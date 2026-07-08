@@ -1,0 +1,136 @@
+@model GoatFarm.Application.ViewModels.Milk.MilkPageViewModel
+@using GoatFarm.Application.Common
+@using System.Globalization
+@{ var breeds = (string[])ViewBag.MilkBreeds!; }
+
+<div class="bignum">
+    <div><div class="lbl">Milk sold this month</div><div class="big" id="milkIncome">@DisplayHelper.FormatRs(Model.MilkIncome)</div>
+        <div class="lbl" id="milkSoldNote">@Model.LitersSold.ToString("N0") L sold</div></div>
+    <div class="side"><span class="lbl">Collected this month</span><b id="milkProdL">@Model.LitersProduced.ToString("N0") L</b>
+        <span class="lbl" id="milkAvg">@Model.LitersPerDayAvg L/day avg</span></div>
+</div>
+
+<div class="milk4">
+    <div class="fincard"><div class="v">@Model.LitersProduced.ToString("N0") L</div>
+        <div class="k"><span class="dot" style="background:var(--green)"></span>Collected this month</div></div>
+    <div class="fincard"><div class="v">@Model.LitersSold.ToString("N0") L</div>
+        <div class="k"><span class="dot" style="background:var(--blue)"></span>Sold this month</div></div>
+    <div class="fincard"><div class="v">@Model.LitersWasted.ToString("N0") L</div>
+        <div class="k"><span class="dot" style="background:var(--red)"></span>Wasted this month</div></div>
+    <div class="fincard"><div class="v" id="milkLeft">@Model.LitersLeft.ToString("N0") L</div>
+        <div class="k"><span class="dot" style="background:var(--green-dark)"></span>Milk left</div></div>
+</div>
+
+<div class="note"><b>Three steps:</b> log <b>how much milk you collect</b> each day, log <b>sales</b> when you sell
+    (cash shows in Finance), and log any <b>waste</b> (spoiled or discarded). <b>Milk left</b> = collected − sold − wasted.
+    Milk kept for ghee/paneer stays in “left” until you sell or waste it.</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="prodFormTitle">Milk collected</h2><span class="sub">litres per day</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th class="hide-sm">Breed</th>
+            <th class="num-cell">Litres</th></tr></thead>
+            <tbody id="prodRows">
+            @foreach (var p in Model.Productions)
+            {
+                <tr class="milk-row milk-prod-row" data-id="@p.Id" data-date="@p.DateDisplay" data-breed="@p.Breed"
+                    data-liters="@p.Liters.ToString(CultureInfo.InvariantCulture)">
+                    <td><span class="breed">@p.DateDisplay</span></td>
+                    <td class="hide-sm"><span class="breed">@p.Breed</span></td>
+                    <td class="num-cell">@p.Liters.ToString("N0") L</td>
+                </tr>
+            }
+            @if (!Model.Productions.Any()) {<tr><td colspan="3" class="empty">No milk logged yet.</td></tr>}
+            </tbody></table>
+        @{ ViewBag.MilkPageParam = "prodPage"; ViewBag.MilkItemLabel = "collections"; }
+        @await Html.PartialAsync("_MilkPagination", Model.ProductionPagination)
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1fr 1fr">
+            <div class="field"><label>Date</label><input type="date" id="p-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Breed</label><select id="p-breed">@foreach(var b in breeds){<option>@b</option>}</select></div>
+            <div class="field"><label>Litres</label><input type="number" id="p-liters" min="0" step="0.5"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addProd">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelProdBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteProdBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="saleFormTitle">Milk sold</h2><span class="sub">litres × rate = cash → Finance</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th class="num-cell">Litres</th>
+            <th class="num-cell hide-sm">Rate /L</th><th class="num-cell">Amount</th></tr></thead>
+            <tbody id="saleRows">
+            @foreach (var s in Model.Sales)
+            {
+                <tr class="milk-row milk-sale-row" data-id="@s.Id" data-date="@s.DateDisplay"
+                    data-liters="@s.Liters.ToString(CultureInfo.InvariantCulture)"
+                    data-rate="@s.Rate.ToString(CultureInfo.InvariantCulture)">
+                    <td><span class="breed">@s.DateDisplay</span></td>
+                    <td class="num-cell">@s.Liters.ToString("N0") L</td>
+                    <td class="num-cell hide-sm">Rs @s.Rate</td>
+                    <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(s.Amount)</td>
+                </tr>
+            }
+            @if (!Model.Sales.Any()) {<tr><td colspan="4" class="empty">No sales logged yet.</td></tr>}
+            </tbody></table>
+        @{ ViewBag.MilkPageParam = "salePage"; ViewBag.MilkItemLabel = "sales"; }
+        @await Html.PartialAsync("_MilkPagination", Model.SalePagination)
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1fr 1fr 1fr">
+            <div class="field"><label>Date sold</label><input type="date" id="s-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Litres</label><input type="number" id="s-liters" min="0" step="0.5"></div>
+            <div class="field"><label>Rate (Rs/L)</label><input type="number" id="s-rate" min="0"></div>
+            <div class="field"><label>Amount</label><input type="number" id="s-amt" disabled placeholder="auto"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addSale">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelSaleBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteSaleBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="wasteFormTitle">Milk waste</h2><span class="sub">spoiled or discarded</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th>Reason / notes</th><th class="num-cell">Litres</th></tr></thead>
+            <tbody id="wasteRows">
+            @foreach (var w in Model.Wastes)
+            {
+                <tr class="milk-row milk-waste-row" data-id="@w.Id" data-date="@w.DateDisplay"
+                    data-liters="@w.Liters.ToString(CultureInfo.InvariantCulture)"
+                    data-notes="@w.Notes">
+                    <td><span class="breed">@w.DateDisplay</span></td>
+                    <td>@(string.IsNullOrWhiteSpace(w.Notes) ? "—" : w.Notes)</td>
+                    <td class="num-cell">@w.Liters.ToString("N0") L</td>
+                </tr>
+            }
+            @if (!Model.Wastes.Any()) {<tr><td colspan="3" class="empty">No waste logged yet.</td></tr>}
+            </tbody></table>
+        @{ ViewBag.MilkPageParam = "wastePage"; ViewBag.MilkItemLabel = "waste entries"; }
+        @await Html.PartialAsync("_MilkPagination", Model.WastePagination)
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1fr">
+            <div class="field"><label>Date</label><input type="date" id="w-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Litres</label><input type="number" id="w-liters" min="0" step="0.5"></div>
+        </div>
+        <div class="field" style="margin-top:10px">
+            <label>Reason / notes</label>
+            <textarea id="w-notes" rows="2" placeholder="e.g. spoiled, contaminated, leftover unsold"></textarea>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addWaste">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelWasteBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteWasteBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {<script>GoatRecords.initMilk();</script>}

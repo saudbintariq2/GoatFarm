@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GoatFarm.Application/GoatFarm.Application.csproj" />
+    <Project Path="src/GoatFarm.Domain/GoatFarm.Domain.csproj" />
+    <Project Path="src/GoatFarm.Infrastructure/GoatFarm.Infrastructure.csproj" />
+    <Project Path="src/GoatFarm.Web/GoatFarm.Web.csproj" />
+  </Folder>
+</Solution>

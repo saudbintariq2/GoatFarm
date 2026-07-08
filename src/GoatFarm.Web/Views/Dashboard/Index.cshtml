@@ -1,0 +1,117 @@
+@model GoatFarm.Application.ViewModels.Dashboard.DashboardViewModel
+@using GoatFarm.Application.Common
+
+<div class="note"><b>Dashboard</b> — a quick read across the farm. Open any section for full details and editing.</div>
+
+<div class="panel dash-panel">
+    <div class="panel-head dash-head">
+        <h2>Herd</h2>
+        <a class="dash-link" asp-controller="Goat" asp-action="Index">Open Herd →</a>
+    </div>
+    <div class="panel-body">
+        <div class="stats dash-stats">
+            <div class="stat"><div class="num">@Model.HerdStats.Total</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Total goats</div></div>
+            <div class="stat"><div class="num">@Model.HerdStats.Kids</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Kids</div></div>
+            <div class="stat"><div class="num">@Model.HerdStats.Milking</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Milking</div></div>
+            <div class="stat"><div class="num">@Model.HerdStats.Pregnant</div><div class="lbl"><span class="dot" style="background:var(--pink)"></span>Pregnant</div></div>
+            <div class="stat"><div class="num">@Model.HerdStats.Bucks</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Bucks</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="panel dash-panel">
+    <div class="panel-head dash-head">
+        <h2>Feed &amp; Cost</h2>
+        <a class="dash-link" asp-controller="Feed" asp-action="Index">Open Feed →</a>
+    </div>
+    <div class="panel-body">
+        <div class="dash-single">
+            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.FeedCostMonthly)</div>
+                <div class="k"><span class="dot" style="background:var(--red)"></span>Total feed + medicine bill (monthly)</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="panel dash-panel">
+    <div class="panel-head dash-head">
+        <div class="dash-title"><h2>Milk</h2><span class="sub">this month</span></div>
+        <a class="dash-link" asp-controller="Milk" asp-action="Index">Open Milk →</a>
+    </div>
+    <div class="panel-body">
+        <div class="milk4 dash-milk4">
+            <div class="fincard"><div class="v">@Model.LitersProduced.ToString("N0") L</div>
+                <div class="k"><span class="dot" style="background:var(--green)"></span>Collected</div></div>
+            <div class="fincard"><div class="v">@Model.LitersSold.ToString("N0") L</div>
+                <div class="k"><span class="dot" style="background:var(--blue)"></span>Sold</div></div>
+            <div class="fincard"><div class="v">@Model.LitersWasted.ToString("N0") L</div>
+                <div class="k"><span class="dot" style="background:var(--red)"></span>Wasted</div></div>
+            <div class="fincard"><div class="v">@Model.LitersLeft.ToString("N0") L</div>
+                <div class="k"><span class="dot" style="background:var(--green-dark)"></span>Milk left</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="panel dash-panel">
+    <div class="panel-head dash-head">
+        <div class="dash-title"><h2>Finance</h2><span class="sub">@Model.Month</span></div>
+        <a class="dash-link" asp-controller="Finance" asp-action="Index" asp-route-month="@Model.Month">Open Finance →</a>
+    </div>
+    <div class="panel-body">
+        <div class="fin3 dash-fin4">
+            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.TotalIncome)</div>
+                <div class="k"><span class="dot" style="background:var(--green)"></span>Cash received this month</div></div>
+            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.TotalExpense)</div>
+                <div class="k"><span class="dot" style="background:var(--red)"></span>Running costs this month</div></div>
+            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.Capital)</div>
+                <div class="k"><span class="dot" style="background:var(--blue)"></span>Total capital (assets owned)</div></div>
+        </div>
+        <div class="bignum dash-profit @(Model.IsLoss ? "loss" : "")" style="margin-top:12px;margin-bottom:0">
+            <div><div class="lbl">Profit this month (income − running costs)</div>
+                <div class="big">@(Model.IsLoss ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(Model.Profit))</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="panel dash-panel">
+    <div class="panel-head dash-head">
+        <h2>Vaccines</h2>
+        <a class="dash-link" asp-controller="Vaccine" asp-action="Index">Open Vaccines →</a>
+    </div>
+    <div class="panel-body">
+        <div class="dash-vacc-top">
+            <div class="fincard dash-due-card">
+                <div class="v">@Model.DueNowCount</div>
+                <div class="k"><span class="dot" style="background:var(--red)"></span>Due now · @Model.DueNowNote</div>
+            </div>
+        </div>
+        @if (Model.DueNow.Any())
+        {
+            <div class="dash-subhead">Due now</div>
+            <table class="tbl dash-tbl"><thead><tr><th>Vaccine</th><th>Scope</th><th class="num-cell">Goats</th></tr></thead>
+                <tbody>
+                @foreach (var d in Model.DueNow)
+                {
+                    <tr><td><b>@d.VaccineName</b></td><td><span class="scopechip">@d.ScopeDisplay</span></td>
+                        <td class="num-cell">@d.DueCount</td></tr>
+                }
+                </tbody></table>
+        }
+        <div class="dash-subhead">My reminders</div>
+        <table class="tbl dash-tbl"><thead><tr><th>Reminder</th><th class="hide-sm">Date</th><th class="num-cell">When</th></tr></thead>
+            <tbody>
+            @if (Model.Reminders.Any())
+            {
+                @foreach (var r in Model.Reminders)
+                {
+                    <tr><td><b>@r.Title</b>@if(!string.IsNullOrEmpty(r.ScopeDisplay)){<span class="scopechip">@r.ScopeDisplay</span>}</td>
+                        <td class="hide-sm"><span class="breed">@r.DateDisplay</span></td>
+                        <td class="num-cell" style="color:@r.WhenColor">@r.WhenDisplay</td></tr>
+                }
+            }
+            else
+            {
+                <tr><td colspan="3" class="empty">No reminders set.</td></tr>
+            }
+            </tbody></table>
+    </div>
+</div>

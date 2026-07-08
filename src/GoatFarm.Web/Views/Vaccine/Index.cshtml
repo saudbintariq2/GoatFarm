@@ -1,0 +1,183 @@
+@model GoatFarm.Application.ViewModels.Vaccines.VaccinePageViewModel
+@using GoatFarm.Application.ViewModels.Reminders
+@using GoatFarm.Domain.Enums
+@{ var reminders = (IReadOnlyList<ReminderViewModel>)ViewBag.Reminders!; }
+
+<div class="bignum" id="vaccBanner">
+    <div><div class="lbl">Vaccinations due now</div><div class="big" id="vaccDueCount">@Model.DueNowCount</div>
+        <div class="lbl" id="vaccDueNote">@Model.DueNowNote</div></div>
+    <div class="side"><span class="lbl">Coming up</span><b id="vaccUpcoming">@Model.UpcomingCount</b>
+        <span class="lbl" id="vaccUpNote">@Model.UpcomingNote</span></div>
+</div>
+
+<div class="note"><b>How it stays easy:</b> you set each vaccine's rule once — either <b>by age</b>
+    (e.g. kids at 30 days) or <b>repeat</b> (e.g. PPR every 12 months, for a whole group). The system
+    checks every goat's age and last dose, and lists who is due. Tick them off in one click. The example
+    schedule below is a starting point — set it to match your vet's protocol.</div>
+
+<div class="filterbar" style="margin-bottom:14px">
+    <div class="field"><label class="hide-sm">Remind me</label>
+        <select id="remindWin">
+            <option value="14" selected="@(Model.RemindDays==14)">2 weeks ahead</option>
+            <option value="30" selected="@(Model.RemindDays==30)">1 month ahead</option>
+            <option value="60" selected="@(Model.RemindDays==60)">2 months ahead</option>
+            <option value="90" selected="@(Model.RemindDays==90)">3 months ahead</option>
+        </select></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Due now</h2><span class="sub">select is automatic — just confirm</span></div>
+    <div class="panel-body"><div id="dueList">
+        @if (Model.DueNow.Any())
+        {
+            @foreach (var d in Model.DueNow)
+            {
+                <div class="duerow">
+                    <div style="min-width:150px"><div class="dn">@d.VaccineName</div>
+                        <span class="scopechip">@d.ScopeDisplay</span></div>
+                    <div class="dtags">@foreach(var t in d.GoatTags){<span class="dtag">@t</span>}</div>
+                    <button type="button" class="btn btn-green btn-sm" data-dovacc="@d.VaccineId">Mark @d.DueCount done today</button>
+                </div>
+            }
+        }
+        else {<div class="alldone">✓ Every goat is up to date. Nothing due right now.</div>}
+    </div></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Coming up</h2><span class="sub">a heads-up before it's overdue</span></div>
+    <div class="panel-body"><div id="comingList">
+        @if (Model.Upcoming.Any())
+        {
+            @foreach (var u in Model.Upcoming)
+            {
+                <div class="duerow">
+                    <div style="min-width:150px"><div class="dn">@u.VaccineName</div>
+                        <span class="scopechip">@u.ScopeDisplay</span></div>
+                    <div class="dtags">@foreach(var t in u.GoatTags){<span class="dtag">@t</span>}</div>
+                    <div class="rule" style="text-align:right;min-width:120px">@u.Count due ·
+                        first in @u.FirstInDays day@(u.FirstInDays==1?"":"s")<br><span style="opacity:.7">@u.FirstDate</span></div>
+                </div>
+            }
+        }
+        else {<div class="alldone">Nothing coming up in this window.</div>}
+    </div></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="remFormTitle">My reminders</h2><span class="sub">set your own — by group or whole farm</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Reminder</th><th class="hide-sm">Date</th>
+            <th class="num-cell">When</th></tr></thead>
+            <tbody id="reminderRows">
+            @if (reminders.Any())
+            {
+                @foreach (var r in reminders)
+                {
+                    <tr class="health-row reminder-row" data-id="@r.Id" data-title="@r.Title"
+                        data-scope="@r.Scope.ToString()" data-date="@r.DateDisplay">
+                        <td><b>@r.Title</b>@if(!string.IsNullOrEmpty(r.ScopeDisplay)){<span class="scopechip">@r.ScopeDisplay</span>}</td>
+                        <td class="hide-sm"><span class="breed">@r.DateDisplay</span></td>
+                        <td class="num-cell" style="color:@r.WhenColor">@r.WhenDisplay</td>
+                    </tr>
+                }
+            }
+            else {<tr><td colspan="3" class="empty">No reminders set. Add one below.</td></tr>}
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1.2fr .8fr 1fr">
+            <div class="field"><label>Reminder</label><input id="r-note" placeholder="e.g. Hoof trimming"></div>
+            <div class="field"><label>Applies to</label><select id="r-scope">
+                <option value="None">Whole farm</option><option value="All">All goats</option>
+                <option value="Kid">Kids</option><option value="Milking">Milking</option>
+                <option value="Pregnant">Pregnant</option><option value="Dry">Dry</option>
+                <option value="Buck">Bucks</option><option value="Sale">For sale</option></select></div>
+            <div class="field" id="r-relative-wrap"><label>In</label><input type="number" id="r-num" min="1" placeholder="2"></div>
+            <div class="field" id="r-unit-wrap"><label>Unit</label><select id="r-unit">
+                <option value="30">Months</option><option value="7">Weeks</option><option value="1">Days</option></select></div>
+            <div class="field" id="r-date-wrap" style="display:none"><label>Date</label><input type="date" id="r-date"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addReminder">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelRemBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteRemBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="vaccFormTitle">Vaccine schedule</h2><span class="sub"><b id="vaccCount">@Model.VaccineCount</b> set up · set the rule once</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Vaccine</th><th>Applies to</th>
+            <th class="hide-sm">Rule</th></tr></thead>
+            <tbody id="vaccRows">
+            @if (Model.Schedule.Any())
+            {
+                @foreach (var v in Model.Schedule)
+                {
+                    var ruleVal = v.RuleType == VaccineRuleType.Age ? v.Days : v.Months;
+                    <tr class="health-row vacc-row" data-id="@v.Id" data-name="@v.Name" data-scope="@v.Scope.ToString()"
+                        data-rule-type="@v.RuleType" data-value="@ruleVal">
+                        <td><b>@v.Name</b></td><td><span class="scopechip">@v.ScopeDisplay</span></td>
+                        <td class="hide-sm"><span class="rule">@v.RuleDisplay</span></td>
+                    </tr>
+                }
+            }
+            else {<tr><td colspan="3" class="empty">No vaccines set up yet — add one below.</td></tr>}
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1.2fr 1.2fr 1fr">
+            <div class="field"><label>Vaccine name</label><input id="v-name" placeholder="e.g. PPR"></div>
+            <div class="field"><label>Applies to</label><select id="v-scope">
+                <option value="All">All goats</option><option value="Kid">Kids</option>
+                <option value="Milking">Milking</option><option value="Pregnant">Pregnant</option>
+                <option value="Dry">Dry</option><option value="Buck">Bucks</option>
+                <option value="Sale">For sale</option></select></div>
+            <div class="field"><label>Rule</label><select id="v-type">
+                <option value="Age">At age (days)</option><option value="Repeat">Repeat (months)</option></select></div>
+            <div class="field"><label id="v-vlabel">Days</label><input type="number" id="v-val" min="1" placeholder="30"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addVacc">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelVaccBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteVaccBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="histFormTitle">Recent vaccinations</h2><span class="sub">click a row to edit date or delete</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th>Vaccine</th>
+            <th class="num-cell">Goats done</th></tr></thead><tbody id="vaccLogRows">
+        @if (Model.History.Any())
+        {
+            @foreach (var h in Model.History)
+            {
+                <tr class="health-row hist-row" data-vaccine-id="@h.VaccineId" data-date="@h.Date"
+                    data-vaccine-name="@h.VaccineName" data-goat-count="@h.GoatCount">
+                    <td><span class="breed">@h.Date</span></td><td>@h.VaccineName</td>
+                    <td class="num-cell">@h.GoatCount</td>
+                </tr>
+            }
+        }
+        else {<tr><td colspan="3" class="empty">No vaccinations recorded yet.</td></tr>}
+        </tbody></table>
+        <div class="add-grid" id="histForm" style="margin-top:14px;display:none;grid-template-columns:1fr 1fr 1fr">
+            <div class="field"><label>Date</label><input type="date" id="h-date"></div>
+            <div class="field"><label>Vaccine</label><input id="h-vaccine" disabled></div>
+            <div class="field"><label>Goats done</label><input id="h-count" disabled></div>
+        </div>
+        <div class="goat-form-actions" id="histActions" style="display:none">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="saveHistBtn">Save</button>
+                <button type="button" class="btn btn-ghost" id="cancelHistBtn">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteHistBtn">Delete</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {<script>GoatRecords.initHealth();</script>}

@@ -1,0 +1,86 @@
+@model GoatFarm.Application.ViewModels.Feed.FeedPageViewModel
+@using GoatFarm.Application.Common
+
+<div class="bignum">
+    <div><div class="lbl">Total feed + medicine bill</div><div class="big" id="grandMonth">@DisplayHelper.FormatRs(Model.GrandMonthly)</div>
+        <div class="lbl">per month</div></div>
+    <div class="side"><span class="lbl">Per day</span><b id="grandDay">@DisplayHelper.FormatRs(Model.GrandDaily)</b>
+        <span class="lbl" id="grandHead">for @Model.TotalGoats goats</span></div>
+</div>
+<div class="note"><b>How feed cost works:</b> put your real prices, then set what one goat in each group
+    eats per day. It multiplies by the goats in that group. Numbers shown are examples — replace them.</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Feed prices</h2><span class="sub">what you pay per kg</span></div>
+    <div class="panel-body"><div class="price-grid" id="priceGrid">
+        @foreach (var p in Model.Prices)
+        {
+            <div class="price-row"><label>@p.DisplayName</label><div class="price-in"><span class="pre">Rs</span>
+                <input type="number" min="0" data-price="@p.FeedType" value="@p.PricePerKg"><span class="suf">/ kg</span></div></div>
+        }
+    </div></div>
+</div>
+<div class="panel">
+    <div class="panel-head"><h2>Feed plan per group</h2>
+        <div class="filterbar"><select id="planGroup">
+            @foreach (var opt in Model.StatusOptions)
+            {<option value="@opt.Key" selected="@(opt.Key == Model.SelectedStatusKey)">@opt.Label</option>}
+        </select></div>
+    </div>
+    <div class="panel-body">
+        <div id="rationList">
+            @foreach (var item in Model.CurrentPlan.Items)
+            {
+                <div class="ration-row"><div class="rn">@item.DisplayName</div>
+                    <div class="rin"><input type="number" min="0" data-ration="@item.FeedType" value="@item.GramsPerDay"><span class="u">g/day</span></div>
+                    <div class="rcost">@DisplayHelper.FormatRs(item.DailyCost)/day</div></div>
+            }
+        </div>
+        <div class="ration-row" style="border-bottom:none;margin-top:4px">
+            <div class="rn">Medicine / health</div>
+            <div class="rin"><input type="number" id="medIn" min="0" value="@Model.CurrentPlan.MedicineCostPerGoatPerMonth"><span class="u">Rs</span></div>
+            <div class="rcost" style="color:var(--ink-soft)">per goat / month</div>
+        </div>
+        <div class="result" id="planResult">
+            <div class="r"><div class="v">@Model.CurrentPlan.GoatCount</div><div class="k">goats in this group</div></div>
+            <div class="r"><div class="v">@DisplayHelper.FormatRs(Model.CurrentPlan.DailyFeedCost * Model.CurrentPlan.GoatCount)</div><div class="k">feed cost per day</div></div>
+            <div class="r"><div class="v">@DisplayHelper.FormatRs(Model.CurrentPlan.DailyFeedCost * 30 * Model.CurrentPlan.GoatCount + Model.CurrentPlan.MedicineCostPerGoatPerMonth * Model.CurrentPlan.GoatCount)</div><div class="k">total per month</div></div>
+        </div>
+    </div>
+</div>
+<div class="panel">
+    <div class="panel-head"><h2>Cost summary</h2><span class="sub">monthly, by group</span></div>
+    <div class="panel-body"><table class="tbl"><thead><tr>
+        <th>Group</th><th class="num-cell">Goats</th><th class="num-cell">Feed / month</th>
+        <th class="num-cell hide-sm">Medicine / month</th><th class="num-cell">Total / month</th>
+    </tr></thead><tbody id="summaryRows">
+        @foreach (var row in Model.Summary)
+        {
+            <tr><td><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
+                <td class="num-cell">@row.GoatCount</td><td class="num-cell">@DisplayHelper.FormatRs(row.FeedMonthly)</td>
+                <td class="num-cell hide-sm">@DisplayHelper.FormatRs(row.MedicineMonthly)</td>
+                <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(row.TotalMonthly)</td></tr>
+        }
+        <tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+            <td class="num-cell" style="font-weight:800">@Model.TotalGoats</td>
+            <td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(Model.Summary.Sum(s => s.FeedMonthly))</td>
+            <td class="num-cell hide-sm" style="font-weight:800">@DisplayHelper.FormatRs(Model.Summary.Sum(s => s.MedicineMonthly))</td>
+            <td class="num-cell" style="font-weight:800;color:var(--green-dark)">@DisplayHelper.FormatRs(Model.GrandMonthly)</td></tr>
+    </tbody></table></div>
+</div>
+<div class="panel">
+    <div class="panel-head"><h2>Buying list</h2><span class="sub">how much of each feed the farm needs</span></div>
+    <div class="panel-body"><table class="tbl"><thead><tr>
+        <th>Feed</th><th class="num-cell">kg / day</th><th class="num-cell hide-sm">kg / month</th>
+        <th class="num-cell">Rs / month</th>
+    </tr></thead><tbody id="buyRows">
+        @foreach (var b in Model.BuyingList)
+        {
+            <tr><td>@b.DisplayName</td><td class="num-cell">@b.KgPerDay.ToString("F1")</td>
+                <td class="num-cell hide-sm">@Math.Round(b.KgPerMonth).ToString("N0")</td>
+                <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(b.CostPerMonth)</td></tr>
+        }
+    </tbody></table></div>
+</div>
+
+@section Scripts {<script>GoatRecords.initFeed();</script>}

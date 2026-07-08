@@ -1,0 +1,139 @@
+@model GoatFarm.Application.ViewModels.Finance.FinancePageViewModel
+@using GoatFarm.Application.Common
+@using System.Globalization
+@{ var incomeTypes = (string[])ViewBag.IncomeTypes!; var expenseTypes = (string[])ViewBag.ExpenseTypes!; var assetTypes = (string[])ViewBag.AssetTypes!; }
+
+<div class="bignum @(Model.IsLoss ? "loss" : "")" id="profitBanner">
+    <div><div class="lbl">Profit this month (income − running costs)</div>
+        <div class="big" id="profitVal">@(Model.IsLoss ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(Model.Profit))</div>
+        <div class="lbl" id="profitNote">@Model.ProfitNote</div></div>
+    <div class="side"><span class="lbl">Capital invested</span><b id="capSide">@DisplayHelper.FormatRs(Model.Capital)</b>
+        <span class="lbl">goats + machinery + land</span></div>
+</div>
+
+<div class="filterbar" style="margin-bottom:14px">
+    <div class="field"><label class="hide-sm">Month</label><input type="month" id="finMonth" value="@Model.Month"></div>
+</div>
+
+<div class="fin3">
+    <div class="fincard"><div class="v" id="cIncome">@DisplayHelper.FormatRs(Model.TotalIncome)</div>
+        <div class="k"><span class="dot" style="background:var(--green)"></span>Cash received this month</div></div>
+    <div class="fincard"><div class="v" id="cExpense">@DisplayHelper.FormatRs(Model.TotalExpense)</div>
+        <div class="k"><span class="dot" style="background:var(--red)"></span>Running costs this month</div></div>
+    <div class="fincard"><div class="v" id="cCapital">@DisplayHelper.FormatRs(Model.Capital)</div>
+        <div class="k"><span class="dot" style="background:var(--blue)"></span>Total capital (assets owned)</div></div>
+</div>
+
+<div class="note"><b>Capital vs running cost:</b> things you <b>own</b> (goats you bought, machinery, land,
+    sheds) are <b>capital</b> — added once. Things you <b>use up</b> each month (feed, salaries, cultivation)
+    are <b>running costs</b>. Profit = cash received − running costs. Capital is your investment, kept separate.</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="assetFormTitle">Capital — what the farm owns</h2><span class="sub">added once, not monthly</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Asset</th><th class="hide-sm">Type</th>
+            <th class="num-cell">Value</th></tr></thead>
+            <tbody id="assetRows">
+            <tr><td><b>Livestock (goats)</b><div class="name">@Model.BoughtGoatCount bought · auto from herd</div></td>
+                <td class="hide-sm"><span class="chip chip-cap">Livestock</span></td>
+                <td class="num-cell">@DisplayHelper.FormatRs(Model.LivestockValue)</td></tr>
+            @foreach (var a in Model.Assets)
+            {
+                <tr class="fin-row fin-asset-row" data-id="@a.Id" data-name="@a.Name" data-type="@a.Type"
+                    data-cost="@a.Cost.ToString(CultureInfo.InvariantCulture)">
+                    <td>@a.Name</td>
+                    <td class="hide-sm"><span class="chip chip-cap">@a.Type</span></td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(a.Cost)</td>
+                </tr>
+            }
+            <tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL CAPITAL</td>
+                <td class="hide-sm"></td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(Model.Capital)</td></tr>
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
+            <div class="field"><label>Asset name</label><input id="a-name" placeholder="e.g. Chaff cutter"></div>
+            <div class="field"><label>Type</label><select id="a-type">@foreach(var t in assetTypes){<option>@t</option>}</select></div>
+            <div class="field"><label>Cost (Rs)</label><input type="number" id="a-cost" min="0"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addAsset">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelAssetBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteAssetBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="incomeFormTitle">Cash received</h2><span class="sub">milk, meat, ghee, paneer, sales</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Source</th><th class="hide-sm">Date</th>
+            <th class="num-cell">Amount</th></tr></thead>
+            <tbody id="incomeRows">
+            <tr><td><span class="chip chip-inc">Milk sales</span><div class="name">@Model.MilkLitersSold.ToString("N0") L · auto from Milk tab</div></td>
+                <td class="hide-sm"><span class="breed">this month</span></td>
+                <td class="num-cell">@DisplayHelper.FormatRs(Model.MilkIncome)</td></tr>
+            @foreach (var i in Model.Incomes)
+            {
+                <tr class="fin-row fin-income-row" data-id="@i.Id" data-type="@i.Type" data-date="@i.DateDisplay"
+                    data-amount="@i.Amount.ToString(CultureInfo.InvariantCulture)">
+                    <td><span class="chip chip-inc">@i.Type</span></td>
+                    <td class="hide-sm"><span class="breed">@i.DateDisplay</span></td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(i.Amount)</td>
+                </tr>
+            }
+            <tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL RECEIVED</td><td class="hide-sm"></td>
+                <td class="num-cell" style="font-weight:800;color:var(--green-dark)">@DisplayHelper.FormatRs(Model.TotalIncome)</td></tr>
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
+            <div class="field"><label>Source</label><select id="i-type">@foreach(var t in incomeTypes){<option>@t</option>}</select></div>
+            <div class="field"><label>Date</label><input type="date" id="i-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Amount (Rs)</label><input type="number" id="i-amt" min="0"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addIncome">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelIncomeBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteIncomeBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="expenseFormTitle">Running costs</h2><span class="sub">salaries, cultivation, feed, utilities</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Date</th>
+            <th class="num-cell">Amount</th></tr></thead>
+            <tbody id="expenseRows">
+            <tr><td><span class="chip chip-exp">Feed &amp; medicine</span><div class="name">auto from feed plan</div></td>
+                <td class="hide-sm"><span class="breed">every month</span></td>
+                <td class="num-cell">@DisplayHelper.FormatRs(Model.FeedMonthly)</td></tr>
+            @foreach (var e in Model.Expenses)
+            {
+                <tr class="fin-row fin-expense-row" data-id="@e.Id" data-type="@e.Type" data-date="@e.DateDisplay"
+                    data-amount="@e.Amount.ToString(CultureInfo.InvariantCulture)">
+                    <td><span class="chip chip-exp">@e.Type</span></td>
+                    <td class="hide-sm"><span class="breed">@e.DateDisplay</span></td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(e.Amount)</td>
+                </tr>
+            }
+            <tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL COSTS</td><td class="hide-sm"></td>
+                <td class="num-cell" style="font-weight:800;color:#8a261c">@DisplayHelper.FormatRs(Model.TotalExpense)</td></tr>
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
+            <div class="field"><label>Cost type</label><select id="e-type">@foreach(var t in expenseTypes){<option>@t</option>}</select></div>
+            <div class="field"><label>Date</label><input type="date" id="e-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Amount (Rs)</label><input type="number" id="e-amt" min="0"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addExpense">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelExpenseBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteExpenseBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {<script>GoatRecords.initFinance();</script>}

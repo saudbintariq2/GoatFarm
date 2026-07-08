@@ -1,0 +1,279 @@
+@model GoatFarm.Application.ViewModels.Settings.SettingsPageViewModel
+
+@using GoatFarm.Application.ViewModels.Settings
+
+@using GoatFarm.Domain.Constants
+
+@using GoatFarm.Infrastructure.Identity
+
+
+
+@functions {
+
+    TabPermissionViewModel GetPerm(string role, string tab) =>
+
+        Model.RolePermissions.Permissions.GetValueOrDefault(role)?.GetValueOrDefault(tab) ?? TabPermissionViewModel.NoAccess;
+
+}
+
+
+
+<div class="note"><b>Settings</b> — manage users, role permissions, and password rules. Default admin:
+
+    <b>@IdentitySeedHelper.DefaultAdminEmail</b> (seed password: @IdentitySeedHelper.DefaultAdminPassword — change after first login).</div>
+
+
+
+<div class="panel" id="usersPanel">
+
+    <div class="panel-head"><h2 id="userFormTitle">Users</h2><span class="sub">farm staff accounts</span></div>
+
+    <div class="panel-body">
+
+        <table class="tbl"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th class="hide-sm">Status</th></tr></thead>
+
+            <tbody id="userRows">
+
+            @foreach (var u in Model.Users)
+
+            {
+
+                <tr class="health-row user-row" data-id="@u.Id" data-name="@u.FullName" data-email="@u.Email"
+                    data-role="@u.Role" data-locked="@u.IsLocked.ToString().ToLowerInvariant()"
+                    data-uses-role-perms="@u.UsesRolePermissions.ToString().ToLowerInvariant()">
+                    <td><b>@u.FullName</b>@if (!u.UsesRolePermissions) { <span class="scopechip" style="margin-left:6px">Custom</span> }</td>
+
+                    <td>@u.Email</td>
+
+                    <td><span class="scopechip">@u.Role</span></td>
+
+                    <td class="hide-sm">@(u.IsLocked ? "Locked" : "Active")</td>
+
+                </tr>
+
+            }
+
+            @if (!Model.Users.Any()) {<tr><td colspan="4" class="empty">No users yet.</td></tr>}
+
+            </tbody></table>
+
+        <div class="add-grid" id="userFormGrid" style="margin-top:14px;grid-template-columns:1.2fr 1.2fr 1fr 1fr">
+
+            <div class="field"><label>Full name</label><input id="u-name" placeholder="e.g. Ali Khan"></div>
+
+            <div class="field"><label>Email</label><input type="email" id="u-email" placeholder="user@farm.com"></div>
+
+            <div class="field" id="u-password-wrap"><label>Password</label><input type="password" id="u-password" autocomplete="new-password"></div>
+
+            <div class="field"><label>Role</label><select id="u-role">@foreach(var r in Model.Roles){<option>@r</option>}</select></div>
+
+        </div>
+
+        <div class="add-grid" id="u-edit-extra" style="display:none;margin-top:10px;grid-template-columns:1fr 1fr 1fr">
+
+            <div class="field"><label><input type="checkbox" id="u-locked"> Lock account</label></div>
+
+            <div class="field"><label>New password (reset)</label><input type="password" id="u-reset-password" autocomplete="new-password"></div>
+
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost" id="resetPasswordBtn">Reset password</button></div>
+
+        </div>
+
+        <div id="userPermPanel" class="user-perm-panel" style="display:none">
+            <div class="user-perm-head">
+                <h3>User permissions</h3>
+                <span class="sub">override role defaults for this user only</span>
+            </div>
+            <div class="field user-perm-toggle">
+                <label><input type="checkbox" id="u-use-role-perms" checked> Use role defaults</label>
+            </div>
+            <div id="userPermTableWrap">
+                <table class="tbl perm-table user-perm-table">
+                    <thead><tr><th>Tab</th><th class="num-cell">Access</th></tr></thead>
+                    <tbody>
+                    @foreach (var tab in Model.Tabs)
+                    {
+                        var settingsTab = tab.Key == FarmTabs.Settings;
+                        <tr>
+                            <td><b>@tab.Label</b></td>
+                            <td class="num-cell perm-cell">
+                                <div class="perm-actions">
+                                    @foreach (var action in FarmActions.All)
+                                    {
+                                        var label = action switch
+                                        {
+                                            FarmActions.View => "View",
+                                            FarmActions.Add => "Add",
+                                            FarmActions.Edit => "Edit",
+                                            FarmActions.Delete => "Delete",
+                                            _ => action
+                                        };
+                                        <label class="perm-action-label" title="@label">
+                                            <input type="checkbox" class="user-perm-cb" data-tab="@tab.Key" data-action="@action"
+                                                   data-settings-tab="@settingsTab.ToString().ToLowerInvariant()">
+                                            @label[0]
+                                        </label>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <div class="goat-form-actions" style="margin-top:10px">
+                    <button type="button" class="btn btn-ghost btn-sm" id="copyRolePermsBtn">Copy from role</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="goat-form-actions" id="userFormActions">
+
+            <div class="goat-form-actions-left">
+
+                <button type="button" class="btn btn-green" id="addUser">+ Add user</button>
+
+                <button type="button" class="btn btn-ghost" id="cancelUserBtn" style="display:none">Cancel</button>
+
+            </div>
+
+            <button type="button" class="btn btn-danger" id="deleteUserBtn" style="display:none">Delete</button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<div class="panel" id="permissionsPanel">
+
+    <div class="panel-head"><h2>Role defaults</h2><span class="sub">default permissions for each role — used when a user has “Use role defaults” enabled</span></div>
+
+    <div class="panel-body">
+
+        <table class="tbl perm-table"><thead><tr><th>Tab</th>@foreach(var r in Model.Roles){<th class="num-cell">@r</th>}</tr></thead>
+
+            <tbody>
+
+            @foreach (var tab in Model.Tabs)
+
+            {
+
+                <tr>
+
+                    <td><b>@tab.Label</b></td>
+
+                    @foreach (var role in Model.Roles)
+
+                    {
+
+                        var perm = GetPerm(role, tab.Key);
+
+                        var settingsLocked = role == FarmRoles.Admin && tab.Key == FarmTabs.Settings;
+
+                        <td class="num-cell perm-cell">
+
+                            <div class="perm-actions">
+
+                                @foreach (var action in FarmActions.All)
+
+                                {
+
+                                    var label = action switch
+
+                                    {
+
+                                        FarmActions.View => "View",
+
+                                        FarmActions.Add => "Add",
+
+                                        FarmActions.Edit => "Edit",
+
+                                        FarmActions.Delete => "Delete",
+
+                                        _ => action
+
+                                    };
+
+                                    var isChecked = perm.Allows(action) || (settingsLocked && action == FarmActions.View);
+
+                                    var isDisabled = settingsLocked;
+
+                                    <label class="perm-action-label" title="@label">
+
+                                        <input type="checkbox" class="perm-cb" data-role="@role" data-tab="@tab.Key" data-action="@action"
+
+                                               @(isChecked ? "checked" : "") @(isDisabled ? "disabled checked data-perm-locked=\"true\"" : "")>
+
+                                        @label[0]
+
+                                    </label>
+
+                                }
+
+                            </div>
+
+                        </td>
+
+                    }
+
+                </tr>
+
+            }
+
+            </tbody></table>
+
+        <div class="goat-form-actions" style="margin-top:14px">
+
+            <button type="button" class="btn btn-green" id="savePermissions">Save permissions</button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<div class="panel" id="policyPanel">
+
+    <div class="panel-head"><h2>Password policy</h2><span class="sub">enforced on new users and password resets</span></div>
+
+    <div class="panel-body">
+
+        <div class="add-grid" id="policyFormGrid" style="grid-template-columns:1fr 1fr 1fr 1fr 1fr">
+
+            <div class="field"><label>Min length</label><input type="number" id="pp-length" min="6" max="128" value="@Model.PasswordPolicy.RequiredLength"></div>
+
+            <div class="field"><label><input type="checkbox" id="pp-digit" @(Model.PasswordPolicy.RequireDigit ? "checked" : "")> Require digit</label></div>
+
+            <div class="field"><label><input type="checkbox" id="pp-lower" @(Model.PasswordPolicy.RequireLowercase ? "checked" : "")> Require lowercase</label></div>
+
+            <div class="field"><label><input type="checkbox" id="pp-upper" @(Model.PasswordPolicy.RequireUppercase ? "checked" : "")> Require uppercase</label></div>
+
+            <div class="field"><label><input type="checkbox" id="pp-symbol" @(Model.PasswordPolicy.RequireNonAlphanumeric ? "checked" : "")> Require symbol</label></div>
+
+        </div>
+
+        <div class="goat-form-actions" style="margin-top:14px">
+
+            <button type="button" class="btn btn-green" id="savePolicy">Save password policy</button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+@section Scripts {
+<script>
+    window.RolePermissions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+        Model.RolePermissions.Permissions,
+        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+    GoatRecords.initSettings();
+</script>
+}
+

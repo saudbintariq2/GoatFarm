@@ -1,0 +1,47 @@
+@model GoatFarm.Web.Models.LoginViewModel
+@inject IConfiguration Configuration
+@using GoatFarm.Infrastructure.Identity
+@{
+    ViewData["Title"] = "Login";
+    ViewData["BodyClass"] = "auth-page";
+    Layout = "_Layout";
+    var farmName = Configuration["ApplicationSettings:FarmName"] ?? "Goat Records";
+    var farmLocation = Configuration["ApplicationSettings:FarmLocation"] ?? "";
+}
+
+<div class="login-page">
+    <div class="login-card panel">
+        <div class="login-brand">
+            <div class="logo">🐐</div>
+            <div>
+                <h1>@farmName</h1>
+                @if (!string.IsNullOrWhiteSpace(farmLocation))
+                {
+                    <p>@farmLocation</p>
+                }
+            </div>
+        </div>
+        <div class="panel-body">
+            <h2 class="login-title">Sign in</h2>
+            <p class="note login-hint">Default admin: <b>@IdentitySeedHelper.DefaultAdminEmail</b> / @IdentitySeedHelper.DefaultAdminPassword</p>
+            <form asp-action="Login" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="ReturnUrl" />
+                <div asp-validation-summary="ModelOnly" class="login-error"></div>
+                <div class="login-fields">
+                    <div class="field">
+                        <label asp-for="Email">Email</label>
+                        <input asp-for="Email" type="email" autocomplete="username" placeholder="admin@goatfarm.local" />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Password">Password</label>
+                        <input asp-for="Password" type="password" autocomplete="current-password" />
+                    </div>
+                </div>
+                <div class="goat-form-actions login-actions">
+                    <button type="submit" class="btn btn-green login-submit">Sign in</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
