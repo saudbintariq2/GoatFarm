@@ -15,7 +15,13 @@ public class UserSettingsService : IUserSettingsService
     private const string PasswordPolicyKey = "PasswordPolicy";
     private const string RolePermissionsKey = "RolePermissions";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
+
+    internal static JsonSerializerOptions SerializerOptions => JsonOptions;
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;

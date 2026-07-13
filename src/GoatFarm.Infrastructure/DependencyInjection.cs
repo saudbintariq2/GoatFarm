@@ -14,7 +14,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<GoatFarmDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IGoatService, GoatService>();

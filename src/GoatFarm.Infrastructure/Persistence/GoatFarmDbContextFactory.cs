@@ -15,7 +15,7 @@ public class GoatFarmDbContextFactory : IDesignTimeDbContextFactory<GoatFarmDbCo
             .Build();
 
         var optionsBuilder = new DbContextOptionsBuilder<GoatFarmDbContext>();
-        optionsBuilder.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
+        optionsBuilder.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
 
         return new GoatFarmDbContext(optionsBuilder.Options);
     }

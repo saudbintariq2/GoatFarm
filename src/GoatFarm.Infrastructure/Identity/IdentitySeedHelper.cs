@@ -11,19 +11,23 @@ public static class IdentitySeedHelper
 
     public static async Task SeedAdminUserAsync(UserManager<ApplicationUser> userManager)
     {
-        if (await userManager.FindByEmailAsync(DefaultAdminEmail) is not null)
-            return;
-
-        var user = new ApplicationUser
+        var user = await userManager.FindByEmailAsync(DefaultAdminEmail);
+        if (user is null)
         {
-            UserName = DefaultAdminEmail,
-            Email = DefaultAdminEmail,
-            FullName = "Administrator",
-            EmailConfirmed = true
-        };
+            user = new ApplicationUser
+            {
+                UserName = DefaultAdminEmail,
+                Email = DefaultAdminEmail,
+                FullName = "Administrator",
+                EmailConfirmed = true
+            };
 
-        var result = await userManager.CreateAsync(user, DefaultAdminPassword);
-        if (result.Succeeded)
+            var result = await userManager.CreateAsync(user, DefaultAdminPassword);
+            if (!result.Succeeded)
+                return;
+        }
+
+        if (!await userManager.IsInRoleAsync(user, FarmRoles.Admin))
             await userManager.AddToRoleAsync(user, FarmRoles.Admin);
     }
 }
