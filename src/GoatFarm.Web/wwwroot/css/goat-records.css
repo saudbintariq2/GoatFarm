@@ -87,8 +87,11 @@
 
   .tbl{width:100%;border-collapse:collapse;font-size:14px}
   .tbl th{text-align:left;font-size:11px;font-weight:700;color:var(--ink-soft);
-    text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:2px solid var(--line)}
+    text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:2px solid var(--line);vertical-align:bottom}
   .tbl td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .tbl th.num-cell,
+  .tbl td.num-cell{text-align:right;font-variant-numeric:tabular-nums}
+  .tbl td.num-cell{font-weight:600}
   .tbl tr:last-child td{border-bottom:none}
   .tbl tr.checked{background:var(--green-tint)}
   .tbl tr.goat-row{cursor:pointer}
@@ -141,7 +144,8 @@
   .age-d{font-weight:700;font-variant-numeric:tabular-nums}
   .age-m{font-size:12px;color:var(--ink-soft)}
   .breed{font-size:12px;color:var(--ink-soft)}
-  .num-cell{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+  .num-cell{font-variant-numeric:tabular-nums;text-align:right}
+  .tbl .num-cell{text-align:right}
   .del{cursor:pointer;color:#bbb;font-weight:700;font-size:16px;padding:0 6px}
   .del:hover{color:var(--red)}
 
@@ -225,7 +229,8 @@
   .user-perm-toggle{margin-bottom:12px}
   .user-perm-toggle label{text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--ink-soft)}
   .user-perm-table td,.user-perm-table th{text-align:left}
-  .user-perm-table .num-cell{text-align:left}
+  .user-perm-table th.num-cell,
+  .user-perm-table td.num-cell{text-align:left}
   #userPermTableWrap.disabled{opacity:.55;pointer-events:none}
   .fincard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
   .fincard .v{font-size:23px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}

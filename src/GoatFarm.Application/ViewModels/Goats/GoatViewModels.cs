@@ -8,6 +8,7 @@ public class GoatViewModel
     public int Id { get; set; }
     public string Tag { get; set; } = string.Empty;
     public string? Name { get; set; }
+    public string? Comment { get; set; }
     public string Breed { get; set; } = string.Empty;
     public GoatGender Gender { get; set; }
     public GoatStatus Status { get; set; }
@@ -33,6 +34,9 @@ public class CreateGoatViewModel
 
     [StringLength(100)]
     public string? Name { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 
     [Required]
     public string Breed { get; set; } = "Beetal";

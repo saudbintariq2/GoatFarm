@@ -13,6 +13,7 @@ public class GoatConfiguration : IEntityTypeConfiguration<Goat>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Tag).IsRequired().HasMaxLength(50);
         builder.Property(x => x.Name).HasMaxLength(100);
+        builder.Property(x => x.Comment).HasMaxLength(500);
         builder.Property(x => x.Breed).IsRequired().HasMaxLength(100);
         builder.Property(x => x.PurchasePrice).HasPrecision(18, 2);
         builder.HasIndex(x => x.Tag).IsUnique();
@@ -73,6 +74,45 @@ public class FeedPlanItemConfiguration : IEntityTypeConfiguration<FeedPlanItem>
     }
 }
 
+public class FeedPurchaseConfiguration : IEntityTypeConfiguration<FeedPurchase>
+{
+    public void Configure(EntityTypeBuilder<FeedPurchase> builder)
+    {
+        builder.ToTable("FeedPurchases");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.FeedType).IsRequired().HasMaxLength(50);
+        builder.Property(x => x.Kg).HasPrecision(18, 2);
+        builder.Property(x => x.RatePerKg).HasPrecision(18, 2);
+        builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.Comment).HasMaxLength(500);
+    }
+}
+
+public class RecurringCostConfiguration : IEntityTypeConfiguration<RecurringCost>
+{
+    public void Configure(EntityTypeBuilder<RecurringCost> builder)
+    {
+        builder.ToTable("RecurringCosts");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Amount).HasPrecision(18, 2);
+    }
+}
+
+public class VaccinePurchaseConfiguration : IEntityTypeConfiguration<VaccinePurchase>
+{
+    public void Configure(EntityTypeBuilder<VaccinePurchase> builder)
+    {
+        builder.ToTable("VaccinePurchases");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Qty).HasPrecision(18, 2);
+        builder.Property(x => x.Unit).IsRequired().HasMaxLength(50);
+        builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.Comment).HasMaxLength(500);
+    }
+}
+
 public class AssetConfiguration : IEntityTypeConfiguration<Asset>
 {
     public void Configure(EntityTypeBuilder<Asset> builder)
@@ -82,6 +122,7 @@ public class AssetConfiguration : IEntityTypeConfiguration<Asset>
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Type).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Cost).HasPrecision(18, 2);
+        builder.Property(x => x.Comment).HasMaxLength(500);
     }
 }
 
@@ -93,6 +134,7 @@ public class IncomeConfiguration : IEntityTypeConfiguration<Income>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Type).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.Comment).HasMaxLength(500);
     }
 }
 
@@ -104,6 +146,7 @@ public class ExpenseConfiguration : IEntityTypeConfiguration<Expense>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Type).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.Comment).HasMaxLength(500);
     }
 }
 
@@ -126,6 +169,7 @@ public class MilkProductionConfiguration : IEntityTypeConfiguration<MilkProducti
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Breed).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Liters).HasPrecision(18, 2);
+        builder.Property(x => x.Comment).HasMaxLength(500);
     }
 }
 
@@ -138,6 +182,7 @@ public class MilkSaleConfiguration : IEntityTypeConfiguration<MilkSale>
         builder.Property(x => x.Liters).HasPrecision(18, 2);
         builder.Property(x => x.Rate).HasPrecision(18, 2);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.Comment).HasMaxLength(500);
     }
 }
 

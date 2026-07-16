@@ -85,8 +85,8 @@
             @foreach (var a in Model.Assets)
             {
                 <tr class="fin-row fin-asset-row" data-id="@a.Id" data-name="@a.Name" data-type="@a.Type"
-                    data-cost="@a.Cost.ToString(CultureInfo.InvariantCulture)">
-                    <td>@a.Name</td>
+                    data-cost="@a.Cost.ToString(CultureInfo.InvariantCulture)" data-comment="@a.Comment">
+                    <td>@a.Name@if(!string.IsNullOrEmpty(a.Comment)){<div class="name">@a.Comment</div>}</td>
                     <td class="hide-sm"><span class="chip chip-cap">@a.Type</span></td>
                     <td class="num-cell">@DisplayHelper.FormatRs(a.Cost)</td>
                 </tr>
@@ -94,10 +94,11 @@
             <tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL CAPITAL</td>
                 <td class="hide-sm"></td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(Model.Capital)</td></tr>
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr">
             <div class="field"><label>Asset name</label><input id="a-name" placeholder="e.g. Chaff cutter"></div>
-            <div class="field"><label>Type</label><select id="a-type">@foreach(var t in assetTypes){<option>@t</option>}</select></div>
+            <div class="field"><label>Type</label><select id="a-type" data-lookup="Lookup.AssetTypes">@foreach(var t in assetTypes){<option>@t</option>}</select></div>
             <div class="field"><label>Cost (Rs)</label><input type="number" id="a-cost" min="0"></div>
+            <div class="field"><label>Comment</label><input id="a-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">
@@ -121,8 +122,8 @@
             @foreach (var i in Model.Incomes)
             {
                 <tr class="fin-row fin-income-row" data-id="@i.Id" data-type="@i.Type" data-date="@i.DateDisplay"
-                    data-amount="@i.Amount.ToString(CultureInfo.InvariantCulture)">
-                    <td><span class="chip chip-inc">@i.Type</span></td>
+                    data-amount="@i.Amount.ToString(CultureInfo.InvariantCulture)" data-comment="@i.Comment">
+                    <td><span class="chip chip-inc">@i.Type</span>@if(!string.IsNullOrEmpty(i.Comment)){<div class="name">@i.Comment</div>}</td>
                     <td class="hide-sm"><span class="breed">@i.DateDisplay</span></td>
                     <td class="num-cell">@DisplayHelper.FormatRs(i.Amount)</td>
                 </tr>
@@ -130,10 +131,11 @@
             <tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL RECEIVED</td><td class="hide-sm"></td>
                 <td class="num-cell" style="font-weight:800;color:var(--green-dark)">@DisplayHelper.FormatRs(Model.TotalIncome)</td></tr>
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
-            <div class="field"><label>Source</label><select id="i-type">@foreach(var t in incomeTypes){<option>@t</option>}</select></div>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr">
+            <div class="field"><label>Source</label><select id="i-type" data-lookup="Lookup.IncomeTypes">@foreach(var t in incomeTypes){<option>@t</option>}</select></div>
             <div class="field"><label>Date</label><input type="date" id="i-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>Amount (Rs)</label><input type="number" id="i-amt" min="0"></div>
+            <div class="field"><label>Comment</label><input id="i-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">
@@ -146,19 +148,63 @@
 </div>
 
 <div class="panel">
-    <div class="panel-head"><h2 id="expenseFormTitle">Running costs</h2><span class="sub">salaries, cultivation, feed, utilities</span></div>
+    <div class="panel-head"><h2 id="recurFormTitle">Fixed &amp; recurring costs</h2><span class="sub">rent, salaries — spread into monthly running costs</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Period</th>
+            <th class="num-cell">Amount</th><th class="num-cell">Per month</th></tr></thead>
+            <tbody id="recurRows">
+            @foreach (var r in Model.RecurringCosts)
+            {
+                <tr class="fin-row fin-recur-row" data-id="@r.Id" data-name="@r.Name"
+                    data-amount="@r.Amount.ToString(CultureInfo.InvariantCulture)" data-period="@r.Period">
+                    <td><b>@r.Name</b></td>
+                    <td class="hide-sm"><span class="breed">@r.Period</span></td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(r.Amount)</td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(r.MonthlyAmount)</td>
+                </tr>
+            }
+            @if (!Model.RecurringCosts.Any()) {<tr class="recur-empty-row"><td colspan="4" class="empty">No recurring costs set up.</td></tr>}
+            <tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL / MONTH</td><td class="hide-sm"></td>
+                <td class="num-cell"></td><td class="num-cell" style="font-weight:800;color:#8a261c">@DisplayHelper.FormatRs(Model.RecurringMonthly)</td></tr>
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
+            <div class="field"><label>Name</label><input id="rc-name" placeholder="e.g. Land rent"></div>
+            <div class="field"><label>Amount (Rs)</label><input type="number" id="rc-amt" min="0"></div>
+            <div class="field"><label>Period</label><select id="rc-period"><option value="month">Monthly</option><option value="year">Yearly</option></select></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addRecur">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelRecurBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteRecurBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="expenseFormTitle">Running costs</h2><span class="sub">salaries, cultivation, feed bought, medicine, vaccines</span></div>
     <div class="panel-body">
         <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Date</th>
             <th class="num-cell">Amount</th></tr></thead>
             <tbody id="expenseRows">
-            <tr><td><span class="chip chip-exp">Feed &amp; medicine</span><div class="name">auto from feed plan</div></td>
+            <tr><td><span class="chip chip-exp">Feed bought</span><div class="name">@Model.FeedBoughtKg.ToString("N1") kg · auto from Feed tab</div></td>
+                <td class="hide-sm"><span class="breed">this month</span></td>
+                <td class="num-cell">@DisplayHelper.FormatRs(Model.FeedBoughtMonthly)</td></tr>
+            <tr><td><span class="chip chip-exp">Medicine (plan)</span><div class="name">from feed plan estimate</div></td>
                 <td class="hide-sm"><span class="breed">every month</span></td>
-                <td class="num-cell">@DisplayHelper.FormatRs(Model.FeedMonthly)</td></tr>
+                <td class="num-cell">@DisplayHelper.FormatRs(Model.MedicineMonthly)</td></tr>
+            <tr><td><span class="chip chip-exp">Recurring costs</span><div class="name">rent, salaries, etc.</div></td>
+                <td class="hide-sm"><span class="breed">every month</span></td>
+                <td class="num-cell">@DisplayHelper.FormatRs(Model.RecurringMonthly)</td></tr>
+            <tr><td><span class="chip chip-exp">Vaccines bought</span><div class="name">auto from Vaccines tab</div></td>
+                <td class="hide-sm"><span class="breed">this month</span></td>
+                <td class="num-cell">@DisplayHelper.FormatRs(Model.VaccineBoughtMonthly)</td></tr>
             @foreach (var e in Model.Expenses)
             {
                 <tr class="fin-row fin-expense-row" data-id="@e.Id" data-type="@e.Type" data-date="@e.DateDisplay"
-                    data-amount="@e.Amount.ToString(CultureInfo.InvariantCulture)">
-                    <td><span class="chip chip-exp">@e.Type</span></td>
+                    data-amount="@e.Amount.ToString(CultureInfo.InvariantCulture)" data-comment="@e.Comment">
+                    <td><span class="chip chip-exp">@e.Type</span>@if(!string.IsNullOrEmpty(e.Comment)){<div class="name">@e.Comment</div>}</td>
                     <td class="hide-sm"><span class="breed">@e.DateDisplay</span></td>
                     <td class="num-cell">@DisplayHelper.FormatRs(e.Amount)</td>
                 </tr>
@@ -166,10 +212,11 @@
             <tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL COSTS</td><td class="hide-sm"></td>
                 <td class="num-cell" style="font-weight:800;color:#8a261c">@DisplayHelper.FormatRs(Model.TotalExpense)</td></tr>
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
-            <div class="field"><label>Cost type</label><select id="e-type">@foreach(var t in expenseTypes){<option>@t</option>}</select></div>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr">
+            <div class="field"><label>Cost type</label><select id="e-type" data-lookup="Lookup.ExpenseTypes">@foreach(var t in expenseTypes){<option>@t</option>}</select></div>
             <div class="field"><label>Date</label><input type="date" id="e-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>Amount (Rs)</label><input type="number" id="e-amt" min="0"></div>
+            <div class="field"><label>Comment</label><input id="e-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">

@@ -50,175 +50,130 @@
 
 <body class="@(ViewData["BodyClass"]?.ToString() ?? "")">
 
-<div class="wrap">
+    <div class="wrap">
+
+        @if (isAuthenticated)
+        {
+            <div class="top" style="flex-wrap:wrap">
+                <div class="logo">🐐</div>
+                <div style="flex:1;min-width:160px"><h1>@farmName</h1><p>@farmLocation</p></div>
+                <div class="top-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+
+                    @if (visibleTabs.Contains(FarmTabs.Dashboard))
+
+                    {
+
+                        <a class="btn btn-ghost btn-sm" href="/Dashboard/Export">⬇ Backup</a>
+
+                    }
+
+                    @if (!string.IsNullOrEmpty(farmUserRole))
+
+                    {
+
+                        <span class="scopechip">@farmUserRole</span>
+
+                    }
+
+                    <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0">
+
+                        @Html.AntiForgeryToken()
+
+                        <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+
+                    </form>
+                </div>
+            </div>
+        }
+
+
+
+        @if (isAuthenticated && visibleTabs.Count > 0)
+        {
+            <div class="tabs tabs-bar">
+                <div class="tabs-main">
+                    @if (visibleTabs.Contains(FarmTabs.Dashboard))
+                    {
+                        <a class="tab @(activeTab == "dashboard" ? "active" : "")" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Herd))
+                    {
+                        <a class="tab @(activeTab == "herd" ? "active" : "")" asp-controller="Goat" asp-action="Index">Herd</a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Feed))
+                    {
+                        <a class="tab @(activeTab == "feed" ? "active" : "")" asp-controller="Feed" asp-action="Index">Feed &amp; Cost</a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Milk))
+                    {
+                        <a class="tab @(activeTab == "milk" ? "active" : "")" asp-controller="Milk" asp-action="Index">Milk</a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Vaccines))
+                    {
+                        <a class="tab @(activeTab == "health" ? "active" : "")" asp-controller="Vaccine" asp-action="Index">Vaccines</a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Finance))
+                    {
+                        <a class="tab @(activeTab == "finance" ? "active" : "")" asp-controller="Finance" asp-action="Index">Finance</a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Search))
+                    {
+                        <a class="tab @(activeTab == "search" ? "active" : "")" asp-controller="Search" asp-action="Index">Search</a>
+                    }
+                </div>
+
+                @if (visibleTabs.Contains(FarmTabs.Settings))
+                {
+                    <a class="tab tab-settings @(activeTab == "settings" ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a>
+                }
+            </div>
+        }
+        @RenderBody()
+    </div>
+
+    <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+
+
+
+    <div id="appModal" class="modal-overlay" aria-hidden="true">
+
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="appModalMsg">
+
+            <p class="modal-msg" id="appModalMsg"></p>
+
+            <input type="text" id="appModalInput" class="modal-input" autocomplete="off" />
+
+            <div class="modal-actions">
+
+                <button type="button" class="btn btn-ghost" id="appModalCancel">Cancel</button>
+
+                <button type="button" class="btn btn-green" id="appModalOk">OK</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
 
     @if (isAuthenticated)
-    {
-    <div class="top" style="flex-wrap:wrap">
-        <div class="logo">🐐</div>
-        <div style="flex:1;min-width:160px"><h1>@farmName</h1><p>@farmLocation</p></div>
-            <div class="top-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-
-                @if (visibleTabs.Contains(FarmTabs.Dashboard))
-
-                {
-
-                    <a class="btn btn-ghost btn-sm" href="/Dashboard/Export">⬇ Backup</a>
-
-                }
-
-                @if (!string.IsNullOrEmpty(farmUserRole))
-
-                {
-
-                    <span class="scopechip">@farmUserRole</span>
-
-                }
-
-                <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0">
-
-                    @Html.AntiForgeryToken()
-
-                    <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
-
-                </form>
-            </div>
-    </div>
-    }
-
-
-
-    @if (isAuthenticated && visibleTabs.Count > 0)
 
     {
 
-        <div class="tabs tabs-bar">
+        <script>
 
-            <div class="tabs-main">
+                window.FarmPermissions = @Html.Raw(farmPermissionsJson);
 
-                @if (visibleTabs.Contains(FarmTabs.Dashboard))
+                window.FarmUserRole = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(farmUserRole));
 
-                {
-
-                    <a class="tab @(activeTab == "dashboard" ? "active" : "")" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
-
-                }
-
-                @if (visibleTabs.Contains(FarmTabs.Herd))
-
-                {
-
-                    <a class="tab @(activeTab == "herd" ? "active" : "")" asp-controller="Goat" asp-action="Index">Herd</a>
-
-                }
-
-                @if (visibleTabs.Contains(FarmTabs.Feed))
-
-                {
-
-                    <a class="tab @(activeTab == "feed" ? "active" : "")" asp-controller="Feed" asp-action="Index">Feed &amp; Cost</a>
-
-                }
-
-                @if (visibleTabs.Contains(FarmTabs.Milk))
-
-                {
-
-                    <a class="tab @(activeTab == "milk" ? "active" : "")" asp-controller="Milk" asp-action="Index">Milk</a>
-
-                }
-
-                @if (visibleTabs.Contains(FarmTabs.Finance))
-
-                {
-
-                    <a class="tab @(activeTab == "finance" ? "active" : "")" asp-controller="Finance" asp-action="Index">Finance</a>
-
-                }
-
-                @if (visibleTabs.Contains(FarmTabs.Vaccines))
-
-                {
-
-                    <a class="tab @(activeTab == "health" ? "active" : "")" asp-controller="Vaccine" asp-action="Index">Vaccines</a>
-
-                }
-
-                @if (visibleTabs.Contains(FarmTabs.Search))
-
-                {
-
-                    <a class="tab @(activeTab == "search" ? "active" : "")" asp-controller="Search" asp-action="Index">Search</a>
-
-                }
-
-            </div>
-
-            @if (visibleTabs.Contains(FarmTabs.Settings))
-
-            {
-
-                <a class="tab tab-settings @(activeTab == "settings" ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a>
-
-            }
-
-        </div>
+        </script>
 
     }
 
+    <script src="~/js/goat-records.js" asp-append-version="true"></script>
 
-
-    @RenderBody()
-
-
-
-</div>
-
-
-
-<div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
-
-
-
-<div id="appModal" class="modal-overlay" aria-hidden="true">
-
-    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="appModalMsg">
-
-        <p class="modal-msg" id="appModalMsg"></p>
-
-        <input type="text" id="appModalInput" class="modal-input" autocomplete="off" />
-
-        <div class="modal-actions">
-
-            <button type="button" class="btn btn-ghost" id="appModalCancel">Cancel</button>
-
-            <button type="button" class="btn btn-green" id="appModalOk">OK</button>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-
-@if (isAuthenticated)
-
-{
-
-    <script>
-
-        window.FarmPermissions = @Html.Raw(farmPermissionsJson);
-
-        window.FarmUserRole = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(farmUserRole));
-
-    </script>
-
-}
-
-<script src="~/js/goat-records.js" asp-append-version="true"></script>
-
-@await RenderSectionAsync("Scripts", required: false)
+    @await RenderSectionAsync("Scripts", required: false)
 
 </body>
 

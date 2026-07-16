@@ -1,6 +1,7 @@
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Reminders;
 using GoatFarm.Application.ViewModels.Vaccines;
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,26 +12,30 @@ public class VaccineController : Controller
 {
     private readonly IVaccineService _vaccineService;
     private readonly IReminderService _reminderService;
+    private readonly ILookupService _lookupService;
 
-    public VaccineController(IVaccineService vaccineService, IReminderService reminderService)
+    public VaccineController(IVaccineService vaccineService, IReminderService reminderService, ILookupService lookupService)
     {
         _vaccineService = vaccineService;
         _reminderService = reminderService;
+        _lookupService = lookupService;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(int? remindDays, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(int? remindDays, string? month, CancellationToken cancellationToken)
     {
         ViewData["ActiveTab"] = "health";
-        var model = await _vaccineService.GetVaccinePageAsync(remindDays, cancellationToken);
+        var model = await _vaccineService.GetVaccinePageAsync(remindDays, month, cancellationToken);
         ViewBag.Reminders = await _reminderService.GetRemindersAsync(cancellationToken);
+        ViewBag.VaccineNames = await _lookupService.GetListAsync(LookupSettingKeys.VaccineNames, cancellationToken);
+        ViewBag.VaccineUnits = await _lookupService.GetListAsync(LookupSettingKeys.VaccineUnits, cancellationToken);
         return View(model);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetData(int? remindDays, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetData(int? remindDays, string? month, CancellationToken cancellationToken)
     {
-        var page = await _vaccineService.GetVaccinePageAsync(remindDays, cancellationToken);
+        var page = await _vaccineService.GetVaccinePageAsync(remindDays, month, cancellationToken);
         var reminders = await _reminderService.GetRemindersAsync(cancellationToken);
         return Json(new { page, reminders });
     }
@@ -84,6 +89,28 @@ public class VaccineController : Controller
     {
         await _vaccineService.SetReminderWindowAsync(request.Days, cancellationToken);
         return Ok(new { success = true });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AddPurchase([FromBody] CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return Json(await _vaccineService.AddVaccinePurchaseAsync(model, cancellationToken));
+    }
+
+    [HttpPut]
+    public async Task<IActionResult> UpdatePurchase(int id, [FromBody] CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var result = await _vaccineService.UpdateVaccinePurchaseAsync(id, model, cancellationToken);
+        return result is null ? NotFound() : Json(result);
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeletePurchase(int id, CancellationToken cancellationToken)
+    {
+        var ok = await _vaccineService.DeleteVaccinePurchaseAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
     }
 
     public record ReminderWindowRequest(int Days);

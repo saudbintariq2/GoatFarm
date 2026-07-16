@@ -83,5 +83,44 @@ public class VaccinePageViewModel
     public IReadOnlyList<VaccineUpcomingRowViewModel> Upcoming { get; set; } = [];
     public IReadOnlyList<VaccineViewModel> Schedule { get; set; } = [];
     public IReadOnlyList<VaccinationLogViewModel> History { get; set; } = [];
+    public IReadOnlyList<VaccinePurchaseViewModel> VaccinePurchases { get; set; } = [];
+    public decimal VaccineBoughtMonthTotal { get; set; }
+    public string PurchaseMonth { get; set; } = string.Empty;
     public CreateVaccineViewModel NewVaccine { get; set; } = new();
+}
+
+public class VaccinePurchaseViewModel
+{
+    public int Id { get; set; }
+    public DateOnly Date { get; set; }
+    public string DateDisplay => Date.ToString("yyyy-MM-dd");
+    public string Name { get; set; } = string.Empty;
+    public decimal Qty { get; set; }
+    public string Unit { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string? Comment { get; set; }
+}
+
+public class CreateVaccinePurchaseViewModel
+{
+    [Required]
+    public DateOnly Date { get; set; }
+
+    [Required]
+    [StringLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required]
+    [Range(0.01, double.MaxValue)]
+    public decimal Qty { get; set; }
+
+    [Required]
+    public string Unit { get; set; } = "Box";
+
+    [Required]
+    [Range(0.01, double.MaxValue)]
+    public decimal Amount { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 }

@@ -15,8 +15,10 @@ public class VaccineService : IVaccineService
 
     public VaccineService(GoatFarmDbContext context) => _context = context;
 
-    public async Task<VaccinePageViewModel> GetVaccinePageAsync(int? remindDays, CancellationToken cancellationToken = default)
+    public async Task<VaccinePageViewModel> GetVaccinePageAsync(int? remindDays, string? month = null, CancellationToken cancellationToken = default)
     {
+        month ??= MonthHelper.CurrentMonthKey();
+        var (monthStart, monthEnd) = MonthHelper.GetMonthRange(month);
         var window = remindDays ?? await GetRemindDaysAsync(cancellationToken);
         var goats = await _context.Goats.AsNoTracking().ToListAsync(cancellationToken);
         var vaccines = await _context.Vaccines.AsNoTracking().ToListAsync(cancellationToken);
@@ -90,6 +92,21 @@ public class VaccineService : IVaccineService
             .Take(15)
             .ToList();
 
+        var purchases = await _context.VaccinePurchases.AsNoTracking()
+            .Where(p => p.Date >= monthStart && p.Date < monthEnd)
+            .OrderByDescending(p => p.Date)
+            .Select(p => new VaccinePurchaseViewModel
+            {
+                Id = p.Id,
+                Date = p.Date,
+                Name = p.Name,
+                Qty = p.Qty,
+                Unit = p.Unit,
+                Amount = p.Amount,
+                Comment = p.Comment
+            })
+            .ToListAsync(cancellationToken);
+
         return new VaccinePageViewModel
         {
             VaccineCount = vaccines.Count,
@@ -101,7 +118,10 @@ public class VaccineService : IVaccineService
             DueNow = dueNow,
             Upcoming = upcoming,
             Schedule = schedule,
-            History = history
+            History = history,
+            VaccinePurchases = purchases,
+            VaccineBoughtMonthTotal = purchases.Sum(p => p.Amount),
+            PurchaseMonth = month
         };
     }
 
@@ -221,6 +241,65 @@ public class VaccineService : IVaccineService
         }
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<VaccinePurchaseViewModel> AddVaccinePurchaseAsync(CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken = default)
+    {
+        var entity = new VaccinePurchase
+        {
+            Date = model.Date,
+            Name = model.Name.Trim(),
+            Qty = model.Qty,
+            Unit = model.Unit,
+            Amount = model.Amount,
+            Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim()
+        };
+        _context.VaccinePurchases.Add(entity);
+        await _context.SaveChangesAsync(cancellationToken);
+        return MapPurchase(entity);
+    }
+
+    public async Task<VaccinePurchaseViewModel?> UpdateVaccinePurchaseAsync(int id, CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.VaccinePurchases.FindAsync([id], cancellationToken);
+        if (entity is null) return null;
+        entity.Date = model.Date;
+        entity.Name = model.Name.Trim();
+        entity.Qty = model.Qty;
+        entity.Unit = model.Unit;
+        entity.Amount = model.Amount;
+        entity.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
+        entity.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return MapPurchase(entity);
+    }
+
+    public async Task<bool> DeleteVaccinePurchaseAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.VaccinePurchases.FindAsync([id], cancellationToken);
+        if (entity is null) return false;
+        _context.VaccinePurchases.Remove(entity);
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public decimal GetVaccinePurchasedMonthly(string month)
+    {
+        var (monthStart, monthEnd) = MonthHelper.GetMonthRange(month);
+        return _context.VaccinePurchases.AsNoTracking()
+            .Where(p => p.Date >= monthStart && p.Date < monthEnd)
+            .Sum(p => p.Amount);
+    }
+
+    private static VaccinePurchaseViewModel MapPurchase(VaccinePurchase entity) => new()
+    {
+        Id = entity.Id,
+        Date = entity.Date,
+        Name = entity.Name,
+        Qty = entity.Qty,
+        Unit = entity.Unit,
+        Amount = entity.Amount,
+        Comment = entity.Comment
+    };
 
     private async Task<int> GetRemindDaysAsync(CancellationToken cancellationToken)
     {

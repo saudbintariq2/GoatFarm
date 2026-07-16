@@ -16,6 +16,9 @@ public class BackupService : Application.Interfaces.IBackupService
             goats = await _context.Goats.AsNoTracking().ToListAsync(cancellationToken),
             groups = await _context.GoatGroups.AsNoTracking().Select(g => g.Name).ToListAsync(cancellationToken),
             prices = await _context.FeedPrices.AsNoTracking().ToDictionaryAsync(p => p.FeedType, p => p.PricePerKg, cancellationToken),
+            feedBuys = await _context.FeedPurchases.AsNoTracking().ToListAsync(cancellationToken),
+            recurringCosts = await _context.RecurringCosts.AsNoTracking().ToListAsync(cancellationToken),
+            vaccineBuys = await _context.VaccinePurchases.AsNoTracking().ToListAsync(cancellationToken),
             assets = await _context.Assets.AsNoTracking().ToListAsync(cancellationToken),
             incomes = await _context.Incomes.AsNoTracking().ToListAsync(cancellationToken),
             expenses = await _context.Expenses.AsNoTracking().ToListAsync(cancellationToken),
@@ -26,6 +29,9 @@ public class BackupService : Application.Interfaces.IBackupService
             milkProd = await _context.MilkProductions.AsNoTracking().ToListAsync(cancellationToken),
             milkSales = await _context.MilkSales.AsNoTracking().ToListAsync(cancellationToken),
             milkWastes = await _context.MilkWastes.AsNoTracking().ToListAsync(cancellationToken),
+            lookupSettings = await _context.AppSettings.AsNoTracking()
+                .Where(s => s.Key.StartsWith("Lookup."))
+                .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken),
             _savedAt = DateTime.UtcNow
         };
     }

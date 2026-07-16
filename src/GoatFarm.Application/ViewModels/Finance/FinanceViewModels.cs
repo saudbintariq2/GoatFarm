@@ -8,6 +8,7 @@ public class AssetViewModel
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public decimal Cost { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class IncomeViewModel
@@ -17,6 +18,7 @@ public class IncomeViewModel
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
     public string DateDisplay => Date.ToString("yyyy-MM-dd");
+    public string? Comment { get; set; }
 }
 
 public class ExpenseViewModel
@@ -26,6 +28,30 @@ public class ExpenseViewModel
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
     public string DateDisplay => Date.ToString("yyyy-MM-dd");
+    public string? Comment { get; set; }
+}
+
+public class RecurringCostViewModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Period { get; set; } = "month";
+    public decimal MonthlyAmount { get; set; }
+}
+
+public class CreateRecurringCostViewModel
+{
+    [Required(ErrorMessage = "Enter a name")]
+    [StringLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required]
+    [Range(0.01, double.MaxValue, ErrorMessage = "Enter amount")]
+    public decimal Amount { get; set; }
+
+    [Required]
+    public string Period { get; set; } = "month";
 }
 
 public class OwnerInvestmentViewModel
@@ -49,6 +75,9 @@ public class CreateAssetViewModel
     [Required]
     [Range(0.01, double.MaxValue, ErrorMessage = "Enter cost")]
     public decimal Cost { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 }
 
 public class CreateIncomeViewModel
@@ -62,6 +91,9 @@ public class CreateIncomeViewModel
     [Required]
     [Range(0.01, double.MaxValue, ErrorMessage = "Enter amount")]
     public decimal Amount { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 }
 
 public class CreateExpenseViewModel
@@ -75,6 +107,9 @@ public class CreateExpenseViewModel
     [Required]
     [Range(0.01, double.MaxValue, ErrorMessage = "Enter amount")]
     public decimal Amount { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 }
 
 public class CreateOwnerInvestmentViewModel
@@ -103,6 +138,12 @@ public class FinancePageViewModel
     public decimal TotalIncome { get; set; }
     public decimal TotalExpense { get; set; }
     public decimal FeedMonthly { get; set; }
+    public decimal FeedBoughtMonthly { get; set; }
+    public decimal FeedBoughtKg { get; set; }
+    public decimal MedicineMonthly { get; set; }
+    public decimal RecurringMonthly { get; set; }
+    public decimal VaccineBoughtMonthly { get; set; }
+    public decimal ManualExpenseMonthly { get; set; }
     public decimal MilkIncome { get; set; }
     public decimal MilkLitersSold { get; set; }
     public decimal OwnerInvestmentMonthTotal { get; set; }
@@ -110,6 +151,7 @@ public class FinancePageViewModel
     public IReadOnlyList<AssetViewModel> Assets { get; set; } = [];
     public IReadOnlyList<IncomeViewModel> Incomes { get; set; } = [];
     public IReadOnlyList<ExpenseViewModel> Expenses { get; set; } = [];
+    public IReadOnlyList<RecurringCostViewModel> RecurringCosts { get; set; } = [];
     public IReadOnlyList<OwnerInvestmentViewModel> OwnerInvestments { get; set; } = [];
     public CreateAssetViewModel NewAsset { get; set; } = new();
     public CreateIncomeViewModel NewIncome { get; set; } = new() { Date = DateOnly.FromDateTime(DateTime.Today) };

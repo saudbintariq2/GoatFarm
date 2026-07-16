@@ -33,6 +33,14 @@ public static class FarmPermissionMap
             ["Feed.GetData"] = (FarmTabs.Feed, FarmActions.View),
             ["Feed.UpdatePrice"] = (FarmTabs.Feed, FarmActions.Edit),
             ["Feed.UpdatePlan"] = (FarmTabs.Feed, FarmActions.Edit),
+            ["Feed.AddPurchase"] = (FarmTabs.Feed, FarmActions.Add),
+            ["Feed.UpdatePurchase"] = (FarmTabs.Feed, FarmActions.Edit),
+            ["Feed.DeletePurchase"] = (FarmTabs.Feed, FarmActions.Delete),
+            ["Feed.AddFeedType"] = (FarmTabs.Feed, FarmActions.Add),
+            ["Feed.DeleteFeedType"] = (FarmTabs.Feed, FarmActions.Delete),
+
+            ["Lookup.Get"] = (FarmTabs.Herd, FarmActions.View),
+            ["Lookup.AddOption"] = (FarmTabs.Herd, FarmActions.Add),
 
             ["Milk.GetData"] = (FarmTabs.Milk, FarmActions.View),
             ["Milk.AddProduction"] = (FarmTabs.Milk, FarmActions.Add),
@@ -58,6 +66,9 @@ public static class FarmPermissionMap
             ["Finance.AddOwnerInvestment"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.UpdateOwnerInvestment"] = (FarmTabs.Finance, FarmActions.Edit),
             ["Finance.DeleteOwnerInvestment"] = (FarmTabs.Finance, FarmActions.Delete),
+            ["Finance.AddRecurringCost"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.UpdateRecurringCost"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.DeleteRecurringCost"] = (FarmTabs.Finance, FarmActions.Delete),
 
             ["Vaccine.GetData"] = (FarmTabs.Vaccines, FarmActions.View),
             ["Vaccine.Add"] = (FarmTabs.Vaccines, FarmActions.Add),
@@ -67,6 +78,9 @@ public static class FarmPermissionMap
             ["Vaccine.UpdateHistoryBatch"] = (FarmTabs.Vaccines, FarmActions.Edit),
             ["Vaccine.DeleteHistoryBatch"] = (FarmTabs.Vaccines, FarmActions.Delete),
             ["Vaccine.SetReminderWindow"] = (FarmTabs.Vaccines, FarmActions.Edit),
+            ["Vaccine.AddPurchase"] = (FarmTabs.Vaccines, FarmActions.Add),
+            ["Vaccine.UpdatePurchase"] = (FarmTabs.Vaccines, FarmActions.Edit),
+            ["Vaccine.DeletePurchase"] = (FarmTabs.Vaccines, FarmActions.Delete),
 
             ["Reminder.GetAll"] = (FarmTabs.Vaccines, FarmActions.View),
             ["Reminder.Create"] = (FarmTabs.Vaccines, FarmActions.Add),

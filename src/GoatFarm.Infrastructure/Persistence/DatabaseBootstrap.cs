@@ -1,3 +1,4 @@
+using GoatFarm.Application.Interfaces;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -42,6 +43,7 @@ public static class DatabaseBootstrap
                 logger: logger,
                 cancellationToken: cancellationToken);
             await SettingsSeedHelper.SeedDefaultsAsync(context, cancellationToken);
+            await provider.GetRequiredService<ILookupService>().EnsureDefaultsAsync(cancellationToken);
 
             logger.LogInformation("Database initialization completed.");
         }

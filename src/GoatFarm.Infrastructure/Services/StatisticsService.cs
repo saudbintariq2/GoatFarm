@@ -35,7 +35,7 @@ public class StatisticsService : IStatisticsService
         month ??= MonthHelper.CurrentMonthKey();
         var finance = await _financeService.GetFinancePageAsync(month, cancellationToken);
         var milk = await _milkService.GetMilkPageAsync(cancellationToken: cancellationToken);
-        var vaccine = await _vaccineService.GetVaccinePageAsync(null, cancellationToken);
+        var vaccine = await _vaccineService.GetVaccinePageAsync(null, month, cancellationToken);
         var reminders = await _reminderService.GetRemindersAsync(cancellationToken);
         var stats = await GetHerdStatsAsync(cancellationToken);
 

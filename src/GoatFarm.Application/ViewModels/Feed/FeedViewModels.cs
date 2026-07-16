@@ -52,11 +52,43 @@ public class FeedPageViewModel
     public FeedPlanViewModel CurrentPlan { get; set; } = new();
     public IReadOnlyList<FeedSummaryRowViewModel> Summary { get; set; } = [];
     public IReadOnlyList<FeedBuyingRowViewModel> BuyingList { get; set; } = [];
+    public IReadOnlyList<FeedPurchaseViewModel> FeedPurchases { get; set; } = [];
+    public decimal FeedBoughtMonthTotal { get; set; }
+    public decimal FeedBoughtKgTotal { get; set; }
+    public string FeedMonth { get; set; } = string.Empty;
     public decimal GrandMonthly { get; set; }
     public decimal GrandDaily { get; set; }
     public int TotalGoats { get; set; }
     public string SelectedStatusKey { get; set; } = "kid";
     public IReadOnlyList<(string Key, string Label)> StatusOptions { get; set; } = [];
+}
+
+public class FeedPurchaseViewModel
+{
+    public int Id { get; set; }
+    public DateOnly Date { get; set; }
+    public string DateDisplay => Date.ToString("yyyy-MM-dd");
+    public string FeedType { get; set; } = string.Empty;
+    public string FeedDisplayName { get; set; } = string.Empty;
+    public decimal Kg { get; set; }
+    public decimal RatePerKg { get; set; }
+    public decimal Amount { get; set; }
+    public string? Comment { get; set; }
+}
+
+public class CreateFeedPurchaseViewModel
+{
+    public DateOnly Date { get; set; }
+    public string FeedType { get; set; } = string.Empty;
+    public decimal Kg { get; set; }
+    public decimal RatePerKg { get; set; }
+    public string? Comment { get; set; }
+}
+
+public class AddFeedTypeViewModel
+{
+    public string DisplayName { get; set; } = string.Empty;
+    public decimal PricePerKg { get; set; }
 }
 
 public class UpdateFeedPlanViewModel

@@ -17,8 +17,13 @@ public class GoatController : Controller
     };
 
     private readonly IGoatService _goatService;
+    private readonly ILookupService _lookupService;
 
-    public GoatController(IGoatService goatService) => _goatService = goatService;
+    public GoatController(IGoatService goatService, ILookupService lookupService)
+    {
+        _goatService = goatService;
+        _lookupService = lookupService;
+    }
 
     [HttpGet]
     public async Task<IActionResult> Index(
@@ -30,7 +35,7 @@ public class GoatController : Controller
     {
         ViewData["ActiveTab"] = "herd";
         var model = await _goatService.GetHerdPageAsync(filter, page, cancellationToken: cancellationToken);
-        ViewBag.Breeds = LookupConstants.Breeds;
+        ViewBag.Breeds = await _lookupService.GetListAsync(LookupSettingKeys.Breeds, cancellationToken);
 
         GoatViewModel? editGoat = null;
         if (editId.HasValue)

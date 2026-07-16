@@ -27,4 +27,14 @@ public static class LookupConstants
     [
         "Mixed", "Beetal", "Makhee Cheeni"
     ];
+
+    public static readonly string[] VaccineNames =
+    [
+        "Enterotoxaemia (ET)", "PPR", "FMD", "CCPP", "ET booster (pre-kidding)", "Deworming"
+    ];
+
+    public static readonly string[] VaccineUnits =
+    [
+        "Box", "Bottle", "Dose", "Vial", "Other"
+    ];
 }

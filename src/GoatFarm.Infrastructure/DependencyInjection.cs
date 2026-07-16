@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IStatisticsService, StatisticsService>();
         services.AddScoped<IBackupService, BackupService>();
         services.AddScoped<IUserSettingsService, UserSettingsService>();
+        services.AddScoped<ILookupService, LookupService>();
 
         return services;
     }

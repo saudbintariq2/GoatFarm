@@ -121,6 +121,7 @@ public class GoatService : IGoatService
         {
             Tag = model.Tag.Trim(),
             Name = string.IsNullOrWhiteSpace(model.Name) ? null : model.Name.Trim(),
+            Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim(),
             Breed = model.Breed,
             Gender = model.Gender,
             Status = model.Status,
@@ -140,6 +141,7 @@ public class GoatService : IGoatService
 
         goat.Tag = model.Tag.Trim();
         goat.Name = string.IsNullOrWhiteSpace(model.Name) ? null : model.Name.Trim();
+        goat.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
         goat.Breed = model.Breed;
         goat.Gender = model.Gender;
         goat.Status = model.Status;
@@ -242,6 +244,7 @@ public class GoatService : IGoatService
             Id = g.Id,
             Tag = g.Tag,
             Name = g.Name,
+            Comment = g.Comment,
             Breed = g.Breed,
             Gender = g.Gender,
             Status = g.Status,

@@ -14,6 +14,7 @@ public class Goat : BaseEntity
 {
     public string Tag { get; set; } = string.Empty;
     public string? Name { get; set; }
+    public string? Comment { get; set; }
     public string Breed { get; set; } = string.Empty;
     public GoatGender Gender { get; set; }
     public GoatStatus Status { get; set; }
@@ -47,12 +48,40 @@ public class FeedPlanItem : BaseEntity
     public int GramsPerDay { get; set; }
 }
 
+public class FeedPurchase : BaseEntity
+{
+    public DateOnly Date { get; set; }
+    public string FeedType { get; set; } = string.Empty;
+    public decimal Kg { get; set; }
+    public decimal RatePerKg { get; set; }
+    public decimal Amount { get; set; }
+    public string? Comment { get; set; }
+}
+
+public class RecurringCost : BaseEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public RecurringCostPeriod Period { get; set; }
+}
+
+public class VaccinePurchase : BaseEntity
+{
+    public DateOnly Date { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Qty { get; set; }
+    public string Unit { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string? Comment { get; set; }
+}
+
 public class Asset : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public decimal Cost { get; set; }
     public DateOnly? PurchaseDate { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class Income : BaseEntity
@@ -60,6 +89,7 @@ public class Income : BaseEntity
     public string Type { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class Expense : BaseEntity
@@ -67,6 +97,7 @@ public class Expense : BaseEntity
     public string Type { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class OwnerInvestment : BaseEntity
@@ -81,6 +112,7 @@ public class MilkProduction : BaseEntity
     public DateOnly Date { get; set; }
     public string Breed { get; set; } = "Mixed";
     public decimal Liters { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class MilkSale : BaseEntity
@@ -89,6 +121,7 @@ public class MilkSale : BaseEntity
     public decimal Liters { get; set; }
     public decimal Rate { get; set; }
     public decimal Amount { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class MilkWaste : BaseEntity

@@ -99,7 +99,7 @@
             var items = plan.Items.Where(i => i.GramsPerDay > 0).ToList();
             <div class="note" style="margin-bottom:12px">Based on the <b>@plan.StatusDisplay</b> feed plan (farm-level ration per goat).</div>
             <table class="tbl">
-                <thead><tr><th>Feed</th><th>Daily</th><th class="hide-sm">Cost/day</th></tr></thead>
+                <thead><tr><th>Feed</th><th class="num-cell">Daily</th><th class="num-cell hide-sm">Cost/day</th></tr></thead>
                 <tbody>
                 @if (items.Count == 0)
                 {

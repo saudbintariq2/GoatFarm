@@ -9,16 +9,21 @@ namespace GoatFarm.Web.Controllers;
 public class FinanceController : Controller
 {
     private readonly IFinanceService _financeService;
+    private readonly ILookupService _lookupService;
 
-    public FinanceController(IFinanceService financeService) => _financeService = financeService;
+    public FinanceController(IFinanceService financeService, ILookupService lookupService)
+    {
+        _financeService = financeService;
+        _lookupService = lookupService;
+    }
 
     [HttpGet]
     public async Task<IActionResult> Index(string? month, CancellationToken cancellationToken)
     {
         ViewData["ActiveTab"] = "finance";
-        ViewBag.IncomeTypes = LookupConstants.IncomeTypes;
-        ViewBag.ExpenseTypes = LookupConstants.ExpenseTypes;
-        ViewBag.AssetTypes = LookupConstants.AssetTypes;
+        ViewBag.IncomeTypes = await _lookupService.GetListAsync(LookupSettingKeys.IncomeTypes, cancellationToken);
+        ViewBag.ExpenseTypes = await _lookupService.GetListAsync(LookupSettingKeys.ExpenseTypes, cancellationToken);
+        ViewBag.AssetTypes = await _lookupService.GetListAsync(LookupSettingKeys.AssetTypes, cancellationToken);
         return View(await _financeService.GetFinancePageAsync(month, cancellationToken));
     }
 
@@ -111,6 +116,28 @@ public class FinanceController : Controller
     public async Task<IActionResult> DeleteOwnerInvestment(int id, CancellationToken cancellationToken)
     {
         var ok = await _financeService.DeleteOwnerInvestmentAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AddRecurringCost([FromBody] CreateRecurringCostViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return Json(await _financeService.AddRecurringCostAsync(model, cancellationToken));
+    }
+
+    [HttpPut]
+    public async Task<IActionResult> UpdateRecurringCost(int id, [FromBody] CreateRecurringCostViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var result = await _financeService.UpdateRecurringCostAsync(id, model, cancellationToken);
+        return result is null ? NotFound() : Json(result);
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteRecurringCost(int id, CancellationToken cancellationToken)
+    {
+        var ok = await _financeService.DeleteRecurringCostAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound();
     }
 }

@@ -1,24 +1,33 @@
 @model GoatFarm.Application.ViewModels.Feed.FeedPageViewModel
 @using GoatFarm.Application.Common
+@using System.Globalization
 
 <div class="bignum">
-    <div><div class="lbl">Total feed + medicine bill</div><div class="big" id="grandMonth">@DisplayHelper.FormatRs(Model.GrandMonthly)</div>
-        <div class="lbl">per month</div></div>
+    <div><div class="lbl">Estimated feed + medicine (budget)</div><div class="big" id="grandMonth">@DisplayHelper.FormatRs(Model.GrandMonthly)</div>
+        <div class="lbl">per month — planning figure</div></div>
     <div class="side"><span class="lbl">Per day</span><b id="grandDay">@DisplayHelper.FormatRs(Model.GrandDaily)</b>
         <span class="lbl" id="grandHead">for @Model.TotalGoats goats</span></div>
 </div>
-<div class="note"><b>How feed cost works:</b> put your real prices, then set what one goat in each group
-    eats per day. It multiplies by the goats in that group. Numbers shown are examples — replace them.</div>
+<div class="note"><b>Two things here:</b> the <b>prices, plan and buying list</b> below are for <b>planning</b>
+    — they estimate what you'll need. The <b>Feed bought</b> panel at the bottom is for the <b>actual purchases</b>
+    you make — that real spend goes into Finance.</div>
 
 <div class="panel">
     <div class="panel-head"><h2>Feed prices</h2><span class="sub">what you pay per kg</span></div>
     <div class="panel-body"><div class="price-grid" id="priceGrid">
         @foreach (var p in Model.Prices)
         {
-            <div class="price-row"><label>@p.DisplayName</label><div class="price-in"><span class="pre">Rs</span>
+            <div class="price-row"><label>@p.DisplayName <span class="del feed-del" data-delfeed="@p.FeedType" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
                 <input type="number" min="0" data-price="@p.FeedType" value="@p.PricePerKg"><span class="suf">/ kg</span></div></div>
         }
-    </div></div>
+    </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:150px"><label>Add a new feed type</label>
+                <input id="nf-name" placeholder="e.g. Silage / Corn gluten"></div>
+            <div class="field"><label>Price (Rs/kg)</label><input type="number" id="nf-price" min="0" style="width:110px"></div>
+            <button type="button" class="btn btn-green" id="addFeedType">+ Add feed</button>
+        </div>
+    </div>
 </div>
 <div class="panel">
     <div class="panel-head"><h2>Feed plan per group</h2>
@@ -81,6 +90,54 @@
                 <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(b.CostPerMonth)</td></tr>
         }
     </tbody></table></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="feedBuyFormTitle">Feed bought</h2><span class="sub">actual purchases → Finance</span></div>
+    <div class="panel-body">
+        <div class="filterbar" style="margin-bottom:14px">
+            <div class="field"><label class="hide-sm">Month</label><input type="month" id="feedMonth" value="@Model.FeedMonth"></div>
+        </div>
+        <div class="bignum" style="margin-bottom:14px;padding:14px 18px">
+            <div><div class="lbl">Feed bought this month</div><div class="big" id="feedBoughtMonth" style="font-size:26px">@DisplayHelper.FormatRs(Model.FeedBoughtMonthTotal)</div></div>
+            <div class="side"><span class="lbl" id="feedBoughtKg">@Model.FeedBoughtKgTotal.ToString("N1") kg total</span></div>
+        </div>
+        <table class="tbl"><thead><tr><th>Date</th><th>Feed</th><th class="num-cell">Qty</th>
+            <th class="num-cell hide-sm">Rate/kg</th><th class="num-cell">Total</th>
+            <th class="hide-sm">Comment</th></tr></thead>
+            <tbody id="buyLogRows">
+            @foreach (var b in Model.FeedPurchases)
+            {
+                <tr class="feed-buy-row" data-id="@b.Id" data-date="@b.DateDisplay" data-feed="@b.FeedType"
+                    data-kg="@b.Kg.ToString(CultureInfo.InvariantCulture)"
+                    data-rate="@b.RatePerKg.ToString(CultureInfo.InvariantCulture)"
+                    data-comment="@b.Comment">
+                    <td><span class="breed">@b.DateDisplay</span></td>
+                    <td>@b.FeedDisplayName</td>
+                    <td class="num-cell">@b.Kg.ToString("N1") kg</td>
+                    <td class="num-cell hide-sm">Rs @b.RatePerKg</td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(b.Amount)</td>
+                    <td class="hide-sm">@if(!string.IsNullOrEmpty(b.Comment)){<span class="name">@b.Comment</span>}</td>
+                </tr>
+            }
+            @if (!Model.FeedPurchases.Any()) {<tr class="feed-buy-empty"><td colspan="6" class="empty">No feed purchases logged this month.</td></tr>}
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .8fr .9fr .9fr 1.2fr auto">
+            <div class="field"><label>Date</label><input type="date" id="fb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Feed</label><select id="fb-feed">
+                @foreach (var p in Model.Prices){<option value="@p.FeedType">@p.DisplayName</option>}
+            </select></div>
+            <div class="field"><label>Qty (kg)</label><input type="number" id="fb-kg" min="0" step="0.5"></div>
+            <div class="field"><label>Rate/kg</label><input type="number" id="fb-rate" min="0"></div>
+            <div class="field"><label>Total</label><input type="number" id="fb-total" disabled placeholder="auto"></div>
+            <div class="field"><label>Comment</label><input id="fb-note" placeholder="optional"></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addFeedBuy">+ Add</button></div>
+        </div>
+        <div class="goat-form-actions">
+            <button type="button" class="btn btn-ghost" id="cancelFeedBuyBtn" style="display:none">Cancel</button>
+            <button type="button" class="btn btn-danger" id="deleteFeedBuyBtn" style="display:none">Delete</button>
+        </div>
+    </div>
 </div>
 
 @section Scripts {<script>GoatRecords.initFeed();</script>}

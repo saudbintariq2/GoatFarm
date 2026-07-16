@@ -10,6 +10,7 @@ public class MilkProductionViewModel
     public string DateDisplay => Date.ToString("yyyy-MM-dd");
     public string Breed { get; set; } = "Mixed";
     public decimal Liters { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class MilkSaleViewModel
@@ -20,6 +21,7 @@ public class MilkSaleViewModel
     public decimal Liters { get; set; }
     public decimal Rate { get; set; }
     public decimal Amount { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class MilkWasteViewModel
@@ -42,6 +44,9 @@ public class CreateMilkProductionViewModel
     [Required]
     [Range(0.1, double.MaxValue, ErrorMessage = "Enter litres")]
     public decimal Liters { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 }
 
 public class CreateMilkSaleViewModel
@@ -56,6 +61,9 @@ public class CreateMilkSaleViewModel
     [Required]
     [Range(0.01, double.MaxValue)]
     public decimal Rate { get; set; }
+
+    [StringLength(500)]
+    public string? Comment { get; set; }
 }
 
 public class CreateMilkWasteViewModel

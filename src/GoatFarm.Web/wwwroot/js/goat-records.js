@@ -175,6 +175,38 @@ const GoatRecords = (() => {
     return ct.includes('json') ? res.json() : null;
   }
 
+  async function initEditableDropdown(selectId, listKey, prefixItems = []) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !listKey) return;
+    const fill = async () => {
+      const list = await api('/Lookup/Get?key=' + encodeURIComponent(listKey));
+      const opts = [...prefixItems, ...list.filter(x => !prefixItems.includes(x))];
+      const cur = sel.value;
+      sel.innerHTML = opts.map(t => `<option>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('') +
+        '<option value="__add">➕ Add new…</option>';
+      if (opts.includes(cur)) sel.value = cur;
+    };
+    sel.onchange = async () => {
+      if (sel.value !== '__add') return;
+      const name = await showModal('Add a new option to this list:', { prompt: true });
+      if (name?.trim()) {
+        const updated = await api('/Lookup/AddOption', { method: 'POST', body: JSON.stringify({ key: listKey, value: name.trim() }) });
+        sel.innerHTML = updated.map(t => `<option>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('') +
+          '<option value="__add">➕ Add new…</option>';
+        sel.value = name.trim();
+      } else {
+        await fill();
+      }
+    };
+    await fill();
+  }
+
+  function initEditableDropdowns() {
+    document.querySelectorAll('select[data-lookup]').forEach(sel => {
+      initEditableDropdown(sel.id, sel.dataset.lookup);
+    });
+  }
+
   const selected = new Set();
 
   function initHerd(opts = {}) {
@@ -218,6 +250,7 @@ const GoatRecords = (() => {
       document.getElementById('f-price').value = '';
       document.getElementById('f-status').value = 'Kid';
       document.getElementById('f-date').value = '';
+      document.getElementById('f-note').value = '';
       applySourcePriceState();
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       setEditMode(false);
@@ -242,6 +275,7 @@ const GoatRecords = (() => {
       document.getElementById('f-price').value = source === 'Born' ? '' : (goat.purchasePrice ?? '');
       document.getElementById('f-status').value = enumValue(goat.status, 'Kid');
       document.getElementById('f-date').value = goat.eventDateDisplay || goat.eventDate || '';
+      document.getElementById('f-note').value = goat.comment || '';
       applySourcePriceState();
       setEditMode(true);
       if (!FarmPerms.can('herd', 'add')) FarmPerms.revealEditForm('addBtn');
@@ -273,7 +307,8 @@ const GoatRecords = (() => {
         source: row.dataset.source,
         purchasePrice: row.dataset.price,
         status: row.dataset.status,
-        eventDateDisplay: row.dataset.date
+        eventDateDisplay: row.dataset.date,
+        comment: row.dataset.comment
       });
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
@@ -364,6 +399,7 @@ const GoatRecords = (() => {
       return {
         tag: document.getElementById('f-tag').value.trim(),
         name: document.getElementById('f-name').value.trim(),
+        comment: document.getElementById('f-note').value.trim() || null,
         breed: document.getElementById('f-breed').value,
         gender: document.getElementById('f-gender').value,
         status: document.getElementById('f-status').value,
@@ -475,6 +511,7 @@ const GoatRecords = (() => {
     } else {
       document.getElementById('f-tag')?.focus();
     }
+    initEditableDropdown('f-breed', 'Lookup.Breeds');
   }
 
   function renderBulk() {
@@ -501,6 +538,21 @@ const GoatRecords = (() => {
   }
 
   function initFeed() {
+    let editingFeedBuyId = null;
+
+    const feedMonth = () => document.getElementById('feedMonth')?.value || new Date().toISOString().slice(0, 7);
+
+    const updateFbTotal = () => {
+      const kg = +document.getElementById('fb-kg')?.value || 0;
+      const rate = +document.getElementById('fb-rate')?.value || 0;
+      const total = document.getElementById('fb-total');
+      if (total) total.value = kg && rate ? Math.round(kg * rate) : '';
+    };
+    document.getElementById('fb-kg')?.addEventListener('input', updateFbTotal);
+    document.getElementById('fb-rate')?.addEventListener('input', updateFbTotal);
+
+    document.getElementById('feedMonth')?.addEventListener('change', () => reloadFeed());
+
     const savePlan = async () => {
       const statusKey = document.getElementById('planGroup').value;
       const rations = {};
@@ -516,12 +568,58 @@ const GoatRecords = (() => {
       await reloadFeed();
     };
 
+    function resetFeedBuyForm() {
+      editingFeedBuyId = null;
+      document.getElementById('feedBuyFormTitle').textContent = 'Feed bought';
+      document.getElementById('addFeedBuy').textContent = '+ Add';
+      document.getElementById('fb-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('fb-kg').value = '';
+      document.getElementById('fb-rate').value = '';
+      document.getElementById('fb-total').value = '';
+      document.getElementById('fb-note').value = '';
+      document.querySelectorAll('#buyLogRows tr.feed-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      document.getElementById('cancelFeedBuyBtn').style.display = 'none';
+      document.getElementById('deleteFeedBuyBtn').style.display = 'none';
+    }
+
+    function loadFeedBuyForEdit(row) {
+      if (!FarmPerms.can('feed', 'edit')) return;
+      editingFeedBuyId = +row.dataset.id;
+      document.getElementById('feedBuyFormTitle').textContent = 'Edit feed purchase';
+      document.getElementById('addFeedBuy').textContent = 'Save';
+      document.getElementById('fb-date').value = row.dataset.date || '';
+      document.getElementById('fb-feed').value = row.dataset.feed || '';
+      document.getElementById('fb-kg').value = row.dataset.kg || '';
+      document.getElementById('fb-rate').value = row.dataset.rate || '';
+      document.getElementById('fb-note').value = row.dataset.comment || '';
+      updateFbTotal();
+      document.querySelectorAll('#buyLogRows tr.feed-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      document.getElementById('cancelFeedBuyBtn').style.display = '';
+      document.getElementById('deleteFeedBuyBtn').style.display = '';
+    }
+
     async function reloadFeed() {
       const status = document.getElementById('planGroup')?.value;
-      const data = await api('/Feed/GetData?status=' + encodeURIComponent(status || ''));
+      const month = feedMonth();
+      const data = await api('/Feed/GetData?status=' + encodeURIComponent(status || '') + '&month=' + encodeURIComponent(month));
       document.getElementById('grandMonth').textContent = rs(data.grandMonthly);
       document.getElementById('grandDay').textContent = rs(data.grandDaily);
       document.getElementById('grandHead').textContent = 'for ' + data.totalGoats + ' goats';
+      document.getElementById('feedBoughtMonth').textContent = rs(data.feedBoughtMonthTotal);
+      document.getElementById('feedBoughtKg').textContent = (data.feedBoughtKgTotal || 0).toFixed(1) + ' kg total';
+
+      document.getElementById('priceGrid').innerHTML = data.prices.map(p =>
+        `<div class="price-row"><label>${p.displayName} <span class="del feed-del" data-delfeed="${p.feedType}" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
+          <input type="number" min="0" data-price="${p.feedType}" value="${p.pricePerKg}"><span class="suf">/ kg</span></div></div>`).join('');
+
+      const feedOpts = data.prices.map(p => `<option value="${p.feedType}">${p.displayName}</option>`).join('');
+      const fbFeed = document.getElementById('fb-feed');
+      const curFeed = fbFeed?.value;
+      if (fbFeed) {
+        fbFeed.innerHTML = feedOpts;
+        if ([...fbFeed.options].some(o => o.value === curFeed)) fbFeed.value = curFeed;
+      }
 
       const plan = data.currentPlan;
       document.getElementById('medIn').value = plan.medicineCostPerGoatPerMonth;
@@ -550,15 +648,98 @@ const GoatRecords = (() => {
           <td class="num-cell hide-sm">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
           <td class="num-cell" style="color:var(--green-dark)">${rs(b.costPerMonth)}</td></tr>`).join('');
 
+      document.getElementById('buyLogRows').innerHTML = (data.feedPurchases?.length ? data.feedPurchases.map(b =>
+        `<tr class="feed-buy-row" data-id="${b.id}" data-date="${b.dateDisplay}" data-feed="${b.feedType}"
+          data-kg="${b.kg}" data-rate="${b.ratePerKg}" data-comment="${b.comment || ''}">
+          <td><span class="breed">${b.dateDisplay}</span></td><td>${b.feedDisplayName}</td>
+          <td class="num-cell">${(+b.kg).toFixed(1)} kg</td><td class="num-cell hide-sm">Rs ${b.ratePerKg}</td>
+          <td class="num-cell">${rs(b.amount)}</td>
+          <td class="hide-sm">${b.comment ? `<span class="name">${b.comment}</span>` : ''}</td></tr>`).join('') :
+        '<tr class="feed-buy-empty"><td colspan="6" class="empty">No feed purchases logged this month.</td></tr>');
+
+      document.querySelectorAll('#buyLogRows tr.feed-buy-row').forEach(row => {
+        row.addEventListener('click', () => loadFeedBuyForEdit(row));
+      });
+
       bindFeedInputs(savePlan);
+      bindFeedDeleteButtons();
     }
 
+    function bindFeedDeleteButtons() {
+      document.querySelectorAll('.feed-del').forEach(x => {
+        x.onclick = async e => {
+          e.preventDefault();
+          if (!FarmPerms.can('feed', 'delete')) return;
+          const feedType = x.dataset.delfeed;
+          const label = x.closest('.price-row')?.querySelector('label')?.textContent?.replace('×', '').trim() || feedType;
+          const confirmed = await showConfirm('Remove "' + label + '" from the feed list?');
+          if (!confirmed) return;
+          await api('/Feed/DeleteFeedType?feedType=' + encodeURIComponent(feedType), { method: 'DELETE' });
+          sessionStorage.setItem('goatToast', 'Feed type removed');
+          await reloadFeed();
+          flashStoredToast();
+        };
+      });
+    }
+
+    document.getElementById('cancelFeedBuyBtn')?.addEventListener('click', resetFeedBuyForm);
+    document.getElementById('deleteFeedBuyBtn')?.addEventListener('click', async () => {
+      if (!editingFeedBuyId || !FarmPerms.can('feed', 'delete')) return;
+      const confirmed = await showConfirm('Delete this feed purchase?');
+      if (!confirmed) return;
+      await api('/Feed/DeletePurchase?id=' + editingFeedBuyId, { method: 'DELETE' });
+      sessionStorage.setItem('goatToast', 'Feed purchase deleted');
+      location.href = '/Feed?month=' + encodeURIComponent(feedMonth());
+    });
+
+    document.getElementById('addFeedBuy')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('feed', !!editingFeedBuyId)) return;
+      const date = document.getElementById('fb-date').value;
+      const feedType = document.getElementById('fb-feed').value;
+      const kg = +document.getElementById('fb-kg').value || 0;
+      const ratePerKg = +document.getElementById('fb-rate').value || 0;
+      if (!date || !feedType || !kg || !ratePerKg) { await showModal('Enter date, feed, qty and rate'); return; }
+      const payload = {
+        date, feedType, kg, ratePerKg,
+        comment: document.getElementById('fb-note').value.trim() || null
+      };
+      if (editingFeedBuyId) {
+        await api('/Feed/UpdatePurchase?id=' + editingFeedBuyId, { method: 'PUT', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Feed purchase updated');
+      } else {
+        await api('/Feed/AddPurchase', { method: 'POST', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Feed purchase added');
+      }
+      location.href = '/Feed?month=' + encodeURIComponent(feedMonth());
+    });
+
+    document.getElementById('addFeedType')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'add')) return;
+      const displayName = document.getElementById('nf-name').value.trim();
+      const pricePerKg = +document.getElementById('nf-price').value || 0;
+      if (!displayName) { await showModal('Enter feed name'); return; }
+      await api('/Feed/AddFeedType', { method: 'POST', body: JSON.stringify({ displayName, pricePerKg }) });
+      document.getElementById('nf-name').value = '';
+      document.getElementById('nf-price').value = '';
+      sessionStorage.setItem('goatToast', 'Feed type added');
+      await reloadFeed();
+      flashStoredToast();
+    });
+
     document.getElementById('planGroup')?.addEventListener('change', reloadFeed);
+    document.querySelectorAll('#buyLogRows tr.feed-buy-row').forEach(row => {
+      row.addEventListener('click', () => loadFeedBuyForEdit(row));
+    });
+
     if (!FarmPerms.can('feed', 'edit')) {
-      FarmPerms.readonlyInputs('[data-price], [data-ration], #medIn, #planGroup');
+      FarmPerms.readonlyInputs('[data-price], [data-ration], #medIn, #planGroup, #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price');
+      FarmPerms.hide('addFeedType');
+      FarmPerms.hide('addFeedBuy');
     } else {
       bindFeedInputs(async () => { await savePlan(); });
+      bindFeedDeleteButtons();
     }
+    FarmPerms.applyForm('feed', { addBtnId: 'addFeedBuy', deleteBtnId: 'deleteFeedBuyBtn', rowSelector: '#buyLogRows tr.feed-buy-row' });
   }
 
   function initMilk() {
@@ -606,6 +787,7 @@ const GoatRecords = (() => {
       document.getElementById('p-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('p-breed').selectedIndex = 0;
       document.getElementById('p-liters').value = '';
+      document.getElementById('p-note').value = '';
       document.querySelectorAll('#prodRows tr.milk-prod-row.editing').forEach(r => r.classList.remove('editing'));
       setProdEditMode(false);
     }
@@ -618,6 +800,7 @@ const GoatRecords = (() => {
       document.getElementById('s-liters').value = '';
       document.getElementById('s-rate').value = '';
       document.getElementById('s-amt').value = '';
+      document.getElementById('s-note').value = '';
       document.querySelectorAll('#saleRows tr.milk-sale-row.editing').forEach(r => r.classList.remove('editing'));
       setSaleEditMode(false);
     }
@@ -641,6 +824,7 @@ const GoatRecords = (() => {
       document.getElementById('p-date').value = row.dataset.date || '';
       document.getElementById('p-breed').value = row.dataset.breed || '';
       document.getElementById('p-liters').value = row.dataset.liters || '';
+      document.getElementById('p-note').value = row.dataset.comment || '';
       document.querySelectorAll('#prodRows tr.milk-prod-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setProdEditMode(true);
@@ -657,6 +841,7 @@ const GoatRecords = (() => {
       document.getElementById('s-liters').value = row.dataset.liters || '';
       document.getElementById('s-rate').value = row.dataset.rate || '';
       milkAmt();
+      document.getElementById('s-note').value = row.dataset.comment || '';
       document.querySelectorAll('#saleRows tr.milk-sale-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setSaleEditMode(true);
@@ -712,7 +897,12 @@ const GoatRecords = (() => {
       const date = document.getElementById('p-date').value;
       const liters = +document.getElementById('p-liters').value || 0;
       if (!date || !liters) { await showModal('Enter date and litres'); return; }
-      const payload = { date, breed: document.getElementById('p-breed').value, liters };
+      const payload = {
+        date,
+        breed: document.getElementById('p-breed').value,
+        liters,
+        comment: document.getElementById('p-note').value.trim() || null
+      };
       if (editingProdId) {
         await api('/Milk/UpdateProduction?id=' + editingProdId, { method: 'PUT', body: JSON.stringify(payload) });
         reloadMilkWithToast('Milk collection updated successfully');
@@ -728,7 +918,10 @@ const GoatRecords = (() => {
       const liters = +document.getElementById('s-liters').value || 0;
       const rate = +document.getElementById('s-rate').value || 0;
       if (!date || !liters || !rate) { await showModal('Enter date, litres and rate'); return; }
-      const payload = { date, liters, rate };
+      const payload = {
+        date, liters, rate,
+        comment: document.getElementById('s-note').value.trim() || null
+      };
       if (editingSaleId) {
         await api('/Milk/UpdateSale?id=' + editingSaleId, { method: 'PUT', body: JSON.stringify(payload) });
         reloadMilkWithToast('Milk sale updated successfully');
@@ -771,6 +964,7 @@ const GoatRecords = (() => {
     ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
       FarmPerms.applyForm('milk', { addBtnId, deleteBtnId, rowSelector });
     });
+    initEditableDropdown('p-breed', 'Lookup.Breeds', ['Mixed']);
   }
 
   function initFinance() {
@@ -778,6 +972,7 @@ const GoatRecords = (() => {
     let editingIncomeId = null;
     let editingExpenseId = null;
     let editingOwnerId = null;
+    let editingRecurId = null;
 
     function financeUrl(date) {
       const month = date ? date.slice(0, 7) : (document.getElementById('finMonth')?.value || '');
@@ -820,6 +1015,7 @@ const GoatRecords = (() => {
       document.getElementById('a-name').value = '';
       document.getElementById('a-type').selectedIndex = 0;
       document.getElementById('a-cost').value = '';
+      document.getElementById('a-comment').value = '';
       document.querySelectorAll('#assetRows tr.fin-asset-row.editing').forEach(r => r.classList.remove('editing'));
       setAssetEditMode(false);
     }
@@ -831,6 +1027,7 @@ const GoatRecords = (() => {
       document.getElementById('i-type').selectedIndex = 0;
       document.getElementById('i-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('i-amt').value = '';
+      document.getElementById('i-comment').value = '';
       document.querySelectorAll('#incomeRows tr.fin-income-row.editing').forEach(r => r.classList.remove('editing'));
       setIncomeEditMode(false);
     }
@@ -842,8 +1039,25 @@ const GoatRecords = (() => {
       document.getElementById('e-type').selectedIndex = 0;
       document.getElementById('e-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('e-amt').value = '';
+      document.getElementById('e-comment').value = '';
       document.querySelectorAll('#expenseRows tr.fin-expense-row.editing').forEach(r => r.classList.remove('editing'));
       setExpenseEditMode(false);
+    }
+
+    function setRecurEditMode(editing) {
+      document.getElementById('cancelRecurBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteRecurBtn').style.display = editing ? '' : 'none';
+    }
+
+    function resetRecurForm() {
+      editingRecurId = null;
+      document.getElementById('recurFormTitle').textContent = 'Fixed & recurring costs';
+      document.getElementById('addRecur').textContent = '+ Add';
+      document.getElementById('rc-name').value = '';
+      document.getElementById('rc-amt').value = '';
+      document.getElementById('rc-period').selectedIndex = 0;
+      document.querySelectorAll('#recurRows tr.fin-recur-row.editing').forEach(r => r.classList.remove('editing'));
+      setRecurEditMode(false);
     }
 
     function resetOwnerForm() {
@@ -865,6 +1079,7 @@ const GoatRecords = (() => {
       document.getElementById('a-name').value = row.dataset.name || '';
       document.getElementById('a-type').value = row.dataset.type || '';
       document.getElementById('a-cost').value = row.dataset.cost || '';
+      document.getElementById('a-comment').value = row.dataset.comment || '';
       document.querySelectorAll('#assetRows tr.fin-asset-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setAssetEditMode(true);
@@ -880,6 +1095,7 @@ const GoatRecords = (() => {
       document.getElementById('i-type').value = row.dataset.type || '';
       document.getElementById('i-date').value = row.dataset.date || '';
       document.getElementById('i-amt').value = row.dataset.amount || '';
+      document.getElementById('i-comment').value = row.dataset.comment || '';
       document.querySelectorAll('#incomeRows tr.fin-income-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setIncomeEditMode(true);
@@ -895,6 +1111,7 @@ const GoatRecords = (() => {
       document.getElementById('e-type').value = row.dataset.type || '';
       document.getElementById('e-date').value = row.dataset.date || '';
       document.getElementById('e-amt').value = row.dataset.amount || '';
+      document.getElementById('e-comment').value = row.dataset.comment || '';
       document.querySelectorAll('#expenseRows tr.fin-expense-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setExpenseEditMode(true);
@@ -917,10 +1134,26 @@ const GoatRecords = (() => {
       document.getElementById('o-amt').focus();
     }
 
+    function loadRecurForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingRecurId = +row.dataset.id;
+      document.getElementById('recurFormTitle').textContent = 'Edit recurring cost';
+      document.getElementById('addRecur').textContent = 'Save';
+      document.getElementById('rc-name').value = row.dataset.name || '';
+      document.getElementById('rc-amt').value = row.dataset.amount || '';
+      document.getElementById('rc-period').value = row.dataset.period || 'month';
+      document.querySelectorAll('#recurRows tr.fin-recur-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setRecurEditMode(true);
+      if (!FarmPerms.can('finance', 'add')) FarmPerms.revealEditForm('addRecur');
+      document.getElementById('rc-name').focus();
+    }
+
     document.getElementById('cancelAssetBtn')?.addEventListener('click', resetAssetForm);
     document.getElementById('cancelIncomeBtn')?.addEventListener('click', resetIncomeForm);
     document.getElementById('cancelExpenseBtn')?.addEventListener('click', resetExpenseForm);
     document.getElementById('cancelOwnerBtn')?.addEventListener('click', resetOwnerForm);
+    document.getElementById('cancelRecurBtn')?.addEventListener('click', resetRecurForm);
 
     document.getElementById('deleteAssetBtn')?.addEventListener('click', async () => {
       if (!editingAssetId || !FarmPerms.can('finance', 'delete')) return;
@@ -957,12 +1190,25 @@ const GoatRecords = (() => {
       reloadFinanceWithToast('Owner investment deleted successfully', date);
     });
 
+    document.getElementById('deleteRecurBtn')?.addEventListener('click', async () => {
+      if (!editingRecurId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Delete this recurring cost?');
+      if (!confirmed) return;
+      await api('/Finance/DeleteRecurringCost?id=' + editingRecurId, { method: 'DELETE' });
+      reloadFinanceWithToast('Recurring cost deleted successfully');
+    });
+
     document.getElementById('addAsset')?.addEventListener('click', async () => {
       if (!FarmPerms.guardAddEdit('finance', !!editingAssetId)) return;
       const name = document.getElementById('a-name').value.trim();
       const cost = +document.getElementById('a-cost').value || 0;
       if (!name || !cost) { await showModal('Enter asset name and cost'); return; }
-      const payload = { name, type: document.getElementById('a-type').value, cost };
+      const payload = {
+        name,
+        type: document.getElementById('a-type').value,
+        cost,
+        comment: document.getElementById('a-comment').value.trim() || null
+      };
       if (editingAssetId) {
         await api('/Finance/UpdateAsset?id=' + editingAssetId, { method: 'PUT', body: JSON.stringify(payload) });
         reloadWithToast('Asset updated successfully');
@@ -977,7 +1223,12 @@ const GoatRecords = (() => {
       const amt = +document.getElementById('i-amt').value || 0;
       const date = document.getElementById('i-date').value;
       if (!amt || !date) { await showModal('Enter date and amount'); return; }
-      const payload = { type: document.getElementById('i-type').value, amount: amt, date };
+      const payload = {
+        type: document.getElementById('i-type').value,
+        amount: amt,
+        date,
+        comment: document.getElementById('i-comment').value.trim() || null
+      };
       if (editingIncomeId) {
         await api('/Finance/UpdateIncome?id=' + editingIncomeId, { method: 'PUT', body: JSON.stringify(payload) });
         reloadFinanceWithToast('Cash received updated successfully', date);
@@ -992,7 +1243,12 @@ const GoatRecords = (() => {
       const amt = +document.getElementById('e-amt').value || 0;
       const date = document.getElementById('e-date').value;
       if (!amt || !date) { await showModal('Enter date and amount'); return; }
-      const payload = { type: document.getElementById('e-type').value, amount: amt, date };
+      const payload = {
+        type: document.getElementById('e-type').value,
+        amount: amt,
+        date,
+        comment: document.getElementById('e-comment').value.trim() || null
+      };
       if (editingExpenseId) {
         await api('/Finance/UpdateExpense?id=' + editingExpenseId, { method: 'PUT', body: JSON.stringify(payload) });
         reloadFinanceWithToast('Running cost updated successfully', date);
@@ -1019,6 +1275,25 @@ const GoatRecords = (() => {
       }
     });
 
+    document.getElementById('addRecur')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingRecurId)) return;
+      const name = document.getElementById('rc-name').value.trim();
+      const amount = +document.getElementById('rc-amt').value || 0;
+      if (!name || !amount) { await showModal('Enter name and amount'); return; }
+      const payload = {
+        name,
+        amount,
+        period: document.getElementById('rc-period').value
+      };
+      if (editingRecurId) {
+        await api('/Finance/UpdateRecurringCost?id=' + editingRecurId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Recurring cost updated successfully');
+      } else {
+        await api('/Finance/AddRecurringCost', { method: 'POST', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Recurring cost added successfully');
+      }
+    });
+
     document.querySelectorAll('#assetRows tr.fin-asset-row').forEach(row => {
       row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadAssetForEdit(row); });
     });
@@ -1031,21 +1306,37 @@ const GoatRecords = (() => {
     document.querySelectorAll('#ownerRows tr.fin-owner-row').forEach(row => {
       row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadOwnerForEdit(row); });
     });
+    document.querySelectorAll('#recurRows tr.fin-recur-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadRecurForEdit(row); });
+    });
 
     [
       ['addAsset', 'deleteAssetBtn', '#assetRows tr.fin-asset-row'],
       ['addIncome', 'deleteIncomeBtn', '#incomeRows tr.fin-income-row'],
       ['addExpense', 'deleteExpenseBtn', '#expenseRows tr.fin-expense-row'],
-      ['addOwner', 'deleteOwnerBtn', '#ownerRows tr.fin-owner-row']
+      ['addOwner', 'deleteOwnerBtn', '#ownerRows tr.fin-owner-row'],
+      ['addRecur', 'deleteRecurBtn', '#recurRows tr.fin-recur-row']
     ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
       FarmPerms.applyForm('finance', { addBtnId, deleteBtnId, rowSelector });
     });
+    initEditableDropdowns();
   }
 
   function initHealth() {
     let editingRemId = null;
     let editingVaccId = null;
     let editingHist = null;
+    let editingVaccBuyId = null;
+
+    const vaccBuyMonth = () => document.getElementById('vbMonth')?.value || new Date().toISOString().slice(0, 7);
+
+    function vaccBuyUrl() {
+      const params = new URLSearchParams();
+      params.set('month', vaccBuyMonth());
+      const remind = new URLSearchParams(window.location.search || '').get('remindDays');
+      if (remind) params.set('remindDays', remind);
+      return '/Vaccine?' + params.toString();
+    }
 
     function reloadHealthWithToast(message) {
       sessionStorage.setItem('goatToast', message);
@@ -1113,6 +1404,36 @@ const GoatRecords = (() => {
       document.querySelectorAll('#vaccLogRows tr.hist-row.editing').forEach(r => r.classList.remove('editing'));
     }
 
+    function resetVaccBuyForm() {
+      editingVaccBuyId = null;
+      document.getElementById('vaccBuyFormTitle').textContent = 'Vaccines bought';
+      document.getElementById('addVaccBuy').textContent = '+ Add';
+      document.getElementById('vb-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('vb-qty').value = '';
+      document.getElementById('vb-amt').value = '';
+      document.getElementById('vb-note').value = '';
+      document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      document.getElementById('cancelVaccBuyBtn').style.display = 'none';
+      document.getElementById('deleteVaccBuyBtn').style.display = 'none';
+    }
+
+    function loadVaccBuyForEdit(row) {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      editingVaccBuyId = +row.dataset.id;
+      document.getElementById('vaccBuyFormTitle').textContent = 'Edit vaccine purchase';
+      document.getElementById('addVaccBuy').textContent = 'Save';
+      document.getElementById('vb-date').value = row.dataset.date || '';
+      document.getElementById('vb-name').value = row.dataset.name || '';
+      document.getElementById('vb-qty').value = row.dataset.qty || '';
+      document.getElementById('vb-unit').value = row.dataset.unit || '';
+      document.getElementById('vb-amt').value = row.dataset.amount || '';
+      document.getElementById('vb-note').value = row.dataset.comment || '';
+      document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      document.getElementById('cancelVaccBuyBtn').style.display = '';
+      document.getElementById('deleteVaccBuyBtn').style.display = '';
+    }
+
     function loadRemForEdit(row) {
       if (!FarmPerms.can('vaccines', 'edit')) return;
       editingRemId = +row.dataset.id;
@@ -1173,6 +1494,20 @@ const GoatRecords = (() => {
     document.getElementById('cancelRemBtn')?.addEventListener('click', resetRemForm);
     document.getElementById('cancelVaccBtn')?.addEventListener('click', resetVaccForm);
     document.getElementById('cancelHistBtn')?.addEventListener('click', resetHistForm);
+    document.getElementById('cancelVaccBuyBtn')?.addEventListener('click', resetVaccBuyForm);
+
+    document.getElementById('vbMonth')?.addEventListener('change', () => {
+      location.href = vaccBuyUrl();
+    });
+
+    document.getElementById('deleteVaccBuyBtn')?.addEventListener('click', async () => {
+      if (!editingVaccBuyId || !FarmPerms.can('vaccines', 'delete')) return;
+      const confirmed = await showConfirm('Delete this vaccine purchase?');
+      if (!confirmed) return;
+      await api('/Vaccine/DeletePurchase?id=' + editingVaccBuyId, { method: 'DELETE' });
+      sessionStorage.setItem('goatToast', 'Vaccine purchase deleted');
+      location.href = vaccBuyUrl();
+    });
 
     document.getElementById('deleteRemBtn')?.addEventListener('click', async () => {
       if (!editingRemId || !FarmPerms.can('vaccines', 'delete')) return;
@@ -1230,7 +1565,7 @@ const GoatRecords = (() => {
       if (!FarmPerms.guardAddEdit('vaccines', !!editingVaccId)) return;
       const name = document.getElementById('v-name').value.trim();
       const val = +document.getElementById('v-val').value || 0;
-      if (!name || !val) { await showModal('Enter a vaccine name and a number'); return; }
+      if (!name || name === '__add' || !val) { await showModal('Enter a vaccine name and a number'); return; }
       const payload = {
         name,
         scope: document.getElementById('v-scope').value,
@@ -1244,6 +1579,31 @@ const GoatRecords = (() => {
         await api('/Vaccine/Add', { method: 'POST', body: JSON.stringify(payload) });
         reloadHealthWithToast('Vaccine added successfully');
       }
+    });
+
+    document.getElementById('addVaccBuy')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('vaccines', !!editingVaccBuyId)) return;
+      const date = document.getElementById('vb-date').value;
+      const name = document.getElementById('vb-name').value;
+      const qty = +document.getElementById('vb-qty').value || 0;
+      const unit = document.getElementById('vb-unit').value;
+      const amount = +document.getElementById('vb-amt').value || 0;
+      if (!date || !name || name === '__add' || !qty || !unit || !amount) {
+        await showModal('Enter date, vaccine, qty, unit and amount');
+        return;
+      }
+      const payload = {
+        date, name, qty, unit, amount,
+        comment: document.getElementById('vb-note').value.trim() || null
+      };
+      if (editingVaccBuyId) {
+        await api('/Vaccine/UpdatePurchase?id=' + editingVaccBuyId, { method: 'PUT', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Vaccine purchase updated');
+      } else {
+        await api('/Vaccine/AddPurchase', { method: 'POST', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Vaccine purchase added');
+      }
+      location.href = vaccBuyUrl();
     });
 
     document.getElementById('saveHistBtn')?.addEventListener('click', async () => {
@@ -1285,13 +1645,20 @@ const GoatRecords = (() => {
     document.querySelectorAll('#vaccLogRows tr.hist-row').forEach(row => {
       row.addEventListener('click', () => loadHistForEdit(row));
     });
+    document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row').forEach(row => {
+      row.addEventListener('click', () => loadVaccBuyForEdit(row));
+    });
 
     [
       ['addReminder', 'deleteRemBtn', '#reminderRows tr.reminder-row'],
-      ['addVacc', 'deleteVaccBtn', '#vaccRows tr.vacc-row']
+      ['addVacc', 'deleteVaccBtn', '#vaccRows tr.vacc-row'],
+      ['addVaccBuy', 'deleteVaccBuyBtn', '#vaccBuyRows tr.vacc-buy-row']
     ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
       FarmPerms.applyForm('vaccines', { addBtnId, deleteBtnId, rowSelector });
     });
+    initEditableDropdown('v-name', 'Lookup.VaccineNames');
+    initEditableDropdown('vb-name', 'Lookup.VaccineNames');
+    initEditableDropdown('vb-unit', 'Lookup.VaccineUnits');
     if (!FarmPerms.can('vaccines', 'edit')) {
       FarmPerms.readonlyInputs('#remindWin');
       document.querySelectorAll('[data-dovacc]').forEach(b => b.classList.add('perm-hidden'));
@@ -1375,7 +1742,7 @@ const GoatRecords = (() => {
           `<tr><td>${esc(i.displayName)}</td><td class="num-cell">${i.gramsPerDay} g</td><td class="num-cell hide-sm">${rs(i.dailyCost)}</td></tr>`
         ).join('');
         feedHtml = `<div class="note" style="margin-bottom:12px">Based on the <b>${esc(plan.statusDisplay)}</b> feed plan (farm-level ration per goat).</div>
-          <table class="tbl"><thead><tr><th>Feed</th><th>Daily</th><th class="hide-sm">Cost/day</th></tr></thead><tbody>
+          <table class="tbl"><thead><tr><th>Feed</th><th class="num-cell">Daily</th><th class="num-cell hide-sm">Cost/day</th></tr></thead><tbody>
           ${rationRows || '<tr><td colspan="3" class="search-empty">No rations configured.</td></tr>'}
           </tbody></table>
           <div style="margin-top:12px;font-size:14px">

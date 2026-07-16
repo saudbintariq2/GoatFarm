@@ -15,6 +15,9 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     public DbSet<FeedPrice> FeedPrices => Set<FeedPrice>();
     public DbSet<FeedPlan> FeedPlans => Set<FeedPlan>();
     public DbSet<FeedPlanItem> FeedPlanItems => Set<FeedPlanItem>();
+    public DbSet<FeedPurchase> FeedPurchases => Set<FeedPurchase>();
+    public DbSet<RecurringCost> RecurringCosts => Set<RecurringCost>();
+    public DbSet<VaccinePurchase> VaccinePurchases => Set<VaccinePurchase>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Income> Incomes => Set<Income>();
     public DbSet<Expense> Expenses => Set<Expense>();

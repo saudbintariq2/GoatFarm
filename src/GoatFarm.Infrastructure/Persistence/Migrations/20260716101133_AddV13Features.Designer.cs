@@ -3,6 +3,7 @@ using System;
 using GoatFarm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GoatFarm.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(GoatFarmDbContext))]
-    partial class GoatFarmDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716101133_AddV13Features")]
+    partial class AddV13Features
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

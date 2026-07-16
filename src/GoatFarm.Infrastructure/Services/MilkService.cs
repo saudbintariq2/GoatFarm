@@ -63,7 +63,8 @@ public class MilkService : IMilkService
         {
             Date = model.Date,
             Breed = model.Breed,
-            Liters = model.Liters
+            Liters = model.Liters,
+            Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim()
         };
         _context.MilkProductions.Add(entity);
         await _context.SaveChangesAsync(cancellationToken);
@@ -72,7 +73,8 @@ public class MilkService : IMilkService
             Id = entity.Id,
             Date = entity.Date,
             Breed = entity.Breed,
-            Liters = entity.Liters
+            Liters = entity.Liters,
+            Comment = entity.Comment
         };
     }
 
@@ -83,7 +85,8 @@ public class MilkService : IMilkService
             Date = model.Date,
             Liters = model.Liters,
             Rate = model.Rate,
-            Amount = Math.Round(model.Liters * model.Rate)
+            Amount = Math.Round(model.Liters * model.Rate),
+            Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim()
         };
         _context.MilkSales.Add(entity);
         await _context.SaveChangesAsync(cancellationToken);
@@ -93,7 +96,8 @@ public class MilkService : IMilkService
             Date = entity.Date,
             Liters = entity.Liters,
             Rate = entity.Rate,
-            Amount = entity.Amount
+            Amount = entity.Amount,
+            Comment = entity.Comment
         };
     }
 
@@ -123,13 +127,15 @@ public class MilkService : IMilkService
         entity.Date = model.Date;
         entity.Breed = model.Breed;
         entity.Liters = model.Liters;
+        entity.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
         await _context.SaveChangesAsync(cancellationToken);
         return new MilkProductionViewModel
         {
             Id = entity.Id,
             Date = entity.Date,
             Breed = entity.Breed,
-            Liters = entity.Liters
+            Liters = entity.Liters,
+            Comment = entity.Comment
         };
     }
 
@@ -141,6 +147,7 @@ public class MilkService : IMilkService
         entity.Liters = model.Liters;
         entity.Rate = model.Rate;
         entity.Amount = Math.Round(model.Liters * model.Rate);
+        entity.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
         await _context.SaveChangesAsync(cancellationToken);
         return new MilkSaleViewModel
         {
@@ -148,7 +155,8 @@ public class MilkService : IMilkService
             Date = entity.Date,
             Liters = entity.Liters,
             Rate = entity.Rate,
-            Amount = entity.Amount
+            Amount = entity.Amount,
+            Comment = entity.Comment
         };
     }
 
@@ -243,7 +251,8 @@ public class MilkService : IMilkService
                 Id = p.Id,
                 Date = p.Date,
                 Breed = p.Breed,
-                Liters = p.Liters
+                Liters = p.Liters,
+                Comment = p.Comment
             }).ToListAsync(cancellationToken);
         return (items, pagination);
     }
@@ -264,7 +273,8 @@ public class MilkService : IMilkService
                 Date = s.Date,
                 Liters = s.Liters,
                 Rate = s.Rate,
-                Amount = s.Amount
+                Amount = s.Amount,
+                Comment = s.Comment
             }).ToListAsync(cancellationToken);
         return (items, pagination);
     }

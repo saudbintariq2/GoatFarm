@@ -9,14 +9,20 @@ namespace GoatFarm.Web.Controllers;
 public class MilkController : Controller
 {
     private readonly IMilkService _milkService;
+    private readonly ILookupService _lookupService;
 
-    public MilkController(IMilkService milkService) => _milkService = milkService;
+    public MilkController(IMilkService milkService, ILookupService lookupService)
+    {
+        _milkService = milkService;
+        _lookupService = lookupService;
+    }
 
     [HttpGet]
     public async Task<IActionResult> Index(int prodPage = 1, int salePage = 1, int wastePage = 1, CancellationToken cancellationToken = default)
     {
         ViewData["ActiveTab"] = "milk";
-        ViewBag.MilkBreeds = LookupConstants.MilkBreeds;
+        var breeds = await _lookupService.GetListAsync(LookupSettingKeys.Breeds, cancellationToken);
+        ViewBag.MilkBreeds = new[] { "Mixed" }.Concat(breeds.Where(b => b != "Mixed")).ToArray();
         var model = await _milkService.GetMilkPageAsync(prodPage, salePage, wastePage, cancellationToken: cancellationToken);
         ViewBag.ProdPage = model.ProdPage;
         ViewBag.SalePage = model.SalePage;
