@@ -1,0 +1,156 @@
+@model GoatFarm.Application.ViewModels.Search.GoatProfileViewModel
+@using GoatFarm.Domain.Enums
+
+@{
+    var g = Model.Goat;
+    var gender = g.Gender == GoatGender.Male ? "Male" : "Female";
+    var source = g.Source == GoatSource.Born ? "Born on farm" : "Bought";
+}
+
+<div class="panel">
+    <div class="panel-body">
+        <div class="search-hero">
+            <div class="search-hero-main">
+                <h2><span class="tag">@g.Tag</span></h2>
+                @if (!string.IsNullOrEmpty(g.Name))
+                {
+                    <div class="name">@g.Name</div>
+                }
+                <span class="chip @g.StatusCssClass">@g.StatusDisplay</span>
+                <div class="search-hero-meta">
+                    <div class="search-meta-item">Breed<b>@g.Breed</b></div>
+                    <div class="search-meta-item">Gender<b>@gender</b></div>
+                    <div class="search-meta-item">Age<b>@g.AgeLabel</b></div>
+                    <div class="search-meta-item">Group<b>@(g.GroupName ?? "—")</b></div>
+                    <div class="search-meta-item">Source<b>@source</b></div>
+                    <div class="search-meta-item">Price<b>@g.PriceDisplay</b></div>
+                    <div class="search-meta-item">Date<b>@g.EventDateDisplay</b></div>
+                </div>
+            </div>
+            <a class="btn btn-ghost" asp-controller="Goat" asp-action="Index" asp-route-editId="@g.Id">Edit in Herd</a>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Vaccine schedule</h2></div>
+    <div class="panel-body">
+        @if (Model.VaccineSchedule.Count == 0)
+        {
+            <div class="search-empty">No vaccines apply to this goat's status.</div>
+        }
+        else
+        {
+            <table class="tbl">
+                <thead><tr><th>Vaccine</th><th class="hide-sm">Rule</th><th>Status</th><th class="hide-sm">Last</th><th class="hide-sm">Next</th></tr></thead>
+                <tbody>
+                @foreach (var v in Model.VaccineSchedule)
+                {
+                    <tr>
+                        <td>@v.VaccineName</td>
+                        <td class="hide-sm">@v.RuleDisplay</td>
+                        <td><span class="chip @v.StatusCss">@v.Status</span></td>
+                        <td class="hide-sm">@(v.LastDate ?? "—")</td>
+                        <td class="hide-sm">@(v.DueDate ?? "—")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Vaccination history</h2></div>
+    <div class="panel-body">
+        @if (Model.VaccinationHistory.Count == 0)
+        {
+            <div class="search-empty">No vaccinations recorded yet for this goat.</div>
+        }
+        else
+        {
+            <table class="tbl">
+                <thead><tr><th>Date</th><th>Vaccine</th><th class="hide-sm">Scope</th></tr></thead>
+                <tbody>
+                @foreach (var h in Model.VaccinationHistory)
+                {
+                    <tr>
+                        <td>@h.DateDisplay</td>
+                        <td>@h.VaccineName</td>
+                        <td class="hide-sm">@h.ScopeDisplay</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Feed plan</h2></div>
+    <div class="panel-body">
+        @if (Model.FeedPlan is null)
+        {
+            <div class="search-empty">No feed plan set for this status.</div>
+        }
+        else
+        {
+            var plan = Model.FeedPlan;
+            var items = plan.Items.Where(i => i.GramsPerDay > 0).ToList();
+            <div class="note" style="margin-bottom:12px">Based on the <b>@plan.StatusDisplay</b> feed plan (farm-level ration per goat).</div>
+            <table class="tbl">
+                <thead><tr><th>Feed</th><th>Daily</th><th class="hide-sm">Cost/day</th></tr></thead>
+                <tbody>
+                @if (items.Count == 0)
+                {
+                    <tr><td colspan="3" class="search-empty">No rations configured.</td></tr>
+                }
+                else
+                {
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@item.DisplayName</td>
+                            <td class="num-cell">@item.GramsPerDay g</td>
+                            <td class="num-cell hide-sm">Rs @Math.Round(item.DailyCost).ToString("N0")</td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+            <div style="margin-top:12px;font-size:14px">
+                <span><b>Daily feed:</b> Rs @Math.Round(plan.DailyFeedCost).ToString("N0")</span> ·
+                <span><b>Medicine/mo:</b> Rs @Math.Round(plan.MedicineCostPerGoatPerMonth).ToString("N0")</span> ·
+                <span><b>Est. monthly:</b> Rs @Math.Round(plan.MonthlyTotalCost).ToString("N0")</span>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Reminders</h2></div>
+    <div class="panel-body">
+        @if (Model.Reminders.Count == 0)
+        {
+            <div class="search-empty">No reminders for this goat.</div>
+        }
+        else
+        {
+            <ul style="margin:0;padding-left:18px;line-height:1.7">
+                @foreach (var r in Model.Reminders)
+                {
+                    <li>
+                        <span style="color:@r.WhenColor;font-weight:600">@r.WhenDisplay</span> — @r.Title
+                        @if (!string.IsNullOrEmpty(r.ScopeDisplay))
+                        {
+                            <span class="breed">(@r.ScopeDisplay)</span>
+                        }
+                        <span class="breed">· @r.DateDisplay</span>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+<div class="note">Milk production is tracked at farm level on the Milk tab, not per individual goat.</div>

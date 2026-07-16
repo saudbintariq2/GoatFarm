@@ -1,17 +1,25 @@
 using GoatFarm.Application.Interfaces;
-using GoatFarm.Domain.Constants;
 using GoatFarm.Infrastructure;
-using GoatFarm.Infrastructure.Identity;
 using GoatFarm.Infrastructure.Persistence;
 using GoatFarm.Web.Filters;
 using GoatFarm.Web.Middleware;
 using GoatFarm.Web.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+using GoatFarm.Infrastructure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var home = Environment.GetEnvironmentVariable("HOME");
+if (!string.IsNullOrEmpty(home))
+{
+    var keysPath = Path.Combine(home, "ASP.NET", "DataProtection-Keys");
+    Directory.CreateDirectory(keysPath);
+    builder.Services.AddDataProtection()
+        .SetApplicationName("GoatFarm")
+        .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+}
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddControllersWithViews(options =>
@@ -55,22 +63,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<GoatFarmDbContext>();
-    await context.Database.MigrateAsync();
-    await DbSeeder.SeedAsync(context);
-
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    foreach (var role in FarmRoles.All)
-    {
-        if (!await roleManager.RoleExistsAsync(role))
-            await roleManager.CreateAsync(new IdentityRole(role));
-    }
-
-    await IdentitySeedHelper.SeedAdminUserAsync(scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>());
-    await SettingsSeedHelper.SeedDefaultsAsync(context);
-}
+await DatabaseBootstrap.InitializeAsync(app.Services);
 
 app.UseGlobalExceptionMiddleware();
 

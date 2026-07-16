@@ -107,6 +107,17 @@ public class ExpenseConfiguration : IEntityTypeConfiguration<Expense>
     }
 }
 
+public class OwnerInvestmentConfiguration : IEntityTypeConfiguration<OwnerInvestment>
+{
+    public void Configure(EntityTypeBuilder<OwnerInvestment> builder)
+    {
+        builder.ToTable("OwnerInvestments");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Note).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Amount).HasPrecision(18, 2);
+    }
+}
+
 public class MilkProductionConfiguration : IEntityTypeConfiguration<MilkProduction>
 {
     public void Configure(EntityTypeBuilder<MilkProduction> builder)

@@ -34,7 +34,8 @@ public class AccountController : Controller
         if (!ModelState.IsValid)
             return View(model);
 
-        var user = await _userManager.FindByEmailAsync(model.Email);
+        var email = model.Email.Trim().ToLowerInvariant();
+        var user = await _userManager.FindByEmailAsync(email);
         if (user is null)
         {
             ModelState.AddModelError(string.Empty, "Invalid email or password.");

@@ -191,6 +191,13 @@ const GoatRecords = (() => {
       if (source === 'Born') p.value = '';
     }
 
+    function setTagHint(msg, isError = false) {
+      const hint = document.getElementById('tag-lookup-hint');
+      if (!hint) return;
+      hint.textContent = msg || 'Scan to load an existing goat, or enter a new tag to add.';
+      hint.classList.toggle('error', isError);
+    }
+
     function setEditMode(editing) {
       const cancelBtn = document.getElementById('cancelBtn');
       const deleteBtn = document.getElementById('deleteBtn');
@@ -214,28 +221,134 @@ const GoatRecords = (() => {
       applySourcePriceState();
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       setEditMode(false);
+      setTagHint();
+    }
+
+    function enumValue(value, fallback) {
+      return typeof value === 'string' ? value : fallback;
+    }
+
+    function fillGoatForm(goat) {
+      editingId = goat.id;
+      document.getElementById('goatFormTitle').textContent = 'Edit goat';
+      document.getElementById('addBtn').textContent = 'Save';
+      document.getElementById('f-tag').value = goat.tag || '';
+      document.getElementById('f-tag').disabled = true;
+      document.getElementById('f-name').value = goat.name || '';
+      document.getElementById('f-breed').value = goat.breed || '';
+      document.getElementById('f-gender').value = enumValue(goat.gender, 'Female');
+      const source = enumValue(goat.source, 'Bought');
+      document.getElementById('f-source').value = source;
+      document.getElementById('f-price').value = source === 'Born' ? '' : (goat.purchasePrice ?? '');
+      document.getElementById('f-status').value = enumValue(goat.status, 'Kid');
+      document.getElementById('f-date').value = goat.eventDateDisplay || goat.eventDate || '';
+      applySourcePriceState();
+      setEditMode(true);
+      if (!FarmPerms.can('herd', 'add')) FarmPerms.revealEditForm('addBtn');
+    }
+
+    function openGoatForEdit(goat) {
+      if (!goat?.id || !FarmPerms.can('herd', 'edit')) return;
+      fillGoatForm(goat);
+      document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
+      const row = document.querySelector(`#rows tr.goat-row[data-id="${goat.id}"]`);
+      if (row) {
+        row.classList.add('editing');
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        document.getElementById('goatFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      setTagHint(`Editing goat ${goat.tag}.`);
+      document.getElementById('f-name').focus();
     }
 
     function loadGoatForEdit(row) {
       if (!FarmPerms.can('herd', 'edit')) return;
-      editingId = +row.dataset.id;
-      document.getElementById('goatFormTitle').textContent = 'Edit goat';
-      document.getElementById('addBtn').textContent = 'Save';
-      document.getElementById('f-tag').value = row.dataset.tag || '';
-      document.getElementById('f-tag').disabled = true;
-      document.getElementById('f-name').value = row.dataset.name || '';
-      document.getElementById('f-breed').value = row.dataset.breed || '';
-      document.getElementById('f-gender').value = row.dataset.gender || 'Female';
-      document.getElementById('f-source').value = row.dataset.source || 'Bought';
-      document.getElementById('f-price').value = row.dataset.source === 'Born' ? '' : (row.dataset.price || '');
-      document.getElementById('f-status').value = row.dataset.status || 'Kid';
-      document.getElementById('f-date').value = row.dataset.date || '';
-      applySourcePriceState();
+      fillGoatForm({
+        id: +row.dataset.id,
+        tag: row.dataset.tag,
+        name: row.dataset.name,
+        breed: row.dataset.breed,
+        gender: row.dataset.gender,
+        source: row.dataset.source,
+        purchasePrice: row.dataset.price,
+        status: row.dataset.status,
+        eventDateDisplay: row.dataset.date
+      });
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
-      setEditMode(true);
-      if (!FarmPerms.can('herd', 'add')) FarmPerms.revealEditForm('addBtn');
+      setTagHint(`Editing goat ${row.dataset.tag}.`);
       document.getElementById('f-name').focus();
+    }
+
+    function normalizeTag(value) {
+      return String(value ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+    }
+
+    function findRowByTag(tag) {
+      const needle = normalizeTag(tag).toLowerCase();
+      if (!needle) return null;
+      for (const row of document.querySelectorAll('#rows tr.goat-row')) {
+        if ((row.dataset.tag || '').toLowerCase() === needle) return row;
+      }
+      return null;
+    }
+
+    async function lookupGoatByTag() {
+      if (editingId) return;
+
+      const tagInput = document.getElementById('f-tag');
+      const tag = normalizeTag(tagInput?.value);
+      if (!tag) {
+        setTagHint('Enter or scan a tag / RFID ID.', true);
+        tagInput?.focus();
+        return;
+      }
+
+      if (!FarmPerms.can('herd', 'edit')) {
+        setTagHint('You do not have permission to edit goats.', true);
+        return;
+      }
+
+      const localRow = findRowByTag(tag);
+      if (localRow) {
+        loadGoatForEdit(localRow);
+        return;
+      }
+
+      setTagHint('Looking up tag…');
+      tagInput.disabled = true;
+
+      try {
+        const res = await fetch('/Goat/GetByTag?tag=' + encodeURIComponent(tag), {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        });
+
+        if (res.status === 404) {
+          setTagHint(`Tag "${tag}" not found — fill in the details below to add a new goat.`, true);
+          return;
+        }
+
+        if (res.status === 403) {
+          setTagHint('You do not have permission to look up goats.', true);
+          return;
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setTagHint(err.error || 'Could not look up that tag.', true);
+          return;
+        }
+
+        const goat = await res.json();
+        openGoatForEdit(goat);
+      } catch {
+        setTagHint('Could not reach the server. Try again.', true);
+      } finally {
+        if (!editingId) tagInput.disabled = false;
+        else tagInput.disabled = true;
+      }
     }
 
     function herdUrl(filter, page) {
@@ -262,6 +375,13 @@ const GoatRecords = (() => {
 
     document.getElementById('f-source')?.addEventListener('change', applySourcePriceState);
 
+    document.getElementById('f-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        lookupGoatByTag();
+      }
+    });
+
     document.getElementById('cancelBtn')?.addEventListener('click', resetGoatForm);
 
     document.getElementById('deleteBtn')?.addEventListener('click', async () => {
@@ -276,7 +396,7 @@ const GoatRecords = (() => {
       if (!FarmPerms.guardAddEdit('herd', !!editingId)) return;
       const tag = document.getElementById('f-tag').value.trim();
       const date = document.getElementById('f-date').value;
-      if (!tag) { await showModal('Please enter a Tag / ID'); return; }
+      if (!tag) { await showModal('Please enter a Tag / RFID ID'); return; }
       if (!date) { await showModal('Please pick the date'); return; }
       const payload = goatPayload();
       if (editingId) {
@@ -291,7 +411,7 @@ const GoatRecords = (() => {
     document.querySelectorAll('#rows tr.goat-row').forEach(row => {
       row.addEventListener('click', e => {
         if (!FarmPerms.can('herd', 'edit')) return;
-        if (e.target.closest('input[type=checkbox]')) return;
+        if (e.target.closest('input[type=checkbox]') || e.target.closest('a.tag-link')) return;
         loadGoatForEdit(row);
       });
     });
@@ -349,6 +469,12 @@ const GoatRecords = (() => {
       rowSelector: '#rows tr.goat-row',
       extraHideIds: ['bulkbar', 'newGroupBtn']
     });
+
+    if (opts.editGoat && opts.editGoat.id) {
+      openGoatForEdit(opts.editGoat);
+    } else {
+      document.getElementById('f-tag')?.focus();
+    }
   }
 
   function renderBulk() {
@@ -651,6 +777,7 @@ const GoatRecords = (() => {
     let editingAssetId = null;
     let editingIncomeId = null;
     let editingExpenseId = null;
+    let editingOwnerId = null;
 
     function financeUrl(date) {
       const month = date ? date.slice(0, 7) : (document.getElementById('finMonth')?.value || '');
@@ -679,6 +806,11 @@ const GoatRecords = (() => {
     function setExpenseEditMode(editing) {
       document.getElementById('cancelExpenseBtn').style.display = editing ? '' : 'none';
       document.getElementById('deleteExpenseBtn').style.display = editing ? '' : 'none';
+    }
+
+    function setOwnerEditMode(editing) {
+      document.getElementById('cancelOwnerBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteOwnerBtn').style.display = editing ? '' : 'none';
     }
 
     function resetAssetForm() {
@@ -712,6 +844,17 @@ const GoatRecords = (() => {
       document.getElementById('e-amt').value = '';
       document.querySelectorAll('#expenseRows tr.fin-expense-row.editing').forEach(r => r.classList.remove('editing'));
       setExpenseEditMode(false);
+    }
+
+    function resetOwnerForm() {
+      editingOwnerId = null;
+      document.getElementById('ownerFormTitle').textContent = 'Owner investment — money you put in';
+      document.getElementById('addOwner').textContent = '+ Add';
+      document.getElementById('o-note').value = '';
+      document.getElementById('o-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('o-amt').value = '';
+      document.querySelectorAll('#ownerRows tr.fin-owner-row.editing').forEach(r => r.classList.remove('editing'));
+      setOwnerEditMode(false);
     }
 
     function loadAssetForEdit(row) {
@@ -759,9 +902,25 @@ const GoatRecords = (() => {
       document.getElementById('e-amt').focus();
     }
 
+    function loadOwnerForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingOwnerId = +row.dataset.id;
+      document.getElementById('ownerFormTitle').textContent = 'Edit owner investment';
+      document.getElementById('addOwner').textContent = 'Save';
+      document.getElementById('o-note').value = row.dataset.note || '';
+      document.getElementById('o-date').value = row.dataset.date || '';
+      document.getElementById('o-amt').value = row.dataset.amount || '';
+      document.querySelectorAll('#ownerRows tr.fin-owner-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setOwnerEditMode(true);
+      if (!FarmPerms.can('finance', 'add')) FarmPerms.revealEditForm('addOwner');
+      document.getElementById('o-amt').focus();
+    }
+
     document.getElementById('cancelAssetBtn')?.addEventListener('click', resetAssetForm);
     document.getElementById('cancelIncomeBtn')?.addEventListener('click', resetIncomeForm);
     document.getElementById('cancelExpenseBtn')?.addEventListener('click', resetExpenseForm);
+    document.getElementById('cancelOwnerBtn')?.addEventListener('click', resetOwnerForm);
 
     document.getElementById('deleteAssetBtn')?.addEventListener('click', async () => {
       if (!editingAssetId || !FarmPerms.can('finance', 'delete')) return;
@@ -787,6 +946,15 @@ const GoatRecords = (() => {
       const date = document.getElementById('e-date').value;
       await api('/Finance/DeleteExpense?id=' + editingExpenseId, { method: 'DELETE' });
       reloadFinanceWithToast('Running cost deleted successfully', date);
+    });
+
+    document.getElementById('deleteOwnerBtn')?.addEventListener('click', async () => {
+      if (!editingOwnerId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      const date = document.getElementById('o-date').value;
+      await api('/Finance/DeleteOwnerInvestment?id=' + editingOwnerId, { method: 'DELETE' });
+      reloadFinanceWithToast('Owner investment deleted successfully', date);
     });
 
     document.getElementById('addAsset')?.addEventListener('click', async () => {
@@ -834,6 +1002,23 @@ const GoatRecords = (() => {
       }
     });
 
+    document.getElementById('addOwner')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingOwnerId)) return;
+      const amt = +document.getElementById('o-amt').value || 0;
+      const date = document.getElementById('o-date').value;
+      const note = document.getElementById('o-note').value.trim();
+      if (!amt || !date) { await showModal('Enter date and amount'); return; }
+      if (!note) { await showModal('Enter a note'); return; }
+      const payload = { note, amount: amt, date };
+      if (editingOwnerId) {
+        await api('/Finance/UpdateOwnerInvestment?id=' + editingOwnerId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Owner investment updated successfully', date);
+      } else {
+        await api('/Finance/AddOwnerInvestment', { method: 'POST', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Owner investment added successfully', date);
+      }
+    });
+
     document.querySelectorAll('#assetRows tr.fin-asset-row').forEach(row => {
       row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadAssetForEdit(row); });
     });
@@ -843,11 +1028,15 @@ const GoatRecords = (() => {
     document.querySelectorAll('#expenseRows tr.fin-expense-row').forEach(row => {
       row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadExpenseForEdit(row); });
     });
+    document.querySelectorAll('#ownerRows tr.fin-owner-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadOwnerForEdit(row); });
+    });
 
     [
       ['addAsset', 'deleteAssetBtn', '#assetRows tr.fin-asset-row'],
       ['addIncome', 'deleteIncomeBtn', '#incomeRows tr.fin-income-row'],
-      ['addExpense', 'deleteExpenseBtn', '#expenseRows tr.fin-expense-row']
+      ['addExpense', 'deleteExpenseBtn', '#expenseRows tr.fin-expense-row'],
+      ['addOwner', 'deleteOwnerBtn', '#ownerRows tr.fin-owner-row']
     ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
       FarmPerms.applyForm('finance', { addBtnId, deleteBtnId, rowSelector });
     });
@@ -1114,6 +1303,195 @@ const GoatRecords = (() => {
     } else if (!FarmPerms.can('vaccines', 'delete')) {
       FarmPerms.hide('deleteHistBtn');
     }
+  }
+
+  function initSearch(opts = {}) {
+    const form = document.getElementById('search-form');
+    const panelEl = document.getElementById('search-panel');
+    const input = document.getElementById('search-tag');
+    const btn = document.getElementById('search-btn');
+    const statusEl = document.getElementById('search-status');
+    const resultsEl = document.getElementById('search-results');
+    if (!input || !resultsEl) return;
+
+    function setStatus(msg, isError = false) {
+      if (!statusEl) return;
+      statusEl.textContent = msg || '';
+      statusEl.classList.toggle('error', isError);
+    }
+
+    function setLoading(loading) {
+      panelEl?.classList.toggle('is-loading', loading);
+      if (btn) btn.disabled = loading;
+      if (input) input.disabled = loading;
+      if (loading) {
+        setStatus('');
+        resultsEl.innerHTML = `
+          <div class="search-results-loading" role="status" aria-live="polite">
+            <div class="search-loading-spinner" aria-hidden="true"></div>
+            <span>Loading goat profile…</span>
+          </div>`;
+      }
+    }
+
+    function waitForPaint() {
+      return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    }
+
+    function renderProfile(data) {
+      const g = data.goat || {};
+      const nameLine = g.name ? `<div class="name">${esc(g.name)}</div>` : '';
+      const groupLine = g.groupName ? esc(g.groupName) : '—';
+      const gender = g.gender === 'Male' ? 'Male' : 'Female';
+      const source = g.source === 'Born' ? 'Born on farm' : 'Bought';
+      const herdLink = FarmPerms.can('herd', 'edit')
+        ? `<a class="btn btn-ghost" href="/Goat?editId=${encodeURIComponent(g.id || '')}">Edit in Herd</a>`
+        : '';
+
+      const history = data.vaccinationHistory || [];
+      const historyHtml = history.length
+        ? `<table class="tbl"><thead><tr><th>Date</th><th>Vaccine</th><th class="hide-sm">Scope</th></tr></thead><tbody>
+          ${history.map(h => `<tr><td>${esc(h.dateDisplay)}</td><td>${esc(h.vaccineName)}</td><td class="hide-sm">${esc(h.scopeDisplay)}</td></tr>`).join('')}
+          </tbody></table>`
+        : '<div class="search-empty">No vaccinations recorded yet for this goat.</div>';
+
+      const schedule = data.vaccineSchedule || [];
+      const scheduleHtml = schedule.length
+        ? `<table class="tbl"><thead><tr><th>Vaccine</th><th>Rule</th><th>Status</th><th class="hide-sm">Last</th><th class="hide-sm">Next</th></tr></thead><tbody>
+          ${schedule.map(v => `<tr><td>${esc(v.vaccineName)}</td><td class="hide-sm">${esc(v.ruleDisplay)}</td>
+            <td><span class="chip ${esc(v.statusCss)}">${esc(v.status)}</span></td>
+            <td class="hide-sm">${esc(v.lastDate || '—')}</td><td class="hide-sm">${esc(v.dueDate || '—')}</td></tr>`).join('')}
+          </tbody></table>`
+        : '<div class="search-empty">No vaccines apply to this goat\'s status.</div>';
+
+      const plan = data.feedPlan;
+      let feedHtml = '<div class="search-empty">No feed plan set for this status.</div>';
+      if (plan) {
+        const rationRows = (plan.items || []).filter(i => i.gramsPerDay > 0).map(i =>
+          `<tr><td>${esc(i.displayName)}</td><td class="num-cell">${i.gramsPerDay} g</td><td class="num-cell hide-sm">${rs(i.dailyCost)}</td></tr>`
+        ).join('');
+        feedHtml = `<div class="note" style="margin-bottom:12px">Based on the <b>${esc(plan.statusDisplay)}</b> feed plan (farm-level ration per goat).</div>
+          <table class="tbl"><thead><tr><th>Feed</th><th>Daily</th><th class="hide-sm">Cost/day</th></tr></thead><tbody>
+          ${rationRows || '<tr><td colspan="3" class="search-empty">No rations configured.</td></tr>'}
+          </tbody></table>
+          <div style="margin-top:12px;font-size:14px">
+            <span><b>Daily feed:</b> ${rs(plan.dailyFeedCost)}</span> ·
+            <span><b>Medicine/mo:</b> ${rs(plan.medicineCostPerGoatPerMonth)}</span> ·
+            <span><b>Est. monthly:</b> ${rs(plan.monthlyTotalCost)}</span>
+          </div>`;
+      }
+
+      const reminders = data.reminders || [];
+      const reminderHtml = reminders.length
+        ? `<ul style="margin:0;padding-left:18px;line-height:1.7">
+          ${reminders.map(r => `<li><span style="color:${esc(r.whenColor)};font-weight:600">${esc(r.whenDisplay)}</span> — ${esc(r.title)}${r.scopeDisplay ? ` <span class="breed">(${esc(r.scopeDisplay)})</span>` : ''} <span class="breed">· ${esc(r.dateDisplay)}</span></li>`).join('')}
+          </ul>`
+        : '<div class="search-empty">No reminders for this goat.</div>';
+
+      resultsEl.innerHTML = `
+        <div class="panel">
+          <div class="panel-body">
+            <div class="search-hero">
+              <div class="search-hero-main">
+                <h2><span class="tag">${esc(g.tag)}</span></h2>
+                ${nameLine}
+                <span class="chip ${esc(g.statusCssClass)}">${esc(g.statusDisplay)}</span>
+                <div class="search-hero-meta">
+                  <div class="search-meta-item">Breed<b>${esc(g.breed)}</b></div>
+                  <div class="search-meta-item">Gender<b>${esc(gender)}</b></div>
+                  <div class="search-meta-item">Age<b>${esc(g.ageLabel)}</b></div>
+                  <div class="search-meta-item">Group<b>${groupLine}</b></div>
+                  <div class="search-meta-item">Source<b>${esc(source)}</b></div>
+                  <div class="search-meta-item">Price<b>${esc(g.priceDisplay)}</b></div>
+                  <div class="search-meta-item">Date<b>${esc(g.eventDateDisplay)}</b></div>
+                </div>
+              </div>
+              ${herdLink}
+            </div>
+          </div>
+        </div>
+        <div class="panel"><div class="panel-head"><h2>Vaccine schedule</h2></div><div class="panel-body">${scheduleHtml}</div></div>
+        <div class="panel"><div class="panel-head"><h2>Vaccination history</h2></div><div class="panel-body">${historyHtml}</div></div>
+        <div class="panel"><div class="panel-head"><h2>Feed plan</h2></div><div class="panel-body">${feedHtml}</div></div>
+        <div class="panel"><div class="panel-head"><h2>Reminders</h2></div><div class="panel-body">${reminderHtml}</div></div>
+        <div class="note">Milk production is tracked at farm level on the Milk tab, not per individual goat.</div>`;
+    }
+
+    async function runSearch() {
+      const tag = input.value.trim();
+      if (!tag) {
+        setStatus('Enter or scan a tag / RFID ID.', true);
+        resultsEl.innerHTML = '';
+        input.focus();
+        return;
+      }
+
+      setLoading(true);
+      await waitForPaint();
+
+      try {
+        const url = '/Search/Lookup?tag=' + encodeURIComponent(tag);
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        });
+
+        if (res.status === 404 || res.status === 400) {
+          const err = await res.json().catch(() => ({}));
+          setLoading(false);
+          setStatus(err.error || 'Goat not found.', true);
+          resultsEl.innerHTML = '';
+          return;
+        }
+
+        if (res.status === 403) {
+          setLoading(false);
+          setStatus('You do not have permission to search.', true);
+          resultsEl.innerHTML = '';
+          return;
+        }
+
+        if (!res.ok) {
+          setLoading(false);
+          setStatus('Something went wrong. Please try again.', true);
+          resultsEl.innerHTML = '';
+          return;
+        }
+
+        const data = await res.json();
+        setLoading(false);
+        setStatus('');
+        renderProfile(data);
+        if (history.replaceState) {
+          const next = '/Search?tag=' + encodeURIComponent(tag);
+          if (location.pathname + location.search !== next) history.replaceState(null, '', next);
+        }
+        input.select();
+      } catch {
+        setLoading(false);
+        setStatus('Could not reach the server. Try again or press Search for a full page reload.', true);
+        resultsEl.innerHTML = '';
+      }
+    }
+
+    form?.addEventListener('submit', e => {
+      e.preventDefault();
+      runSearch();
+    });
+    btn?.addEventListener('click', e => {
+      e.preventDefault();
+      runSearch();
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); runSearch(); }
+    });
+
+    input.focus();
+    if (opts.initialTag && String(opts.initialTag).trim() && !opts.hasServerProfile) runSearch();
   }
 
   function initSettings() {
@@ -1391,5 +1769,5 @@ const GoatRecords = (() => {
     });
   }
 
-  return { initHerd, initFeed, initMilk, initFinance, initHealth, initSettings, showModal, showConfirm, showToast };
+  return { initHerd, initFeed, initMilk, initFinance, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
 })();

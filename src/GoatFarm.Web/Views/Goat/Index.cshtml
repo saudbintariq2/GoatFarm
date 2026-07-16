@@ -3,6 +3,7 @@
 @{
     var breeds = (string[])ViewBag.Breeds!;
     var herdFilter = Model.Filter ?? "all";
+    var editGoatJson = ViewBag.EditGoatJson as string ?? "null";
     ViewBag.HerdFilter = herdFilter;
 }
 
@@ -20,8 +21,12 @@
 <div class="panel" id="goatFormPanel">
     <div class="panel-head"><h2 id="goatFormTitle">Add a goat</h2></div>
     <div class="panel-body">
+        <div class="herd-tag-scan">
+            <label for="f-tag">Tag / RFID ID</label>
+            <input id="f-tag" class="herd-tag-input" placeholder="Scan or type tag, then press Enter" autocomplete="off" spellcheck="false">
+            <span id="tag-lookup-hint" class="field-hint">Scan to load an existing goat, or enter a new tag to add.</span>
+        </div>
         <div class="add-grid">
-            <div class="field"><label>Tag / ID</label><input id="f-tag" placeholder="e.g. 245"></div>
             <div class="field"><label>Name (optional)</label><input id="f-name" placeholder="optional"></div>
             <div class="field"><label>Breed</label><select id="f-breed">@foreach (var b in breeds){<option>@b</option>}</select></div>
             <div class="field"><label>Gender</label><select id="f-gender"><option value="Female">Female</option><option value="Male">Male</option></select></div>
@@ -96,7 +101,7 @@
                     data-status="@g.Status"
                     data-date="@g.EventDateDisplay">
                     <td><input type="checkbox" data-id="@g.Id"></td>
-                    <td><span class="tag">@g.Tag</span>@if(!string.IsNullOrEmpty(g.Name)){<div class="name">@g.Name</div>}</td>
+                    <td><a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(g.Tag)">@g.Tag</a>@if(!string.IsNullOrEmpty(g.Name)){<div class="name">@g.Name</div>}</td>
                     <td class="hide-sm"><span class="breed">@g.Breed</span></td>
                     <td><span class="age-d">@g.AgeDays</span> <span class="age-m">days · @g.AgeLabel</span></td>
                     <td><span class="chip @g.StatusCssClass">@g.StatusDisplay</span></td>
@@ -111,5 +116,5 @@
 </div>
 
 @section Scripts {
-<script>GoatRecords.initHerd({ filter: '@herdFilter', page: @Model.Pagination.Page });</script>
+<script>GoatRecords.initHerd({ filter: '@herdFilter', page: @Model.Pagination.Page, editGoat: @Html.Raw(editGoatJson) });</script>
 }

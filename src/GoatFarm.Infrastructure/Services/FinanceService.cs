@@ -46,6 +46,15 @@ public class FinanceService : IFinanceService
             .Select(e => new ExpenseViewModel { Id = e.Id, Type = e.Type, Amount = e.Amount, Date = e.Date })
             .ToListAsync(cancellationToken);
 
+        var ownerInvestments = await _context.OwnerInvestments.AsNoTracking()
+            .Where(o => o.Date >= monthStart && o.Date < monthEnd)
+            .OrderByDescending(o => o.Date)
+            .Select(o => new OwnerInvestmentViewModel { Id = o.Id, Note = o.Note, Amount = o.Amount, Date = o.Date })
+            .ToListAsync(cancellationToken);
+
+        var ownerInvMonth = ownerInvestments.Sum(o => o.Amount);
+        var ownerInvTotal = await _context.OwnerInvestments.AsNoTracking().SumAsync(o => o.Amount, cancellationToken);
+
         var milkInc = _milkService.GetMilkIncomeMonth(month);
         var milkL = _milkService.GetMilkLitersSold(month);
         var incManual = incomes.Sum(i => i.Amount);
@@ -69,11 +78,15 @@ public class FinanceService : IFinanceService
             FeedMonthly = feedM,
             MilkIncome = milkInc,
             MilkLitersSold = milkL,
+            OwnerInvestmentMonthTotal = ownerInvMonth,
+            OwnerInvestmentTotal = ownerInvTotal,
             Assets = assets,
             Incomes = incomes,
             Expenses = expenses,
+            OwnerInvestments = ownerInvestments,
             NewIncome = new CreateIncomeViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
-            NewExpense = new CreateExpenseViewModel { Date = DateOnly.FromDateTime(DateTime.Today) }
+            NewExpense = new CreateExpenseViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
+            NewOwnerInvestment = new CreateOwnerInvestmentViewModel { Date = DateOnly.FromDateTime(DateTime.Today) }
         };
     }
 
@@ -99,6 +112,19 @@ public class FinanceService : IFinanceService
         _context.Expenses.Add(entity);
         await _context.SaveChangesAsync(cancellationToken);
         return new ExpenseViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date };
+    }
+
+    public async Task<OwnerInvestmentViewModel> AddOwnerInvestmentAsync(CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken = default)
+    {
+        var entity = new OwnerInvestment
+        {
+            Note = model.Note.Trim(),
+            Amount = model.Amount,
+            Date = model.Date
+        };
+        _context.OwnerInvestments.Add(entity);
+        await _context.SaveChangesAsync(cancellationToken);
+        return new OwnerInvestmentViewModel { Id = entity.Id, Note = entity.Note, Amount = entity.Amount, Date = entity.Date };
     }
 
     public async Task<AssetViewModel?> UpdateAssetAsync(int id, CreateAssetViewModel model, CancellationToken cancellationToken = default)
@@ -134,6 +160,17 @@ public class FinanceService : IFinanceService
         return new ExpenseViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date };
     }
 
+    public async Task<OwnerInvestmentViewModel?> UpdateOwnerInvestmentAsync(int id, CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.OwnerInvestments.FindAsync([id], cancellationToken);
+        if (entity is null) return null;
+        entity.Note = model.Note.Trim();
+        entity.Amount = model.Amount;
+        entity.Date = model.Date;
+        await _context.SaveChangesAsync(cancellationToken);
+        return new OwnerInvestmentViewModel { Id = entity.Id, Note = entity.Note, Amount = entity.Amount, Date = entity.Date };
+    }
+
     public async Task<bool> DeleteAssetAsync(int id, CancellationToken cancellationToken = default)
     {
         var entity = await _context.Assets.FindAsync([id], cancellationToken);
@@ -157,6 +194,15 @@ public class FinanceService : IFinanceService
         var entity = await _context.Expenses.FindAsync([id], cancellationToken);
         if (entity is null) return false;
         _context.Expenses.Remove(entity);
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> DeleteOwnerInvestmentAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.OwnerInvestments.FindAsync([id], cancellationToken);
+        if (entity is null) return false;
+        _context.OwnerInvestments.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
     }

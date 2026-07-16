@@ -27,7 +27,7 @@ public class GoatViewModel
 
 public class CreateGoatViewModel
 {
-    [Required(ErrorMessage = "Please enter a Tag / ID")]
+    [Required(ErrorMessage = "Please enter a Tag / RFID ID")]
     [StringLength(50)]
     public string Tag { get; set; } = string.Empty;
 

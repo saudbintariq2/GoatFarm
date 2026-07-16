@@ -271,10 +271,25 @@ public class UserSettingsService : IUserSettingsService
         var rolePermissions = await GetPermissionsForRoleAsync(role, cancellationToken);
 
         if (user.UsesRolePermissions || string.IsNullOrWhiteSpace(user.PermissionsJson))
-            return EnsureAdminUserSettings(role, rolePermissions);
+            return EnsureMissingTabPermissions(EnsureAdminUserSettings(role, rolePermissions), role);
 
         var effective = MergeWithRoleDefaults(DeserializeUserPermissions(user.PermissionsJson), rolePermissions);
-        return EnsureAdminUserSettings(role, effective);
+        return EnsureMissingTabPermissions(EnsureAdminUserSettings(role, effective), role);
+    }
+
+    private static IReadOnlyDictionary<string, TabPermissionViewModel> EnsureMissingTabPermissions(
+        IReadOnlyDictionary<string, TabPermissionViewModel> permissions,
+        string role)
+    {
+        var defaults = DefaultRolePermissions()[role];
+        var copy = permissions.ToDictionary(p => p.Key, p => p.Value);
+        foreach (var (tabKey, defaultPerm) in defaults)
+        {
+            if (!copy.ContainsKey(tabKey))
+                copy[tabKey] = defaultPerm;
+        }
+
+        return copy;
     }
 
     internal static RolePermissionsViewModel ParseRolePermissions(string json)
@@ -294,6 +309,7 @@ public class UserSettingsService : IUserSettingsService
         var permissions = parsed ?? DefaultRolePermissions();
         EnsureAdminSettingsAccess(permissions);
         EnsureStaffVaccineAccess(permissions);
+        EnsureMissingTabs(permissions);
         return new RolePermissionsViewModel { Permissions = permissions };
     }
 
@@ -344,7 +360,27 @@ public class UserSettingsService : IUserSettingsService
 
         EnsureAdminSettingsAccess(result);
         EnsureStaffVaccineAccess(result);
+        EnsureMissingTabs(result);
         return result;
+    }
+
+    private static void EnsureMissingTabs(Dictionary<string, Dictionary<string, TabPermissionViewModel>> permissions)
+    {
+        var defaults = DefaultRolePermissions();
+        foreach (var role in FarmRoles.All)
+        {
+            if (!permissions.TryGetValue(role, out var tabs))
+            {
+                permissions[role] = defaults[role];
+                continue;
+            }
+
+            foreach (var (tabKey, defaultPerm) in defaults[role])
+            {
+                if (!tabs.ContainsKey(tabKey))
+                    tabs[tabKey] = defaultPerm;
+            }
+        }
     }
 
     public IReadOnlyList<string> ValidatePassword(string password, PasswordPolicyViewModel? policy = null)
@@ -459,7 +495,7 @@ public class UserSettingsService : IUserSettingsService
                 {
                     FarmRoles.Admin => true,
                     FarmRoles.Manager => tab != FarmTabs.Settings,
-                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Herd or FarmTabs.Feed or FarmTabs.Milk or FarmTabs.Vaccines,
+                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Herd or FarmTabs.Search or FarmTabs.Feed or FarmTabs.Milk or FarmTabs.Vaccines,
                     _ => false
                 };
                 tabs[tab] = hasTab ? TabPermissionViewModel.FullAccess : TabPermissionViewModel.NoAccess;

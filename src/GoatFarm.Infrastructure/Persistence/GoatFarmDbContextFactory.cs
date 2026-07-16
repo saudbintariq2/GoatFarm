@@ -12,10 +12,15 @@ public class GoatFarmDbContextFactory : IDesignTimeDbContextFactory<GoatFarmDbCo
         var configuration = new ConfigurationBuilder()
             .SetBasePath(basePath)
             .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
             .Build();
 
+        var connectionString = Configuration.ConnectionStringResolver.Resolve(configuration);
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
+
         var optionsBuilder = new DbContextOptionsBuilder<GoatFarmDbContext>();
-        optionsBuilder.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+        optionsBuilder.UseNpgsql(connectionString);
 
         return new GoatFarmDbContext(optionsBuilder.Options);
     }

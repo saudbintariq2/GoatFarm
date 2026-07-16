@@ -144,6 +144,14 @@
 
                 }
 
+                @if (visibleTabs.Contains(FarmTabs.Search))
+
+                {
+
+                    <a class="tab @(activeTab == "search" ? "active" : "")" asp-controller="Search" asp-action="Index">Search</a>
+
+                }
+
             </div>
 
             @if (visibleTabs.Contains(FarmTabs.Settings))

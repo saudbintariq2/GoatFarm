@@ -47,6 +47,13 @@ public class FinanceController : Controller
         return Json(await _financeService.AddExpenseAsync(model, cancellationToken));
     }
 
+    [HttpPost]
+    public async Task<IActionResult> AddOwnerInvestment([FromBody] CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return Json(await _financeService.AddOwnerInvestmentAsync(model, cancellationToken));
+    }
+
     [HttpPut]
     public async Task<IActionResult> UpdateAsset(int id, [FromBody] CreateAssetViewModel model, CancellationToken cancellationToken)
     {
@@ -71,6 +78,14 @@ public class FinanceController : Controller
         return result is null ? NotFound() : Json(result);
     }
 
+    [HttpPut]
+    public async Task<IActionResult> UpdateOwnerInvestment(int id, [FromBody] CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var result = await _financeService.UpdateOwnerInvestmentAsync(id, model, cancellationToken);
+        return result is null ? NotFound() : Json(result);
+    }
+
     [HttpDelete]
     public async Task<IActionResult> DeleteAsset(int id, CancellationToken cancellationToken)
     {
@@ -89,6 +104,13 @@ public class FinanceController : Controller
     public async Task<IActionResult> DeleteExpense(int id, CancellationToken cancellationToken)
     {
         var ok = await _financeService.DeleteExpenseAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteOwnerInvestment(int id, CancellationToken cancellationToken)
+    {
+        var ok = await _financeService.DeleteOwnerInvestmentAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound();
     }
 }

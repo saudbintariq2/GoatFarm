@@ -63,6 +63,58 @@ public class GoatService : IGoatService
         return goat is null ? null : MapGoat(goat);
     }
 
+    public async Task<GoatViewModel?> GetByTagAsync(string tag, CancellationToken cancellationToken = default)
+    {
+        var goat = await FindGoatByTagAsync(tag, cancellationToken);
+        return goat is null ? null : MapGoat(goat);
+    }
+
+    private async Task<Goat?> FindGoatByTagAsync(string tag, CancellationToken cancellationToken)
+    {
+        var normalized = NormalizeTag(tag);
+        if (string.IsNullOrEmpty(normalized))
+            return null;
+
+        var goat = await MatchTagAsync(normalized, cancellationToken);
+        if (goat is not null)
+            return goat;
+
+        if (long.TryParse(normalized, out _))
+        {
+            var trimmed = normalized.TrimStart('0');
+            if (!string.IsNullOrEmpty(trimmed) && !string.Equals(trimmed, normalized, StringComparison.Ordinal))
+            {
+                goat = await MatchTagAsync(trimmed, cancellationToken);
+                if (goat is not null)
+                    return goat;
+            }
+
+            foreach (var candidate in new[] { normalized.PadLeft(3, '0'), normalized.PadLeft(4, '0') })
+            {
+                if (string.Equals(candidate, normalized, StringComparison.Ordinal))
+                    continue;
+
+                goat = await MatchTagAsync(candidate, cancellationToken);
+                if (goat is not null)
+                    return goat;
+            }
+        }
+
+        return null;
+    }
+
+    private Task<Goat?> MatchTagAsync(string tag, CancellationToken cancellationToken) =>
+        _context.Goats.Include(g => g.Group).AsNoTracking()
+            .FirstOrDefaultAsync(g => g.Tag.ToLower() == tag.ToLower(), cancellationToken);
+
+    private static string NormalizeTag(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return string.Empty;
+
+        return new string(tag.Where(c => !char.IsControl(c)).ToArray()).Trim();
+    }
+
     public async Task<GoatViewModel> CreateAsync(CreateGoatViewModel model, CancellationToken cancellationToken = default)
     {
         var goat = new Goat

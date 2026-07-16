@@ -7,6 +7,7 @@ public interface IGoatService
 {
     Task<HerdPageViewModel> GetHerdPageAsync(string? filter, int page = 1, int pageSize = 10, CancellationToken cancellationToken = default);
     Task<GoatViewModel?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<GoatViewModel?> GetByTagAsync(string tag, CancellationToken cancellationToken = default);
     Task<GoatViewModel> CreateAsync(CreateGoatViewModel model, CancellationToken cancellationToken = default);
     Task<GoatViewModel?> UpdateAsync(int id, CreateGoatViewModel model, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);

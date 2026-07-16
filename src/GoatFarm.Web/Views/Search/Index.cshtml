@@ -1,0 +1,34 @@
+@model GoatFarm.Application.ViewModels.Search.SearchPageViewModel
+@{
+    var initialTag = Model.InitialTag ?? string.Empty;
+}
+
+<div class="note"><b>Search:</b> scan an RFID tag or type the goat's <b>Tag / RFID ID</b>. Most handheld scanners
+    type the ID and press Enter automatically — focus stays in the search box so you can scan one goat after another.</div>
+
+<div class="panel search-panel" id="search-panel">
+    <div class="panel-head"><h2>Find goat by tag</h2></div>
+    <div class="panel-body">
+        <form id="search-form" class="search-bar" method="get" asp-controller="Search" asp-action="Index">
+            <input type="text" name="tag" id="search-tag" class="search-input" placeholder="Scan or enter tag / RFID ID…"
+                   value="@initialTag" autocomplete="off" spellcheck="false">
+            <button type="submit" class="btn btn-green" id="search-btn">Search</button>
+        </form>
+        <div id="search-status" class="search-status @(Model.Error is not null ? "error" : null)" aria-live="polite">@Model.Error</div>
+        <div id="search-loader" class="search-loader" role="status" aria-live="polite">
+            <div class="search-loading-spinner" aria-hidden="true"></div>
+            <span>Loading goat profile…</span>
+        </div>
+    </div>
+</div>
+
+<div id="search-results" class="search-results">
+    @if (Model.Profile is not null)
+    {
+        @await Html.PartialAsync("_SearchProfile", Model.Profile)
+    }
+</div>
+
+@section Scripts {
+<script>GoatRecords.initSearch({ initialTag: @System.Text.Json.JsonSerializer.Serialize(initialTag), hasServerProfile: @(Model.Profile is not null ? "true" : "false") });</script>
+}

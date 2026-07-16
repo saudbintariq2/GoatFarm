@@ -18,6 +18,7 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Income> Incomes => Set<Income>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<OwnerInvestment> OwnerInvestments => Set<OwnerInvestment>();
     public DbSet<MilkProduction> MilkProductions => Set<MilkProduction>();
     public DbSet<MilkSale> MilkSales => Set<MilkSale>();
     public DbSet<MilkWaste> MilkWastes => Set<MilkWaste>();

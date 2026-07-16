@@ -22,11 +22,56 @@
         <div class="k"><span class="dot" style="background:var(--red)"></span>Running costs this month</div></div>
     <div class="fincard"><div class="v" id="cCapital">@DisplayHelper.FormatRs(Model.Capital)</div>
         <div class="k"><span class="dot" style="background:var(--blue)"></span>Total capital (assets owned)</div></div>
+    <div class="fincard"><div class="v" id="cOwner">@DisplayHelper.FormatRs(Model.OwnerInvestmentTotal)</div>
+        <div class="k"><span class="dot" style="background:var(--amber)"></span>Your money put in (total)</div></div>
 </div>
 
 <div class="note"><b>Capital vs running cost:</b> things you <b>own</b> (goats you bought, machinery, land,
     sheds) are <b>capital</b> — added once. Things you <b>use up</b> each month (feed, salaries, cultivation)
-    are <b>running costs</b>. Profit = cash received − running costs. Capital is your investment, kept separate.</div>
+    are <b>running costs</b>. Profit = cash received − running costs. Capital is your investment, kept separate.
+    <b>Owner investment</b> is money you put in from your own pocket — it is not income and not profit.</div>
+
+<div class="panel">
+    <div class="panel-head"><h2 id="ownerFormTitle">Owner investment — money you put in</h2><span class="sub">your own money funding the farm</span></div>
+    <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0"><b>Keep this separate:</b> money you put in from your own
+            pocket is <b>not income and not profit</b> — it's your investment keeping the farm going until it
+            earns enough on its own. The card above shows the total you've put in so far.</div>
+        <table class="tbl"><thead><tr><th>Note</th><th class="hide-sm">Date</th>
+            <th class="num-cell">Amount</th></tr></thead>
+            <tbody id="ownerRows">
+            @if (Model.OwnerInvestments.Count == 0)
+            {
+                <tr class="owner-empty-row"><td colspan="3" class="empty">No money added this month.</td></tr>
+            }
+            @foreach (var o in Model.OwnerInvestments)
+            {
+                <tr class="fin-row fin-owner-row" data-id="@o.Id" data-note="@o.Note" data-date="@o.DateDisplay"
+                    data-amount="@o.Amount.ToString(CultureInfo.InvariantCulture)">
+                    <td><b>@o.Note</b></td>
+                    <td class="hide-sm"><span class="breed">@o.DateDisplay</span></td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(o.Amount)</td>
+                </tr>
+            }
+            <tr style="background:var(--amber-tint)"><td style="font-weight:800">PUT IN THIS MONTH</td><td class="hide-sm"></td>
+                <td class="num-cell" style="font-weight:800;color:#8a5b13">@DisplayHelper.FormatRs(Model.OwnerInvestmentMonthTotal)</td></tr>
+            <tr style="background:var(--amber-tint)"><td style="font-weight:800">TOTAL TO DATE</td><td class="hide-sm"></td>
+                <td class="num-cell" style="font-weight:800;color:#8a5b13">@DisplayHelper.FormatRs(Model.OwnerInvestmentTotal)</td></tr>
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
+            <div class="field"><label>Note</label><input id="o-note" placeholder="e.g. Monthly top-up"></div>
+            <div class="field"><label>Date</label><input type="date" id="o-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Amount (Rs)</label><input type="number" id="o-amt" min="0"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addOwner">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelOwnerBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteOwnerBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
 
 <div class="panel">
     <div class="panel-head"><h2 id="assetFormTitle">Capital — what the farm owns</h2><span class="sub">added once, not monthly</span></div>

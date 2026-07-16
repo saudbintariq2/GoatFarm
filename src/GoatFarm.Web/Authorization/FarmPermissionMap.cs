@@ -9,6 +9,7 @@ public static class FarmPermissionMap
         {
             ["Dashboard"] = FarmTabs.Dashboard,
             ["Goat"] = FarmTabs.Herd,
+            ["Search"] = FarmTabs.Search,
             ["Feed"] = FarmTabs.Feed,
             ["Milk"] = FarmTabs.Milk,
             ["Finance"] = FarmTabs.Finance,
@@ -54,6 +55,9 @@ public static class FarmPermissionMap
             ["Finance.AddExpense"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.UpdateExpense"] = (FarmTabs.Finance, FarmActions.Edit),
             ["Finance.DeleteExpense"] = (FarmTabs.Finance, FarmActions.Delete),
+            ["Finance.AddOwnerInvestment"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.UpdateOwnerInvestment"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.DeleteOwnerInvestment"] = (FarmTabs.Finance, FarmActions.Delete),
 
             ["Vaccine.GetData"] = (FarmTabs.Vaccines, FarmActions.View),
             ["Vaccine.Add"] = (FarmTabs.Vaccines, FarmActions.Add),

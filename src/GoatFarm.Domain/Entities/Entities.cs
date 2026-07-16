@@ -69,6 +69,13 @@ public class Expense : BaseEntity
     public DateOnly Date { get; set; }
 }
 
+public class OwnerInvestment : BaseEntity
+{
+    public string Note { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public DateOnly Date { get; set; }
+}
+
 public class MilkProduction : BaseEntity
 {
     public DateOnly Date { get; set; }

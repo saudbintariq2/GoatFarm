@@ -9,11 +9,9 @@ namespace GoatFarm.Infrastructure.Persistence;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(GoatFarmDbContext context)
+    public static async Task SeedAsync(GoatFarmDbContext context, CancellationToken cancellationToken = default)
     {
-        await context.Database.MigrateAsync();
-
-        if (await context.Goats.AnyAsync()) return;
+        if (await context.Goats.AnyAsync(cancellationToken)) return;
 
         var groups = new[]
         {
@@ -104,6 +102,10 @@ public static class DbSeeder
             new Expense { Type = "Cultivation (fodder)", Amount = 18000, Date = new DateOnly(today.Year, today.Month, 3) },
             new Expense { Type = "Utilities", Amount = 8000, Date = new DateOnly(today.Year, today.Month, 7) }
         );
+        context.OwnerInvestments.AddRange(
+            new OwnerInvestment { Note = "Startup — buying goats & sheds", Amount = 500000, Date = new DateOnly(today.Year, today.Month, 1) },
+            new OwnerInvestment { Note = "Monthly top-up", Amount = 60000, Date = new DateOnly(today.Year, today.Month, 4) }
+        );
 
         var vET = new Vaccine { Name = "Enterotoxaemia (ET)", Scope = VaccineScope.Kid, RuleType = VaccineRuleType.Age, Days = 30 };
         var vPPR = new Vaccine { Name = "PPR", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 12 };
@@ -144,7 +146,7 @@ public static class DbSeeder
             new MilkWaste { Date = new DateOnly(today.Year, today.Month, 15), Liters = 8, Notes = "Leftover unsold from morning collection" }
         );
 
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     private static Goat NewGoat(string tag, string breed, GoatGender gender, GoatStatus status, GoatSource source, decimal price, int daysAgo, string? name = null) =>

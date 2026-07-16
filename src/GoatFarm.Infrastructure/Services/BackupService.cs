@@ -19,6 +19,7 @@ public class BackupService : Application.Interfaces.IBackupService
             assets = await _context.Assets.AsNoTracking().ToListAsync(cancellationToken),
             incomes = await _context.Incomes.AsNoTracking().ToListAsync(cancellationToken),
             expenses = await _context.Expenses.AsNoTracking().ToListAsync(cancellationToken),
+            ownerInv = await _context.OwnerInvestments.AsNoTracking().ToListAsync(cancellationToken),
             vaccines = await _context.Vaccines.AsNoTracking().ToListAsync(cancellationToken),
             vaccLog = await _context.VaccinationHistories.AsNoTracking().ToListAsync(cancellationToken),
             reminders = await _context.Reminders.AsNoTracking().ToListAsync(cancellationToken),
