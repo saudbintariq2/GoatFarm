@@ -58,8 +58,8 @@
             <tr style="background:var(--amber-tint)"><td style="font-weight:800">TOTAL TO DATE</td><td class="hide-sm"></td>
                 <td class="num-cell" style="font-weight:800;color:#8a5b13">@DisplayHelper.FormatRs(Model.OwnerInvestmentTotal)</td></tr>
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
-            <div class="field"><label>Note</label><input id="o-note" placeholder="e.g. Monthly top-up"></div>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1fr">
+            <div class="field field-comment"><label>Note</label><input id="o-note" placeholder="e.g. Monthly top-up"></div>
             <div class="field"><label>Date</label><input type="date" id="o-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>Amount (Rs)</label><input type="number" id="o-amt" min="0"></div>
         </div>
@@ -94,11 +94,11 @@
             <tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL CAPITAL</td>
                 <td class="hide-sm"></td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(Model.Capital)</td></tr>
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr">
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
             <div class="field"><label>Asset name</label><input id="a-name" placeholder="e.g. Chaff cutter"></div>
             <div class="field"><label>Type</label><select id="a-type" data-lookup="Lookup.AssetTypes">@foreach(var t in assetTypes){<option>@t</option>}</select></div>
             <div class="field"><label>Cost (Rs)</label><input type="number" id="a-cost" min="0"></div>
-            <div class="field"><label>Comment</label><input id="a-comment" placeholder="optional"></div>
+            <div class="field field-comment"><label>Comment</label><input id="a-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">
@@ -131,11 +131,11 @@
             <tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL RECEIVED</td><td class="hide-sm"></td>
                 <td class="num-cell" style="font-weight:800;color:var(--green-dark)">@DisplayHelper.FormatRs(Model.TotalIncome)</td></tr>
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr">
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
             <div class="field"><label>Source</label><select id="i-type" data-lookup="Lookup.IncomeTypes">@foreach(var t in incomeTypes){<option>@t</option>}</select></div>
             <div class="field"><label>Date</label><input type="date" id="i-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>Amount (Rs)</label><input type="number" id="i-amt" min="0"></div>
-            <div class="field"><label>Comment</label><input id="i-comment" placeholder="optional"></div>
+            <div class="field field-comment"><label>Comment</label><input id="i-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">
@@ -212,11 +212,11 @@
             <tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL COSTS</td><td class="hide-sm"></td>
                 <td class="num-cell" style="font-weight:800;color:#8a261c">@DisplayHelper.FormatRs(Model.TotalExpense)</td></tr>
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr">
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr">
             <div class="field"><label>Cost type</label><select id="e-type" data-lookup="Lookup.ExpenseTypes">@foreach(var t in expenseTypes){<option>@t</option>}</select></div>
             <div class="field"><label>Date</label><input type="date" id="e-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>Amount (Rs)</label><input type="number" id="e-amt" min="0"></div>
-            <div class="field"><label>Comment</label><input id="e-comment" placeholder="optional"></div>
+            <div class="field field-comment"><label>Comment</label><input id="e-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">

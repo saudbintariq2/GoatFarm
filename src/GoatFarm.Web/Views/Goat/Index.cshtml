@@ -15,18 +15,18 @@
     <div class="stat" data-filter="st:kid"><div class="num">@Model.Stats.Kids</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Kids</div></div>
     <div class="stat" data-filter="st:milking"><div class="num">@Model.Stats.Milking</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Milking</div></div>
     <div class="stat" data-filter="st:pregnant"><div class="num">@Model.Stats.Pregnant</div><div class="lbl"><span class="dot" style="background:var(--pink)"></span>Pregnant</div></div>
+    <div class="stat" data-filter="st:dry"><div class="num">@Model.Stats.Dry</div><div class="lbl"><span class="dot" style="background:var(--ink-soft)"></span>Dry</div></div>
     <div class="stat" data-filter="st:buck"><div class="num">@Model.Stats.Bucks</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Bucks</div></div>
 </div>
 
 <div class="panel" id="goatFormPanel">
     <div class="panel-head"><h2 id="goatFormTitle">Add a goat</h2></div>
     <div class="panel-body">
-        <div class="herd-tag-scan">
-            <label for="f-tag">Tag / RFID ID</label>
-            <input id="f-tag" class="herd-tag-input" placeholder="Scan or type tag, then press Enter" autocomplete="off" spellcheck="false">
-            <span id="tag-lookup-hint" class="field-hint">Scan to load an existing goat, or enter a new tag to add.</span>
-        </div>
-        <div class="add-grid">
+        <div class="add-grid goat-add-grid">
+            <div class="field field-tag">
+                <label for="f-tag">Tag / RFID ID</label>
+                <input id="f-tag" class="herd-tag-input" placeholder="Scan or type tag, then press Enter" autocomplete="off" spellcheck="false">
+            </div>
             <div class="field"><label>Name (optional)</label><input id="f-name" placeholder="optional"></div>
             <div class="field"><label>Breed</label><select id="f-breed" data-lookup="Lookup.Breeds">@foreach (var b in breeds){<option>@b</option>}</select></div>
             <div class="field"><label>Gender</label><select id="f-gender"><option value="Female">Female</option><option value="Male">Male</option></select></div>
@@ -36,7 +36,7 @@
                 <option value="Kid">Kid</option><option value="Milking">Milking</option><option value="Pregnant">Pregnant</option>
                 <option value="Dry">Dry</option><option value="Buck">Buck</option><option value="Sale">For sale</option></select></div>
             <div class="field"><label>Date (born / bought)</label><input type="date" id="f-date"></div>
-            <div class="field"><label>Comment</label><input id="f-note" placeholder="optional"></div>
+            <div class="field field-comment-goat"><label>Comment</label><input id="f-note" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">
@@ -65,6 +65,10 @@
                     <option value="st:milking">Milking</option><option value="st:dry">Dry</option>
                     <option value="st:buck">Bucks</option><option value="st:sale">For sale</option>
                 </optgroup>
+                <optgroup label="By breeding">
+                    <option value="br:prep" selected="@(Model.Filter == "br:prep")">Ready for cross</option>
+                    <option value="br:expecting" selected="@(Model.Filter == "br:expecting")">Expecting / in-kid</option>
+                </optgroup>
                 <optgroup label="By group" id="groupOpts">
                     @foreach (var g in Model.Groups){<option value="grp:@g">@g</option>}
                 </optgroup>
@@ -76,8 +80,13 @@
             <span style="color:var(--green-dark);font-weight:600">Move to:</span>
             <select id="moveTo">
                 <optgroup label="Set status">
-                    <option value="st:milking">Milking</option><option value="st:pregnant">Pregnant</option>
-                    <option value="st:dry">Dry</option><option value="st:sale">For sale</option></optgroup>
+                    <option value="st:kid">Kid</option><option value="st:milking">Milking</option>
+                    <option value="st:pregnant">Pregnant</option><option value="st:dry">Dry</option>
+                    <option value="st:buck">Buck</option><option value="st:sale">For sale</option></optgroup>
+                <optgroup label="Breeding">
+                    <option value="br:prep">Ready for cross</option>
+                    <option value="br:cross">Crossed / expecting</option>
+                    <option value="br:kidded">Kidded → Milking</option></optgroup>
                 <optgroup label="Group" id="moveGroupOpts">
                     @foreach (var g in Model.Groups){<option value="grp:@g">@g</option>}
                 </optgroup>
@@ -106,7 +115,9 @@
                     <td><a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(g.Tag)">@g.Tag</a>@if(!string.IsNullOrEmpty(g.Name)){<div class="name">@g.Name</div>}@if(!string.IsNullOrEmpty(g.Comment)){<div class="name" style="opacity:.75">@g.Comment</div>}</td>
                     <td class="hide-sm"><span class="breed">@g.Breed</span></td>
                     <td><span class="age-d">@g.AgeDays</span> <span class="age-m">days · @g.AgeLabel</span></td>
-                    <td><span class="chip @g.StatusCssClass">@g.StatusDisplay</span></td>
+                    <td><span class="chip @g.StatusCssClass">@g.StatusDisplay</span>
+                        @if (!string.IsNullOrEmpty(g.BreedingHint))
+                        {<div class="name" style="color:@g.BreedingHintColor;font-weight:700">@g.BreedingHint</div>}</td>
                     <td class="hide-sm num-cell">@if(g.Source == GoatSource.Born){<span class="breed">home-bred</span>}else{<span class="breed">@DisplayHelper.FormatRs(g.PurchasePrice)</span>}</td>
                     <td class="hide-sm"><span class="breed">@g.EventDateDisplay</span></td>
                 </tr>

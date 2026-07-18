@@ -24,6 +24,16 @@ public class GoatViewModel
     public string StatusDisplay { get; set; } = string.Empty;
     public string StatusCssClass { get; set; } = string.Empty;
     public string PriceDisplay { get; set; } = string.Empty;
+    public DateOnly? PrepCrossDate { get; set; }
+    public string? PrepCrossDateDisplay => PrepCrossDate?.ToString("yyyy-MM-dd");
+    public DateOnly? MatedDate { get; set; }
+    public string? MatedDateDisplay => MatedDate?.ToString("yyyy-MM-dd");
+    public string? BuckTag { get; set; }
+    public int? KidsCount { get; set; }
+    public DateOnly? UltrasoundDate { get; set; }
+    public string? UltrasoundDateDisplay => UltrasoundDate?.ToString("yyyy-MM-dd");
+    public string? BreedingHint { get; set; }
+    public string? BreedingHintColor { get; set; }
 }
 
 public class CreateGoatViewModel
@@ -61,6 +71,9 @@ public class BulkMoveViewModel
 {
     public IReadOnlyList<int> GoatIds { get; set; } = [];
     public string MoveTarget { get; set; } = string.Empty;
+    public DateOnly? PrepCrossDate { get; set; }
+    public DateOnly? MatedDate { get; set; }
+    public string? BuckTag { get; set; }
 }
 
 public class HerdStatsViewModel
@@ -69,6 +82,7 @@ public class HerdStatsViewModel
     public int Kids { get; set; }
     public int Milking { get; set; }
     public int Pregnant { get; set; }
+    public int Dry { get; set; }
     public int Bucks { get; set; }
 }
 

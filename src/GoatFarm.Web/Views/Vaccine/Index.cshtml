@@ -17,8 +17,8 @@
     checks every goat's age and last dose, and lists who is due. Tick them off in one click. The example
     schedule below is a starting point — set it to match your vet's protocol.</div>
 
-<div class="filterbar" style="margin-bottom:14px">
-    <div class="field"><label class="hide-sm">Remind me</label>
+<div class="filterbar remind-bar" style="margin-bottom:14px">
+    <div class="field"><label>Remind me</label>
         <select id="remindWin">
             <option value="14" selected="@(Model.RemindDays==14)">2 weeks ahead</option>
             <option value="30" selected="@(Model.RemindDays==30)">1 month ahead</option>
@@ -211,7 +211,7 @@
             }
             @if (!Model.VaccinePurchases.Any()) {<tr class="vacc-buy-empty"><td colspan="6" class="empty">No vaccine purchases this month.</td></tr>}
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .7fr .8fr .9fr 1.2fr auto">
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .7fr .8fr .9fr auto">
             <div class="field"><label>Date</label><input type="date" id="vb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>Vaccine</label><select id="vb-name" data-lookup="Lookup.VaccineNames">
                 @foreach (var n in vaccineNames){<option>@n</option>}</select></div>
@@ -219,8 +219,10 @@
             <div class="field"><label>Unit</label><select id="vb-unit" data-lookup="Lookup.VaccineUnits">
                 @foreach (var u in vaccineUnits){<option>@u</option>}</select></div>
             <div class="field"><label>Amount</label><input type="number" id="vb-amt" min="0"></div>
-            <div class="field"><label>Comment</label><input id="vb-note" placeholder="optional"></div>
             <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addVaccBuy">+ Add</button></div>
+        </div>
+        <div class="field field-comment" style="margin-top:10px">
+            <label>Comment</label><input id="vb-note" placeholder="optional">
         </div>
         <div class="goat-form-actions">
             <button type="button" class="btn btn-ghost" id="cancelVaccBuyBtn" style="display:none">Cancel</button>

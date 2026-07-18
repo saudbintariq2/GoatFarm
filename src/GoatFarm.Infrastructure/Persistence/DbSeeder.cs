@@ -38,6 +38,17 @@ public static class DbSeeder
                     "sheera" => 50,
                     "fodder" => 15,
                     _ => 0
+                },
+                StockKg = key switch
+                {
+                    "wanda" => 150,
+                    "binola" => 80,
+                    "sarson" => 0,
+                    "bran" => 120,
+                    "maize" => 60,
+                    "sheera" => 40,
+                    "fodder" => 0,
+                    _ => 0
                 }
             });
         }
@@ -85,6 +96,17 @@ public static class DbSeeder
             NewGoat("311", "Makhee Cheeni", GoatGender.Female, GoatStatus.Dry, GoatSource.Bought, 30000, 400)
         };
         context.Goats.AddRange(goats);
+        await context.SaveChangesAsync(cancellationToken);
+
+        goats[1].MatedDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-100));
+        goats[1].BuckTag = "B-12";
+        goats[1].UltrasoundDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-50));
+        goats[1].KidsCount = 2;
+        goats[3].MatedDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-60));
+        goats[3].BuckTag = "B-12";
+        goats[4].MatedDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-125));
+        goats[4].BuckTag = "Sultan";
+        goats[11].PrepCrossDate = DateOnly.FromDateTime(DateTime.Today.AddDays(30));
 
         context.Assets.AddRange(
             new Asset { Name = "Chaff cutter", Type = "Machinery", Cost = 55000 },

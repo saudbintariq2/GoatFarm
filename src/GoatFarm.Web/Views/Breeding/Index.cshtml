@@ -1,0 +1,120 @@
+@model GoatFarm.Application.ViewModels.Breeding.BreedingPageViewModel
+
+<div class="bignum">
+    <div><div class="lbl">Expecting (does in-kid)</div><div class="big" id="breedExp">@Model.ExpectingCount</div>
+        <div class="lbl" id="breedNext">@Model.NextDueText</div></div>
+    <div class="side"><span class="lbl">Getting ready for cross</span><b id="breedPrep">@Model.PrepCount</b></div>
+</div>
+<div class="note"><b>Two stages:</b> first mark a doe <b>getting ready for cross</b> with a target date —
+    the app tells you when to start her good diet (about 2 months before). After she's crossed, record the
+    <b>mating date</b> and it works out the <b>estimated kidding date</b> (goats carry about 150 days) with a
+    countdown. Dates are estimates — a vet check confirms pregnancy.</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Getting ready for cross</h2><span class="sub">condition the doe ~2 months before</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Status</th>
+            <th>Target cross</th><th>Start good diet</th><th class="num-cell">Cross in</th><th style="width:150px"></th></tr></thead>
+            <tbody id="prepRows">
+            @if (Model.PrepRows.Any())
+            {
+                foreach (var row in Model.PrepRows)
+                {
+                    <tr>
+                        <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                        <td class="hide-sm"><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
+                        <td><span class="breed">@row.PrepCrossDate</span></td>
+                        <td style="@(row.DietStartNow ? "color:var(--amber);font-weight:700" : "")">@row.DietStartDate</td>
+                        <td class="num-cell">@row.CrossInText</td>
+                        <td>
+                            <button type="button" class="btn btn-green btn-sm" data-cross="@row.Id">Crossed</button>
+                            <span class="del" data-unprep="@row.Id">×</span>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr><td colspan="6" class="empty">No does being prepared. Add one below.</td></tr>
+            }
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.5fr 1fr auto">
+            <div class="field"><label>Doe — scan RFID or type tag</label><input id="bp-tag" placeholder="scan or type tag" autocomplete="off"></div>
+            <div class="field"><label>Target cross date</label><input type="date" id="bp-date" value="@DateTime.Today.AddDays(30).ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addPrep">+ Add</button></div>
+        </div>
+        <div class="rule" id="bp-found" style="margin-top:8px"></div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Expecting — due dates</h2><span class="sub">estimated kidding timeline</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Mated</th><th class="hide-sm">Buck</th>
+            <th>Kids (scan)</th><th>Expected kidding</th><th class="hide-sm">Window</th><th class="num-cell">Due in</th><th style="width:150px"></th></tr></thead>
+            <tbody id="expRows">
+            @if (Model.ExpectingRows.Any())
+            {
+                foreach (var row in Model.ExpectingRows)
+                {
+                    <tr>
+                        <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                        <td class="hide-sm"><span class="breed">@row.MatedDate</span></td>
+                        <td class="hide-sm"><span class="breed">@(row.BuckTag ?? "—")</span></td>
+                        <td>
+                            @if (row.KidsCount.HasValue)
+                            {
+                                <b>@row.KidsDisplay</b>
+                                @if (!string.IsNullOrEmpty(row.UltrasoundDate)) {<div class="name">@row.UltrasoundDate</div>}
+                                @if (row.ExtraFeed) {<div class="name" style="color:var(--amber);font-weight:700">↑ extra feed (multiples)</div>}
+                            }
+                            else
+                            {
+                                <span class="breed" style="color:#bbb">not checked</span>
+                            }
+                        </td>
+                        <td><b>@row.ExpectedKidding</b></td>
+                        <td class="hide-sm"><span class="breed">@row.KiddingWindow</span></td>
+                        <td class="num-cell" style="font-weight:700;@row.DueColor">@row.DueText</td>
+                        <td>
+                            <button type="button" class="btn btn-green btn-sm" data-kidded="@row.Id">Kidded</button>
+                            <span class="del" data-uncross="@row.Id">×</span>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr><td colspan="8" class="empty">No does expecting yet.</td></tr>
+            }
+            </tbody></table>
+
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.4fr 1fr 1fr auto">
+            <div class="field"><label>Doe — scan or type tag</label><input id="bc-tag" placeholder="scan or type tag" autocomplete="off"></div>
+            <div class="field"><label>Mating date</label><input type="date" id="bc-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Buck (optional)</label><input id="bc-buck" placeholder="tag"></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addCross">Record cross</button></div>
+        </div>
+        <div class="rule" id="bc-found" style="margin-top:8px"></div>
+
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+            <div class="rule" style="margin-bottom:8px"><b>Record an ultrasound / pregnancy check</b> — after ~45–60 days</div>
+            <div class="add-grid" style="grid-template-columns:1.3fr 1.2fr 1fr auto">
+                <div class="field"><label>Doe — scan or type tag</label><input id="us-tag" placeholder="scan or type tag" autocomplete="off"></div>
+                <div class="field"><label>Result</label><select id="us-result">
+                    <option value="1">1 kid (single)</option>
+                    <option value="2">Twins (2)</option>
+                    <option value="3">Triplets (3)</option>
+                    <option value="4">4+ kids</option>
+                    <option value="0">Not pregnant (empty)</option></select></div>
+                <div class="field"><label>Date</label><input type="date" id="us-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+                <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addUs">Save</button></div>
+            </div>
+            <div class="rule" id="us-found" style="margin-top:8px"></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>GoatRecords.initBreeding();</script>
+}

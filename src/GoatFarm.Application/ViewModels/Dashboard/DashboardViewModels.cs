@@ -1,3 +1,5 @@
+using GoatFarm.Application.ViewModels.Breeding;
+using GoatFarm.Application.ViewModels.Feed;
 using GoatFarm.Application.ViewModels.Goats;
 using GoatFarm.Application.ViewModels.Reminders;
 using GoatFarm.Application.ViewModels.Vaccines;
@@ -10,7 +12,14 @@ public class DashboardViewModel
 
     public HerdStatsViewModel HerdStats { get; set; } = new();
 
+    public int BreedingPrepCount { get; set; }
+    public int BreedingExpectingCount { get; set; }
+    public string BreedingNextDueText { get; set; } = string.Empty;
+    public IReadOnlyList<BreedingExpectingRowViewModel> BreedingUpcoming { get; set; } = [];
+
     public decimal FeedCostMonthly { get; set; }
+    public IReadOnlyList<FeedStockRowViewModel> FeedStock { get; set; } = [];
+    public int FeedStockLowCount { get; set; }
 
     public decimal LitersProduced { get; set; }
     public decimal LitersSold { get; set; }

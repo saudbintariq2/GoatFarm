@@ -14,8 +14,41 @@
             <div class="stat"><div class="num">@Model.HerdStats.Kids</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Kids</div></div>
             <div class="stat"><div class="num">@Model.HerdStats.Milking</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Milking</div></div>
             <div class="stat"><div class="num">@Model.HerdStats.Pregnant</div><div class="lbl"><span class="dot" style="background:var(--pink)"></span>Pregnant</div></div>
+            <div class="stat"><div class="num">@Model.HerdStats.Dry</div><div class="lbl"><span class="dot" style="background:var(--ink-soft)"></span>Dry</div></div>
             <div class="stat"><div class="num">@Model.HerdStats.Bucks</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Bucks</div></div>
         </div>
+    </div>
+</div>
+
+<div class="panel dash-panel">
+    <div class="panel-head dash-head">
+        <h2>Breeding</h2>
+        <a class="dash-link" asp-controller="Breeding" asp-action="Index">Open Breeding →</a>
+    </div>
+    <div class="panel-body">
+        <div class="breed3 dash-breed3">
+            <div class="fincard"><div class="v">@Model.BreedingExpectingCount</div>
+                <div class="k"><span class="dot" style="background:var(--pink)"></span>Expecting (in-kid)</div></div>
+            <div class="fincard"><div class="v">@Model.BreedingPrepCount</div>
+                <div class="k"><span class="dot" style="background:var(--amber)"></span>Getting ready for cross</div></div>
+            <div class="fincard"><div class="v dash-breed-due">@Model.BreedingNextDueText</div>
+                <div class="k"><span class="dot" style="background:var(--green)"></span>Next kidding</div></div>
+        </div>
+        @if (Model.BreedingUpcoming.Any())
+        {
+            <div class="dash-subhead">Upcoming kidding</div>
+            <table class="tbl dash-tbl"><thead><tr><th>Doe</th><th>Expected</th><th class="num-cell">Due in</th></tr></thead>
+                <tbody>
+                @foreach (var row in Model.BreedingUpcoming)
+                {
+                    <tr>
+                        <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                        <td><b>@row.ExpectedKidding</b></td>
+                        <td class="num-cell" style="font-weight:700;@row.DueColor">@row.DueText</td>
+                    </tr>
+                }
+                </tbody></table>
+        }
     </div>
 </div>
 
@@ -25,10 +58,30 @@
         <a class="dash-link" asp-controller="Feed" asp-action="Index">Open Feed →</a>
     </div>
     <div class="panel-body">
-        <div class="dash-single">
+        <div class="dash-feed-top">
             <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.FeedCostMonthly)</div>
                 <div class="k"><span class="dot" style="background:var(--red)"></span>Total feed + medicine bill (monthly)</div></div>
+            @if (Model.FeedStockLowCount > 0)
+            {
+                <div class="fincard dash-stock-alert"><div class="v">@Model.FeedStockLowCount</div>
+                    <div class="k"><span class="dot" style="background:var(--amber)"></span>Feed type@(Model.FeedStockLowCount == 1 ? "" : "s") low on stock (&lt; 7 days)</div></div>
+            }
         </div>
+        @if (Model.FeedStock.Any())
+        {
+            <div class="dash-subhead">Feed stock</div>
+            <table class="tbl dash-tbl"><thead><tr><th>Feed</th><th class="num-cell">In store</th><th class="num-cell">Days left</th></tr></thead>
+                <tbody>
+                @foreach (var s in Model.FeedStock)
+                {
+                    <tr>
+                        <td><b>@s.DisplayName</b></td>
+                        <td class="num-cell">@s.StockKg.ToString("N1") kg</td>
+                        <td class="num-cell" style="font-weight:700;@s.DaysLeftColor">@s.DaysLeftText</td>
+                    </tr>
+                }
+                </tbody></table>
+        }
     </div>
 </div>
 

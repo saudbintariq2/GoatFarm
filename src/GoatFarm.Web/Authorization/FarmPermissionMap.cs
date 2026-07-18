@@ -9,6 +9,7 @@ public static class FarmPermissionMap
         {
             ["Dashboard"] = FarmTabs.Dashboard,
             ["Goat"] = FarmTabs.Herd,
+            ["Breeding"] = FarmTabs.Breeding,
             ["Search"] = FarmTabs.Search,
             ["Feed"] = FarmTabs.Feed,
             ["Milk"] = FarmTabs.Milk,
@@ -21,6 +22,7 @@ public static class FarmPermissionMap
         new Dictionary<string, (string Tab, string Action)>(StringComparer.OrdinalIgnoreCase)
         {
             ["Dashboard.Export"] = (FarmTabs.Dashboard, FarmActions.View),
+            ["Dashboard.Import"] = (FarmTabs.Dashboard, FarmActions.View),
             ["Dashboard.Stats"] = (FarmTabs.Dashboard, FarmActions.View),
 
             ["Goat.GetAll"] = (FarmTabs.Herd, FarmActions.View),
@@ -30,6 +32,16 @@ public static class FarmPermissionMap
             ["Goat.BulkMove"] = (FarmTabs.Herd, FarmActions.Edit),
             ["Goat.CreateGroup"] = (FarmTabs.Herd, FarmActions.Add),
 
+            ["Breeding.GetData"] = (FarmTabs.Breeding, FarmActions.View),
+            ["Breeding.LookupTag"] = (FarmTabs.Breeding, FarmActions.View),
+            ["Breeding.RecordPrep"] = (FarmTabs.Breeding, FarmActions.Add),
+            ["Breeding.RecordCross"] = (FarmTabs.Breeding, FarmActions.Add),
+            ["Breeding.RecordUltrasound"] = (FarmTabs.Breeding, FarmActions.Edit),
+            ["Breeding.MarkKidded"] = (FarmTabs.Breeding, FarmActions.Edit),
+            ["Breeding.CrossFromPrep"] = (FarmTabs.Breeding, FarmActions.Add),
+            ["Breeding.RemovePrep"] = (FarmTabs.Breeding, FarmActions.Delete),
+            ["Breeding.RemoveCross"] = (FarmTabs.Breeding, FarmActions.Delete),
+
             ["Feed.GetData"] = (FarmTabs.Feed, FarmActions.View),
             ["Feed.UpdatePrice"] = (FarmTabs.Feed, FarmActions.Edit),
             ["Feed.UpdatePlan"] = (FarmTabs.Feed, FarmActions.Edit),
@@ -38,6 +50,7 @@ public static class FarmPermissionMap
             ["Feed.DeletePurchase"] = (FarmTabs.Feed, FarmActions.Delete),
             ["Feed.AddFeedType"] = (FarmTabs.Feed, FarmActions.Add),
             ["Feed.DeleteFeedType"] = (FarmTabs.Feed, FarmActions.Delete),
+            ["Feed.UpdateStock"] = (FarmTabs.Feed, FarmActions.Edit),
 
             ["Lookup.Get"] = (FarmTabs.Herd, FarmActions.View),
             ["Lookup.AddOption"] = (FarmTabs.Herd, FarmActions.Add),

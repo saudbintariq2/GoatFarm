@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goat Records — Farm Software Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EBEFE7;--card:#FFFFFF;--ink:#1B2A1E;--ink-soft:#5C6B5E;--line:#DCE3D8;
+    --green:#2F6B3D;--green-dark:#234F2D;--green-tint:#E6F0E6;
+    --amber:#C2842A;--amber-tint:#F7EDDA;--pink:#B5446E;--pink-tint:#F6E4EC;
+    --blue:#2E6F8E;--blue-tint:#E1EEF3;--red:#B23A2E;--red-tint:#FBE7E3;
+    --shadow:0 1px 2px rgba(27,42,30,.06),0 8px 24px rgba(27,42,30,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+    line-height:1.45;-webkit-font-smoothing:antialiased;padding:16px}
+  .wrap{max-width:1040px;margin:0 auto}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .logo{width:42px;height:42px;border-radius:12px;background:var(--green);
+    display:grid;place-items:center;font-size:22px;flex-shrink:0;box-shadow:var(--shadow)}
+  .top h1{font-size:21px;font-weight:800;letter-spacing:-.4px}
+  .top p{font-size:13px;color:var(--ink-soft);font-weight:500}
+
+  .tabs{display:flex;gap:6px;margin:18px 0;background:#fff;border:1px solid var(--line);
+    border-radius:12px;padding:5px;box-shadow:var(--shadow);width:fit-content;flex-wrap:wrap}
+  .tab{font-family:inherit;font-size:14px;font-weight:600;padding:8px 18px;border-radius:8px;
+    border:none;background:none;color:var(--ink-soft);cursor:pointer;transition:.15s}
+  .tab.active{background:var(--green);color:#fff}
+
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;box-shadow:var(--shadow);cursor:pointer;transition:.15s}
+  .stat:hover{transform:translateY(-2px);border-color:var(--green)}
+  .stat .num{font-size:25px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .stat .lbl{font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:2px}
+  .stat .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px}
+  .panel-head{padding:14px 18px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .panel-head h2{font-size:15px;font-weight:700}
+  .panel-head .sub{font-size:12px;color:var(--ink-soft);font-weight:500}
+  .panel-body{padding:16px 18px}
+
+  .add-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
+  .field input,.field select{font-family:inherit;font-size:14px;padding:9px 10px;
+    border:1px solid var(--line);border-radius:9px;background:#FCFDFB;color:var(--ink);width:100%}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--green);background:#fff}
+  .field input:disabled{background:#f0f0ee;color:#aaa}
+
+  .btn{font-family:inherit;font-size:14px;font-weight:600;padding:9px 16px;border-radius:9px;
+    border:1px solid transparent;cursor:pointer;transition:.15s;white-space:nowrap}
+  .btn-green{background:var(--green);color:#fff}.btn-green:hover{background:var(--green-dark)}
+  .btn-ghost{background:#fff;border-color:var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--green);color:var(--green)}
+  .btn-sm{padding:7px 12px;font-size:13px}
+
+  .filterbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .filterbar .field{flex-direction:row;align-items:center;gap:7px}
+  .filterbar select,.filterbar input{min-width:120px}
+
+  .bulkbar{display:none;align-items:center;gap:12px;background:var(--green-tint);
+    border:1px solid var(--green);border-radius:11px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap}
+  .bulkbar.show{display:flex}
+  .bulkbar .sel{font-weight:700;font-size:14px;color:var(--green-dark)}
+  .bulkbar select{font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--green);
+    border-radius:8px;background:#fff;color:var(--ink)}
+
+  .tbl{width:100%;border-collapse:collapse;font-size:14px}
+  .tbl th{text-align:left;font-size:11px;font-weight:700;color:var(--ink-soft);
+    text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:2px solid var(--line)}
+  .tbl td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl tr.checked{background:var(--green-tint)}
+  .tbl input[type=checkbox]{width:17px;height:17px;accent-color:var(--green);cursor:pointer}
+  .tag{font-weight:700;font-variant-numeric:tabular-nums}
+  .name{color:var(--ink-soft);font-size:13px}
+  .age-d{font-weight:700;font-variant-numeric:tabular-nums}
+  .age-m{font-size:12px;color:var(--ink-soft)}
+  .breed{font-size:12px;color:var(--ink-soft)}
+  .num-cell{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+  .del{cursor:pointer;color:#bbb;font-weight:700;font-size:16px;padding:0 6px}
+  .del:hover{color:var(--red)}
+
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
+  .chip-kid{background:var(--amber-tint);color:#8a5b13}.chip-preg{background:var(--pink-tint);color:#8a2b50}
+  .chip-milk{background:var(--green-tint);color:var(--green-dark)}.chip-dry{background:#EEF1EA;color:#566}
+  .chip-buck{background:var(--blue-tint);color:#1e5470}.chip-sale{background:#fde6e0;color:#9a3a1e}
+  .chip-cap{background:var(--blue-tint);color:#1e5470}.chip-inc{background:var(--green-tint);color:var(--green-dark)}
+  .chip-exp{background:var(--red-tint);color:#8a261c}
+
+  .empty{text-align:center;padding:30px 16px;color:var(--ink-soft);font-size:14px}
+  .note{font-size:12.5px;color:var(--ink-soft);background:var(--amber-tint);
+    border:1px solid #e9d4a8;border-radius:11px;padding:11px 14px;margin-bottom:16px;line-height:1.5}
+  .note b{color:#7a5210}
+
+  .price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .price-row{display:flex;flex-direction:column;gap:5px}
+  .price-row label{font-size:12px;font-weight:600}
+  .price-in{display:flex;align-items:center;gap:6px}
+  .price-in .pre{font-size:12px;color:var(--ink-soft);font-weight:600}
+  .price-in input{font-family:inherit;font-size:14px;padding:7px 9px;width:78px;
+    border:1px solid var(--line);border-radius:8px;text-align:right;font-variant-numeric:tabular-nums}
+  .price-in input:focus{outline:none;border-color:var(--green)}
+  .price-in .suf{font-size:11px;color:var(--ink-soft)}
+
+  .ration-row{display:grid;grid-template-columns:1fr 110px 90px;gap:10px;align-items:center;
+    padding:8px 0;border-bottom:1px solid var(--line)}
+  .ration-row .rn{font-size:13.5px;font-weight:600}
+  .ration-row .rin{display:flex;align-items:center;gap:5px;justify-content:flex-end}
+  .ration-row .rin input{font-family:inherit;font-size:14px;padding:6px 8px;width:64px;
+    border:1px solid var(--line);border-radius:7px;text-align:right;font-variant-numeric:tabular-nums}
+  .ration-row .rin input:focus{outline:none;border-color:var(--green)}
+  .ration-row .rin .u{font-size:11px;color:var(--ink-soft);width:26px}
+  .ration-row .rcost{text-align:right;font-size:13px;font-weight:600;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+
+  .result{background:var(--green-tint);border:1px solid var(--green);border-radius:12px;
+    padding:14px 16px;margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .result .r{text-align:center}
+  .result .r .v{font-size:21px;font-weight:800;color:var(--green-dark);font-variant-numeric:tabular-nums}
+  .result .r .k{font-size:11px;color:var(--green-dark);font-weight:600;opacity:.8}
+
+  .bignum{background:linear-gradient(135deg,var(--green),var(--green-dark));color:#fff;
+    border-radius:16px;padding:18px 22px;margin-bottom:16px;box-shadow:var(--shadow);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+  .bignum.loss{background:linear-gradient(135deg,#9a3225,var(--red))}
+  .bignum .big{font-size:32px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .bignum .lbl{font-size:13px;opacity:.85;font-weight:500}
+  .bignum .side{text-align:right;font-size:13px;opacity:.9}
+  .bignum .side b{font-size:18px;display:block;font-variant-numeric:tabular-nums}
+
+  .fin3{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .fincard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
+  .fincard .v{font-size:23px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+  .fincard .k{font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:2px}
+  .fincard .k .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+
+  .duerow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .duerow:last-child{border-bottom:none}
+  .duerow .dn{font-size:14px;font-weight:700}
+  .duerow .dtags{display:flex;gap:5px;flex-wrap:wrap;flex:1;min-width:140px}
+  .duerow .dtag{font-size:11px;font-weight:700;background:var(--amber-tint);color:#8a5b13;
+    padding:2px 8px;border-radius:20px;font-variant-numeric:tabular-nums}
+  .scopechip{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+    background:var(--blue-tint);color:#1e5470}
+  .rule{font-size:12.5px;color:var(--ink-soft);font-weight:600}
+  .alldone{text-align:center;padding:24px;color:var(--green-dark);font-size:14px;font-weight:600}
+  .view{display:none}.view.active{display:block}
+  @media(max-width:760px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .add-grid{grid-template-columns:1fr 1fr}
+    .price-grid{grid-template-columns:1fr 1fr}
+    .hide-sm{display:none}
+    .ration-row{grid-template-columns:1fr 100px}.ration-row .rcost{display:none}
+    .result{grid-template-columns:1fr}
+    .fin3{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top" style="flex-wrap:wrap">
+    <div class="logo">🐐</div>
+    <div style="flex:1;min-width:160px"><h1>Goat Records</h1><p>Faisalabad farm — cloud record demo</p></div>
+    <button class="btn btn-ghost btn-sm" id="exportBtn">⬇ Backup</button>
+    <button class="btn btn-ghost btn-sm" id="importBtn">⬆ Restore</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none">
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="herd">Herd</button>
+    <button class="tab" data-view="breed">Breeding</button>
+    <button class="tab" data-view="feed">Feed &amp; cost</button>
+    <button class="tab" data-view="milk">Milk</button>
+    <button class="tab" data-view="finance">Finance</button>
+    <button class="tab" data-view="health">Vaccines</button>
+  </div>
+
+  <!-- ============ HERD ============ -->
+  <div class="view active" id="view-herd">
+    <div class="note"><b>Herd:</b> add a goat with its date and price. If you <b>bought</b> it, the price
+      goes into Capital on the Finance tab automatically — because a bought goat is an asset you own.</div>
+    <div class="stats" id="stats"></div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Add a goat</h2></div>
+      <div class="panel-body">
+        <div class="add-grid">
+          <div class="field"><label>Tag / ID</label><input id="f-tag" placeholder="e.g. 245"></div>
+          <div class="field"><label>Name (optional)</label><input id="f-name" placeholder="optional"></div>
+          <div class="field"><label>Breed</label><select id="f-breed"></select></div>
+          <div class="field"><label>Gender</label><select id="f-gender">
+            <option>Female</option><option>Male</option></select></div>
+          <div class="field"><label>Source</label><select id="f-source">
+            <option value="bought">Bought</option><option value="born">Born on farm</option></select></div>
+          <div class="field"><label>Price (Rs)</label><input type="number" id="f-price" min="0" placeholder="0"></div>
+          <div class="field"><label>Status</label><select id="f-status">
+            <option value="kid">Kid</option><option value="milking">Milking</option>
+            <option value="pregnant">Pregnant</option><option value="dry">Dry</option>
+            <option value="buck">Buck</option><option value="sale">For sale</option></select></div>
+          <div class="field"><label>Date (born / bought)</label><input type="date" id="f-date"></div>
+          <div class="field"><label>Comment</label><input id="f-note" placeholder="optional note"></div>
+        </div>
+        <div style="margin-top:14px"><button class="btn btn-green" id="addBtn">+ Add goat</button></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>The herd</h2>
+        <div class="filterbar"><div class="field"><label class="hide-sm">Show</label>
+          <select id="filter">
+            <optgroup label="By age">
+              <option value="all">All goats</option><option value="age:0:70">Kids 0–70 days</option>
+              <option value="age:70:90">Kids 70–90 days</option><option value="age:90:180">3–6 months</option>
+              <option value="age:180:365">6–12 months</option><option value="age:365:99999">Over 1 year</option>
+            </optgroup>
+            <optgroup label="By status">
+              <option value="st:kid">Kids</option><option value="st:pregnant">Pregnant</option>
+              <option value="st:milking">Milking</option><option value="st:dry">Dry</option>
+              <option value="st:buck">Bucks</option><option value="st:sale">For sale</option>
+            </optgroup>
+            <optgroup label="By breeding">
+              <option value="br:prep">Ready for cross</option>
+              <option value="br:expecting">Expecting / in-kid</option>
+            </optgroup>
+            <optgroup label="By group" id="groupOpts"></optgroup>
+          </select></div></div>
+      </div>
+      <div class="panel-body">
+        <div class="bulkbar" id="bulkbar">
+          <span class="sel" id="selCount">0 selected</span>
+          <span style="color:var(--green-dark);font-weight:600">Move to:</span>
+          <select id="moveTo">
+            <optgroup label="Set status">
+              <option value="st:kid">Kid</option><option value="st:milking">Milking</option>
+              <option value="st:pregnant">Pregnant</option><option value="st:dry">Dry</option>
+              <option value="st:buck">Buck</option><option value="st:sale">For sale</option></optgroup>
+            <optgroup label="Breeding">
+              <option value="br:prep">Ready for cross</option>
+              <option value="br:cross">Crossed / expecting</option>
+              <option value="br:kidded">Kidded → Milking</option></optgroup>
+            <optgroup label="Group" id="moveGroupOpts"></optgroup>
+          </select>
+          <button class="btn btn-green" id="moveBtn">Move</button>
+          <button class="btn btn-ghost" id="newGroupBtn">+ New group</button>
+        </div>
+        <table class="tbl"><thead><tr>
+          <th style="width:34px"><input type="checkbox" id="checkAll"></th>
+          <th>Tag</th><th class="hide-sm">Breed</th><th>Age</th><th>Status</th>
+          <th class="hide-sm">Price</th><th class="hide-sm">Date</th>
+        </tr></thead><tbody id="rows"></tbody></table>
+        <div class="empty" id="empty" style="display:none">No goats match this filter.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BREEDING ============ -->
+  <div class="view" id="view-breed">
+    <div class="bignum">
+      <div><div class="lbl">Expecting (does in-kid)</div><div class="big" id="breedExp">0</div>
+        <div class="lbl" id="breedNext">next due —</div></div>
+      <div class="side"><span class="lbl">Getting ready for cross</span><b id="breedPrep">0</b></div>
+    </div>
+    <div class="note"><b>Two stages:</b> first mark a doe <b>getting ready for cross</b> with a target date —
+      the app tells you when to start her good diet (about 2 months before). After she's crossed, record the
+      <b>mating date</b> and it works out the <b>estimated kidding date</b> (goats carry about 150 days) with a
+      countdown. Dates are estimates — a vet check confirms pregnancy.</div>
+
+    <!-- PREPARING -->
+    <div class="panel">
+      <div class="panel-head"><h2>Getting ready for cross</h2><span class="sub">condition the doe ~2 months before</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Status</th>
+          <th>Target cross</th><th>Start good diet</th><th class="num-cell">Cross in</th><th style="width:150px"></th></tr></thead>
+          <tbody id="prepRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.5fr 1fr auto">
+          <div class="field"><label>Doe — scan RFID or type tag</label><input id="bp-tag" placeholder="scan or type tag" autocomplete="off"></div>
+          <div class="field"><label>Target cross date</label><input type="date" id="bp-date"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addPrep">+ Add</button></div>
+        </div>
+        <div class="rule" id="bp-found" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- EXPECTING -->
+    <div class="panel">
+      <div class="panel-head"><h2>Expecting — due dates</h2><span class="sub">estimated kidding timeline</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Mated</th><th class="hide-sm">Buck</th>
+          <th>Kids (scan)</th><th>Expected kidding</th><th class="hide-sm">Window</th><th class="num-cell">Due in</th><th style="width:150px"></th></tr></thead>
+          <tbody id="expRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.4fr 1fr 1fr auto">
+          <div class="field"><label>Doe — scan or type tag</label><input id="bc-tag" placeholder="scan or type tag" autocomplete="off"></div>
+          <div class="field"><label>Mating date</label><input type="date" id="bc-date"></div>
+          <div class="field"><label>Buck (optional)</label><input id="bc-buck" placeholder="tag"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addCross">Record cross</button></div>
+        </div>
+        <div class="rule" id="bc-found" style="margin-top:8px"></div>
+
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+          <div class="rule" style="margin-bottom:8px"><b>Record an ultrasound / pregnancy check</b> — after ~45–60 days</div>
+          <div class="add-grid" style="grid-template-columns:1.3fr 1.2fr 1fr auto">
+            <div class="field"><label>Doe — scan or type tag</label><input id="us-tag" placeholder="scan or type tag" autocomplete="off"></div>
+            <div class="field"><label>Result</label><select id="us-result">
+              <option value="1">1 kid (single)</option>
+              <option value="2">Twins (2)</option>
+              <option value="3">Triplets (3)</option>
+              <option value="4">4+ kids</option>
+              <option value="0">Not pregnant (empty)</option></select></div>
+            <div class="field"><label>Date</label><input type="date" id="us-date"></div>
+            <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addUs">Save</button></div>
+          </div>
+          <div class="rule" id="us-found" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FEED ============ -->
+  <div class="view" id="view-feed">
+    <div class="bignum">
+      <div><div class="lbl">Estimated feed + medicine (budget)</div><div class="big" id="grandMonth">Rs 0</div>
+        <div class="lbl">per month — planning figure</div></div>
+      <div class="side"><span class="lbl">Per day</span><b id="grandDay">Rs 0</b>
+        <span class="lbl" id="grandHead">for 0 goats</span></div>
+    </div>
+    <div class="note"><b>Two things here:</b> the <b>prices, plan and buying list</b> below are for <b>planning</b>
+      — they estimate what you'll need. The <b>Feed bought</b> panel at the bottom is for the <b>actual purchases</b>
+      you make (e.g. 15 kg Wanda) — that real spend is what goes into Finance.</div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Feed prices</h2><span class="sub">what you pay per kg</span></div>
+      <div class="panel-body"><div class="price-grid" id="priceGrid"></div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px"><label>Add a new feed type</label>
+            <input id="nf-name" placeholder="e.g. Silage / Corn gluten"></div>
+          <div class="field"><label>Price (Rs/kg)</label><input type="number" id="nf-price" min="0" style="width:110px"></div>
+          <button class="btn btn-green" id="addFeedType">+ Add feed</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Feed plan per group</h2>
+        <div class="filterbar"><select id="planGroup">
+          <option value="kid">Kids</option><option value="milking">Milking</option>
+          <option value="pregnant">Pregnant</option><option value="dry">Dry</option>
+          <option value="buck">Bucks</option><option value="sale">For sale</option></select></div>
+      </div>
+      <div class="panel-body">
+        <div id="rationList"></div>
+        <div class="ration-row" style="border-bottom:none;margin-top:4px">
+          <div class="rn">Medicine / health</div>
+          <div class="rin"><input type="number" id="medIn" min="0"><span class="u">Rs</span></div>
+          <div class="rcost" style="color:var(--ink-soft)">per goat / month</div>
+        </div>
+        <div class="result" id="planResult"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Cost summary</h2><span class="sub">monthly, by group</span></div>
+      <div class="panel-body"><table class="tbl"><thead><tr>
+        <th>Group</th><th class="num-cell">Goats</th><th class="num-cell">Feed / month</th>
+        <th class="num-cell hide-sm">Medicine / month</th><th class="num-cell">Total / month</th>
+      </tr></thead><tbody id="summaryRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Buying list</h2><span class="sub">how much of each feed the farm needs</span></div>
+      <div class="panel-body"><table class="tbl"><thead><tr>
+        <th>Feed</th><th class="num-cell">kg / day</th><th class="num-cell hide-sm">kg / month</th>
+        <th class="num-cell">Rs / month</th>
+      </tr></thead><tbody id="buyRows"></tbody></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Feed bought</h2><span class="sub">actual purchases — quantity &amp; cost → Finance</span></div>
+      <div class="panel-body">
+        <div class="bignum" style="margin-bottom:14px;padding:14px 18px">
+          <div><div class="lbl">Feed bought this month</div><div class="big" id="feedBoughtMonth" style="font-size:26px">Rs 0</div></div>
+          <div class="side"><span class="lbl" id="feedBoughtKg">0 kg total</span></div>
+        </div>
+        <table class="tbl"><thead><tr><th>Date</th><th>Feed</th><th class="num-cell">Qty</th>
+          <th class="num-cell hide-sm">Rate/kg</th><th class="num-cell">Total</th>
+          <th class="hide-sm">Comment</th><th style="width:30px"></th></tr></thead>
+          <tbody id="buyLogRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .8fr .9fr .9fr 1.2fr auto">
+          <div class="field"><label>Date</label><input type="date" id="fb-date"></div>
+          <div class="field"><label>Feed</label><select id="fb-feed"></select></div>
+          <div class="field"><label>Qty (kg)</label><input type="number" id="fb-kg" min="0" step="0.5"></div>
+          <div class="field"><label>Rate/kg</label><input type="number" id="fb-rate" min="0"></div>
+          <div class="field"><label>Total</label><input type="number" id="fb-total" disabled placeholder="auto"></div>
+          <div class="field"><label>Comment</label><input id="fb-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addFeedBuy">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Feed stock</h2><span class="sub">what's in the store now</span></div>
+      <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0">Buying feed adds to stock automatically. <b>Days left</b>
+          uses your ration plan to estimate how long stock will last — it turns amber when low. Edit a number
+          if you count the store by hand.</div>
+        <table class="tbl"><thead><tr><th>Feed</th><th class="num-cell">Stock</th>
+          <th class="num-cell hide-sm">Used / day</th><th class="num-cell">Days left</th></tr></thead>
+          <tbody id="stockRows"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MILK ============ -->
+  <div class="view" id="view-milk">
+    <div class="bignum">
+      <div><div class="lbl">Milk sold this month</div><div class="big" id="milkIncome">Rs 0</div>
+        <div class="lbl" id="milkSoldNote">0 L sold</div></div>
+      <div class="side"><span class="lbl">Collected this month</span><b id="milkProdL">0 L</b>
+        <span class="lbl" id="milkAvg">0 L/day avg</span></div>
+    </div>
+    <div class="note"><b>Two separate steps:</b> first log <b>how much milk you collect</b> each day. Then,
+      whenever you actually <b>sell</b> — even days later, in a batch — log the litres and the rate. The sale
+      is what becomes cash, and it shows up in Finance → Cash received on its own. Milk kept for ghee/paneer
+      simply isn't sold here.</div>
+
+    <!-- COLLECTION -->
+    <div class="panel">
+      <div class="panel-head"><h2>Milk collected</h2><span class="sub">litres per day</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th class="hide-sm">Breed</th>
+          <th class="num-cell">Litres</th><th class="hide-sm">Comment</th><th style="width:30px"></th></tr></thead>
+          <tbody id="prodRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1fr 1fr 2fr auto">
+          <div class="field"><label>Date</label><input type="date" id="p-date"></div>
+          <div class="field"><label>Breed</label><select id="p-breed"></select></div>
+          <div class="field"><label>Litres</label><input type="number" id="p-liters" min="0" step="0.5"></div>
+          <div class="field"><label>Comment</label><input id="p-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addProd">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SALES -->
+    <div class="panel">
+      <div class="panel-head"><h2>Milk sold</h2><span class="sub">litres × rate = cash → Finance</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th class="num-cell">Litres</th>
+          <th class="num-cell hide-sm">Rate /L</th><th class="num-cell">Amount</th><th class="hide-sm">Comment</th><th style="width:30px"></th></tr></thead>
+          <tbody id="saleRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1fr 1fr 1fr 1.5fr auto">
+          <div class="field"><label>Date sold</label><input type="date" id="s-date"></div>
+          <div class="field"><label>Litres</label><input type="number" id="s-liters" min="0" step="0.5"></div>
+          <div class="field"><label>Rate (Rs/L)</label><input type="number" id="s-rate" min="0"></div>
+          <div class="field"><label>Amount</label><input type="number" id="s-amt" disabled placeholder="auto"></div>
+          <div class="field"><label>Comment</label><input id="s-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addSale">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FINANCE ============ -->
+  <div class="view" id="view-finance">
+    <div class="bignum" id="profitBanner">
+      <div><div class="lbl">Profit this month (income − running costs)</div>
+        <div class="big" id="profitVal">Rs 0</div><div class="lbl" id="profitNote"></div></div>
+      <div class="side"><span class="lbl">Capital invested</span><b id="capSide">Rs 0</b>
+        <span class="lbl">goats + machinery + land</span></div>
+    </div>
+
+    <div class="filterbar" style="margin-bottom:14px">
+      <div class="field"><label class="hide-sm">Month</label><input type="month" id="finMonth"></div>
+    </div>
+
+    <div class="fin3">
+      <div class="fincard"><div class="v" id="cIncome">Rs 0</div>
+        <div class="k"><span class="dot" style="background:var(--green)"></span>Cash received this month</div></div>
+      <div class="fincard"><div class="v" id="cExpense">Rs 0</div>
+        <div class="k"><span class="dot" style="background:var(--red)"></span>Running costs this month</div></div>
+      <div class="fincard"><div class="v" id="cCapital">Rs 0</div>
+        <div class="k"><span class="dot" style="background:var(--blue)"></span>Total capital (assets owned)</div></div>
+      <div class="fincard"><div class="v" id="cOwner">Rs 0</div>
+        <div class="k"><span class="dot" style="background:var(--amber)"></span>Your money put in (total)</div></div>
+    </div>
+
+    <div class="note"><b>Capital vs running cost:</b> things you <b>own</b> (goats you bought, machinery, land,
+      sheds) are <b>capital</b> — added once. Things you <b>use up</b> each month (feed, salaries, cultivation)
+      are <b>running costs</b>. Profit = cash received − running costs. Capital is your investment, kept separate.</div>
+
+    <!-- OWNER INVESTMENT -->
+    <div class="panel">
+      <div class="panel-head"><h2>Owner investment — money you put in</h2><span class="sub">your own money funding the farm</span></div>
+      <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0"><b>Keep this separate:</b> money you put in from your own
+          pocket is <b>not income and not profit</b> — it's your investment keeping the farm going until it
+          earns enough on its own. The card above shows the total you've put in so far.</div>
+        <table class="tbl"><thead><tr><th>Note</th><th class="hide-sm">Date</th>
+          <th class="num-cell">Amount</th><th style="width:30px"></th></tr></thead>
+          <tbody id="ownerRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr auto">
+          <div class="field"><label>Note</label><input id="o-note" placeholder="e.g. Monthly top-up"></div>
+          <div class="field"><label>Date</label><input type="date" id="o-date"></div>
+          <div class="field"><label>Amount (Rs)</label><input type="number" id="o-amt" min="0"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addOwner">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAPITAL -->
+    <div class="panel">
+      <div class="panel-head"><h2>Capital — what the farm owns</h2><span class="sub">added once, not monthly</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Asset</th><th class="hide-sm">Type</th>
+          <th class="num-cell">Value</th><th style="width:30px"></th></tr></thead>
+          <tbody id="assetRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr auto">
+          <div class="field"><label>Asset name</label><input id="a-name" placeholder="e.g. Chaff cutter"></div>
+          <div class="field"><label>Type</label><select id="a-type">
+            <option>Machinery</option><option>Land</option><option>Buildings/Sheds</option><option>Other</option></select></div>
+          <div class="field"><label>Cost (Rs)</label><input type="number" id="a-cost" min="0"></div>
+          <div class="field"><label>Comment</label><input id="a-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addAsset">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INCOME -->
+    <div class="panel">
+      <div class="panel-head"><h2>Cash received</h2><span class="sub">milk, meat, ghee, paneer, sales</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Source</th><th class="hide-sm">Date</th>
+          <th class="num-cell">Amount</th><th style="width:30px"></th></tr></thead>
+          <tbody id="incomeRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr auto">
+          <div class="field"><label>Source</label><select id="i-type"></select></div>
+          <div class="field"><label>Date</label><input type="date" id="i-date"></div>
+          <div class="field"><label>Amount (Rs)</label><input type="number" id="i-amt" min="0"></div>
+          <div class="field"><label>Comment</label><input id="i-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addIncome">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECURRING -->
+    <div class="panel">
+      <div class="panel-head"><h2>Fixed &amp; recurring costs</h2><span class="sub">rent, fixed salaries — counted every month automatically</span></div>
+      <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0"><b>Yearly costs are spread:</b> if you pay land rent once a
+          year, enter it as <b>Yearly</b> — the app shows 1/12 of it in every month's running costs, so no single
+          month looks unfairly bad. Add anything that repeats (rent, guard salary) here once, instead of typing it
+          every month.</div>
+        <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Period</th>
+          <th class="num-cell hide-sm">Full amount</th><th class="num-cell">Per month</th><th style="width:30px"></th></tr></thead>
+          <tbody id="recurRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr auto">
+          <div class="field"><label>Cost name</label><input id="rc-name" placeholder="e.g. Land rent"></div>
+          <div class="field"><label>Amount (Rs)</label><input type="number" id="rc-amt" min="0"></div>
+          <div class="field"><label>Period</label><select id="rc-period">
+            <option value="year">Yearly</option><option value="month">Monthly</option></select></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addRecur">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPENSES -->
+    <div class="panel">
+      <div class="panel-head"><h2>Running costs</h2><span class="sub">salaries, cultivation, feed, utilities</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Date</th>
+          <th class="num-cell">Amount</th><th style="width:30px"></th></tr></thead>
+          <tbody id="expenseRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1fr 1fr 2fr auto">
+          <div class="field"><label>Cost type</label><select id="e-type"></select></div>
+          <div class="field"><label>Date</label><input type="date" id="e-date"></div>
+          <div class="field"><label>Amount (Rs)</label><input type="number" id="e-amt" min="0"></div>
+          <div class="field"><label>Comment</label><input id="e-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addExpense">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ VACCINES / HEALTH ============ -->
+  <div class="view" id="view-health">
+    <div class="bignum" id="vaccBanner">
+      <div><div class="lbl">Vaccinations due now</div><div class="big" id="vaccDueCount">0</div>
+        <div class="lbl" id="vaccDueNote">across the herd</div></div>
+      <div class="side"><span class="lbl">Coming up</span><b id="vaccUpcoming">0</b>
+        <span class="lbl" id="vaccUpNote">in the reminder window</span></div>
+    </div>
+
+    <div class="note"><b>How it stays easy:</b> you set each vaccine's rule once — either <b>by age</b>
+      (e.g. kids at 30 days) or <b>repeat</b> (e.g. PPR every 12 months, for a whole group). The system
+      checks every goat's age and last dose, and lists who is due. Tick them off in one click. The example
+      schedule below is a starting point — set it to match your vet's protocol.</div>
+
+    <div class="filterbar" style="margin-bottom:14px">
+      <div class="field"><label class="hide-sm">Remind me</label>
+        <select id="remindWin">
+          <option value="14">2 weeks ahead</option>
+          <option value="30">1 month ahead</option>
+          <option value="60">2 months ahead</option>
+          <option value="90">3 months ahead</option>
+        </select></div>
+    </div>
+
+    <!-- DUE NOW -->
+    <div class="panel">
+      <div class="panel-head"><h2>Due now</h2><span class="sub">select is automatic — just confirm</span></div>
+      <div class="panel-body"><div id="dueList"></div></div>
+    </div>
+
+    <!-- GIVE A VACCINE -->
+    <div class="panel">
+      <div class="panel-head"><h2>Give a vaccine</h2><span class="sub">record a vaccination for a whole group at once</span></div>
+      <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:1.4fr 1.4fr 1fr auto">
+          <div class="field"><label>Vaccine</label><select id="gv-vacc"></select></div>
+          <div class="field"><label>Group</label><select id="gv-group"></select></div>
+          <div class="field"><label>Date</label><input type="date" id="gv-date"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="giveVacc">Mark done</button></div>
+        </div>
+        <div class="rule" id="gv-info" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <!-- COMING UP -->
+    <div class="panel">
+      <div class="panel-head"><h2>Coming up</h2><span class="sub">a heads-up before it's overdue</span></div>
+      <div class="panel-body"><div id="comingList"></div></div>
+    </div>
+
+    <!-- MY REMINDERS -->
+    <div class="panel">
+      <div class="panel-head"><h2>My reminders</h2><span class="sub">set your own — by group or whole farm</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Reminder</th><th class="hide-sm">Date</th>
+          <th class="num-cell">When</th><th style="width:30px"></th></tr></thead>
+          <tbody id="reminderRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:2fr 1.2fr .8fr 1fr auto">
+          <div class="field"><label>Reminder</label><input id="r-note" placeholder="e.g. Hoof trimming"></div>
+          <div class="field"><label>Applies to</label><select id="r-scope">
+            <option value="none">Whole farm</option><option value="all">All goats</option>
+            <option value="kid">Kids</option><option value="milking">Milking</option>
+            <option value="pregnant">Pregnant</option><option value="dry">Dry</option>
+            <option value="buck">Bucks</option><option value="sale">For sale</option></select></div>
+          <div class="field"><label>In</label><input type="number" id="r-num" min="1" placeholder="2"></div>
+          <div class="field"><label>Unit</label><select id="r-unit">
+            <option value="30">Months</option><option value="7">Weeks</option><option value="1">Days</option></select></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addReminder">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCHEDULE -->
+    <div class="panel">
+      <div class="panel-head"><h2>Vaccine schedule</h2><span class="sub"><b id="vaccCount">0</b> set up · set the rule once</span></div>
+      <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Vaccine</th><th>Applies to</th>
+          <th class="hide-sm">Rule</th><th style="width:30px"></th></tr></thead>
+          <tbody id="vaccRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.6fr 1.1fr 1.1fr .9fr 1.4fr auto">
+          <div class="field"><label>Vaccine name</label><input id="v-name" placeholder="e.g. PPR"></div>
+          <div class="field"><label>Applies to</label><select id="v-scope">
+            <option value="all">All goats</option><option value="kid">Kids</option>
+            <option value="milking">Milking</option><option value="pregnant">Pregnant</option>
+            <option value="dry">Dry</option><option value="buck">Bucks</option>
+            <option value="sale">For sale</option></select></div>
+          <div class="field"><label>Rule</label><select id="v-type">
+            <option value="age">At age (days)</option><option value="repeat">Repeat (months)</option></select></div>
+          <div class="field"><label id="v-vlabel">Days</label><input type="number" id="v-val" min="1" placeholder="30"></div>
+          <div class="field"><label>Comment</label><input id="v-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addVacc">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="panel">
+      <div class="panel-head"><h2>Recent vaccinations</h2><span class="sub">what was given, when</span></div>
+      <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th>Vaccine</th>
+        <th class="num-cell">Goats done</th></tr></thead><tbody id="vaccLogRows"></tbody></table></div>
+    </div>
+
+    <!-- VACCINE PURCHASES -->
+    <div class="panel">
+      <div class="panel-head"><h2>Vaccines bought</h2><span class="sub">what you paid — goes to Finance costs</span></div>
+      <div class="panel-body">
+        <div class="bignum" style="margin-bottom:14px;padding:14px 18px">
+          <div><div class="lbl">Vaccines bought this month</div><div class="big" id="vaccBuyMonth" style="font-size:26px">Rs 0</div></div>
+        </div>
+        <table class="tbl"><thead><tr><th>Date</th><th>Vaccine</th><th class="num-cell hide-sm">Qty</th>
+          <th class="num-cell">Amount</th><th class="hide-sm">Comment</th><th style="width:30px"></th></tr></thead>
+          <tbody id="vaccBuyRows"></tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .8fr .9fr 1fr 1.2fr auto">
+          <div class="field"><label>Date</label><input type="date" id="vb-date"></div>
+          <div class="field"><label>Vaccine</label><select id="vb-name"></select></div>
+          <div class="field"><label>Qty</label><input type="number" id="vb-qty" min="0" placeholder="1"></div>
+          <div class="field"><label>Unit</label><select id="vb-unit"></select></div>
+          <div class="field"><label>Amount (Rs)</label><input type="number" id="vb-amt" min="0"></div>
+          <div class="field"><label>Comment</label><input id="vb-note" placeholder="optional"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addVaccBuy">+ Add</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const KEY='goatHerd_v4';
+const STNAME={kid:'Kids',milking:'Milking',pregnant:'Pregnant',dry:'Dry',buck:'Bucks',sale:'For sale'};
+let FEEDS=[{k:'wanda',n:'Wanda (concentrate)'},{k:'binola',n:'Binola (cottonseed cake)'},
+  {k:'sarson',n:'Sarson khali (mustard cake)'},{k:'bran',n:'Wheat bran (choker)'},
+  {k:'maize',n:'Maize (makai)'},{k:'sheera',n:'Sheera (molasses)'},{k:'fodder',n:'Green fodder (chaara)'}];
+const STORDER=['kid','milking','pregnant','dry','buck','sale'];
+let INCOME_TYPES=['Ghee','Paneer','Yogurt / Lassi','Soap','Live goat sale','Meat','Other'];
+let EXPENSE_TYPES=['Salaries','Salary advance','Seeding','Fodder cutting','Irrigation / water','Cultivation (fodder)','Vaccines','Doctor / vet visit','Vet / extra medicine','Utilities','Transport','Repairs','Land rent','Other'];
+let ASSET_TYPES=['Machinery','Land','Buildings/Sheds','Other'];
+let VACCINE_NAMES=['Enterotoxaemia (ET)','PPR','FMD','CCPP','ET booster (pre-kidding)','Deworming'];
+let BREED_NAMES=['Beetal','Makhee Cheeni','Mixed'];
+let VACCINE_UNITS=['Box','Bottle','Dose (loose)','Other'];
+const ST={kid:{t:'Kid',c:'chip-kid'},pregnant:{t:'Pregnant',c:'chip-preg'},milking:{t:'Milking',c:'chip-milk'},
+  dry:{t:'Dry',c:'chip-dry'},buck:{t:'Buck',c:'chip-buck'},sale:{t:'For sale',c:'chip-sale'}};
+
+let goats=[],groups=['Lactating kids','Weaned kids','Sale lot'];
+let prices={wanda:90,binola:95,sarson:85,bran:60,maize:75,sheera:50,fodder:15};
+let plans={
+  kid:{wanda:150,binola:0,sarson:0,bran:0,maize:0,sheera:0,fodder:500,med:50},
+  milking:{wanda:500,binola:200,sarson:0,bran:200,maize:100,sheera:50,fodder:2000,med:80},
+  pregnant:{wanda:400,binola:150,sarson:0,bran:150,maize:100,sheera:50,fodder:1500,med:150},
+  dry:{wanda:200,binola:0,sarson:0,bran:100,maize:0,sheera:0,fodder:1500,med:40},
+  buck:{wanda:400,binola:100,sarson:0,bran:100,maize:100,sheera:0,fodder:1500,med:60},
+  sale:{wanda:250,binola:0,sarson:0,bran:100,maize:0,sheera:0,fodder:1500,med:30}};
+let assets=[],incomes=[],expenses=[],ownerInv=[];
+let vaccines=[],vaccLog=[];
+let reminders=[],remindDays=30;
+let milkProd=[],milkSales=[],feedBuys=[],recurringCosts=[],vaccineBuys=[];
+let feedStock={};
+
+async function load(){
+  try{const r=await window.storage.get(KEY);if(r&&r.value){const d=JSON.parse(r.value);
+    goats=d.goats||goats;groups=d.groups||groups;prices=Object.assign(prices,d.prices||{});
+    plans=Object.assign(plans,d.plans||{});assets=d.assets||[];incomes=d.incomes||[];expenses=d.expenses||[];ownerInv=d.ownerInv||[];if(d.FEEDS)FEEDS=d.FEEDS;if(d.incomeTypes)INCOME_TYPES=d.incomeTypes;if(d.expenseTypes)EXPENSE_TYPES=d.expenseTypes;if(d.assetTypes)ASSET_TYPES=d.assetTypes;if(d.vaccineNames)VACCINE_NAMES=d.vaccineNames;if(d.breedNames)BREED_NAMES=d.breedNames;if(d.vaccineUnits)VACCINE_UNITS=d.vaccineUnits;
+    vaccines=d.vaccines||[];vaccLog=d.vaccLog||[];reminders=d.reminders||[];remindDays=d.remindDays||30;
+    milkProd=d.milkProd||[];milkSales=d.milkSales||[];feedBuys=d.feedBuys||[];recurringCosts=d.recurringCosts||[];vaccineBuys=d.vaccineBuys||[];feedStock=d.feedStock||{};return;}
+  }catch(e){}
+  seed();
+}
+async function save(){try{await window.storage.set(KEY,JSON.stringify(
+  {goats,groups,prices,plans,assets,incomes,expenses,ownerInv,vaccines,vaccLog,reminders,remindDays,milkProd,milkSales,feedBuys,recurringCosts,vaccineBuys,feedStock,FEEDS,incomeTypes:INCOME_TYPES,expenseTypes:EXPENSE_TYPES,assetTypes:ASSET_TYPES,vaccineNames:VACCINE_NAMES,breedNames:BREED_NAMES,vaccineUnits:VACCINE_UNITS}));}catch(e){}}
+
+function daysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);}
+function thisMonth(){return new Date().toISOString().slice(0,7);}
+function monthDate(day){const d=new Date();return d.toISOString().slice(0,8)+String(day).padStart(2,'0');}
+function id(){return Math.random().toString(36).slice(2,9)}
+
+function seed(){
+  goats=[
+    {id:id(),tag:'201',breed:'Beetal',gender:'Female',status:'milking',group:'',date:daysAgo(900),source:'bought',price:38000},
+    {id:id(),tag:'202',breed:'Beetal',gender:'Female',status:'pregnant',group:'',date:daysAgo(720),source:'bought',price:42000},
+    {id:id(),tag:'203',breed:'Makhee Cheeni',gender:'Female',status:'milking',group:'',date:daysAgo(640),source:'bought',price:45000},
+    {id:id(),tag:'204',breed:'Makhee Cheeni',gender:'Female',status:'pregnant',group:'',date:daysAgo(810),source:'bought',price:40000},
+    {id:id(),tag:'205',breed:'Beetal',gender:'Female',status:'pregnant',group:'',date:daysAgo(690),source:'bought',price:39000},
+    {id:id(),tag:'B-12',name:'Sultan',breed:'Beetal',gender:'Male',status:'buck',group:'',date:daysAgo(1100),source:'bought',price:65000},
+    {id:id(),tag:'305',breed:'Beetal',gender:'Female',status:'kid',group:'',date:daysAgo(45),source:'born',price:0},
+    {id:id(),tag:'306',breed:'Beetal',gender:'Male',status:'kid',group:'',date:daysAgo(52),source:'born',price:0},
+    {id:id(),tag:'307',breed:'Makhee Cheeni',gender:'Female',status:'kid',group:'',date:daysAgo(68),source:'born',price:0},
+    {id:id(),tag:'308',breed:'Makhee Cheeni',gender:'Female',status:'kid',group:'',date:daysAgo(75),source:'born',price:0},
+    {id:id(),tag:'309',breed:'Beetal',gender:'Male',status:'kid',group:'',date:daysAgo(120),source:'born',price:0},
+    {id:id(),tag:'310',breed:'Beetal',gender:'Female',status:'milking',group:'',date:daysAgo(500),source:'bought',price:41000},
+    {id:id(),tag:'311',breed:'Makhee Cheeni',gender:'Female',status:'dry',group:'',date:daysAgo(400),source:'bought',price:30000},
+  ];
+  const gm=(tag,f)=>{const g=goats.find(x=>x.tag===tag);if(g)Object.assign(g,f);};
+  gm('202',{matedDate:daysAgo(100),buck:'B-12',usDate:daysAgo(50),kids:2});
+  gm('204',{matedDate:daysAgo(60),buck:'B-12'});
+  gm('205',{matedDate:daysAgo(125),buck:'Sultan'});
+  gm('311',{prepCross:daysAgo(-30)});
+  assets=[
+    {id:id(),name:'Chaff cutter',type:'Machinery',cost:55000},
+    {id:id(),name:'Milking & cooling',type:'Machinery',cost:40000},
+    {id:id(),name:'Sheds & fencing',type:'Buildings/Sheds',cost:250000},
+  ];
+  incomes=[
+    {id:id(),type:'Ghee',amount:25000,date:monthDate(10)},
+    {id:id(),type:'Live goat sale',amount:30000,date:monthDate(15)},
+  ];
+  expenses=[
+    {id:id(),type:'Salaries',amount:45000,date:monthDate(1)},
+    {id:id(),type:'Cultivation (fodder)',amount:18000,date:monthDate(3)},
+    {id:id(),type:'Utilities',amount:8000,date:monthDate(7)},
+  ];
+  ownerInv=[
+    {id:id(),note:'Startup — buying goats & sheds',amount:500000,date:monthDate(1)},
+    {id:id(),note:'Monthly top-up',amount:60000,date:monthDate(4)},
+  ];
+  const vET={id:id(),name:'Enterotoxaemia (ET)',scope:'kid',type:'age',ageDays:30};
+  const vPPR={id:id(),name:'PPR',scope:'all',type:'repeat',months:12};
+  const vFMD={id:id(),name:'FMD',scope:'all',type:'repeat',months:6};
+  const vCCPP={id:id(),name:'CCPP',scope:'all',type:'repeat',months:12};
+  const vETB={id:id(),name:'ET booster (pre-kidding)',scope:'pregnant',type:'repeat',months:6};
+  const vDW={id:id(),name:'Deworming',scope:'all',type:'repeat',months:3};
+  vaccines=[vET,vPPR,vFMD,vCCPP,vETB,vDW];
+  // a few recent PPR doses so some show "done" and the rest show "due"
+  vaccLog=[
+    {id:id(),goatId:goats[0].id,vaccineId:vPPR.id,date:daysAgo(40)},
+    {id:id(),goatId:goats[1].id,vaccineId:vPPR.id,date:daysAgo(40)},
+    {id:id(),goatId:goats[2].id,vaccineId:vPPR.id,date:daysAgo(40)},
+  ];
+  reminders=[
+    {id:id(),note:'Hoof trimming',scope:'all',date:daysAgo(-20)},
+    {id:id(),note:'Pregnancy check (ultrasound)',scope:'pregnant',date:daysAgo(-8)},
+  ];
+  milkProd=[
+    {id:id(),date:daysAgo(0),breed:'Mixed',liters:186},
+    {id:id(),date:daysAgo(1),breed:'Mixed',liters:190},
+    {id:id(),date:daysAgo(2),breed:'Beetal',liters:120},
+    {id:id(),date:daysAgo(2),breed:'Makhee Cheeni',liters:68},
+    {id:id(),date:daysAgo(3),breed:'Mixed',liters:188},
+    {id:id(),date:daysAgo(4),breed:'Mixed',liters:182},
+  ];
+  milkSales=[
+    {id:id(),date:monthDate(6),liters:500,rate:150,amount:75000},
+    {id:id(),date:monthDate(12),liters:300,rate:150,amount:45000},
+  ];
+  feedBuys=[
+    {id:id(),date:monthDate(2),feed:'Wanda (concentrate)',kg:200,rate:90,amount:18000,note:'monthly stock'},
+    {id:id(),date:monthDate(8),feed:'Binola (cottonseed cake)',kg:100,rate:95,amount:9500,note:''},
+  ];
+  recurringCosts=[
+    {id:id(),name:'Land rent (cultivated land)',amount:240000,period:'year'},
+  ];
+  vaccineBuys=[
+    {id:id(),date:monthDate(4),name:'PPR',qty:1,unit:'Box',amount:3500,note:'50 doses'},
+  ];
+  feedStock={wanda:150,binola:80,sarson:0,bran:120,maize:60,sheera:40,fodder:0};
+}
+
+function ageDays(d){return Math.max(0,Math.floor((Date.now()-new Date(d).getTime())/86400000));}
+function ageLabel(d){if(d<60)return d+' days';const m=Math.floor(d/30.4);if(m<12)return m+' mo';
+  const y=Math.floor(d/365),r=Math.floor((d%365)/30.4);return r?`${y}y ${r}m`:`${y}y`;}
+function rs(n){return 'Rs '+Math.round(n).toLocaleString('en-US');}
+function countByStatus(st){return goats.filter(g=>g.status===st).length;}
+function planDailyFeed(p){let c=0;FEEDS.forEach(f=>{c+=(p[f.k]||0)/1000*(prices[f.k]||0)});return c;}
+function farmFeedMonthly(){let t=0;STORDER.forEach(st=>{const n=countByStatus(st);const p=plans[st];
+  t+=planDailyFeed(p)*30*n+(p.med||0)*n;});return t;}
+function farmMedicineMonthly(){let t=0;STORDER.forEach(st=>{t+=(plans[st].med||0)*countByStatus(st);});return t;}
+function recurMonthly(rc){return rc.period==='year'?(+rc.amount||0)/12:(+rc.amount||0);}
+function recurMonthlyTotal(){return recurringCosts.reduce((s,rc)=>s+recurMonthly(rc),0);}
+function vaccineBoughtMonth(m){return vaccineBuys.filter(b=>b.date.startsWith(m)).reduce((s,b)=>s+(+b.amount||0),0);}
+function feedBoughtMonthTotal(m){return feedBuys.filter(b=>b.date.startsWith(m)).reduce((s,b)=>s+(+b.amount||0),0);}
+function feedBoughtKgTotal(m){return feedBuys.filter(b=>b.date.startsWith(m)).reduce((s,b)=>s+(+b.kg||0),0);}
+function livestockValue(){return goats.reduce((s,g)=>s+(+g.price||0),0);}
+function assetsValue(){return assets.reduce((s,a)=>s+(+a.cost||0),0);}
+
+// ---------- HERD ----------
+let selected=new Set();
+function currentList(){const f=document.getElementById('filter').value;
+  return goats.filter(g=>{if(f==='all')return true;
+    if(f.startsWith('age:')){const[,lo,hi]=f.split(':');const d=ageDays(g.date);return d>=+lo&&d<+hi;}
+    if(f.startsWith('st:'))return g.status===f.slice(3);
+    if(f==='br:prep')return !!g.prepCross&&!g.matedDate;
+    if(f==='br:expecting')return !!g.matedDate;
+    if(f.startsWith('grp:'))return g.group===f.slice(4);return true;});}
+function renderStats(){const c={total:goats.length,kid:0,milking:0,pregnant:0,dry:0,buck:0};
+  goats.forEach(g=>{if(c[g.status]!==undefined)c[g.status]++});
+  const cards=[{n:c.total,l:'Total goats',col:'var(--green)'},{n:c.kid,l:'Kids',col:'var(--amber)'},
+    {n:c.milking,l:'Milking',col:'var(--green)'},{n:c.pregnant,l:'Pregnant',col:'var(--pink)'},
+    {n:c.dry,l:'Dry',col:'var(--ink-soft)'},{n:c.buck,l:'Bucks',col:'var(--blue)'}];
+  document.getElementById('stats').innerHTML=cards.map(s=>`<div class="stat"><div class="num">${s.n}</div>
+    <div class="lbl"><span class="dot" style="background:${s.col}"></span>${s.l}</div></div>`).join('');}
+function renderGroupOptions(){
+  document.getElementById('groupOpts').innerHTML=groups.map(g=>`<option value="grp:${g}">${g}</option>`).join('');
+  document.getElementById('moveGroupOpts').innerHTML=groups.map(g=>`<option value="grp:${g}">${g}</option>`).join('');}
+function renderRows(){const list=currentList();const tb=document.getElementById('rows');
+  document.getElementById('empty').style.display=list.length?'none':'block';
+  tb.innerHTML=list.map(g=>{const d=ageDays(g.date),st=ST[g.status]||ST.kid,on=selected.has(g.id);
+    const pr=g.source==='born'?'<span class="breed">home-bred</span>':`<span class="breed">${rs(g.price||0)}</span>`;
+    return `<tr class="${on?'checked':''}"><td><input type="checkbox" data-id="${g.id}" ${on?'checked':''}></td>
+      <td><span class="tag">${g.tag}</span>${g.name?`<div class="name">${g.name}</div>`:''}${g.note?`<div class="name" style="opacity:.75">${g.note}</div>`:''}</td>
+      <td class="hide-sm"><span class="breed">${g.breed}</span></td>
+      <td><span class="age-d">${d}</span> <span class="age-m">days · ${ageLabel(d)}</span></td>
+      <td><span class="chip ${st.c}">${st.t}</span>${g.matedDate?`<div class="name" style="color:var(--pink);font-weight:700">due ~${addDays(g.matedDate,150)}</div>`:g.prepCross?`<div class="name" style="color:var(--amber);font-weight:700">ready for cross</div>`:''}</td>
+      <td class="hide-sm">${pr}</td><td class="hide-sm"><span class="breed">${g.date}</span></td></tr>`;}).join('');
+  tb.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener('change',()=>{
+    cb.checked?selected.add(cb.dataset.id):selected.delete(cb.dataset.id);renderBulk();renderRows();}));
+  document.getElementById('checkAll').checked=list.length&&list.every(g=>selected.has(g.id));}
+function renderBulk(){document.getElementById('bulkbar').classList.toggle('show',selected.size>0);
+  document.getElementById('selCount').textContent=selected.size+' selected';}
+
+// ---------- FEED ----------
+function feedKey(name){let k=name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')||'feed';
+  let base=k,i=2;while(FEEDS.some(f=>f.k===k)){k=base+'_'+i;i++;}return k;}
+function renderPrices(){document.getElementById('priceGrid').innerHTML=FEEDS.map(f=>
+  `<div class="price-row"><label>${f.n} <span class="del" data-delfeed="${f.k}" title="remove feed" style="font-size:13px">×</span></label>
+   <div class="price-in"><span class="pre">Rs</span>
+   <input type="number" min="0" data-price="${f.k}" value="${prices[f.k]||0}"><span class="suf">/ kg</span></div></div>`).join('');
+  document.querySelectorAll('[data-price]').forEach(inp=>inp.addEventListener('input',async()=>{
+    prices[inp.dataset.price]=+inp.value||0;await save();renderPlan();renderSummary();renderFinance();}));
+  document.querySelectorAll('[data-delfeed]').forEach(x=>x.onclick=async()=>{
+    const k=x.dataset.delfeed;const f=FEEDS.find(z=>z.k===k);
+    if(!confirm('Remove "'+(f?f.n:k)+'" from the feed list?'))return;
+    FEEDS=FEEDS.filter(z=>z.k!==k);delete prices[k];delete feedStock[k];Object.keys(plans).forEach(g=>{delete plans[g][k];});
+    await save();renderFeed();renderFinance();});}
+function renderPlan(){const g=document.getElementById('planGroup').value;const p=plans[g];
+  document.getElementById('rationList').innerHTML=FEEDS.map(f=>{const grams=p[f.k]||0;const cost=grams/1000*(prices[f.k]||0);
+    return `<div class="ration-row"><div class="rn">${f.n}</div>
+      <div class="rin"><input type="number" min="0" data-ration="${f.k}" value="${grams}"><span class="u">g/day</span></div>
+      <div class="rcost">${rs(cost)}/day</div></div>`;}).join('');
+  document.getElementById('medIn').value=p.med||0;
+  document.querySelectorAll('[data-ration]').forEach(inp=>inp.addEventListener('input',async()=>{
+    plans[g][inp.dataset.ration]=+inp.value||0;await save();renderPlan();renderSummary();renderFinance();}));
+  document.getElementById('medIn').oninput=async(e)=>{plans[g].med=+e.target.value||0;await save();renderPlan();renderSummary();renderFinance();};
+  const n=countByStatus(g);const dFeed=planDailyFeed(p);
+  document.getElementById('planResult').innerHTML=
+    `<div class="r"><div class="v">${n}</div><div class="k">goats in this group</div></div>
+     <div class="r"><div class="v">${rs(dFeed*n)}</div><div class="k">feed cost per day</div></div>
+     <div class="r"><div class="v">${rs(dFeed*30*n+(p.med||0)*n)}</div><div class="k">total per month</div></div>`;}
+function renderSummary(){let tF=0,tM=0,tG=0,tD=0;
+  const rows=STORDER.map(st=>{const n=countByStatus(st);if(!n&&st==='sale')return '';
+    const p=plans[st];const dFeed=planDailyFeed(p);const fM=dFeed*30*n,mM=(p.med||0)*n;
+    tF+=fM;tM+=mM;tG+=n;tD+=dFeed*n;
+    return `<tr><td><span class="chip ${ST[st].c}">${ST[st].t}</span></td>
+      <td class="num-cell">${n}</td><td class="num-cell">${rs(fM)}</td>
+      <td class="num-cell hide-sm">${rs(mM)}</td>
+      <td class="num-cell" style="color:var(--green-dark)">${rs(fM+mM)}</td></tr>`;}).join('');
+  document.getElementById('summaryRows').innerHTML=rows+
+    `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+     <td class="num-cell" style="font-weight:800">${tG}</td><td class="num-cell" style="font-weight:800">${rs(tF)}</td>
+     <td class="num-cell hide-sm" style="font-weight:800">${rs(tM)}</td>
+     <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(tF+tM)}</td></tr>`;
+  document.getElementById('grandMonth').textContent=rs(tF+tM);
+  document.getElementById('grandDay').textContent=rs(tD+tM/30);
+  document.getElementById('grandHead').textContent=`for ${tG} goats`;renderBuy();}
+function renderBuy(){const kg={};FEEDS.forEach(f=>kg[f.k]=0);
+  STORDER.forEach(st=>{const n=countByStatus(st);const p=plans[st];FEEDS.forEach(f=>kg[f.k]+=(p[f.k]||0)/1000*n);});
+  document.getElementById('buyRows').innerHTML=FEEDS.map(f=>{const d=kg[f.k];if(d<=0)return '';
+    const m=d*30;const cost=m*(prices[f.k]||0);
+    return `<tr><td>${f.n}</td><td class="num-cell">${d.toFixed(1)}</td>
+      <td class="num-cell hide-sm">${Math.round(m).toLocaleString('en-US')}</td>
+      <td class="num-cell" style="color:var(--green-dark)">${rs(cost)}</td></tr>`;}).join('');}
+
+// ---------- FINANCE ----------
+function renderFinance(){
+  const month=document.getElementById('finMonth').value||thisMonth();
+  if(document.getElementById('i-type'))['i-type','e-type','a-type'].forEach(fillType);
+  // capital
+  const lv=livestockValue(),av=assetsValue(),cap=lv+av;
+  const boughtN=goats.filter(g=>(+g.price||0)>0).length;
+  document.getElementById('assetRows').innerHTML=
+    `<tr><td><b>Livestock (goats)</b><div class="name">${boughtN} bought · auto from herd</div></td>
+       <td class="hide-sm"><span class="chip chip-cap">Livestock</span></td>
+       <td class="num-cell">${rs(lv)}</td><td></td></tr>`+
+    assets.map(a=>`<tr><td>${a.name}${a.note?`<div class="name">${a.note}</div>`:''}</td><td class="hide-sm"><span class="chip chip-cap">${a.type}</span></td>
+       <td class="num-cell">${rs(a.cost)}</td><td><span class="del" data-delasset="${a.id}">×</span></td></tr>`).join('')+
+    `<tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL CAPITAL</td>
+       <td class="hide-sm"></td><td class="num-cell" style="font-weight:800">${rs(cap)}</td><td></td></tr>`;
+  document.querySelectorAll('[data-delasset]').forEach(x=>x.onclick=async()=>{
+    assets=assets.filter(a=>a.id!==x.dataset.delasset);await save();renderFinance();});
+
+  // income (month) — milk sales come automatically from the Milk tab
+  const inc=incomes.filter(i=>i.date.startsWith(month)).sort((a,b)=>a.date<b.date?1:-1);
+  const milkInc=milkIncomeMonth(month),milkL=milkLitersSold(month);
+  const incTot=inc.reduce((s,i)=>s+(+i.amount||0),0)+milkInc;
+  document.getElementById('incomeRows').innerHTML=
+    `<tr><td><span class="chip chip-inc">Milk sales</span><div class="name">${milkL.toLocaleString('en-US')} L · auto from Milk tab</div></td>
+      <td class="hide-sm"><span class="breed">this month</span></td>
+      <td class="num-cell">${rs(milkInc)}</td><td></td></tr>`+
+    (inc.length?inc.map(i=>
+    `<tr><td><span class="chip chip-inc">${i.type}</span>${i.note?`<div class="name">${i.note}</div>`:''}</td><td class="hide-sm"><span class="breed">${i.date}</span></td>
+      <td class="num-cell">${rs(i.amount)}</td><td><span class="del" data-delinc="${i.id}">×</span></td></tr>`).join(''):
+    ``)+
+    `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL RECEIVED</td><td class="hide-sm"></td>
+      <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(incTot)}</td><td></td></tr>`;
+  document.querySelectorAll('[data-delinc]').forEach(x=>x.onclick=async()=>{
+    incomes=incomes.filter(i=>i.id!==x.dataset.delinc);await save();renderFinance();});
+
+  // expenses (month): actual feed bought + medicine (from plan) + recurring + manual costs
+  const feedBought=feedBoughtMonthTotal(month);
+  const feedKg=feedBoughtKgTotal(month);
+  const medM=farmMedicineMonthly();
+  const recurM=recurMonthlyTotal();
+  const vaccBought=vaccineBoughtMonth(month);
+  const exp=expenses.filter(e=>e.date.startsWith(month)).sort((a,b)=>a.date<b.date?1:-1);
+  const expManual=exp.reduce((s,e)=>s+(+e.amount||0),0);
+  const expTot=expManual+feedBought+medM+recurM+vaccBought;
+  const recurLines=recurringCosts.map(rc=>
+    `<tr><td><span class="chip chip-exp">${rc.name}</span><div class="name">${rc.period==='year'?'yearly, spread over 12 months':'every month'}</div></td>
+       <td class="hide-sm"><span class="breed">recurring</span></td>
+       <td class="num-cell">${rs(recurMonthly(rc))}</td><td></td></tr>`).join('');
+  document.getElementById('expenseRows').innerHTML=
+    `<tr><td><span class="chip chip-exp">Feed bought</span><div class="name">${feedKg.toLocaleString('en-US')} kg · from Feed tab</div></td>
+       <td class="hide-sm"><span class="breed">this month</span></td>
+       <td class="num-cell">${rs(feedBought)}</td><td></td></tr>`+
+    `<tr><td><span class="chip chip-exp">Medicine</span><div class="name">estimated from feed plan</div></td>
+       <td class="hide-sm"><span class="breed">every month</span></td>
+       <td class="num-cell">${rs(medM)}</td><td></td></tr>`+
+    `<tr><td><span class="chip chip-exp">Vaccines bought</span><div class="name">from Vaccines tab</div></td>
+       <td class="hide-sm"><span class="breed">this month</span></td>
+       <td class="num-cell">${rs(vaccBought)}</td><td></td></tr>`+
+    recurLines+
+    exp.map(e=>`<tr><td><span class="chip chip-exp">${e.type}</span>${e.note?`<div class="name">${e.note}</div>`:''}</td>
+       <td class="hide-sm"><span class="breed">${e.date}</span></td>
+       <td class="num-cell">${rs(e.amount)}</td><td><span class="del" data-delexp="${e.id}">×</span></td></tr>`).join('')+
+    `<tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL COSTS</td><td class="hide-sm"></td>
+       <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(expTot)}</td><td></td></tr>`;
+  document.querySelectorAll('[data-delexp]').forEach(x=>x.onclick=async()=>{
+    expenses=expenses.filter(e=>e.id!==x.dataset.delexp);await save();renderFinance();});
+
+  // recurring costs table
+  document.getElementById('recurRows').innerHTML=(recurringCosts.length?recurringCosts.map(rc=>
+    `<tr><td><b>${rc.name}</b></td><td class="hide-sm"><span class="breed">${rc.period==='year'?'Yearly':'Monthly'}</span></td>
+      <td class="num-cell hide-sm">${rs(rc.amount)}</td>
+      <td class="num-cell" style="color:#8a261c">${rs(recurMonthly(rc))}</td>
+      <td><span class="del" data-delrecur="${rc.id}">×</span></td></tr>`).join(''):
+    `<tr><td colspan="5" class="empty">No recurring costs set.</td></tr>`)+
+    `<tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL PER MONTH</td><td class="hide-sm"></td>
+      <td class="num-cell hide-sm"></td><td class="num-cell" style="font-weight:800;color:#8a261c">${rs(recurM)}</td><td></td></tr>`;
+  document.querySelectorAll('[data-delrecur]').forEach(x=>x.onclick=async()=>{
+    recurringCosts=recurringCosts.filter(rc=>rc.id!==x.dataset.delrecur);await save();renderFinance();});
+
+  // owner investment (money put in) — month list + all-time total
+  const own=ownerInv.filter(o=>o.date.startsWith(month)).sort((a,b)=>a.date<b.date?1:-1);
+  const ownMonth=own.reduce((s,o)=>s+(+o.amount||0),0);
+  const ownTotal=ownerInv.reduce((s,o)=>s+(+o.amount||0),0);
+  document.getElementById('ownerRows').innerHTML=(own.length?own.map(o=>
+    `<tr><td><b>${o.note||'Investment'}</b></td><td class="hide-sm"><span class="breed">${o.date}</span></td>
+      <td class="num-cell">${rs(o.amount)}</td><td><span class="del" data-delown="${o.id}">×</span></td></tr>`).join(''):
+    `<tr><td colspan="4" class="empty">No money added this month.</td></tr>`)+
+    `<tr style="background:var(--amber-tint)"><td style="font-weight:800">PUT IN THIS MONTH</td><td class="hide-sm"></td>
+      <td class="num-cell" style="font-weight:800;color:#8a5b13">${rs(ownMonth)}</td>
+      <td></td></tr>
+     <tr style="background:var(--amber-tint)"><td style="font-weight:800">TOTAL TO DATE</td><td class="hide-sm"></td>
+      <td class="num-cell" style="font-weight:800;color:#8a5b13">${rs(ownTotal)}</td><td></td></tr>`;
+  document.querySelectorAll('[data-delown]').forEach(x=>x.onclick=async()=>{
+    ownerInv=ownerInv.filter(o=>o.id!==x.dataset.delown);await save();renderFinance();});
+
+  // summary
+  const profit=incTot-expTot;
+  document.getElementById('cIncome').textContent=rs(incTot);
+  document.getElementById('cExpense').textContent=rs(expTot);
+  document.getElementById('cCapital').textContent=rs(cap);
+  document.getElementById('cOwner').textContent=rs(ownTotal);
+  document.getElementById('capSide').textContent=rs(cap);
+  document.getElementById('profitVal').textContent=(profit<0?'– ':'')+rs(Math.abs(profit));
+  document.getElementById('profitNote').textContent=profit>=0?'you made money this month':'costs were higher than income this month';
+  document.getElementById('profitBanner').classList.toggle('loss',profit<0);
+}
+
+// ---------- VACCINES ----------
+function scopeLabel(s){return s==='all'?'All goats':(STNAME[s]||s);}
+function ruleLabel(v){return v.type==='age'?`At ${v.ageDays} days old`:`Every ${v.months} months`;}
+function goatsInScope(v){return goats.filter(g=>v.scope==='all'||g.status===v.scope);}
+function lastDose(goatId,vId){const ds=vaccLog.filter(l=>l.goatId===goatId&&l.vaccineId===vId)
+  .map(l=>l.date).sort();return ds.length?ds[ds.length-1]:null;}
+function addDays(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function daysUntilDate(ds){return Math.ceil((new Date(ds+'T00:00:00').getTime()-Date.now())/86400000);}
+// when is this goat next due for this vaccine? null = done / not applicable
+function nextDue(g,v){
+  if(v.type==='age'){
+    if(vaccLog.some(l=>l.goatId===g.id&&l.vaccineId===v.id))return null;
+    const dd=addDays(g.date,v.ageDays);return {date:dd,days:daysUntilDate(dd)};
+  }
+  const last=lastDose(g.id,v.id);
+  if(!last)return {date:new Date().toISOString().slice(0,10),days:0};
+  const dd=addDays(last,v.months*30);return {date:dd,days:daysUntilDate(dd)};
+}
+function dueForVaccine(v){return goatsInScope(v).filter(g=>{const i=nextDue(g,v);return i&&i.days<=0;});}
+function upcomingForVaccine(v,win){return goatsInScope(v).map(g=>({g,i:nextDue(g,v)}))
+  .filter(x=>x.i&&x.i.days>0&&x.i.days<=win);}
+
+function renderHealth(){
+  document.getElementById('vaccCount').textContent=vaccines.length;
+  const win=remindDays;
+  const winSel=document.getElementById('remindWin');if(winSel)winSel.value=String(remindDays);
+
+  // ----- DUE NOW -----
+  let totalDue=0;
+  const blocks=vaccines.map(v=>{
+    const due=dueForVaccine(v);if(!due.length)return '';totalDue+=due.length;
+    const tags=due.map(g=>`<span class="dtag">${g.tag}</span>`).join('');
+    return `<div class="duerow">
+      <div style="min-width:150px"><div class="dn">${v.name}</div>
+        <span class="scopechip">${scopeLabel(v.scope)}</span></div>
+      <div class="dtags">${tags}</div>
+      <button class="btn btn-green btn-sm" data-dovacc="${v.id}">Mark ${due.length} done today</button>
+    </div>`;
+  }).join('');
+  document.getElementById('dueList').innerHTML=blocks||
+    `<div class="alldone">✓ Every goat is up to date. Nothing due right now.</div>`;
+  document.getElementById('vaccDueCount').textContent=totalDue;
+  document.getElementById('vaccDueNote').textContent=totalDue?'goats waiting for a shot':'all up to date';
+  document.querySelectorAll('[data-dovacc]').forEach(b=>b.onclick=async()=>{
+    const v=vaccines.find(x=>x.id===b.dataset.dovacc);const today=new Date().toISOString().slice(0,10);
+    dueForVaccine(v).forEach(g=>vaccLog.push({id:id(),goatId:g.id,vaccineId:v.id,date:today}));
+    await save();renderHealth();});
+
+  // ----- COMING UP (automatic reminders ahead of time) -----
+  let upCount=0;
+  const upBlocks=vaccines.map(v=>{
+    const up=upcomingForVaccine(v,win);if(!up.length)return '';upCount+=up.length;
+    up.sort((a,b)=>a.i.days-b.i.days);const soon=up[0].i;
+    const tags=up.map(x=>`<span class="dtag">${x.g.tag}</span>`).join('');
+    return `<div class="duerow">
+      <div style="min-width:150px"><div class="dn">${v.name}</div>
+        <span class="scopechip">${scopeLabel(v.scope)}</span></div>
+      <div class="dtags">${tags}</div>
+      <div class="rule" style="text-align:right;min-width:120px">${up.length} due ·
+        first in ${soon.days} day${soon.days===1?'':'s'}<br><span style="opacity:.7">${soon.date}</span></div>
+    </div>`;
+  }).join('');
+  document.getElementById('comingList').innerHTML=upBlocks||
+    `<div class="alldone">Nothing coming up in this window.</div>`;
+  document.getElementById('vaccUpcoming').textContent=upCount;
+  document.getElementById('vaccUpNote').textContent=`due within ${win} days`;
+
+  // ----- CUSTOM REMINDERS -----
+  const active=reminders.slice().sort((a,b)=>a.date<b.date?-1:1);
+  document.getElementById('reminderRows').innerHTML=active.length?active.map(r=>{
+    const du=daysUntilDate(r.date);
+    const when=du<0?`overdue ${-du}d`:du===0?'today':`in ${du} day${du===1?'':'s'}`;
+    const col=du<=0?'#8a261c':du<=win?'var(--amber)':'var(--ink-soft)';
+    return `<tr><td><b>${r.note}</b>${r.scope&&r.scope!=='none'?` <span class="scopechip">${scopeLabel(r.scope)}</span>`:''}</td>
+      <td class="hide-sm"><span class="breed">${r.date}</span></td>
+      <td class="num-cell" style="color:${col}">${when}</td>
+      <td><span class="del" data-delrem="${r.id}">×</span></td></tr>`;}).join(''):
+    `<tr><td colspan="4" class="empty">No reminders set. Add one below.</td></tr>`;
+  document.querySelectorAll('[data-delrem]').forEach(x=>x.onclick=async()=>{
+    reminders=reminders.filter(r=>r.id!==x.dataset.delrem);await save();renderHealth();});
+
+  // ----- SCHEDULE -----
+  document.getElementById('vaccRows').innerHTML=vaccines.length?vaccines.map(v=>
+    `<tr><td><b>${v.name}</b>${v.note?`<div class="name">${v.note}</div>`:''}</td><td><span class="scopechip">${scopeLabel(v.scope)}</span></td>
+      <td class="hide-sm"><span class="rule">${ruleLabel(v)}</span></td>
+      <td><span class="del" data-delvacc="${v.id}">×</span></td></tr>`).join(''):
+    `<tr><td colspan="4" class="empty">No vaccines set up yet — add one below.</td></tr>`;
+  document.querySelectorAll('[data-delvacc]').forEach(x=>x.onclick=async()=>{
+    vaccines=vaccines.filter(v=>v.id!==x.dataset.delvacc);await save();renderHealth();});
+
+  // ----- HISTORY -----
+  const map={};
+  vaccLog.forEach(l=>{const k=l.date+'|'+l.vaccineId;map[k]=(map[k]||0)+1;});
+  const hist=Object.entries(map).map(([k,n])=>{const[date,vId]=k.split('|');
+    const v=vaccines.find(x=>x.id===vId);return {date,name:v?v.name:'(removed)',n};})
+    .sort((a,b)=>a.date<b.date?1:-1).slice(0,15);
+  document.getElementById('vaccLogRows').innerHTML=hist.length?hist.map(h=>
+    `<tr><td><span class="breed">${h.date}</span></td><td>${h.name}</td>
+      <td class="num-cell">${h.n}</td></tr>`).join(''):
+    `<tr><td colspan="3" class="empty">No vaccinations recorded yet.</td></tr>`;
+
+  // ----- VACCINE PURCHASES -----
+  const vm=thisMonth();
+  document.getElementById('vaccBuyMonth').textContent=rs(vaccineBoughtMonth(vm));
+  if(document.getElementById('vb-name'))fillType('vb-name');
+  if(document.getElementById('vb-unit'))fillType('vb-unit');
+  // give-a-vaccine dropdowns
+  const gvv=document.getElementById('gv-vacc');
+  if(gvv){const cur=gvv.value;
+    gvv.innerHTML=vaccines.length?vaccines.map(v=>`<option value="${v.id}">${v.name}</option>`).join(''):'<option value="">— add a vaccine first —</option>';
+    if([...gvv.options].some(o=>o.value===cur))gvv.value=cur;
+    const gvg=document.getElementById('gv-group');const gcur=gvg.value;
+    gvg.innerHTML='<option value="all">All goats</option>'+
+      STORDER.map(st=>`<option value="st:${st}">${STNAME[st]}</option>`).join('')+
+      groups.map(g=>`<option value="grp:${g}">${g}</option>`).join('');
+    if([...gvg.options].some(o=>o.value===gcur))gvg.value=gcur;
+  }
+  const vbrows=vaccineBuys.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,15);
+  document.getElementById('vaccBuyRows').innerHTML=vbrows.length?vbrows.map(b=>
+    `<tr><td><span class="breed">${b.date}</span></td><td>${b.name}</td>
+      <td class="num-cell hide-sm">${b.qty?(b.qty+' '+(b.unit||'')):''}</td>
+      <td class="num-cell" style="color:#8a261c">${rs(b.amount)}</td>
+      <td class="hide-sm"><span class="breed">${b.note||''}</span></td>
+      <td><span class="del" data-delvbuy="${b.id}">×</span></td></tr>`).join(''):
+    `<tr><td colspan="6" class="empty">No vaccine purchases logged yet.</td></tr>`;
+  document.querySelectorAll('[data-delvbuy]').forEach(x=>x.onclick=async()=>{
+    vaccineBuys=vaccineBuys.filter(b=>b.id!==x.dataset.delvbuy);await save();renderHealth();renderFinance();});
+}
+
+// ---------- MILK ----------
+function milkLitersProd(m){return milkProd.filter(p=>p.date.startsWith(m)).reduce((s,p)=>s+(+p.liters||0),0);}
+function milkLitersSold(m){return milkSales.filter(p=>p.date.startsWith(m)).reduce((s,p)=>s+(+p.liters||0),0);}
+function milkIncomeMonth(m){return milkSales.filter(p=>p.date.startsWith(m)).reduce((s,p)=>s+(+p.amount||0),0);}
+
+function renderMilk(){
+  const m=thisMonth();
+  if(document.getElementById('p-breed'))fillType('p-breed');
+  const prodL=milkLitersProd(m),soldL=milkLitersSold(m),inc=milkIncomeMonth(m);
+  document.getElementById('milkIncome').textContent=rs(inc);
+  document.getElementById('milkSoldNote').textContent=soldL.toLocaleString('en-US')+' L sold';
+  document.getElementById('milkProdL').textContent=prodL.toLocaleString('en-US')+' L';
+  const dayN=new Date().getDate();
+  document.getElementById('milkAvg').textContent=(dayN?Math.round(prodL/dayN):0)+' L/day avg';
+
+  const pr=milkProd.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,12);
+  document.getElementById('prodRows').innerHTML=pr.length?pr.map(p=>
+    `<tr><td><span class="breed">${p.date}</span></td><td class="hide-sm"><span class="breed">${p.breed||'Mixed'}</span></td>
+      <td class="num-cell">${(+p.liters).toLocaleString('en-US')} L</td>
+      <td class="hide-sm"><span class="breed">${p.note||''}</span></td>
+      <td><span class="del" data-delprod="${p.id}">×</span></td></tr>`).join(''):
+    `<tr><td colspan="5" class="empty">No milk logged yet.</td></tr>`;
+  document.querySelectorAll('[data-delprod]').forEach(x=>x.onclick=async()=>{
+    milkProd=milkProd.filter(p=>p.id!==x.dataset.delprod);await save();renderMilk();});
+
+  const sr=milkSales.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,12);
+  document.getElementById('saleRows').innerHTML=sr.length?sr.map(p=>
+    `<tr><td><span class="breed">${p.date}</span></td>
+      <td class="num-cell">${(+p.liters).toLocaleString('en-US')} L</td>
+      <td class="num-cell hide-sm">Rs ${p.rate}</td>
+      <td class="num-cell" style="color:var(--green-dark)">${rs(p.amount)}</td>
+      <td class="hide-sm"><span class="breed">${p.note||''}</span></td>
+      <td><span class="del" data-delsale="${p.id}">×</span></td></tr>`).join(''):
+    `<tr><td colspan="6" class="empty">No sales logged yet.</td></tr>`;
+  document.querySelectorAll('[data-delsale]').forEach(x=>x.onclick=async()=>{
+    milkSales=milkSales.filter(p=>p.id!==x.dataset.delsale);await save();renderMilk();renderFinance();});
+}
+
+function renderFeedBuys(){
+  const m=thisMonth();
+  document.getElementById('feedBoughtMonth').textContent=rs(feedBoughtMonthTotal(m));
+  document.getElementById('feedBoughtKg').textContent=feedBoughtKgTotal(m).toLocaleString('en-US')+' kg total';
+  // feed dropdown (keeps up with custom feeds)
+  const sel=document.getElementById('fb-feed');const cur=sel.value;
+  sel.innerHTML=FEEDS.map(f=>`<option value="${f.k}">${f.n}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+  const rows=feedBuys.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,15);
+  document.getElementById('buyLogRows').innerHTML=rows.length?rows.map(b=>
+    `<tr><td><span class="breed">${b.date}</span></td><td>${b.feed}</td>
+      <td class="num-cell">${(+b.kg).toLocaleString('en-US')} kg</td>
+      <td class="num-cell hide-sm">Rs ${b.rate}</td>
+      <td class="num-cell" style="color:var(--green-dark)">${rs(b.amount)}</td>
+      <td class="hide-sm"><span class="breed">${b.note||''}</span></td>
+      <td><span class="del" data-delbuy="${b.id}">×</span></td></tr>`).join(''):
+    `<tr><td colspan="7" class="empty">No feed purchases logged yet.</td></tr>`;
+  document.querySelectorAll('[data-delbuy]').forEach(x=>x.onclick=async()=>{
+    feedBuys=feedBuys.filter(b=>b.id!==x.dataset.delbuy);await save();renderFeedBuys();renderFinance();});
+}
+function feedDailyUseMap(){const kg={};FEEDS.forEach(f=>kg[f.k]=0);
+  STORDER.forEach(st=>{const n=countByStatus(st);const p=plans[st];FEEDS.forEach(f=>kg[f.k]+=(p[f.k]||0)/1000*n);});return kg;}
+function renderStock(){const use=feedDailyUseMap();
+  document.getElementById('stockRows').innerHTML=FEEDS.map(f=>{
+    const st=+feedStock[f.k]||0;const du=use[f.k]||0;const days=du>0?st/du:null;
+    const col=days==null?'':(days<3?'color:#8a261c':days<7?'color:var(--amber)':'color:var(--green-dark)');
+    const daysTxt=days==null?'—':('~'+Math.floor(days)+' day'+(Math.floor(days)===1?'':'s'));
+    return `<tr><td>${f.n}</td>
+      <td class="num-cell"><input type="number" min="0" data-stock="${f.k}" value="${st}"
+        style="width:78px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
+      <td class="num-cell hide-sm">${du.toFixed(1)} kg</td>
+      <td class="num-cell" style="font-weight:700;${col}">${daysTxt}</td></tr>`;}).join('');
+  document.querySelectorAll('[data-stock]').forEach(inp=>inp.addEventListener('change',async()=>{
+    feedStock[inp.dataset.stock]=+inp.value||0;await save();renderStock();}));}
+function renderFeed(){renderPrices();renderPlan();renderSummary();renderFeedBuys();renderStock();}
+function renderHerd(){if(document.getElementById('f-breed'))fillType('f-breed');renderStats();renderGroupOptions();renderRows();renderBulk();}
+function renderAll(){renderHerd();renderBreeding();renderFeed();renderMilk();renderFinance();renderHealth();}
+
+const GEST=150;
+function kidsLabel(n){return n===1?'1 kid (single)':n===2?'Twins':n===3?'Triplets':n+' kids';}
+function kidsCell(g){
+  if(!g.kids)return '<span class="breed" style="color:#bbb">not checked</span>';
+  const flag=g.kids>=2?'<div class="name" style="color:var(--amber);font-weight:700">↑ extra feed (multiples)</div>':'';
+  return `<b>${kidsLabel(g.kids)}</b>${g.usDate?`<div class="name">${g.usDate}</div>`:''}${flag}`;}
+function renderBreeding(){
+  const prep=goats.filter(g=>g.prepCross&&!g.matedDate);
+  const exp=goats.filter(g=>g.matedDate);
+  document.getElementById('breedPrep').textContent=prep.length;
+  document.getElementById('breedExp').textContent=exp.length;
+  const soon=exp.length?Math.min(...exp.map(g=>daysUntilDate(addDays(g.matedDate,GEST)))):null;
+  document.getElementById('breedNext').textContent=soon==null?'next due —':(soon<0?`one overdue by ${-soon} days`:`next due in ${soon} days`);
+
+  document.getElementById('prepRows').innerHTML=prep.length?prep.map(g=>{
+    const start=addDays(g.prepCross,-60);const dCross=daysUntilDate(g.prepCross);const dStart=daysUntilDate(start);
+    const startCol=dStart<=0?'color:var(--amber);font-weight:700':'';
+    return `<tr><td><span class="tag">${g.tag}</span>${g.name?`<div class="name">${g.name}</div>`:''}</td>
+      <td class="hide-sm"><span class="chip ${ST[g.status].c}">${ST[g.status].t}</span></td>
+      <td><span class="breed">${g.prepCross}</span></td>
+      <td style="${startCol}">${start}${dStart<=0?' · start now':''}</td>
+      <td class="num-cell">${dCross<0?'now':('in '+dCross+'d')}</td>
+      <td><button class="btn btn-green btn-sm" data-cross="${g.id}">Crossed</button>
+          <span class="del" data-unprep="${g.id}">×</span></td></tr>`;}).join(''):
+    `<tr><td colspan="6" class="empty">No does being prepared. Add one below.</td></tr>`;
+
+  document.getElementById('expRows').innerHTML=exp.length?exp.slice().sort((a,b)=>addDays(a.matedDate,GEST)<addDays(b.matedDate,GEST)?-1:1).map(g=>{
+    const kd=addDays(g.matedDate,GEST);const w1=addDays(g.matedDate,145),w2=addDays(g.matedDate,155);
+    const du=daysUntilDate(kd);const col=du<0?'color:#8a261c':du<=10?'color:var(--amber)':'color:var(--green-dark)';
+    const dueTxt=du<0?`overdue ${-du}d`:(du===0?'today':`in ${du} days`);
+    return `<tr><td><span class="tag">${g.tag}</span>${g.name?`<div class="name">${g.name}</div>`:''}</td>
+      <td class="hide-sm"><span class="breed">${g.matedDate}</span></td>
+      <td class="hide-sm"><span class="breed">${g.buck||'—'}</span></td>
+      <td>${kidsCell(g)}</td>
+      <td><b>${kd}</b></td>
+      <td class="hide-sm"><span class="breed">${w1} → ${w2}</span></td>
+      <td class="num-cell" style="font-weight:700;${col}">${dueTxt}</td>
+      <td><button class="btn btn-green btn-sm" data-kidded="${g.id}">Kidded</button>
+          <span class="del" data-uncross="${g.id}">×</span></td></tr>`;}).join(''):
+    `<tr><td colspan="8" class="empty">No does expecting yet.</td></tr>`;
+
+  document.querySelectorAll('[data-cross]').forEach(b=>b.onclick=async()=>{
+    const g=goats.find(x=>x.id===b.dataset.cross);
+    const dt=prompt('Mating date (YYYY-MM-DD)',new Date().toISOString().slice(0,10));if(!dt)return;
+    g.matedDate=dt;g.buck=(prompt('Buck tag (optional)','')||'').trim();g.prepCross=null;g.status='pregnant';
+    await save();renderAll();});
+  document.querySelectorAll('[data-unprep]').forEach(x=>x.onclick=async()=>{
+    const g=goats.find(z=>z.id===x.dataset.unprep);g.prepCross=null;await save();renderBreeding();});
+  document.querySelectorAll('[data-kidded]').forEach(b=>b.onclick=async()=>{
+    const g=goats.find(x=>x.id===b.dataset.kidded);if(!confirm('Mark '+g.tag+' as kidded? She moves to Milking.'))return;
+    g.matedDate=null;g.buck=null;g.status='milking';await save();renderAll();});
+  document.querySelectorAll('[data-uncross]').forEach(x=>x.onclick=async()=>{
+    const g=goats.find(z=>z.id===x.dataset.uncross);if(!confirm('Remove '+g.tag+' from expecting? The mating record is cleared.'))return;
+    g.matedDate=null;await save();renderAll();});
+}
+
+// ---------- events ----------
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+t.dataset.view).classList.add('active');});
+
+document.getElementById('f-source').onchange=(e)=>{
+  const p=document.getElementById('f-price');p.disabled=e.target.value==='born';if(e.target.value==='born')p.value='';};
+
+document.getElementById('addBtn').onclick=async()=>{
+  const tag=document.getElementById('f-tag').value.trim();const date=document.getElementById('f-date').value;
+  if(!tag){alert('Please enter a Tag / ID');return;}if(!date){alert('Please pick the date');return;}
+  const source=document.getElementById('f-source').value;
+  goats.unshift({id:id(),tag,name:document.getElementById('f-name').value.trim(),
+    breed:document.getElementById('f-breed').value,gender:document.getElementById('f-gender').value,
+    status:document.getElementById('f-status').value,group:'',date,source,
+    note:document.getElementById('f-note').value.trim(),
+    price:source==='born'?0:(+document.getElementById('f-price').value||0)});
+  document.getElementById('f-tag').value='';document.getElementById('f-name').value='';document.getElementById('f-price').value='';document.getElementById('f-note').value='';
+  await save();renderAll();};
+
+document.getElementById('filter').onchange=()=>{selected.clear();renderRows();renderBulk();};
+document.getElementById('checkAll').onchange=(e)=>{const list=currentList();
+  e.target.checked?list.forEach(g=>selected.add(g.id)):list.forEach(g=>selected.delete(g.id));renderRows();renderBulk();};
+document.getElementById('moveBtn').onclick=async()=>{const v=document.getElementById('moveTo').value;
+  const sel=goats.filter(g=>selected.has(g.id));if(!sel.length)return;
+  if(v==='br:prep'){const dt=prompt('Target cross date for the selected does (YYYY-MM-DD)',addDays(new Date().toISOString().slice(0,10),30));
+    if(!dt)return;sel.forEach(g=>{g.prepCross=dt;});}
+  else if(v==='br:cross'){const dt=prompt('Mating date (YYYY-MM-DD)',new Date().toISOString().slice(0,10));if(!dt)return;
+    const bk=(prompt('Buck tag (optional)','')||'').trim();sel.forEach(g=>{g.matedDate=dt;g.buck=bk;g.prepCross=null;g.status='pregnant';});}
+  else if(v==='br:kidded'){if(!confirm('Mark '+sel.length+' doe(s) as kidded? They move to Milking.'))return;
+    sel.forEach(g=>{g.matedDate=null;g.buck=null;g.status='milking';});}
+  else{sel.forEach(g=>{if(v.startsWith('st:'))g.status=v.slice(3);if(v.startsWith('grp:'))g.group=v.slice(4);});}
+  selected.clear();await save();renderAll();};
+document.getElementById('newGroupBtn').onclick=async()=>{const name=prompt('Name the new group');
+  if(name&&name.trim()){groups.push(name.trim());await save();renderGroupOptions();}};
+document.getElementById('planGroup').onchange=renderPlan;
+function findGoatByTag(t){t=(t||'').trim().toLowerCase();return t?goats.find(g=>(g.tag||'').toLowerCase()===t):null;}
+function bFound(inId,outId){const val=document.getElementById(inId).value;const out=document.getElementById(outId);
+  if(!val.trim()){out.innerHTML='';return null;}
+  const g=findGoatByTag(val);
+  if(!g){out.innerHTML='<span style="color:#8a261c;font-weight:700">No goat with that tag</span>';return null;}
+  let extra='';if(g.gender!=='Female')extra=' — note: not marked female';if(g.matedDate)extra=' — already expecting';
+  out.innerHTML=`<span style="color:var(--green-dark);font-weight:700">✓ ${g.tag}${g.name?' · '+g.name:''} · ${ST[g.status].t}${extra}</span>`;
+  return g;}
+document.getElementById('bp-tag').addEventListener('input',()=>bFound('bp-tag','bp-found'));
+document.getElementById('bc-tag').addEventListener('input',()=>bFound('bc-tag','bc-found'));
+document.getElementById('us-tag').addEventListener('input',()=>bFound('us-tag','us-found'));
+document.getElementById('us-tag').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('addUs').focus();}});
+document.getElementById('addUs').onclick=async()=>{
+  const g=findGoatByTag(document.getElementById('us-tag').value);const date=document.getElementById('us-date').value;
+  const result=+document.getElementById('us-result').value;
+  if(!g){alert('Scan or type a valid doe tag');return;}
+  if(result===0){
+    if(!confirm(g.tag+' is NOT pregnant — clear her mating record and move to Dry?'))return;
+    g.matedDate=null;g.buck=null;g.kids=null;g.usDate=null;g.prepCross=null;g.status='dry';
+    document.getElementById('us-tag').value='';document.getElementById('us-found').innerHTML='';
+    await save();renderAll();return;}
+  if(!g.matedDate){alert('Record her cross first (she must be in the Expecting list).');return;}
+  g.kids=result;g.usDate=date||new Date().toISOString().slice(0,10);g.status='pregnant';
+  document.getElementById('us-tag').value='';document.getElementById('us-found').innerHTML='';
+  await save();renderAll();};
+document.getElementById('bp-tag').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('bp-date').focus();}});
+document.getElementById('bc-tag').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('addCross').focus();}});
+document.getElementById('addPrep').onclick=async()=>{
+  const g=findGoatByTag(document.getElementById('bp-tag').value);const date=document.getElementById('bp-date').value;
+  if(!g){alert('Scan or type a valid doe tag');return;}if(!date){alert('Pick a target cross date');return;}
+  g.prepCross=date;document.getElementById('bp-tag').value='';document.getElementById('bp-found').innerHTML='';
+  await save();renderBreeding();};
+document.getElementById('addCross').onclick=async()=>{
+  const g=findGoatByTag(document.getElementById('bc-tag').value);const date=document.getElementById('bc-date').value;
+  if(!g){alert('Scan or type a valid doe tag');return;}if(!date){alert('Pick the mating date');return;}
+  g.matedDate=date;g.buck=document.getElementById('bc-buck').value.trim();g.prepCross=null;g.status='pregnant';
+  document.getElementById('bc-tag').value='';document.getElementById('bc-buck').value='';document.getElementById('bc-found').innerHTML='';
+  await save();renderAll();};
+document.getElementById('addFeedType').onclick=async()=>{
+  const name=document.getElementById('nf-name').value.trim();const price=+document.getElementById('nf-price').value||0;
+  if(!name){alert('Enter a feed name');return;}
+  const k=feedKey(name);FEEDS.push({k,n:name});prices[k]=price;feedStock[k]=0;
+  Object.keys(plans).forEach(g=>{plans[g][k]=0;});
+  document.getElementById('nf-name').value='';document.getElementById('nf-price').value='';
+  await save();renderFeed();renderFinance();};
+// feed purchase form
+function fbTotal(){const kg=+document.getElementById('fb-kg').value||0;const r=+document.getElementById('fb-rate').value||0;
+  document.getElementById('fb-total').value=kg&&r?Math.round(kg*r):'';}
+document.getElementById('fb-feed').onchange=()=>{const k=document.getElementById('fb-feed').value;
+  if(prices[k]!=null)document.getElementById('fb-rate').value=prices[k];fbTotal();};
+document.getElementById('fb-kg').oninput=fbTotal;
+document.getElementById('fb-rate').oninput=fbTotal;
+document.getElementById('addFeedBuy').onclick=async()=>{
+  const date=document.getElementById('fb-date').value;const kg=+document.getElementById('fb-kg').value||0;
+  const rate=+document.getElementById('fb-rate').value||0;const k=document.getElementById('fb-feed').value;
+  const feed=(FEEDS.find(f=>f.k===k)||{}).n||'Feed';
+  if(!date||!kg||!rate){alert('Enter date, quantity and rate');return;}
+  feedBuys.push({id:id(),date,feed,kg,rate,amount:Math.round(kg*rate),note:document.getElementById('fb-note').value.trim()});
+  feedStock[k]=(+feedStock[k]||0)+kg;
+  document.getElementById('fb-kg').value='';document.getElementById('fb-rate').value='';document.getElementById('fb-total').value='';document.getElementById('fb-note').value='';
+  await save();renderFeedBuys();renderStock();renderFinance();};
+document.getElementById('stats').addEventListener('click',e=>{const labels=['all','st:kid','st:milking','st:pregnant','st:dry','st:buck'];
+  const card=e.target.closest('.stat');if(!card)return;
+  const idx=[...document.getElementById('stats').children].indexOf(card);
+  document.getElementById('filter').value=labels[idx]||'all';selected.clear();renderRows();renderBulk();});
+
+// finance events
+document.getElementById('finMonth').onchange=renderFinance;
+document.getElementById('addAsset').onclick=async()=>{const name=document.getElementById('a-name').value.trim();
+  const cost=+document.getElementById('a-cost').value||0;if(!name||!cost){alert('Enter asset name and cost');return;}
+  let atype=document.getElementById('a-type').value;if(atype==='__add')atype='Other';
+  assets.push({id:id(),name,type:atype,cost,note:document.getElementById('a-note').value.trim()});
+  document.getElementById('a-name').value='';document.getElementById('a-cost').value='';document.getElementById('a-note').value='';await save();renderFinance();};
+document.getElementById('addIncome').onclick=async()=>{const amt=+document.getElementById('i-amt').value||0;
+  const date=document.getElementById('i-date').value||monthDate(new Date().getDate());if(!amt){alert('Enter amount');return;}
+  let itype=document.getElementById('i-type').value;if(itype==='__add')return;
+  incomes.push({id:id(),type:itype,amount:amt,date,note:document.getElementById('i-note').value.trim()});
+  document.getElementById('i-amt').value='';document.getElementById('i-note').value='';await save();
+  document.getElementById('finMonth').value=date.slice(0,7);renderFinance();};
+document.getElementById('addExpense').onclick=async()=>{const amt=+document.getElementById('e-amt').value||0;
+  const date=document.getElementById('e-date').value||monthDate(new Date().getDate());if(!amt){alert('Enter amount');return;}
+  let etype=document.getElementById('e-type').value;if(etype==='__add')return;
+  expenses.push({id:id(),type:etype,amount:amt,date,note:document.getElementById('e-note').value.trim()});
+  document.getElementById('e-amt').value='';document.getElementById('e-note').value='';await save();
+  document.getElementById('finMonth').value=date.slice(0,7);renderFinance();};
+document.getElementById('addRecur').onclick=async()=>{const name=document.getElementById('rc-name').value.trim();
+  const amt=+document.getElementById('rc-amt').value||0;if(!name||!amt){alert('Enter a name and amount');return;}
+  recurringCosts.push({id:id(),name,amount:amt,period:document.getElementById('rc-period').value});
+  document.getElementById('rc-name').value='';document.getElementById('rc-amt').value='';await save();renderFinance();};
+document.getElementById('addOwner').onclick=async()=>{const amt=+document.getElementById('o-amt').value||0;
+  const date=document.getElementById('o-date').value||new Date().toISOString().slice(0,10);if(!amt){alert('Enter amount');return;}
+  ownerInv.push({id:id(),note:document.getElementById('o-note').value.trim()||'Investment',amount:amt,date});
+  document.getElementById('o-note').value='';document.getElementById('o-amt').value='';await save();
+  document.getElementById('finMonth').value=date.slice(0,7);renderFinance();};
+
+// vaccine events
+document.getElementById('v-type').onchange=(e)=>{
+  document.getElementById('v-vlabel').textContent=e.target.value==='age'?'Days':'Months';
+  document.getElementById('v-val').placeholder=e.target.value==='age'?'30':'12';};
+document.getElementById('addVacc').onclick=async()=>{
+  const name=document.getElementById('v-name').value.trim();
+  const val=+document.getElementById('v-val').value||0;
+  if(!name||!val){alert('Enter a vaccine name and a number');return;}
+  const type=document.getElementById('v-type').value;
+  const v={id:id(),name,scope:document.getElementById('v-scope').value,type,note:document.getElementById('v-note').value.trim()};
+  if(type==='age')v.ageDays=val;else v.months=val;
+  vaccines.push(v);
+  document.getElementById('v-name').value='';document.getElementById('v-val').value='';document.getElementById('v-note').value='';
+  await save();renderHealth();};
+document.getElementById('addVaccBuy').onclick=async()=>{
+  const date=document.getElementById('vb-date').value;const name=document.getElementById('vb-name').value.trim();
+  const amt=+document.getElementById('vb-amt').value||0;
+  if(name==='__add'){alert('Pick a vaccine, or choose "Add new…" to add one first');return;}
+  if(!date||!name||!amt){alert('Enter date, vaccine name and amount');return;}
+  vaccineBuys.push({id:id(),date,name,qty:+document.getElementById('vb-qty').value||0,
+    unit:document.getElementById('vb-unit').value,amount:amt,note:document.getElementById('vb-note').value.trim()});
+  document.getElementById('vb-qty').value='';document.getElementById('vb-amt').value='';document.getElementById('vb-note').value='';
+  await save();renderHealth();renderFinance();};
+
+document.getElementById('remindWin').onchange=async(e)=>{remindDays=+e.target.value||30;await save();renderHealth();};
+function goatsInGroupSel(sel){
+  if(sel==='all')return goats;
+  if(sel.startsWith('st:'))return goats.filter(g=>g.status===sel.slice(3));
+  if(sel.startsWith('grp:'))return goats.filter(g=>g.group===sel.slice(4));
+  return [];}
+document.getElementById('giveVacc').onclick=async()=>{
+  const vid=document.getElementById('gv-vacc').value;const v=vaccines.find(x=>x.id===vid);
+  if(!v){alert('Add a vaccine to the schedule first');return;}
+  const sel=document.getElementById('gv-group').value;const list=goatsInGroupSel(sel);
+  const date=document.getElementById('gv-date').value||new Date().toISOString().slice(0,10);
+  if(!list.length){document.getElementById('gv-info').textContent='No goats in that group.';return;}
+  if(!confirm(`Mark ${v.name} done for ${list.length} goat(s) on ${date}?`))return;
+  list.forEach(g=>vaccLog.push({id:id(),goatId:g.id,vaccineId:v.id,date}));
+  await save();renderHealth();
+  document.getElementById('gv-info').innerHTML=`<span style="color:var(--green-dark);font-weight:700">✓ Recorded ${v.name} for ${list.length} goat(s).</span>`;};
+document.getElementById('addReminder').onclick=async()=>{
+  const note=document.getElementById('r-note').value.trim();
+  const n=+document.getElementById('r-num').value||0;
+  if(!note||!n){alert('Enter a reminder and how many months/weeks');return;}
+  const unit=+document.getElementById('r-unit').value;
+  const date=addDays(new Date().toISOString().slice(0,10),n*unit);
+  reminders.push({id:id(),note,scope:document.getElementById('r-scope').value,date});
+  document.getElementById('r-note').value='';document.getElementById('r-num').value='';
+  await save();renderHealth();};
+
+// milk events
+function milkAmt(){const l=+document.getElementById('s-liters').value||0;const r=+document.getElementById('s-rate').value||0;
+  document.getElementById('s-amt').value=l&&r?Math.round(l*r):'';}
+document.getElementById('s-liters').oninput=milkAmt;
+document.getElementById('s-rate').oninput=milkAmt;
+document.getElementById('addProd').onclick=async()=>{
+  const date=document.getElementById('p-date').value;const liters=+document.getElementById('p-liters').value||0;
+  if(!date||!liters){alert('Enter date and litres');return;}
+  milkProd.push({id:id(),date,breed:document.getElementById('p-breed').value,liters,note:document.getElementById('p-note').value.trim()});
+  document.getElementById('p-liters').value='';document.getElementById('p-note').value='';await save();renderMilk();};
+document.getElementById('addSale').onclick=async()=>{
+  const date=document.getElementById('s-date').value;const liters=+document.getElementById('s-liters').value||0;
+  const rate=+document.getElementById('s-rate').value||0;
+  if(!date||!liters||!rate){alert('Enter date, litres and rate');return;}
+  milkSales.push({id:id(),date,liters,rate,amount:Math.round(liters*rate),note:document.getElementById('s-note').value.trim()});
+  document.getElementById('s-liters').value='';document.getElementById('s-rate').value='';document.getElementById('s-amt').value='';document.getElementById('s-note').value='';
+  await save();renderMilk();renderFinance();};
+
+// backup: export all data to a file, restore from a file
+function snapshot(){return {goats,groups,prices,plans,assets,incomes,expenses,ownerInv,
+  vaccines,vaccLog,reminders,remindDays,milkProd,milkSales,feedBuys,recurringCosts,vaccineBuys,feedStock,FEEDS,incomeTypes:INCOME_TYPES,expenseTypes:EXPENSE_TYPES,assetTypes:ASSET_TYPES,vaccineNames:VACCINE_NAMES,breedNames:BREED_NAMES,vaccineUnits:VACCINE_UNITS,_savedAt:new Date().toISOString()};}
+document.getElementById('exportBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download='goat-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);};
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=(e)=>{
+  const f=e.target.files[0];if(!f)return;
+  if(!confirm('Restore from this backup? It will replace everything currently in the app.')){e.target.value='';return;}
+  const r=new FileReader();
+  r.onload=async()=>{try{const d=JSON.parse(r.result);
+    goats=d.goats||[];groups=d.groups||groups;prices=Object.assign(prices,d.prices||{});
+    plans=Object.assign(plans,d.plans||{});assets=d.assets||[];incomes=d.incomes||[];expenses=d.expenses||[];ownerInv=d.ownerInv||[];if(d.FEEDS)FEEDS=d.FEEDS;if(d.incomeTypes)INCOME_TYPES=d.incomeTypes;if(d.expenseTypes)EXPENSE_TYPES=d.expenseTypes;if(d.assetTypes)ASSET_TYPES=d.assetTypes;if(d.vaccineNames)VACCINE_NAMES=d.vaccineNames;if(d.breedNames)BREED_NAMES=d.breedNames;if(d.vaccineUnits)VACCINE_UNITS=d.vaccineUnits;
+    vaccines=d.vaccines||[];vaccLog=d.vaccLog||[];reminders=d.reminders||[];remindDays=d.remindDays||30;
+    milkProd=d.milkProd||[];milkSales=d.milkSales||[];feedBuys=d.feedBuys||[];recurringCosts=d.recurringCosts||[];vaccineBuys=d.vaccineBuys||[];feedStock=d.feedStock||{};
+    await save();renderAll();alert('Backup restored successfully.');
+  }catch(err){alert('Could not read this file — make sure it is a Goat Records backup (.json).');}};
+  r.readAsText(f);e.target.value='';};
+
+// init dropdowns + defaults
+// editable dropdowns — pick "➕ Add new…" to add your own option to any of these lists
+const TYPE_LISTS={'i-type':()=>INCOME_TYPES,'e-type':()=>EXPENSE_TYPES,'a-type':()=>ASSET_TYPES,'vb-name':()=>VACCINE_NAMES,'f-breed':()=>BREED_NAMES,'p-breed':()=>BREED_NAMES,'vb-unit':()=>VACCINE_UNITS};
+function fillType(id){const arr=TYPE_LISTS[id]();const sel=document.getElementById(id);const cur=sel.value;
+  sel.innerHTML=arr.map(t=>`<option>${t}</option>`).join('')+'<option value="__add">➕ Add new…</option>';
+  if(arr.includes(cur))sel.value=cur;else sel.selectedIndex=0;}
+['i-type','e-type','a-type','vb-name','f-breed','p-breed','vb-unit'].forEach(idd=>{const sel=document.getElementById(idd);
+  sel.onchange=async()=>{if(sel.value==='__add'){const name=(prompt('Add a new option to this list')||'').trim();
+    const arr=TYPE_LISTS[idd]();if(name&&!arr.includes(name)){arr.push(name);await save();fillType(idd);sel.value=name;}
+    else fillType(idd);}};
+  fillType(idd);});
+document.getElementById('finMonth').value=thisMonth();
+document.getElementById('remindWin').value=String(remindDays);
+document.getElementById('i-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('e-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('o-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('p-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('s-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('fb-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('vb-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('gv-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('bc-date').value=new Date().toISOString().slice(0,10);
+document.getElementById('us-date').value=new Date().toISOString().slice(0,10);
+
+load().then(renderAll);
+</script>
+</body>
+</html>

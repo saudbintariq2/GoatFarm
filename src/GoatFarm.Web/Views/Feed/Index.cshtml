@@ -122,7 +122,7 @@
             }
             @if (!Model.FeedPurchases.Any()) {<tr class="feed-buy-empty"><td colspan="6" class="empty">No feed purchases logged this month.</td></tr>}
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .8fr .9fr .9fr 1.2fr auto">
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .8fr .9fr .9fr auto">
             <div class="field"><label>Date</label><input type="date" id="fb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>Feed</label><select id="fb-feed">
                 @foreach (var p in Model.Prices){<option value="@p.FeedType">@p.DisplayName</option>}
@@ -130,13 +130,40 @@
             <div class="field"><label>Qty (kg)</label><input type="number" id="fb-kg" min="0" step="0.5"></div>
             <div class="field"><label>Rate/kg</label><input type="number" id="fb-rate" min="0"></div>
             <div class="field"><label>Total</label><input type="number" id="fb-total" disabled placeholder="auto"></div>
-            <div class="field"><label>Comment</label><input id="fb-note" placeholder="optional"></div>
             <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addFeedBuy">+ Add</button></div>
+        </div>
+        <div class="field field-comment" style="margin-top:10px">
+            <label>Comment</label><input id="fb-note" placeholder="optional">
         </div>
         <div class="goat-form-actions">
             <button type="button" class="btn btn-ghost" id="cancelFeedBuyBtn" style="display:none">Cancel</button>
             <button type="button" class="btn btn-danger" id="deleteFeedBuyBtn" style="display:none">Delete</button>
         </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Feed stock</h2><span class="sub">what's in the store now</span></div>
+    <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0">Buying feed adds to stock automatically. <b>Days left</b>
+            uses your ration plan to estimate how long stock will last — it turns amber when low. Edit a number
+            if you count the store by hand.</div>
+        <table class="tbl"><thead><tr><th>Feed</th><th class="num-cell">Stock</th>
+            <th class="num-cell hide-sm">Used / day</th><th class="num-cell">Days left</th></tr></thead>
+            <tbody id="stockRows">
+            @foreach (var s in Model.Stock)
+            {
+                <tr>
+                    <td>@s.DisplayName</td>
+                    <td class="num-cell">
+                        <input type="number" min="0" data-stock="@s.FeedType" value="@s.StockKg.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                            style="width:78px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg
+                    </td>
+                    <td class="num-cell hide-sm">@s.KgPerDay.ToString("F1") kg</td>
+                    <td class="num-cell" style="font-weight:700;@s.DaysLeftColor">@s.DaysLeftText</td>
+                </tr>
+            }
+            </tbody></table>
     </div>
 </div>
 

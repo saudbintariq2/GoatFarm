@@ -23,6 +23,11 @@ public class Goat : BaseEntity
     public DateOnly EventDate { get; set; }
     public int? GroupId { get; set; }
     public GoatGroup? Group { get; set; }
+    public DateOnly? PrepCrossDate { get; set; }
+    public DateOnly? MatedDate { get; set; }
+    public string? BuckTag { get; set; }
+    public int? KidsCount { get; set; }
+    public DateOnly? UltrasoundDate { get; set; }
     public ICollection<VaccinationHistory> VaccinationHistories { get; set; } = [];
 }
 
@@ -31,6 +36,7 @@ public class FeedPrice : BaseEntity
     public string FeedType { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public decimal PricePerKg { get; set; }
+    public decimal StockKg { get; set; }
 }
 
 public class FeedPlan : BaseEntity

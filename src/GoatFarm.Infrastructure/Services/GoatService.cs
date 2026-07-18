@@ -1,4 +1,5 @@
 using GoatFarm.Application.Common;
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Goats;
 using GoatFarm.Domain.Entities;
@@ -167,7 +168,31 @@ public class GoatService : IGoatService
         var goats = await _context.Goats.Where(g => model.GoatIds.Contains(g.Id)).ToListAsync(cancellationToken);
         foreach (var goat in goats)
         {
-            if (model.MoveTarget.StartsWith("st:", StringComparison.OrdinalIgnoreCase))
+            if (model.MoveTarget.Equals("br:prep", StringComparison.OrdinalIgnoreCase))
+            {
+                if (model.PrepCrossDate.HasValue)
+                    goat.PrepCrossDate = model.PrepCrossDate;
+            }
+            else if (model.MoveTarget.Equals("br:cross", StringComparison.OrdinalIgnoreCase))
+            {
+                if (model.MatedDate.HasValue)
+                {
+                    goat.MatedDate = model.MatedDate;
+                    goat.BuckTag = string.IsNullOrWhiteSpace(model.BuckTag) ? null : model.BuckTag.Trim();
+                    goat.PrepCrossDate = null;
+                    goat.Status = GoatStatus.Pregnant;
+                }
+            }
+            else if (model.MoveTarget.Equals("br:kidded", StringComparison.OrdinalIgnoreCase))
+            {
+                goat.MatedDate = null;
+                goat.BuckTag = null;
+                goat.KidsCount = null;
+                goat.UltrasoundDate = null;
+                goat.PrepCrossDate = null;
+                goat.Status = GoatStatus.Milking;
+            }
+            else if (model.MoveTarget.StartsWith("st:", StringComparison.OrdinalIgnoreCase))
             {
                 var statusKey = model.MoveTarget[3..];
                 goat.Status = DisplayHelper.ParseStatusKey(statusKey);
@@ -232,6 +257,7 @@ public class GoatService : IGoatService
         Kids = goats.Count(g => g.Status == GoatStatus.Kid),
         Milking = goats.Count(g => g.Status == GoatStatus.Milking),
         Pregnant = goats.Count(g => g.Status == GoatStatus.Pregnant),
+        Dry = goats.Count(g => g.Status == GoatStatus.Dry),
         Bucks = goats.Count(g => g.Status == GoatStatus.Buck)
     };
 
@@ -257,7 +283,16 @@ public class GoatService : IGoatService
             AgeLabel = GetAgeLabel(ageDays),
             StatusDisplay = text,
             StatusCssClass = css,
-            PriceDisplay = g.Source == GoatSource.Born ? "home-bred" : DisplayHelper.FormatRs(g.PurchasePrice)
+            PriceDisplay = g.Source == GoatSource.Born ? "home-bred" : DisplayHelper.FormatRs(g.PurchasePrice),
+            PrepCrossDate = g.PrepCrossDate,
+            MatedDate = g.MatedDate,
+            BuckTag = g.BuckTag,
+            KidsCount = g.KidsCount,
+            UltrasoundDate = g.UltrasoundDate,
+            BreedingHint = g.MatedDate.HasValue
+                ? $"due ~{BreedingHelper.ExpectedKidding(g.MatedDate.Value):yyyy-MM-dd}"
+                : g.PrepCrossDate.HasValue ? "ready for cross" : null,
+            BreedingHintColor = g.MatedDate.HasValue ? "var(--pink)" : g.PrepCrossDate.HasValue ? "var(--amber)" : null
         };
     }
 
@@ -276,6 +311,10 @@ public class GoatService : IGoatService
             var status = DisplayHelper.ParseStatusKey(filter[3..]);
             return goats.Where(g => g.Status == status);
         }
+        if (filter.Equals("br:prep", StringComparison.Ordinal))
+            return goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue);
+        if (filter.Equals("br:expecting", StringComparison.Ordinal))
+            return goats.Where(g => g.MatedDate.HasValue);
         if (filter.StartsWith("grp:", StringComparison.Ordinal))
         {
             var group = filter[4..];

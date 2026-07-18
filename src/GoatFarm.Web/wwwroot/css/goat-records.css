@@ -43,7 +43,7 @@
     border:none;background:none;color:var(--ink-soft);cursor:pointer;transition:.15s;text-decoration:none;display:inline-block}
   .tab.active{background:var(--green);color:#fff}
 
-  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px}
   .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;
     padding:12px 14px;box-shadow:var(--shadow);cursor:pointer;transition:.15s}
   .stat:hover{transform:translateY(-2px);border-color:var(--green)}
@@ -66,6 +66,10 @@
     border:1px solid var(--line);border-radius:9px;background:#FCFDFB;color:var(--ink);width:100%}
   .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--green);background:#fff}
   .field input:disabled{background:#f0f0ee;color:#aaa}
+  .field-comment input,
+  .field-comment textarea{width:100%}
+  .field-comment textarea{min-height:4.5em;resize:vertical;line-height:1.45}
+  .add-grid .field-comment{grid-column:1 / -1}
 
   .btn{font-family:inherit;font-size:14px;font-weight:600;padding:9px 16px;border-radius:9px;
     border:1px solid transparent;cursor:pointer;transition:.15s;white-space:nowrap}
@@ -112,6 +116,13 @@
     border-radius:9px;background:#FCFDFB;color:var(--ink)}
   .herd-tag-input:focus{outline:none;border-color:var(--green);background:#fff}
   .herd-tag-input:disabled{background:#f0f0ee;color:#aaa}
+  .goat-add-grid .field-tag{grid-column:span 2}
+  .goat-add-grid .field-comment-goat{grid-column:span 3}
+  .goat-add-grid .field-comment-goat input{width:100%}
+  .policy-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end}
+  .policy-grid .field-check label{flex-direction:row;align-items:center;gap:8px;text-transform:none;letter-spacing:0;
+    font-size:14px;font-weight:500;color:var(--ink);cursor:pointer;white-space:nowrap}
+  .policy-grid .field-check input[type=checkbox]{width:17px;height:17px;flex-shrink:0;margin:0;accent-color:var(--green);cursor:pointer}
   .search-input{width:100%;box-sizing:border-box;font-size:22px;font-weight:700;padding:14px 16px;border-radius:12px;
     border:2px solid var(--line);font-family:inherit;color:var(--ink);background:var(--card)}
   .search-input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-tint)}
@@ -209,6 +220,10 @@
   .dash-link:hover{text-decoration:underline;color:var(--green)}
   .dash-stats{margin-bottom:0}
   .dash-milk4,.dash-fin4{margin-bottom:0}
+  .dash-breed3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:0}
+  .dash-breed-due{font-size:18px;line-height:1.25;letter-spacing:-.3px}
+  .dash-feed-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:0}
+  .dash-stock-alert .v{color:var(--amber)}
   .dash-single{max-width:360px}
   .dash-profit{padding:18px 22px;border-radius:14px}
   .dash-vacc-top{max-width:280px;margin-bottom:14px}
@@ -217,8 +232,13 @@
   .dash-subhead:first-of-type{margin-top:0}
   .dash-tbl{margin-bottom:0}
   .perm-table input[type=checkbox]{width:17px;height:17px;accent-color:var(--green);cursor:pointer}
-  .perm-table td,.perm-table th{text-align:center}
+  .perm-table td,.perm-table th{text-align:center;vertical-align:middle}
   .perm-table td:first-child,.perm-table th:first-child{text-align:left}
+  .perm-table th.num-cell,.perm-table td.num-cell{text-align:center}
+  .perm-table .perm-cell .perm-actions{align-items:center}
+  .perm-table-role th.num-cell{min-width:148px}
+  .perm-table-role td.num-cell.perm-cell{min-width:148px}
+  .perm-table-role .perm-actions{flex-direction:row;flex-wrap:wrap;gap:8px 10px;justify-content:center;align-items:center}
   .perm-actions{display:flex;flex-direction:column;gap:3px;align-items:flex-start;font-size:11px;font-weight:600;color:var(--ink-soft)}
   .perm-action-label{display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}
   .perm-hidden{display:none !important}
@@ -228,9 +248,12 @@
   .user-perm-head .sub{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
   .user-perm-toggle{margin-bottom:12px}
   .user-perm-toggle label{text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--ink-soft)}
-  .user-perm-table td,.user-perm-table th{text-align:left}
+  .user-perm-table td,.user-perm-table th{text-align:left;vertical-align:middle}
   .user-perm-table th.num-cell,
   .user-perm-table td.num-cell{text-align:left}
+  .user-perm-table .perm-actions{flex-direction:row;flex-wrap:wrap;gap:10px;align-items:center}
+  .remind-bar .field{flex-wrap:nowrap;white-space:nowrap}
+  .remind-bar label{text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--ink-soft)}
   #userPermTableWrap.disabled{opacity:.55;pointer-events:none}
   .fincard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
   .fincard .v{font-size:23px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
@@ -301,6 +324,9 @@
   @media(max-width:760px){
     .stats{grid-template-columns:repeat(2,1fr)}
     .add-grid{grid-template-columns:1fr 1fr}
+    .goat-add-grid .field-tag,.goat-add-grid .field-comment-goat{grid-column:1 / -1}
+    .policy-grid{grid-template-columns:1fr}
+    .dash-breed3{grid-template-columns:1fr}
     .price-grid{grid-template-columns:1fr 1fr}
     .hide-sm{display:none}
     .ration-row{grid-template-columns:1fr 100px}.ration-row .rcost{display:none}

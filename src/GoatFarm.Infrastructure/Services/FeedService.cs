@@ -37,7 +37,8 @@ public class FeedService : IFeedService
         {
             FeedType = p.FeedType,
             DisplayName = p.DisplayName,
-            PricePerKg = p.PricePerKg
+            PricePerKg = p.PricePerKg,
+            StockKg = p.StockKg
         }).ToList();
 
         var currentPlanEntity = plans.FirstOrDefault(p => p.StatusKey == selected) ?? plans.First();
@@ -78,6 +79,8 @@ public class FeedService : IFeedService
         }
 
         var buying = BuildBuyingList(plans, prices, feedCatalog);
+        var dailyUse = BuildDailyUseMap(plans, feedCatalog);
+        var stock = BuildStockRows(feedCatalog, dailyUse);
         var (monthStart, monthEnd) = MonthHelper.GetMonthRange(month);
         var purchases = await _context.FeedPurchases.AsNoTracking()
             .Where(p => p.Date >= monthStart && p.Date < monthEnd)
@@ -111,7 +114,8 @@ public class FeedService : IFeedService
             GrandDaily = totalDaily + totalMed / 30m,
             TotalGoats = (int)totalGoats,
             SelectedStatusKey = DisplayHelper.StatusKey(selected),
-            StatusOptions = StatusOrder.Select(s => (DisplayHelper.StatusKey(s), DisplayHelper.GetStatusDisplay(s).Text)).ToList()
+            StatusOptions = StatusOrder.Select(s => (DisplayHelper.StatusKey(s), DisplayHelper.GetStatusDisplay(s).Text)).ToList(),
+            Stock = stock
         };
     }
 
@@ -157,6 +161,7 @@ public class FeedService : IFeedService
             Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim()
         };
         _context.FeedPurchases.Add(entity);
+        await AdjustFeedStockAsync(model.FeedType, model.Kg, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
 
         var displayName = await _context.FeedPrices.AsNoTracking()
@@ -182,6 +187,9 @@ public class FeedService : IFeedService
         var entity = await _context.FeedPurchases.FindAsync([id], cancellationToken);
         if (entity is null) return null;
 
+        var oldKg = entity.Kg;
+        var oldFeedType = entity.FeedType;
+
         entity.Date = model.Date;
         entity.FeedType = model.FeedType;
         entity.Kg = model.Kg;
@@ -189,6 +197,15 @@ public class FeedService : IFeedService
         entity.Amount = Math.Round(model.Kg * model.RatePerKg);
         entity.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
         entity.UpdatedDate = DateTime.UtcNow;
+
+        if (oldFeedType == model.FeedType)
+            await AdjustFeedStockAsync(model.FeedType, model.Kg - oldKg, cancellationToken);
+        else
+        {
+            await AdjustFeedStockAsync(oldFeedType, -oldKg, cancellationToken);
+            await AdjustFeedStockAsync(model.FeedType, model.Kg, cancellationToken);
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         var displayName = await _context.FeedPrices.AsNoTracking()
@@ -213,9 +230,19 @@ public class FeedService : IFeedService
     {
         var entity = await _context.FeedPurchases.FindAsync([id], cancellationToken);
         if (entity is null) return false;
+        await AdjustFeedStockAsync(entity.FeedType, -entity.Kg, cancellationToken);
         _context.FeedPurchases.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task UpdateFeedStockAsync(UpdateFeedStockViewModel model, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.FeedPrices.FirstOrDefaultAsync(p => p.FeedType == model.FeedType, cancellationToken);
+        if (entity is null) return;
+        entity.StockKg = Math.Max(0, model.StockKg);
+        entity.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<FeedPriceViewModel> AddFeedTypeAsync(AddFeedTypeViewModel model, CancellationToken cancellationToken = default)
@@ -234,7 +261,8 @@ public class FeedService : IFeedService
         {
             FeedType = feedType,
             DisplayName = displayName,
-            PricePerKg = model.PricePerKg
+            PricePerKg = model.PricePerKg,
+            StockKg = 0
         };
         _context.FeedPrices.Add(price);
 
@@ -248,7 +276,7 @@ public class FeedService : IFeedService
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-        return new FeedPriceViewModel { FeedType = feedType, DisplayName = displayName, PricePerKg = model.PricePerKg };
+        return new FeedPriceViewModel { FeedType = feedType, DisplayName = displayName, PricePerKg = model.PricePerKg, StockKg = 0 };
     }
 
     public async Task<bool> DeleteFeedTypeAsync(string feedType, CancellationToken cancellationToken = default)
@@ -363,6 +391,67 @@ public class FeedService : IFeedService
             DailyTotalCost = dailyFeed,
             MonthlyTotalCost = dailyFeed * 30 + plan.MedicineCostPerGoatPerMonth
         };
+    }
+
+    private IReadOnlyDictionary<string, decimal> BuildDailyUseMap(
+        IReadOnlyList<FeedPlan> plans,
+        IReadOnlyList<FeedPrice> feedCatalog)
+    {
+        var kg = feedCatalog.ToDictionary(f => f.FeedType, _ => 0m);
+        foreach (var st in StatusOrder)
+        {
+            var n = _goatService.CountByStatus(st);
+            var plan = plans.FirstOrDefault(p => p.StatusKey == st);
+            if (plan is null) continue;
+            foreach (var f in feedCatalog)
+            {
+                var grams = plan.Items.FirstOrDefault(i => i.FeedType == f.FeedType)?.GramsPerDay ?? 0;
+                kg[f.FeedType] += grams / 1000m * n;
+            }
+        }
+        return kg;
+    }
+
+    private static IReadOnlyList<FeedStockRowViewModel> BuildStockRows(
+        IReadOnlyList<FeedPrice> feedCatalog,
+        IReadOnlyDictionary<string, decimal> dailyUse)
+    {
+        return feedCatalog.Select(f =>
+        {
+            var st = f.StockKg;
+            var du = dailyUse.GetValueOrDefault(f.FeedType, 0);
+            decimal? days = du > 0 ? st / du : null;
+            var floorDays = days.HasValue ? (int)Math.Floor(days.Value) : (int?)null;
+            var daysText = floorDays.HasValue
+                ? $"~{floorDays} day{(floorDays == 1 ? "" : "s")}"
+                : "—";
+            var color = days switch
+            {
+                null => "",
+                < 3 => "color:#8a261c",
+                < 7 => "color:var(--amber)",
+                _ => "color:var(--green-dark)"
+            };
+            return new FeedStockRowViewModel
+            {
+                FeedType = f.FeedType,
+                DisplayName = f.DisplayName,
+                StockKg = st,
+                KgPerDay = du,
+                DaysLeft = days,
+                DaysLeftText = daysText,
+                DaysLeftColor = color
+            };
+        }).ToList();
+    }
+
+    private async Task AdjustFeedStockAsync(string feedType, decimal deltaKg, CancellationToken cancellationToken)
+    {
+        if (deltaKg == 0) return;
+        var price = await _context.FeedPrices.FirstOrDefaultAsync(p => p.FeedType == feedType, cancellationToken);
+        if (price is null) return;
+        price.StockKg = Math.Max(0, price.StockKg + deltaKg);
+        price.UpdatedDate = DateTime.UtcNow;
     }
 
     private IReadOnlyList<FeedBuyingRowViewModel> BuildBuyingList(

@@ -223,13 +223,6 @@ const GoatRecords = (() => {
       if (source === 'Born') p.value = '';
     }
 
-    function setTagHint(msg, isError = false) {
-      const hint = document.getElementById('tag-lookup-hint');
-      if (!hint) return;
-      hint.textContent = msg || 'Scan to load an existing goat, or enter a new tag to add.';
-      hint.classList.toggle('error', isError);
-    }
-
     function setEditMode(editing) {
       const cancelBtn = document.getElementById('cancelBtn');
       const deleteBtn = document.getElementById('deleteBtn');
@@ -254,7 +247,6 @@ const GoatRecords = (() => {
       applySourcePriceState();
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       setEditMode(false);
-      setTagHint();
     }
 
     function enumValue(value, fallback) {
@@ -263,7 +255,6 @@ const GoatRecords = (() => {
 
     function fillGoatForm(goat) {
       editingId = goat.id;
-      document.getElementById('goatFormTitle').textContent = 'Edit goat';
       document.getElementById('addBtn').textContent = 'Save';
       document.getElementById('f-tag').value = goat.tag || '';
       document.getElementById('f-tag').disabled = true;
@@ -292,8 +283,6 @@ const GoatRecords = (() => {
       } else {
         document.getElementById('goatFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-      setTagHint(`Editing goat ${goat.tag}.`);
-      document.getElementById('f-name').focus();
     }
 
     function loadGoatForEdit(row) {
@@ -312,8 +301,6 @@ const GoatRecords = (() => {
       });
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
-      setTagHint(`Editing goat ${row.dataset.tag}.`);
-      document.getElementById('f-name').focus();
     }
 
     function normalizeTag(value) {
@@ -335,13 +322,13 @@ const GoatRecords = (() => {
       const tagInput = document.getElementById('f-tag');
       const tag = normalizeTag(tagInput?.value);
       if (!tag) {
-        setTagHint('Enter or scan a tag / RFID ID.', true);
+        showToast('Enter or scan a tag / RFID ID.', 'error');
         tagInput?.focus();
         return;
       }
 
       if (!FarmPerms.can('herd', 'edit')) {
-        setTagHint('You do not have permission to edit goats.', true);
+        showToast('You do not have permission to edit goats.', 'error');
         return;
       }
 
@@ -351,7 +338,6 @@ const GoatRecords = (() => {
         return;
       }
 
-      setTagHint('Looking up tag…');
       tagInput.disabled = true;
 
       try {
@@ -361,25 +347,24 @@ const GoatRecords = (() => {
         });
 
         if (res.status === 404) {
-          setTagHint(`Tag "${tag}" not found — fill in the details below to add a new goat.`, true);
           return;
         }
 
         if (res.status === 403) {
-          setTagHint('You do not have permission to look up goats.', true);
+          showToast('You do not have permission to look up goats.', 'error');
           return;
         }
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          setTagHint(err.error || 'Could not look up that tag.', true);
+          showToast(err.error || 'Could not look up that tag.', 'error');
           return;
         }
 
         const goat = await res.json();
         openGoatForEdit(goat);
       } catch {
-        setTagHint('Could not reach the server. Try again.', true);
+        showToast('Could not reach the server. Try again.', 'error');
       } finally {
         if (!editingId) tagInput.disabled = false;
         else tagInput.disabled = true;
@@ -481,10 +466,27 @@ const GoatRecords = (() => {
 
     document.getElementById('moveBtn')?.addEventListener('click', async () => {
       if (!selected.size || !FarmPerms.can('herd', 'edit')) return;
-      await api('/Goat/BulkMove', {
-        method: 'POST',
-        body: JSON.stringify({ goatIds: [...selected], moveTarget: document.getElementById('moveTo').value })
-      });
+      const v = document.getElementById('moveTo').value;
+      const payload = { goatIds: [...selected], moveTarget: v };
+      const defaultDate = new Date().toISOString().slice(0, 10);
+      if (v === 'br:prep') {
+        const dt = await showModal('Target cross date for the selected does (YYYY-MM-DD)', {
+          prompt: true,
+          defaultValue: (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })()
+        });
+        if (!dt) return;
+        payload.prepCrossDate = dt;
+      } else if (v === 'br:cross') {
+        const dt = await showModal('Mating date (YYYY-MM-DD)', { prompt: true, defaultValue: defaultDate });
+        if (!dt) return;
+        const bk = await showModal('Buck tag (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+        payload.matedDate = dt;
+        if (bk) payload.buckTag = bk;
+      } else if (v === 'br:kidded') {
+        const confirmed = await showConfirm('Mark ' + selected.size + ' doe(s) as kidded? They move to Milking.');
+        if (!confirmed) return;
+      }
+      await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify(payload) });
       location.reload();
     });
 
@@ -550,6 +552,14 @@ const GoatRecords = (() => {
     };
     document.getElementById('fb-kg')?.addEventListener('input', updateFbTotal);
     document.getElementById('fb-rate')?.addEventListener('input', updateFbTotal);
+    document.getElementById('fb-feed')?.addEventListener('change', () => {
+      const feedType = document.getElementById('fb-feed')?.value;
+      const priceInput = document.querySelector(`[data-price="${feedType}"]`);
+      const rateInput = document.getElementById('fb-rate');
+      if (priceInput && rateInput)
+        rateInput.value = priceInput.value;
+      updateFbTotal();
+    });
 
     document.getElementById('feedMonth')?.addEventListener('change', () => reloadFeed());
 
@@ -663,6 +673,35 @@ const GoatRecords = (() => {
 
       bindFeedInputs(savePlan);
       bindFeedDeleteButtons();
+      renderStock(data.stock);
+    }
+
+    function renderStock(stock) {
+      const stockEl = document.getElementById('stockRows');
+      if (!stockEl || !stock) return;
+      stockEl.innerHTML = stock.map(s =>
+        `<tr><td>${s.displayName}</td>
+          <td class="num-cell"><input type="number" min="0" data-stock="${s.feedType}" value="${s.stockKg}"
+            style="width:78px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
+          <td class="num-cell hide-sm">${(+s.kgPerDay).toFixed(1)} kg</td>
+          <td class="num-cell" style="font-weight:700;${s.daysLeftColor || ''}">${s.daysLeftText}</td></tr>`).join('');
+      bindStockInputs();
+    }
+
+    function bindStockInputs() {
+      if (!FarmPerms.can('feed', 'edit')) {
+        document.querySelectorAll('[data-stock]').forEach(inp => { inp.disabled = true; });
+        return;
+      }
+      document.querySelectorAll('[data-stock]').forEach(inp => {
+        inp.onchange = async () => {
+          await api('/Feed/UpdateStock', {
+            method: 'POST',
+            body: JSON.stringify({ feedType: inp.dataset.stock, stockKg: +inp.value || 0 })
+          });
+          await reloadFeed();
+        };
+      });
     }
 
     function bindFeedDeleteButtons() {
@@ -732,14 +771,187 @@ const GoatRecords = (() => {
     });
 
     if (!FarmPerms.can('feed', 'edit')) {
-      FarmPerms.readonlyInputs('[data-price], [data-ration], #medIn, #planGroup, #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price');
+      FarmPerms.readonlyInputs('[data-price], [data-ration], [data-stock], #medIn, #planGroup, #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price');
       FarmPerms.hide('addFeedType');
       FarmPerms.hide('addFeedBuy');
     } else {
       bindFeedInputs(async () => { await savePlan(); });
       bindFeedDeleteButtons();
+      bindStockInputs();
     }
     FarmPerms.applyForm('feed', { addBtnId: 'addFeedBuy', deleteBtnId: 'deleteFeedBuyBtn', rowSelector: '#buyLogRows tr.feed-buy-row' });
+  }
+
+  function initBreeding() {
+    const normalizeTag = v => String(v ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+
+    async function lookupTag(inId, outId) {
+      const val = normalizeTag(document.getElementById(inId)?.value);
+      const out = document.getElementById(outId);
+      if (!val) { if (out) out.innerHTML = ''; return; }
+      try {
+        const res = await fetch('/Breeding/LookupTag?tag=' + encodeURIComponent(val), {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        });
+        if (!res.ok) {
+          out.innerHTML = '<span style="color:#8a261c;font-weight:700">No goat with that tag</span>';
+          return;
+        }
+        const g = await res.json();
+        out.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${g.tag}${g.name ? ' · ' + g.name : ''} · ${g.status}${g.extra || ''}</span>`;
+      } catch {
+        out.innerHTML = '';
+      }
+    }
+
+    ['bp-tag', 'bc-tag', 'us-tag'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', () => lookupTag(id, id.replace('-tag', '-found')));
+    });
+    document.getElementById('bp-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('bp-date')?.focus(); }
+    });
+    document.getElementById('bc-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addCross')?.focus(); }
+    });
+    document.getElementById('us-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addUs')?.focus(); }
+    });
+
+    async function reloadBreeding() {
+      const data = await api('/Breeding/GetData');
+      document.getElementById('breedPrep').textContent = data.prepCount;
+      document.getElementById('breedExp').textContent = data.expectingCount;
+      document.getElementById('breedNext').textContent = data.nextDueText;
+
+      document.getElementById('prepRows').innerHTML = data.prepRows?.length ? data.prepRows.map(g =>
+        `<tr><td><span class="tag">${g.tag}</span>${g.name ? `<div class="name">${g.name}</div>` : ''}</td>
+          <td class="hide-sm"><span class="chip ${g.statusCssClass}">${g.statusDisplay}</span></td>
+          <td><span class="breed">${g.prepCrossDate}</span></td>
+          <td style="${g.dietStartNow ? 'color:var(--amber);font-weight:700' : ''}">${g.dietStartDate}</td>
+          <td class="num-cell">${g.crossInText}</td>
+          <td><button type="button" class="btn btn-green btn-sm" data-cross="${g.id}">Crossed</button>
+              <span class="del" data-unprep="${g.id}">×</span></td></tr>`).join('') :
+        '<tr><td colspan="6" class="empty">No does being prepared. Add one below.</td></tr>';
+
+      document.getElementById('expRows').innerHTML = data.expectingRows?.length ? data.expectingRows.map(g => {
+        let kids = g.kidsCount != null
+          ? `<b>${g.kidsDisplay}</b>${g.ultrasoundDate ? `<div class="name">${g.ultrasoundDate}</div>` : ''}${g.extraFeed ? '<div class="name" style="color:var(--amber);font-weight:700">↑ extra feed (multiples)</div>' : ''}`
+          : '<span class="breed" style="color:#bbb">not checked</span>';
+        return `<tr><td><span class="tag">${g.tag}</span>${g.name ? `<div class="name">${g.name}</div>` : ''}</td>
+          <td class="hide-sm"><span class="breed">${g.matedDate}</span></td>
+          <td class="hide-sm"><span class="breed">${g.buckTag || '—'}</span></td>
+          <td>${kids}</td>
+          <td><b>${g.expectedKidding}</b></td>
+          <td class="hide-sm"><span class="breed">${g.kiddingWindow}</span></td>
+          <td class="num-cell" style="font-weight:700;${g.dueColor}">${g.dueText}</td>
+          <td><button type="button" class="btn btn-green btn-sm" data-kidded="${g.id}">Kidded</button>
+              <span class="del" data-uncross="${g.id}">×</span></td></tr>`;
+      }).join('') :
+        '<tr><td colspan="8" class="empty">No does expecting yet.</td></tr>';
+
+      bindBreedingActions(reloadBreeding);
+    }
+
+    function bindBreedingActions(reload) {
+      document.querySelectorAll('[data-cross]').forEach(b => {
+        b.onclick = async () => {
+          if (!FarmPerms.can('breeding', 'add')) return;
+          const dt = await showModal('Mating date (YYYY-MM-DD)', { prompt: true, defaultValue: new Date().toISOString().slice(0, 10) });
+          if (!dt) return;
+          const bk = await showModal('Buck tag (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+          await api('/Breeding/CrossFromPrep?id=' + b.dataset.cross, {
+            method: 'POST',
+            body: JSON.stringify({ date: dt, buckTag: bk || null, tag: '' })
+          });
+          reloadWithToast('Cross recorded');
+        };
+      });
+      document.querySelectorAll('[data-unprep]').forEach(x => {
+        x.onclick = async () => {
+          if (!FarmPerms.can('breeding', 'delete')) return;
+          await api('/Breeding/RemovePrep?id=' + x.dataset.unprep, { method: 'DELETE' });
+          await reload();
+        };
+      });
+      document.querySelectorAll('[data-kidded]').forEach(b => {
+        b.onclick = async () => {
+          if (!FarmPerms.can('breeding', 'edit')) return;
+          const confirmed = await showConfirm('Mark this doe as kidded? She moves to Milking.');
+          if (!confirmed) return;
+          await api('/Breeding/MarkKidded?id=' + b.dataset.kidded, { method: 'POST' });
+          reloadWithToast('Marked as kidded');
+        };
+      });
+      document.querySelectorAll('[data-uncross]').forEach(x => {
+        x.onclick = async () => {
+          if (!FarmPerms.can('breeding', 'delete')) return;
+          const confirmed = await showConfirm('Remove from expecting? The mating record is cleared.');
+          if (!confirmed) return;
+          await api('/Breeding/RemoveCross?id=' + x.dataset.uncross, { method: 'DELETE' });
+          await reload();
+        };
+      });
+    }
+
+    document.getElementById('addPrep')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'add')) return;
+      const tag = normalizeTag(document.getElementById('bp-tag')?.value);
+      const date = document.getElementById('bp-date')?.value;
+      if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
+      if (!date) { await showModal('Pick a target cross date'); return; }
+      await api('/Breeding/RecordPrep', { method: 'POST', body: JSON.stringify({ tag, date }) });
+      document.getElementById('bp-tag').value = '';
+      document.getElementById('bp-found').innerHTML = '';
+      reloadWithToast('Doe added for cross prep');
+    });
+
+    document.getElementById('addCross')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'add')) return;
+      const tag = normalizeTag(document.getElementById('bc-tag')?.value);
+      const date = document.getElementById('bc-date')?.value;
+      if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
+      if (!date) { await showModal('Pick the mating date'); return; }
+      await api('/Breeding/RecordCross', {
+        method: 'POST',
+        body: JSON.stringify({
+          tag,
+          date,
+          buckTag: document.getElementById('bc-buck')?.value.trim() || null
+        })
+      });
+      document.getElementById('bc-tag').value = '';
+      document.getElementById('bc-buck').value = '';
+      document.getElementById('bc-found').innerHTML = '';
+      reloadWithToast('Cross recorded');
+    });
+
+    document.getElementById('addUs')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'edit')) return;
+      const tag = normalizeTag(document.getElementById('us-tag')?.value);
+      const kidsCount = +document.getElementById('us-result')?.value;
+      const date = document.getElementById('us-date')?.value || null;
+      if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
+      if (kidsCount === 0) {
+        const confirmed = await showConfirm('This doe is NOT pregnant — clear her mating record and move to Dry?');
+        if (!confirmed) return;
+      }
+      await api('/Breeding/RecordUltrasound', { method: 'POST', body: JSON.stringify({ tag, kidsCount, date }) });
+      document.getElementById('us-tag').value = '';
+      document.getElementById('us-found').innerHTML = '';
+      reloadWithToast(kidsCount === 0 ? 'Mating record cleared' : 'Ultrasound saved');
+    });
+
+    bindBreedingActions(reloadBreeding);
+
+    FarmPerms.applyForm('breeding', {
+      addBtnId: 'addPrep',
+      extraHideIds: ['addCross', 'addUs']
+    });
+    if (!FarmPerms.can('breeding', 'add')) {
+      FarmPerms.hide('addCross');
+      FarmPerms.hide('addUs');
+    }
   }
 
   function initMilk() {
@@ -2136,5 +2348,5 @@ const GoatRecords = (() => {
     });
   }
 
-  return { initHerd, initFeed, initMilk, initFinance, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
+  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
 })();

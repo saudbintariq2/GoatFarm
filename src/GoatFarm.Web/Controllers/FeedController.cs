@@ -72,5 +72,12 @@ public class FeedController : Controller
         return ok ? Ok(new { success = true }) : NotFound();
     }
 
+    [HttpPost]
+    public async Task<IActionResult> UpdateStock([FromBody] UpdateFeedStockViewModel model, CancellationToken cancellationToken)
+    {
+        await _feedService.UpdateFeedStockAsync(model, cancellationToken);
+        return Ok(new { success = true });
+    }
+
     public record UpdatePriceRequest(string FeedType, decimal Price);
 }

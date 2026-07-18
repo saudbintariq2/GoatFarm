@@ -25,6 +25,8 @@ public static class DependencyInjection
                 "Do not use a setting named 'ConnectionStrings, DefaultConnection' (comma is invalid).");
         }
 
+        services.AddMemoryCache();
+
         services.AddDbContext<GoatFarmDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql =>
             {
@@ -34,6 +36,7 @@ public static class DependencyInjection
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IGoatService, GoatService>();
+        services.AddScoped<IBreedingService, BreedingService>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IFeedService, FeedService>();
         services.AddScoped<IMilkService, MilkService>();

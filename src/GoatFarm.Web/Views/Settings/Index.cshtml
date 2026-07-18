@@ -152,7 +152,7 @@
 
     <div class="panel-body">
 
-        <table class="tbl perm-table"><thead><tr><th>Tab</th>@foreach(var r in Model.Roles){<th class="num-cell">@r</th>}</tr></thead>
+        <table class="tbl perm-table perm-table-role"><thead><tr><th>Tab</th>@foreach(var r in Model.Roles){<th class="num-cell">@r</th>}</tr></thead>
 
             <tbody>
 
@@ -242,17 +242,17 @@
 
     <div class="panel-body">
 
-        <div class="add-grid" id="policyFormGrid" style="grid-template-columns:1fr 1fr 1fr 1fr 1fr">
+        <div class="policy-grid" id="policyFormGrid">
 
-            <div class="field"><label>Min length</label><input type="number" id="pp-length" min="6" max="128" value="@Model.PasswordPolicy.RequiredLength"></div>
+            <div class="field"><label for="pp-length">Min length</label><input type="number" id="pp-length" min="6" max="128" value="@Model.PasswordPolicy.RequiredLength"></div>
 
-            <div class="field"><label><input type="checkbox" id="pp-digit" @(Model.PasswordPolicy.RequireDigit ? "checked" : "")> Require digit</label></div>
+            <div class="field field-check"><label for="pp-digit"><input type="checkbox" id="pp-digit" @(Model.PasswordPolicy.RequireDigit ? "checked" : "")> Require digit</label></div>
 
-            <div class="field"><label><input type="checkbox" id="pp-lower" @(Model.PasswordPolicy.RequireLowercase ? "checked" : "")> Require lowercase</label></div>
+            <div class="field field-check"><label for="pp-lower"><input type="checkbox" id="pp-lower" @(Model.PasswordPolicy.RequireLowercase ? "checked" : "")> Require lowercase</label></div>
 
-            <div class="field"><label><input type="checkbox" id="pp-upper" @(Model.PasswordPolicy.RequireUppercase ? "checked" : "")> Require uppercase</label></div>
+            <div class="field field-check"><label for="pp-upper"><input type="checkbox" id="pp-upper" @(Model.PasswordPolicy.RequireUppercase ? "checked" : "")> Require uppercase</label></div>
 
-            <div class="field"><label><input type="checkbox" id="pp-symbol" @(Model.PasswordPolicy.RequireNonAlphanumeric ? "checked" : "")> Require symbol</label></div>
+            <div class="field field-check"><label for="pp-symbol"><input type="checkbox" id="pp-symbol" @(Model.PasswordPolicy.RequireNonAlphanumeric ? "checked" : "")> Require symbol</label></div>
 
         </div>
 

@@ -5,6 +5,7 @@ public class FeedPriceViewModel
     public string FeedType { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public decimal PricePerKg { get; set; }
+    public decimal StockKg { get; set; }
 }
 
 public class FeedPlanItemViewModel
@@ -61,6 +62,24 @@ public class FeedPageViewModel
     public int TotalGoats { get; set; }
     public string SelectedStatusKey { get; set; } = "kid";
     public IReadOnlyList<(string Key, string Label)> StatusOptions { get; set; } = [];
+    public IReadOnlyList<FeedStockRowViewModel> Stock { get; set; } = [];
+}
+
+public class FeedStockRowViewModel
+{
+    public string FeedType { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public decimal StockKg { get; set; }
+    public decimal KgPerDay { get; set; }
+    public decimal? DaysLeft { get; set; }
+    public string DaysLeftText { get; set; } = "—";
+    public string DaysLeftColor { get; set; } = string.Empty;
+}
+
+public class UpdateFeedStockViewModel
+{
+    public string FeedType { get; set; } = string.Empty;
+    public decimal StockKg { get; set; }
 }
 
 public class FeedPurchaseViewModel

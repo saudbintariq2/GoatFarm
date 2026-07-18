@@ -12,6 +12,7 @@ public interface IFeedService
     Task<bool> DeleteFeedPurchaseAsync(int id, CancellationToken cancellationToken = default);
     Task<FeedPriceViewModel> AddFeedTypeAsync(AddFeedTypeViewModel model, CancellationToken cancellationToken = default);
     Task<bool> DeleteFeedTypeAsync(string feedType, CancellationToken cancellationToken = default);
+    Task UpdateFeedStockAsync(UpdateFeedStockViewModel model, CancellationToken cancellationToken = default);
     decimal CalculateDailyFeedCost(FeedPlanViewModel plan, IReadOnlyDictionary<string, decimal> prices);
     decimal CalculateFarmFeedMonthly();
     decimal CalculateFarmMedicineMonthly();

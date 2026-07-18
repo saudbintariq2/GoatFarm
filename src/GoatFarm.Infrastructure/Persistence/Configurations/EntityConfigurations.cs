@@ -16,6 +16,7 @@ public class GoatConfiguration : IEntityTypeConfiguration<Goat>
         builder.Property(x => x.Comment).HasMaxLength(500);
         builder.Property(x => x.Breed).IsRequired().HasMaxLength(100);
         builder.Property(x => x.PurchasePrice).HasPrecision(18, 2);
+        builder.Property(x => x.BuckTag).HasMaxLength(50);
         builder.HasIndex(x => x.Tag).IsUnique();
         builder.HasOne(x => x.Group)
             .WithMany(x => x.Goats)
@@ -44,6 +45,7 @@ public class FeedPriceConfiguration : IEntityTypeConfiguration<FeedPrice>
         builder.Property(x => x.FeedType).IsRequired().HasMaxLength(50);
         builder.Property(x => x.DisplayName).IsRequired().HasMaxLength(200);
         builder.Property(x => x.PricePerKg).HasPrecision(18, 2);
+        builder.Property(x => x.StockKg).HasPrecision(18, 2);
         builder.HasIndex(x => x.FeedType).IsUnique();
     }
 }
