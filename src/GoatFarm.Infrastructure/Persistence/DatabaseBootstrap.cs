@@ -24,7 +24,15 @@ public static class DatabaseBootstrap
             logger.LogInformation("Applying database migrations...");
             await context.Database.MigrateAsync(cancellationToken);
 
-            logger.LogInformation("Seeding demo data (if database is empty)...");
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            var clearFarmData = string.Equals(configuration["Seed:ClearFarmData"], "true", StringComparison.OrdinalIgnoreCase);
+            if (clearFarmData)
+            {
+                logger.LogWarning("Clearing all farm data (Seed:ClearFarmData=true)...");
+                await DbDataCleaner.ClearAllFarmDataAsync(context, cancellationToken);
+            }
+
+            logger.LogInformation("Seeding default configuration (if not already present)...");
             await DbSeeder.SeedAsync(context, cancellationToken);
 
             var roleManager = provider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -34,7 +42,6 @@ public static class DatabaseBootstrap
                     await roleManager.CreateAsync(new IdentityRole(role));
             }
 
-            var configuration = provider.GetRequiredService<IConfiguration>();
             var resetAdminPassword = !string.Equals(configuration["Seed:ResetAdminPassword"], "false", StringComparison.OrdinalIgnoreCase);
 
             await IdentitySeedHelper.SeedAdminUserAsync(

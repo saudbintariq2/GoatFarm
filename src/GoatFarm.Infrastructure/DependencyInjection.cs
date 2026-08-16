@@ -19,10 +19,11 @@ public static class DependencyInjection
         {
             throw new InvalidOperationException(
                 "Connection string 'DefaultConnection' is missing or empty. " +
-                "In Azure App Service, use ONE of these (then Save and Restart):\n" +
-                "  • Application settings → Name: ConnectionStrings__DefaultConnection (two underscores)\n" +
-                "  • Connection strings → Name: DefaultConnection, Type: Custom (not PostgreSQL)\n" +
-                "Do not use a setting named 'ConnectionStrings, DefaultConnection' (comma is invalid).");
+                "Set ONE of these, then redeploy:\n" +
+                "  • Railway: link Postgres and set ConnectionStrings__DefaultConnection=${{Postgres.DATABASE_URL}}\n" +
+                "  • Railway: or rely on DATABASE_URL when Postgres is in the same project\n" +
+                "  • Azure: ConnectionStrings__DefaultConnection (two underscores)\n" +
+                "  • Local: appsettings.Development.json");
         }
 
         services.AddMemoryCache();
