@@ -9,8 +9,9 @@ public static class LookupConstants
 
     public static readonly string[] ExpenseTypes =
     [
-        "Salaries", "Cultivation (fodder)", "Vet / extra medicine", "Utilities",
-        "Transport", "Repairs", "Land rent", "Other"
+        "Salary advance", "Seeding", "Fodder cutting", "Irrigation / water",
+        "Cultivation (fodder)", "Vaccines", "Doctor / vet visit", "Vet / extra medicine",
+        "Utilities", "Transport", "Repairs", "Land rent", "Other"
     ];
 
     public static readonly string[] AssetTypes =

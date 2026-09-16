@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IReminderService, ReminderService>();
         services.AddScoped<IStatisticsService, StatisticsService>();
         services.AddScoped<IBackupService, BackupService>();
+        services.AddScoped<IReportsService, ReportsService>();
         services.AddScoped<IUserSettingsService, UserSettingsService>();
         services.AddScoped<ILookupService, LookupService>();
 

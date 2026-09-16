@@ -59,6 +59,18 @@ public class VaccinationLogViewModel
     public int GoatCount { get; set; }
 }
 
+public class GiveVaccineViewModel
+{
+    [Required]
+    public int VaccineId { get; set; }
+
+    [Required]
+    public string Target { get; set; } = "all";
+
+    [Required]
+    public DateOnly Date { get; set; }
+}
+
 public class UpdateVaccinationBatchViewModel
 {
     [Required]
@@ -87,6 +99,7 @@ public class VaccinePageViewModel
     public decimal VaccineBoughtMonthTotal { get; set; }
     public string PurchaseMonth { get; set; } = string.Empty;
     public CreateVaccineViewModel NewVaccine { get; set; } = new();
+    public IReadOnlyList<string> GoatGroups { get; set; } = [];
 }
 
 public class VaccinePurchaseViewModel

@@ -58,15 +58,16 @@
                 <div class="logo">🐐</div>
                 <div style="flex:1;min-width:160px"><h1>@farmName</h1><p>@farmLocation</p></div>
                 <div class="top-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-
-                    @if (!string.IsNullOrEmpty(farmUserRole))
-
+                    @if (visibleTabs.Contains(FarmTabs.Dashboard))
                     {
-
-                        <span class="scopechip">@farmUserRole</span>
-
+                        <button type="button" class="btn btn-ghost btn-sm" id="exportBtn">⬇ Export Data</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="importBtn">⬆ Import Data</button>
+                        <input type="file" id="importFile" accept="application/json" style="display:none">
                     }
-
+                    @if (!string.IsNullOrEmpty(farmUserRole))
+                    {
+                        <span class="scopechip">@farmUserRole</span>
+                    }
                     <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0">
 
                         @Html.AntiForgeryToken()
@@ -111,6 +112,10 @@
                     @if (visibleTabs.Contains(FarmTabs.Finance))
                     {
                         <a class="tab @(activeTab == "finance" ? "active" : "")" asp-controller="Finance" asp-action="Index">Finance</a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Reports))
+                    {
+                        <a class="tab @(activeTab == "reports" ? "active" : "")" asp-controller="Reports" asp-action="Index">Reports</a>
                     }
                     @if (visibleTabs.Contains(FarmTabs.Search))
                     {

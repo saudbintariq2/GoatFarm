@@ -37,6 +37,13 @@ public class FeedController : Controller
     }
 
     [HttpPost]
+    public async Task<IActionResult> UpdateMixRecipe([FromBody] UpdateMixRecipeViewModel model, CancellationToken cancellationToken)
+    {
+        await _feedService.UpdateMixRecipeAsync(model, cancellationToken);
+        return Ok(new { success = true });
+    }
+
+    [HttpPost]
     public async Task<IActionResult> AddPurchase([FromBody] CreateFeedPurchaseViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

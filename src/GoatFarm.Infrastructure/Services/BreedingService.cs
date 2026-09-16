@@ -12,11 +12,13 @@ public class BreedingService : IBreedingService
 {
     private readonly GoatFarmDbContext _context;
     private readonly IGoatService _goatService;
+    private readonly IFeedService _feedService;
 
-    public BreedingService(GoatFarmDbContext context, IGoatService goatService)
+    public BreedingService(GoatFarmDbContext context, IGoatService goatService, IFeedService feedService)
     {
         _context = context;
         _goatService = goatService;
+        _feedService = feedService;
     }
 
     public async Task<BreedingPageViewModel> GetBreedingPageAsync(CancellationToken cancellationToken = default)
@@ -29,21 +31,59 @@ public class BreedingService : IBreedingService
             ? exp.Min(g => BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate!.Value)))
             : null;
 
+        var emptyLogs = await _context.BreedingEmptyLogs.AsNoTracking()
+            .Include(l => l.Goat)
+            .OrderByDescending(l => l.ScanDate)
+            .ToListAsync(cancellationToken);
+
+        var emptyByGoat = emptyLogs.GroupBy(l => l.GoatId).ToDictionary(g => g.Key, g => g.Count());
+        var totalScans = exp.Count(e => e.KidsCount.HasValue) + emptyLogs.Count;
+        var totalEmpty = emptyLogs.Count;
+        var emptyRateText = totalScans > 0
+            ? $"{totalEmpty} empty of {totalScans} scans ({Math.Round(totalEmpty / (double)totalScans * 100)}%)"
+            : "no scans recorded yet";
+
+        var emptyRows = emptyLogs.Select(l =>
+        {
+            var g = l.Goat;
+            var (text, css) = DisplayHelper.GetStatusDisplay(g.Status);
+            return new BreedingEmptyRowViewModel
+            {
+                Tag = g.Tag,
+                Name = g.Name,
+                MatedDate = l.MatedDate?.ToString("yyyy-MM-dd"),
+                BuckTag = l.BuckTag,
+                ScanDate = l.ScanDate.ToString("yyyy-MM-dd"),
+                TimesEmpty = emptyByGoat.GetValueOrDefault(g.Id),
+                StatusDisplay = text,
+                StatusCssClass = css
+            };
+        }).ToList();
+
+        var waiting = exp.Where(g => !g.KidsCount.HasValue).ToList();
+        var confirmed = exp.Where(g => g.KidsCount.HasValue && g.KidsCount > 0).ToList();
+        var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
+        var mixCostPerKg = _feedService.GetMixCostPerKg();
+        var rationRows = BuildRationRows(prep, waiting, confirmed, plans, mixCostPerKg);
+
         return new BreedingPageViewModel
         {
             PrepCount = prep.Count,
-            ExpectingCount = exp.Count,
+            ExpectingCount = confirmed.Count,
             NextDueText = soonest switch
             {
                 null => "next due —",
                 < 0 => $"one overdue by {-soonest.Value} days",
                 _ => $"next due in {soonest.Value} days"
             },
+            EmptyRateText = emptyRateText,
             PrepRows = prep.Select(MapPrep).ToList(),
-            ExpectingRows = exp
+            ExpectingRows = confirmed
                 .OrderBy(g => BreedingHelper.ExpectedKidding(g.MatedDate!.Value))
                 .Select(MapExpecting)
-                .ToList()
+                .ToList(),
+            EmptyRows = emptyRows,
+            RationRows = rationRows
         };
     }
 
@@ -75,6 +115,14 @@ public class BreedingService : IBreedingService
 
         if (model.KidsCount == 0)
         {
+            var scanDate = model.Date ?? DateOnly.FromDateTime(DateTime.Today);
+            _context.BreedingEmptyLogs.Add(new BreedingEmptyLog
+            {
+                GoatId = goat.Id,
+                ScanDate = scanDate,
+                MatedDate = goat.MatedDate,
+                BuckTag = goat.BuckTag
+            });
             goat.MatedDate = null;
             goat.BuckTag = null;
             goat.KidsCount = null;
@@ -167,6 +215,64 @@ public class BreedingService : IBreedingService
             DietStartDate = start.ToString("yyyy-MM-dd") + (dStart <= 0 ? " · start now" : ""),
             DietStartNow = dStart <= 0,
             CrossInText = dCross < 0 ? "now" : $"in {dCross}d"
+        };
+    }
+
+    private static List<BreedingRationRowViewModel> BuildRationRows(
+        IReadOnlyList<Goat> prep,
+        IReadOnlyList<Goat> waiting,
+        IReadOnlyList<Goat> confirmed,
+        IReadOnlyList<FeedPlan> plans,
+        decimal mixCostPerKg)
+    {
+        var rows = new List<BreedingRationRowViewModel>();
+        foreach (var g in prep)
+            rows.Add(MapRation(g, "Ready for cross", GoatStatus.Dry, plans, mixCostPerKg, g.PrepCrossDate));
+        foreach (var g in waiting)
+            rows.Add(MapRation(g, "Crossed — awaiting scan", GoatStatus.Dry, plans, mixCostPerKg, null));
+        foreach (var g in confirmed)
+            rows.Add(MapRation(g, "Confirmed pregnant", GoatStatus.Pregnant, plans, mixCostPerKg, null, g.KidsCount));
+        return rows;
+    }
+
+    private static BreedingRationRowViewModel MapRation(
+        Goat g,
+        string stage,
+        GoatStatus planStatus,
+        IReadOnlyList<FeedPlan> plans,
+        decimal mixCostPerKg,
+        DateOnly? prepCrossDate,
+        int? kidsCount = null)
+    {
+        var plan = plans.FirstOrDefault(p => p.StatusKey == planStatus)
+            ?? plans.FirstOrDefault(p => p.StatusKey == GoatStatus.Dry);
+        var mix = plan?.MixKgPerDay ?? 0;
+        var fodder = plan?.FodderKgPerDay ?? 0;
+        var dailyCost = mix * mixCostPerKg;
+
+        var note = "";
+        if (prepCrossDate.HasValue)
+        {
+            var start = prepCrossDate.Value.AddDays(-BreedingHelper.PrepDietLeadDays);
+            var dStart = BreedingHelper.DaysUntil(start);
+            note = dStart <= 0
+                ? "build-up feeding now"
+                : $"build-up from {start:yyyy-MM-dd}";
+        }
+        else if (kidsCount >= 2)
+            note = $"↑ {BreedingHelper.KidsLabel(kidsCount.Value)} — extra feed";
+        else if (kidsCount == 1)
+            note = "single kid";
+
+        return new BreedingRationRowViewModel
+        {
+            Tag = g.Tag,
+            Name = g.Name,
+            Stage = stage,
+            MixKgPerDay = mix,
+            FodderKgPerDay = fodder,
+            DailyCost = dailyCost,
+            Note = note
         };
     }
 

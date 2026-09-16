@@ -18,6 +18,7 @@ public static class FarmTabs
     public const string Feed = "feed";
     public const string Milk = "milk";
     public const string Finance = "finance";
+    public const string Reports = "reports";
     public const string Vaccines = "vaccines";
     public const string Settings = "settings";
 
@@ -29,6 +30,7 @@ public static class FarmTabs
         (Feed, "Feed & Cost"),
         (Milk, "Milk"),
         (Finance, "Finance"),
+        (Reports, "Reports"),
         (Vaccines, "Vaccines"),
         (Search, "Search"),
         (Settings, "Settings")

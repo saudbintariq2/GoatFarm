@@ -37,11 +37,21 @@ public class BackupService : Application.Interfaces.IBackupService
             milkProd = await _context.MilkProductions.AsNoTracking().ToListAsync(cancellationToken),
             milkSales = await _context.MilkSales.AsNoTracking().ToListAsync(cancellationToken),
             milkWastes = await _context.MilkWastes.AsNoTracking().ToListAsync(cancellationToken),
+            employees = await _context.Employees.AsNoTracking().ToListAsync(cancellationToken),
+            breedingEmptyLogs = await _context.BreedingEmptyLogs.AsNoTracking().ToListAsync(cancellationToken),
+            mixRecipe = await GetMixRecipeExportAsync(cancellationToken),
             lookupSettings = await _context.AppSettings.AsNoTracking()
                 .Where(s => s.Key.StartsWith("Lookup."))
                 .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken),
             _savedAt = DateTime.UtcNow
         };
+    }
+
+    private async Task<object?> GetMixRecipeExportAsync(CancellationToken cancellationToken)
+    {
+        var setting = await _context.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == Domain.Constants.AppSettingKeys.MixRecipe, cancellationToken);
+        return setting?.Value;
     }
 
     public async Task ImportAsync(string json, CancellationToken cancellationToken = default)

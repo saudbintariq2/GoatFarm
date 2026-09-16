@@ -34,6 +34,7 @@ public static class DatabaseBootstrap
 
             logger.LogInformation("Seeding default configuration (if not already present)...");
             await DbSeeder.SeedAsync(context, cancellationToken);
+            await FeedPlanMigrator.MigrateAsync(context, cancellationToken);
 
             var roleManager = provider.GetRequiredService<RoleManager<IdentityRole>>();
             foreach (var role in FarmRoles.All)

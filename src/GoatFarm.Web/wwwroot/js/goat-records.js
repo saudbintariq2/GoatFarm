@@ -534,9 +534,8 @@ const GoatRecords = (() => {
         await onSave();
       };
     });
-    document.querySelectorAll('[data-ration]').forEach(inp => { inp.onchange = onSave; });
-    const med = document.getElementById('medIn');
-    if (med) med.onchange = onSave;
+    document.querySelectorAll('[data-mix]').forEach(inp => { inp.onchange = () => onSave(inp); });
+    document.querySelectorAll('[data-plan]').forEach(inp => { inp.onchange = () => onSave(inp); });
   }
 
   function initFeed() {
@@ -563,16 +562,26 @@ const GoatRecords = (() => {
 
     document.getElementById('feedMonth')?.addEventListener('change', () => reloadFeed());
 
-    const savePlan = async () => {
-      const statusKey = document.getElementById('planGroup').value;
-      const rations = {};
-      document.querySelectorAll('[data-ration]').forEach(inp => { rations[inp.dataset.ration] = +inp.value || 0; });
+    const saveMixRecipe = async () => {
+      const recipe = {};
+      document.querySelectorAll('[data-mix]').forEach(inp => { recipe[inp.dataset.mix] = +inp.value || 0; });
+      await api('/Feed/UpdateMixRecipe', { method: 'POST', body: JSON.stringify({ recipe }) });
+      await reloadFeed();
+    };
+
+    const savePlanField = async (inp) => {
+      const statusKey = inp.dataset.plan;
+      const fld = inp.dataset.fld;
+      const row = document.querySelector(`[data-plan="${statusKey}"][data-fld="mix"]`);
+      const fodder = document.querySelector(`[data-plan="${statusKey}"][data-fld="fodder"]`);
+      const med = document.querySelector(`[data-plan="${statusKey}"][data-fld="med"]`);
       await api('/Feed/UpdatePlan', {
         method: 'POST',
         body: JSON.stringify({
           statusKey,
-          medicineCostPerGoatPerMonth: +document.getElementById('medIn').value || 0,
-          rations
+          mixKgPerDay: +(row?.value || 0),
+          fodderKgPerDay: +(fodder?.value || 0),
+          medicineCostPerGoatPerMonth: +(med?.value || 0)
         })
       });
       await reloadFeed();
@@ -610,20 +619,32 @@ const GoatRecords = (() => {
     }
 
     async function reloadFeed() {
-      const status = document.getElementById('planGroup')?.value;
       const month = feedMonth();
-      const data = await api('/Feed/GetData?status=' + encodeURIComponent(status || '') + '&month=' + encodeURIComponent(month));
+      const data = await api('/Feed/GetData?month=' + encodeURIComponent(month));
       document.getElementById('grandMonth').textContent = rs(data.grandMonthly);
       document.getElementById('grandDay').textContent = rs(data.grandDaily);
       document.getElementById('grandHead').textContent = 'for ' + data.totalGoats + ' goats';
+      const fodderEl = document.getElementById('grandFodder');
+      if (fodderEl) fodderEl.textContent = '+ ' + Math.round(data.fodderKgPerDayTotal || 0) + ' kg green fodder / day';
       document.getElementById('feedBoughtMonth').textContent = rs(data.feedBoughtMonthTotal);
       document.getElementById('feedBoughtKg').textContent = (data.feedBoughtKgTotal || 0).toFixed(1) + ' kg total';
 
-      document.getElementById('priceGrid').innerHTML = data.prices.map(p =>
+      document.getElementById('priceGrid').innerHTML = (data.mixPrices || []).map(p =>
         `<div class="price-row"><label>${p.displayName} <span class="del feed-del" data-delfeed="${p.feedType}" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
           <input type="number" min="0" data-price="${p.feedType}" value="${p.pricePerKg}"><span class="suf">/ kg</span></div></div>`).join('');
 
-      const feedOpts = data.prices.map(p => `<option value="${p.feedType}">${p.displayName}</option>`).join('');
+      const mixList = document.getElementById('mixList');
+      if (mixList) {
+        mixList.innerHTML = (data.mixRecipe || []).map(m =>
+          `<div class="ration-row"><div class="rn">${m.displayName}${m.percent ? ` <span class="breed"> · ${m.percent}%</span>` : ''}</div>
+            <div class="rin"><input type="number" min="0" step="0.5" data-mix="${m.feedType}" value="${m.kgInBatch}"><span class="u">kg</span></div>
+            <div class="rcost">${rs(m.batchCost)}</div></div>`).join('');
+        document.getElementById('mixTotalKg').textContent = (data.mixTotalKg || 0).toFixed(1) + ' kg';
+        document.getElementById('mixBatchCost').textContent = rs(data.mixBatchCost || 0);
+        document.getElementById('mixCostPerKg').textContent = rs(data.mixCostPerKg || 0);
+      }
+
+      const feedOpts = (data.allPrices || data.mixPrices || []).map(p => `<option value="${p.feedType}">${p.displayName}</option>`).join('');
       const fbFeed = document.getElementById('fb-feed');
       const curFeed = fbFeed?.value;
       if (fbFeed) {
@@ -631,32 +652,35 @@ const GoatRecords = (() => {
         if ([...fbFeed.options].some(o => o.value === curFeed)) fbFeed.value = curFeed;
       }
 
-      const plan = data.currentPlan;
-      document.getElementById('medIn').value = plan.medicineCostPerGoatPerMonth;
-      document.getElementById('rationList').innerHTML = plan.items.map(item =>
-        `<div class="ration-row"><div class="rn">${item.displayName}</div>
-          <div class="rin"><input type="number" min="0" data-ration="${item.feedType}" value="${item.gramsPerDay}"><span class="u">g/day</span></div>
-          <div class="rcost">${rs(item.dailyCost)}/day</div></div>`).join('');
-      document.getElementById('planResult').innerHTML =
-        `<div class="r"><div class="v">${plan.goatCount}</div><div class="k">goats in this group</div></div>
-         <div class="r"><div class="v">${rs(plan.dailyFeedCost * plan.goatCount)}</div><div class="k">feed cost per day</div></div>
-         <div class="r"><div class="v">${rs(plan.dailyFeedCost * 30 * plan.goatCount + plan.medicineCostPerGoatPerMonth * plan.goatCount)}</div><div class="k">total per month</div></div>`;
+      const gp = document.getElementById('groupPlanRows');
+      if (gp) {
+        gp.innerHTML = (data.groupPlans || []).map(row =>
+          `<tr><td><span class="chip ${row.statusCssClass}">${row.statusDisplay}</span></td>
+            <td class="num-cell">${row.goatCount}</td>
+            <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="${row.statusKey}" data-fld="mix" value="${row.mixKgPerDay}"
+              style="width:74px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><input type="number" min="0" step="0.5" data-plan="${row.statusKey}" data-fld="fodder" value="${row.fodderKgPerDay}"
+              style="width:74px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><input type="number" min="0" data-plan="${row.statusKey}" data-fld="med" value="${row.medicineCostPerGoatPerMonth}"
+              style="width:80px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell" style="color:var(--green-dark);font-weight:700">${rs(row.monthlyTotal)}</td></tr>`).join('');
+      }
 
-      document.getElementById('summaryRows').innerHTML = data.summary.map(row =>
-        `<tr><td><span class="chip ${row.statusCssClass}">${row.statusDisplay}</span></td>
-          <td class="num-cell">${row.goatCount}</td><td class="num-cell">${rs(row.feedMonthly)}</td>
-          <td class="num-cell hide-sm">${rs(row.medicineMonthly)}</td>
-          <td class="num-cell" style="color:var(--green-dark)">${rs(row.totalMonthly)}</td></tr>`).join('') +
-        `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
-          <td class="num-cell" style="font-weight:800">${data.totalGoats}</td>
-          <td class="num-cell" style="font-weight:800">${rs(data.summary.reduce((s,r)=>s+r.feedMonthly,0))}</td>
-          <td class="num-cell hide-sm" style="font-weight:800">${rs(data.summary.reduce((s,r)=>s+r.medicineMonthly,0))}</td>
-          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(data.grandMonthly)}</td></tr>`;
+      const cc = document.getElementById('catCostRows');
+      if (cc) {
+        cc.innerHTML = (data.categoryCosts || []).map(row =>
+          `<tr><td><span class="chip ${row.statusCssClass}">${row.statusDisplay}</span></td>
+            <td class="num-cell">${row.goatCount}</td><td class="num-cell hide-sm">${(+row.mixKgPerDay).toFixed(1)}</td>
+            <td class="num-cell">${rs(row.dailyCost)}</td><td class="num-cell" style="color:var(--green-dark)">${rs(row.monthlyCost)}</td>
+            <td class="num-cell hide-sm"><span class="breed">${row.sharePercent}%</span></td>
+            <td class="num-cell hide-sm">${(+row.fodderKgPerDay).toFixed(1)} kg</td></tr>`).join('');
+      }
 
-      document.getElementById('buyRows').innerHTML = data.buyingList.map(b =>
-        `<tr><td>${b.displayName}</td><td class="num-cell">${b.kgPerDay.toFixed(1)}</td>
-          <td class="num-cell hide-sm">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
-          <td class="num-cell" style="color:var(--green-dark)">${rs(b.costPerMonth)}</td></tr>`).join('');
+      document.getElementById('buyRows').innerHTML = (data.buyingList || []).map(b =>
+        `<tr><td>${b.displayName}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : ''}</td>
+          <td class="num-cell hide-sm">${b.kgPerDay.toFixed(1)}</td>
+          <td class="num-cell">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
+          <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>' : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
 
       document.getElementById('buyLogRows').innerHTML = (data.feedPurchases?.length ? data.feedPurchases.map(b =>
         `<tr class="feed-buy-row" data-id="${b.id}" data-date="${b.dateDisplay}" data-feed="${b.feedType}"
@@ -671,7 +695,11 @@ const GoatRecords = (() => {
         row.addEventListener('click', () => loadFeedBuyForEdit(row));
       });
 
-      bindFeedInputs(savePlan);
+      bindFeedInputs(async (inp) => {
+        if (inp?.dataset?.mix) await saveMixRecipe();
+        else if (inp?.dataset?.plan) await savePlanField(inp);
+        else await reloadFeed();
+      });
       bindFeedDeleteButtons();
       renderStock(data.stock);
     }
@@ -765,17 +793,19 @@ const GoatRecords = (() => {
       flashStoredToast();
     });
 
-    document.getElementById('planGroup')?.addEventListener('change', reloadFeed);
     document.querySelectorAll('#buyLogRows tr.feed-buy-row').forEach(row => {
       row.addEventListener('click', () => loadFeedBuyForEdit(row));
     });
 
     if (!FarmPerms.can('feed', 'edit')) {
-      FarmPerms.readonlyInputs('[data-price], [data-ration], [data-stock], #medIn, #planGroup, #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price');
+      FarmPerms.readonlyInputs('[data-price], [data-mix], [data-plan], [data-stock], #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price');
       FarmPerms.hide('addFeedType');
       FarmPerms.hide('addFeedBuy');
     } else {
-      bindFeedInputs(async () => { await savePlan(); });
+      bindFeedInputs(async (inp) => {
+        if (inp?.dataset?.mix) await saveMixRecipe();
+        else if (inp?.dataset?.plan) await savePlanField(inp);
+      });
       bindFeedDeleteButtons();
       bindStockInputs();
     }
@@ -1185,6 +1215,7 @@ const GoatRecords = (() => {
     let editingExpenseId = null;
     let editingOwnerId = null;
     let editingRecurId = null;
+    let editingEmpId = null;
 
     function financeUrl(date) {
       const month = date ? date.slice(0, 7) : (document.getElementById('finMonth')?.value || '');
@@ -1487,6 +1518,85 @@ const GoatRecords = (() => {
       }
     });
 
+    function resetEmpForm() {
+      editingEmpId = null;
+      document.getElementById('empFormTitle').textContent = 'Employees & salaries';
+      document.getElementById('addEmp').textContent = '+ Add';
+      document.getElementById('emp-name').value = '';
+      document.getElementById('emp-role').value = '';
+      document.getElementById('emp-salary').value = '';
+      document.querySelectorAll('#empRows tr.fin-emp-row.editing').forEach(r => r.classList.remove('editing'));
+      document.getElementById('cancelEmpBtn').style.display = 'none';
+      document.getElementById('deleteEmpBtn').style.display = 'none';
+    }
+
+    function loadEmpForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingEmpId = +row.dataset.id;
+      document.getElementById('empFormTitle').textContent = 'Edit employee';
+      document.getElementById('addEmp').textContent = 'Save';
+      document.getElementById('emp-name').value = row.dataset.name || '';
+      document.getElementById('emp-role').value = row.dataset.role || '';
+      document.getElementById('emp-salary').value = row.dataset.salary || '';
+      document.querySelectorAll('#empRows tr.fin-emp-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      document.getElementById('cancelEmpBtn').style.display = '';
+      document.getElementById('deleteEmpBtn').style.display = '';
+    }
+
+    document.getElementById('cancelEmpBtn')?.addEventListener('click', resetEmpForm);
+    document.getElementById('deleteEmpBtn')?.addEventListener('click', async () => {
+      if (!editingEmpId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Remove this employee?');
+      if (!confirmed) return;
+      await api('/Finance/DeleteEmployee?id=' + editingEmpId, { method: 'DELETE' });
+      reloadFinanceWithToast('Employee removed');
+    });
+
+    document.getElementById('addEmp')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingEmpId)) return;
+      const name = document.getElementById('emp-name').value.trim();
+      const monthlySalary = +document.getElementById('emp-salary').value || 0;
+      if (!name) { await showModal('Enter employee name'); return; }
+      const payload = {
+        name,
+        role: document.getElementById('emp-role').value.trim() || null,
+        monthlySalary
+      };
+      if (editingEmpId) {
+        await api('/Finance/UpdateEmployee?id=' + editingEmpId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Employee updated');
+      } else {
+        await api('/Finance/AddEmployee', { method: 'POST', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Employee added');
+      }
+    });
+
+    document.querySelectorAll('[data-empsal]').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        if (!FarmPerms.can('finance', 'edit')) return;
+        const id = inp.dataset.empsal;
+        const row = document.querySelector(`#empRows tr.fin-emp-row[data-id="${id}"]`);
+        if (!row) return;
+        await api('/Finance/UpdateEmployee?id=' + id, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: row.dataset.name,
+            role: row.dataset.role || null,
+            monthlySalary: +inp.value || 0
+          })
+        });
+        reloadFinanceWithToast('Salary updated');
+      });
+    });
+
+    document.querySelectorAll('#empRows tr.fin-emp-row').forEach(row => {
+      row.addEventListener('click', e => {
+        if (e.target.matches('[data-empsal]')) return;
+        loadEmpForEdit(row);
+      });
+    });
+
     document.getElementById('addRecur')?.addEventListener('click', async () => {
       if (!FarmPerms.guardAddEdit('finance', !!editingRecurId)) return;
       const name = document.getElementById('rc-name').value.trim();
@@ -1527,7 +1637,8 @@ const GoatRecords = (() => {
       ['addIncome', 'deleteIncomeBtn', '#incomeRows tr.fin-income-row'],
       ['addExpense', 'deleteExpenseBtn', '#expenseRows tr.fin-expense-row'],
       ['addOwner', 'deleteOwnerBtn', '#ownerRows tr.fin-owner-row'],
-      ['addRecur', 'deleteRecurBtn', '#recurRows tr.fin-recur-row']
+      ['addRecur', 'deleteRecurBtn', '#recurRows tr.fin-recur-row'],
+      ['addEmp', 'deleteEmpBtn', '#empRows tr.fin-emp-row']
     ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
       FarmPerms.applyForm('finance', { addBtnId, deleteBtnId, rowSelector });
     });
@@ -1842,6 +1953,27 @@ const GoatRecords = (() => {
       reloadHealthWithToast('Reminder window updated');
     });
 
+    document.getElementById('giveVacc')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      const vaccineId = +document.getElementById('gv-vacc')?.value;
+      const target = document.getElementById('gv-group')?.value || 'all';
+      const date = document.getElementById('gv-date')?.value || new Date().toISOString().slice(0, 10);
+      if (!vaccineId) { await showModal('Select a vaccine'); return; }
+      const result = await api('/Vaccine/GiveToGroup', {
+        method: 'POST',
+        body: JSON.stringify({ vaccineId, target, date })
+      });
+      const info = document.getElementById('gv-info');
+      if (info) {
+        if (result.count > 0) {
+          info.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ Recorded for ${result.count} goat(s).</span>`;
+        } else {
+          info.textContent = 'No goats in that group.';
+        }
+      }
+      reloadHealthWithToast('Vaccination recorded');
+    });
+
     document.querySelectorAll('[data-dovacc]').forEach(b => b.onclick = async () => {
       if (!FarmPerms.can('vaccines', 'edit')) return;
       await api('/Vaccine/MarkDone?vaccineId=' + b.dataset.dovacc, { method: 'POST' });
@@ -1950,12 +2082,16 @@ const GoatRecords = (() => {
       const plan = data.feedPlan;
       let feedHtml = '<div class="search-empty">No feed plan set for this status.</div>';
       if (plan) {
-        const rationRows = (plan.items || []).filter(i => i.gramsPerDay > 0).map(i =>
-          `<tr><td>${esc(i.displayName)}</td><td class="num-cell">${i.gramsPerDay} g</td><td class="num-cell hide-sm">${rs(i.dailyCost)}</td></tr>`
-        ).join('');
+        const rationRows = [];
+        if ((plan.mixKgPerDay || 0) > 0) {
+          rationRows.push(`<tr><td>Mix (concentrate)</td><td class="num-cell">${(+plan.mixKgPerDay).toFixed(2)} kg</td><td class="num-cell hide-sm">${rs(plan.dailyFeedCost)}</td></tr>`);
+        }
+        if ((plan.fodderKgPerDay || 0) > 0) {
+          rationRows.push(`<tr><td>Green fodder (own)</td><td class="num-cell">${(+plan.fodderKgPerDay).toFixed(1)} kg</td><td class="num-cell hide-sm"><span class="breed">not costed</span></td></tr>`);
+        }
         feedHtml = `<div class="note" style="margin-bottom:12px">Based on the <b>${esc(plan.statusDisplay)}</b> feed plan (farm-level ration per goat).</div>
           <table class="tbl"><thead><tr><th>Feed</th><th class="num-cell">Daily</th><th class="num-cell hide-sm">Cost/day</th></tr></thead><tbody>
-          ${rationRows || '<tr><td colspan="3" class="search-empty">No rations configured.</td></tr>'}
+          ${rationRows.join('') || '<tr><td colspan="3" class="search-empty">No rations configured.</td></tr>'}
           </tbody></table>
           <div style="margin-top:12px;font-size:14px">
             <span><b>Daily feed:</b> ${rs(plan.dailyFeedCost)}</span> ·
@@ -2348,5 +2484,55 @@ const GoatRecords = (() => {
     });
   }
 
-  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
+  function initReports() {
+    const reload = () => {
+      const period = document.getElementById('rep-period')?.value || 'month';
+      const params = new URLSearchParams({ period });
+      if (period === 'custom') {
+        params.set('from', document.getElementById('rep-from')?.value || '');
+        params.set('to', document.getElementById('rep-to')?.value || '');
+      }
+      location.href = '/Reports?' + params.toString();
+    };
+    document.getElementById('rep-period')?.addEventListener('change', e => {
+      const custom = document.getElementById('rep-custom');
+      if (custom) custom.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+      if (e.target.value !== 'custom') reload();
+    });
+    document.getElementById('rep-from')?.addEventListener('change', reload);
+    document.getElementById('rep-to')?.addEventListener('change', reload);
+  }
+
+  function initBackupButtons() {
+    document.getElementById('exportBtn')?.addEventListener('click', () => {
+      window.location.href = '/Dashboard/Export';
+    });
+    document.getElementById('importBtn')?.addEventListener('click', () => {
+      document.getElementById('importFile')?.click();
+    });
+    document.getElementById('importFile')?.addEventListener('change', async e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const confirmed = await showConfirm('Restore from this backup? It will replace everything currently in the app.');
+      if (!confirmed) { e.target.value = ''; return; }
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        const res = await fetch('/Dashboard/Import', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.error) await showModal(data.error);
+        else {
+          sessionStorage.setItem('goatToast', 'Backup restored successfully');
+          location.href = '/Dashboard';
+        }
+      } catch {
+        await showModal('Could not read this file — make sure it is a Goat Records backup (.json).');
+      }
+      e.target.value = '';
+    });
+  }
+
+  initBackupButtons();
+
+  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
 })();

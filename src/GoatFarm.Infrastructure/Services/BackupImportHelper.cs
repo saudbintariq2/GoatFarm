@@ -43,6 +43,8 @@ internal static class BackupImportHelper
         context.MilkWastes.RemoveRange(await context.MilkWastes.ToListAsync(cancellationToken));
         context.Vaccines.RemoveRange(await context.Vaccines.ToListAsync(cancellationToken));
         context.Reminders.RemoveRange(await context.Reminders.ToListAsync(cancellationToken));
+        context.BreedingEmptyLogs.RemoveRange(await context.BreedingEmptyLogs.ToListAsync(cancellationToken));
+        context.Employees.RemoveRange(await context.Employees.ToListAsync(cancellationToken));
         await context.SaveChangesAsync(cancellationToken);
     }
 
@@ -78,6 +80,16 @@ internal static class BackupImportHelper
         ImportSimpleList(root, "milkProd", ImportMilkProduction);
         ImportSimpleList(root, "milkSales", ImportMilkSale);
         ImportSimpleList(root, "reminders", ImportReminderV19);
+        ImportSimpleList(root, "employees", ImportEmployee);
+
+        if (root.TryGetProperty("mixRecipe", out var mixRecipe))
+        {
+            context.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.MixRecipe,
+                Value = mixRecipe.GetRawText()
+            });
+        }
 
         await ImportLookupListsV19Async(context, root, cancellationToken);
         await ImportRemindDaysAsync(context, root, cancellationToken);
@@ -122,6 +134,8 @@ internal static class BackupImportHelper
                 var plan = new FeedPlan
                 {
                     StatusKey = status,
+                    MixKgPerDay = GetDecimal(planEl, "mixKgPerDay", "MixKgPerDay"),
+                    FodderKgPerDay = GetDecimal(planEl, "fodderKgPerDay", "FodderKgPerDay"),
                     MedicineCostPerGoatPerMonth = GetDecimal(planEl, "medicineCostPerGoatPerMonth", "MedicineCostPerGoatPerMonth")
                 };
                 if (planEl.TryGetProperty("items", out var items) || planEl.TryGetProperty("Items", out items))
@@ -175,6 +189,7 @@ internal static class BackupImportHelper
         ImportMvcCollection(root, "expenses", ImportExpense);
         ImportMvcCollection(root, "ownerInv", ImportOwnerInvestment);
         ImportMvcCollection(root, "recurringCosts", ImportRecurringCost);
+        ImportMvcCollection(root, "employees", ImportEmployee);
         ImportMvcCollection(root, "vaccineBuys", ImportVaccinePurchase);
         ImportMvcCollection(root, "milkProd", ImportMilkProduction);
         ImportMvcCollection(root, "milkSales", ImportMilkSale);
@@ -206,6 +221,15 @@ internal static class BackupImportHelper
                     VaccinationDate = ParseDateRequired(entry, "date", "VaccinationDate", "vaccinationDate")
                 });
             }
+        }
+
+        if (root.TryGetProperty("mixRecipe", out var mixRecipe))
+        {
+            context.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.MixRecipe,
+                Value = mixRecipe.GetRawText()
+            });
         }
 
         await ImportLookupSettingsAsync(context, root, cancellationToken);
@@ -300,6 +324,8 @@ internal static class BackupImportHelper
             var plan = new FeedPlan
             {
                 StatusKey = status,
+                MixKgPerDay = GetDecimal(statusProp.Value, "mix", "Mix"),
+                FodderKgPerDay = GetDecimal(statusProp.Value, "fodder", "Fodder"),
                 MedicineCostPerGoatPerMonth = GetDecimal(statusProp.Value, "med", "Med")
             };
 
@@ -499,6 +525,13 @@ internal static class BackupImportHelper
         Name = GetString(el, "name", "Name") ?? "",
         Amount = GetDecimal(el, "amount", "Amount"),
         Period = ParseRecurringPeriod(GetString(el, "period", "Period"))
+    };
+
+    private static Employee ImportEmployee(JsonElement el) => new()
+    {
+        Name = GetString(el, "name", "Name") ?? "",
+        Role = GetString(el, "role", "Role"),
+        MonthlySalary = GetDecimal(el, "salary", "Salary", "monthlySalary", "MonthlySalary")
     };
 
     private static VaccinePurchase ImportVaccinePurchase(JsonElement el) => new()

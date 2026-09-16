@@ -121,7 +121,8 @@ public class VaccineService : IVaccineService
             History = history,
             VaccinePurchases = purchases,
             VaccineBoughtMonthTotal = purchases.Sum(p => p.Amount),
-            PurchaseMonth = month
+            PurchaseMonth = month,
+            GoatGroups = await _context.GoatGroups.AsNoTracking().OrderBy(g => g.Name).Select(g => g.Name).ToListAsync(cancellationToken)
         };
     }
 
@@ -180,6 +181,26 @@ public class VaccineService : IVaccineService
         _context.Vaccines.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<int> GiveVaccineToGroupAsync(GiveVaccineViewModel model, CancellationToken cancellationToken = default)
+    {
+        var vaccine = await _context.Vaccines.FindAsync([model.VaccineId], cancellationToken);
+        if (vaccine is null) return 0;
+
+        var goats = await _context.Goats.AsNoTracking().Include(g => g.Group).ToListAsync(cancellationToken);
+        var selected = ResolveGoatsForTarget(goats, model.Target).ToList();
+        foreach (var g in selected)
+        {
+            _context.VaccinationHistories.Add(new VaccinationHistory
+            {
+                GoatId = g.Id,
+                VaccineId = model.VaccineId,
+                VaccinationDate = model.Date
+            });
+        }
+        await _context.SaveChangesAsync(cancellationToken);
+        return selected.Count;
     }
 
     public async Task MarkVaccineDoneAsync(int vaccineId, CancellationToken cancellationToken = default)
@@ -364,5 +385,25 @@ public class VaccineService : IVaccineService
         var target = date.ToDateTime(TimeOnly.MinValue);
         var now = DateTime.Today;
         return (int)Math.Ceiling((target - now).TotalDays);
+    }
+
+    private static IEnumerable<Goat> ResolveGoatsForTarget(IReadOnlyList<Goat> goats, string target)
+    {
+        if (string.Equals(target, "all", StringComparison.OrdinalIgnoreCase))
+            return goats;
+
+        if (target.StartsWith("st:", StringComparison.OrdinalIgnoreCase))
+        {
+            var status = DisplayHelper.ParseStatusKey(target[3..]);
+            return goats.Where(g => g.Status == status);
+        }
+
+        if (target.StartsWith("grp:", StringComparison.OrdinalIgnoreCase))
+        {
+            var groupName = target[4..];
+            return goats.Where(g => g.Group?.Name == groupName);
+        }
+
+        return [];
     }
 }

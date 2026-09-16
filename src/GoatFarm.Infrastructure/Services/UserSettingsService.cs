@@ -495,7 +495,7 @@ public class UserSettingsService : IUserSettingsService
                 {
                     FarmRoles.Admin => true,
                     FarmRoles.Manager => tab != FarmTabs.Settings,
-                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Herd or FarmTabs.Breeding or FarmTabs.Search or FarmTabs.Feed or FarmTabs.Milk or FarmTabs.Vaccines,
+                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Herd or FarmTabs.Breeding or FarmTabs.Search or FarmTabs.Feed or FarmTabs.Milk or FarmTabs.Vaccines or FarmTabs.Reports,
                     _ => false
                 };
                 tabs[tab] = hasTab ? TabPermissionViewModel.FullAccess : TabPermissionViewModel.NoAccess;

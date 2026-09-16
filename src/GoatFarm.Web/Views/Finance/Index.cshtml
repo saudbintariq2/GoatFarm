@@ -148,6 +148,46 @@
 </div>
 
 <div class="panel">
+    <div class="panel-head"><h2 id="empFormTitle">Employees &amp; salaries</h2><span class="sub">counted in running costs every month</span></div>
+    <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0">Add each worker and their monthly salary. Edit a salary any
+            time — just type the new number. The total is added to your running costs automatically each month.</div>
+        <table class="tbl"><thead><tr><th>Name</th><th class="hide-sm">Role</th>
+            <th class="num-cell">Monthly salary</th></tr></thead>
+            <tbody id="empRows">
+            @foreach (var e in Model.Employees)
+            {
+                <tr class="fin-row fin-emp-row" data-id="@e.Id" data-name="@e.Name" data-role="@e.Role"
+                    data-salary="@e.MonthlySalary.ToString(CultureInfo.InvariantCulture)">
+                    <td><b>@e.Name</b></td>
+                    <td class="hide-sm"><span class="breed">@(e.Role ?? "—")</span></td>
+                    <td class="num-cell">
+                        <span class="pre" style="color:var(--ink-soft);font-size:12px">Rs</span>
+                        <input type="number" min="0" data-empsal="@e.Id" value="@e.MonthlySalary.ToString("0.##", CultureInfo.InvariantCulture)"
+                            style="width:96px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums">
+                    </td>
+                </tr>
+            }
+            @if (!Model.Employees.Any()) {<tr class="emp-empty-row"><td colspan="3" class="empty">No staff added yet.</td></tr>}
+            <tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL / MONTH</td><td class="hide-sm"></td>
+                <td class="num-cell" style="font-weight:800;color:#8a261c" id="empTotal">@DisplayHelper.FormatRs(Model.StaffSalaryMonthly)</td></tr>
+            </tbody></table>
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.4fr 1.2fr 1fr">
+            <div class="field"><label>Name</label><input id="emp-name" placeholder="e.g. Aslam"></div>
+            <div class="field"><label>Role (optional)</label><input id="emp-role" placeholder="e.g. Herd worker"></div>
+            <div class="field"><label>Monthly salary (Rs)</label><input type="number" id="emp-salary" min="0"></div>
+        </div>
+        <div class="goat-form-actions">
+            <div class="goat-form-actions-left">
+                <button type="button" class="btn btn-green" id="addEmp">+ Add</button>
+                <button type="button" class="btn btn-ghost" id="cancelEmpBtn" style="display:none">Cancel</button>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteEmpBtn" style="display:none">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
     <div class="panel-head"><h2 id="recurFormTitle">Fixed &amp; recurring costs</h2><span class="sub">rent, salaries — spread into monthly running costs</span></div>
     <div class="panel-body">
         <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Period</th>
@@ -194,7 +234,10 @@
             <tr><td><span class="chip chip-exp">Medicine (plan)</span><div class="name">from feed plan estimate</div></td>
                 <td class="hide-sm"><span class="breed">every month</span></td>
                 <td class="num-cell">@DisplayHelper.FormatRs(Model.MedicineMonthly)</td></tr>
-            <tr><td><span class="chip chip-exp">Recurring costs</span><div class="name">rent, salaries, etc.</div></td>
+            <tr><td><span class="chip chip-exp">Staff salaries</span><div class="name">@Model.Employees.Count staff · from roster</div></td>
+                <td class="hide-sm"><span class="breed">every month</span></td>
+                <td class="num-cell" id="expStaffSal">@DisplayHelper.FormatRs(Model.StaffSalaryMonthly)</td></tr>
+            <tr><td><span class="chip chip-exp">Recurring costs</span><div class="name">rent, fixed costs, etc.</div></td>
                 <td class="hide-sm"><span class="breed">every month</span></td>
                 <td class="num-cell">@DisplayHelper.FormatRs(Model.RecurringMonthly)</td></tr>
             <tr><td><span class="chip chip-exp">Vaccines bought</span><div class="name">auto from Vaccines tab</div></td>

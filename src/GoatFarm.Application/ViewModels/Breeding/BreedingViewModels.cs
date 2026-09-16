@@ -30,13 +30,39 @@ public class BreedingExpectingRowViewModel
     public string DueColor { get; set; } = string.Empty;
 }
 
+public class BreedingEmptyRowViewModel
+{
+    public string Tag { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string? MatedDate { get; set; }
+    public string? BuckTag { get; set; }
+    public string ScanDate { get; set; } = string.Empty;
+    public int TimesEmpty { get; set; }
+    public string StatusDisplay { get; set; } = string.Empty;
+    public string StatusCssClass { get; set; } = string.Empty;
+}
+
+public class BreedingRationRowViewModel
+{
+    public string Tag { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string Stage { get; set; } = string.Empty;
+    public decimal MixKgPerDay { get; set; }
+    public decimal FodderKgPerDay { get; set; }
+    public decimal DailyCost { get; set; }
+    public string Note { get; set; } = string.Empty;
+}
+
 public class BreedingPageViewModel
 {
     public int PrepCount { get; set; }
     public int ExpectingCount { get; set; }
     public string NextDueText { get; set; } = "next due —";
+    public string EmptyRateText { get; set; } = "—";
     public IReadOnlyList<BreedingPrepRowViewModel> PrepRows { get; set; } = [];
     public IReadOnlyList<BreedingExpectingRowViewModel> ExpectingRows { get; set; } = [];
+    public IReadOnlyList<BreedingEmptyRowViewModel> EmptyRows { get; set; } = [];
+    public IReadOnlyList<BreedingRationRowViewModel> RationRows { get; set; } = [];
 }
 
 public class RecordPrepViewModel

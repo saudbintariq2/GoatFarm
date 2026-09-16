@@ -69,6 +69,14 @@ public class VaccineController : Controller
         return Ok(new { success = true });
     }
 
+    [HttpPost]
+    public async Task<IActionResult> GiveToGroup([FromBody] GiveVaccineViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var count = await _vaccineService.GiveVaccineToGroupAsync(model, cancellationToken);
+        return Json(new { success = true, count });
+    }
+
     [HttpPut]
     public async Task<IActionResult> UpdateHistoryBatch([FromBody] UpdateVaccinationBatchViewModel model, CancellationToken cancellationToken)
     {

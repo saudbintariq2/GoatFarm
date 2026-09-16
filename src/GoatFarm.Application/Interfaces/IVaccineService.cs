@@ -9,6 +9,7 @@ public interface IVaccineService
     Task<VaccineViewModel?> UpdateVaccineAsync(int id, CreateVaccineViewModel model, CancellationToken cancellationToken = default);
     Task<bool> DeleteVaccineAsync(int id, CancellationToken cancellationToken = default);
     Task MarkVaccineDoneAsync(int vaccineId, CancellationToken cancellationToken = default);
+    Task<int> GiveVaccineToGroupAsync(GiveVaccineViewModel model, CancellationToken cancellationToken = default);
     Task<bool> DeleteVaccinationBatchAsync(int vaccineId, DateOnly date, CancellationToken cancellationToken = default);
     Task<bool> UpdateVaccinationBatchAsync(UpdateVaccinationBatchViewModel model, CancellationToken cancellationToken = default);
     Task SetReminderWindowAsync(int days, CancellationToken cancellationToken = default);

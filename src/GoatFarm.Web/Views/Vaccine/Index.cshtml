@@ -47,6 +47,33 @@
 </div>
 
 <div class="panel">
+    <div class="panel-head"><h2>Give a vaccine</h2><span class="sub">record a vaccination for a whole group at once</span></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:1.4fr 1.4fr 1fr auto">
+            <div class="field"><label>Vaccine</label><select id="gv-vacc">
+                @foreach (var v in Model.Schedule){<option value="@v.Id">@v.Name</option>}
+            </select></div>
+            <div class="field"><label>Group</label><select id="gv-group">
+                <option value="all">All goats</option>
+                <option value="st:kid">Kids</option>
+                <option value="st:milking">Milking</option>
+                <option value="st:pregnant">Pregnant</option>
+                <option value="st:dry">Dry</option>
+                <option value="st:buck">Bucks</option>
+                <option value="st:sale">For sale</option>
+                @foreach (var g in Model.GoatGroups)
+                {
+                    <option value="grp:@g">@g</option>
+                }
+            </select></div>
+            <div class="field"><label>Date</label><input type="date" id="gv-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="giveVacc">Mark done</button></div>
+        </div>
+        <div class="rule" id="gv-info" style="margin-top:10px"></div>
+    </div>
+</div>
+
+<div class="panel">
     <div class="panel-head"><h2>Coming up</h2><span class="sub">a heads-up before it's overdue</span></div>
     <div class="panel-body"><div id="comingList">
         @if (Model.Upcoming.Any())

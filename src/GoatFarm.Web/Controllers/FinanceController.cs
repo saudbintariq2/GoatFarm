@@ -140,4 +140,26 @@ public class FinanceController : Controller
         var ok = await _financeService.DeleteRecurringCostAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound();
     }
+
+    [HttpPost]
+    public async Task<IActionResult> AddEmployee([FromBody] CreateEmployeeViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return Json(await _financeService.AddEmployeeAsync(model, cancellationToken));
+    }
+
+    [HttpPut]
+    public async Task<IActionResult> UpdateEmployee(int id, [FromBody] CreateEmployeeViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var result = await _financeService.UpdateEmployeeAsync(id, model, cancellationToken);
+        return result is null ? NotFound() : Json(result);
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteEmployee(int id, CancellationToken cancellationToken)
+    {
+        var ok = await _financeService.DeleteEmployeeAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
 }

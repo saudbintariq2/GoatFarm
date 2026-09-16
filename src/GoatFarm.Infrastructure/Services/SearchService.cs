@@ -16,11 +16,13 @@ public class SearchService : ISearchService
     private const string RemindDaysKey = "RemindDays";
     private readonly GoatFarmDbContext _context;
     private readonly IGoatService _goatService;
+    private readonly IFeedService _feedService;
 
-    public SearchService(GoatFarmDbContext context, IGoatService goatService)
+    public SearchService(GoatFarmDbContext context, IGoatService goatService, IFeedService feedService)
     {
         _context = context;
         _goatService = goatService;
+        _feedService = feedService;
     }
 
     public async Task<GoatProfileViewModel?> GetProfileByTagAsync(string tag, CancellationToken cancellationToken = default)
@@ -82,35 +84,21 @@ public class SearchService : ISearchService
 
     private async Task<FeedPlanViewModel?> BuildFeedPlanForStatusAsync(GoatStatus status, CancellationToken cancellationToken)
     {
-        var prices = await _context.FeedPrices.AsNoTracking()
-            .ToDictionaryAsync(p => p.FeedType, p => p.PricePerKg, cancellationToken);
-        var plan = await _context.FeedPlans.Include(p => p.Items).AsNoTracking()
+        var plan = await _context.FeedPlans.AsNoTracking()
             .FirstOrDefaultAsync(p => p.StatusKey == status, cancellationToken);
         if (plan is null)
             return null;
 
-        var items = FeedTypes.All.Select(f =>
-        {
-            var grams = plan.Items.FirstOrDefault(i => i.FeedType == f.Key)?.GramsPerDay ?? 0;
-            var price = prices.GetValueOrDefault(f.Key, 0);
-            return new FeedPlanItemViewModel
-            {
-                FeedType = f.Key,
-                DisplayName = f.Name,
-                GramsPerDay = grams,
-                DailyCost = grams / 1000m * price
-            };
-        }).ToList();
-
-        var dailyFeed = items.Sum(i => i.DailyCost);
+        var dailyFeed = _feedService.CalculateDailyFeedCost(plan.MixKgPerDay);
         var (text, _) = DisplayHelper.GetStatusDisplay(status);
 
         return new FeedPlanViewModel
         {
             StatusKey = DisplayHelper.StatusKey(status),
             StatusDisplay = text,
+            MixKgPerDay = plan.MixKgPerDay,
+            FodderKgPerDay = plan.FodderKgPerDay,
             MedicineCostPerGoatPerMonth = plan.MedicineCostPerGoatPerMonth,
-            Items = items,
             GoatCount = 1,
             DailyFeedCost = dailyFeed,
             DailyTotalCost = dailyFeed + plan.MedicineCostPerGoatPerMonth / 30m,

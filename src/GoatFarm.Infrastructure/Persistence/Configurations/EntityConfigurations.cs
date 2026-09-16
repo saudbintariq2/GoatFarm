@@ -56,6 +56,8 @@ public class FeedPlanConfiguration : IEntityTypeConfiguration<FeedPlan>
     {
         builder.ToTable("FeedPlans");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.MixKgPerDay).HasPrecision(18, 3);
+        builder.Property(x => x.FodderKgPerDay).HasPrecision(18, 3);
         builder.Property(x => x.MedicineCostPerGoatPerMonth).HasPrecision(18, 2);
         builder.HasIndex(x => x.StatusKey).IsUnique();
         builder.HasMany(x => x.Items)
@@ -245,5 +247,31 @@ public class AppSettingConfiguration : IEntityTypeConfiguration<AppSetting>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Key).IsRequired().HasMaxLength(100);
         builder.HasIndex(x => x.Key).IsUnique();
+    }
+}
+
+public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
+{
+    public void Configure(EntityTypeBuilder<Employee> builder)
+    {
+        builder.ToTable("Employees");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Role).HasMaxLength(200);
+        builder.Property(x => x.MonthlySalary).HasPrecision(18, 2);
+    }
+}
+
+public class BreedingEmptyLogConfiguration : IEntityTypeConfiguration<BreedingEmptyLog>
+{
+    public void Configure(EntityTypeBuilder<BreedingEmptyLog> builder)
+    {
+        builder.ToTable("BreedingEmptyLogs");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.BuckTag).HasMaxLength(50);
+        builder.HasOne(x => x.Goat)
+            .WithMany()
+            .HasForeignKey(x => x.GoatId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

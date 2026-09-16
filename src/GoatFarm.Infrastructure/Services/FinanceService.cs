@@ -83,9 +83,21 @@ public class FinanceService : IFinanceService
         var feedKg = _feedService.GetFeedPurchasedKg(month);
         var medM = _feedService.CalculateFarmMedicineMonthly();
         var recurM = GetRecurringMonthlyTotal();
+        var salaryM = GetStaffSalaryMonthlyTotal();
         var vaccBought = _vaccineService.GetVaccinePurchasedMonthly(month);
         var expManual = expenses.Sum(e => e.Amount);
-        var expTot = expManual + feedBought + medM + recurM + vaccBought;
+        var expTot = expManual + feedBought + medM + recurM + vaccBought + salaryM;
+
+        var employees = await _context.Employees.AsNoTracking()
+            .OrderBy(e => e.Name)
+            .Select(e => new EmployeeViewModel
+            {
+                Id = e.Id,
+                Name = e.Name,
+                Role = e.Role,
+                MonthlySalary = e.MonthlySalary
+            })
+            .ToListAsync(cancellationToken);
         var profit = incTot - expTot;
         var feedPlanBudget = _feedService.CalculateFarmFeedMonthly();
 
@@ -105,6 +117,7 @@ public class FinanceService : IFinanceService
             FeedBoughtKg = feedKg,
             MedicineMonthly = medM,
             RecurringMonthly = recurM,
+            StaffSalaryMonthly = salaryM,
             VaccineBoughtMonthly = vaccBought,
             ManualExpenseMonthly = expManual,
             MilkIncome = milkInc,
@@ -115,6 +128,7 @@ public class FinanceService : IFinanceService
             Incomes = incomes,
             Expenses = expenses,
             RecurringCosts = recurringCosts,
+            Employees = employees,
             OwnerInvestments = ownerInvestments,
             NewIncome = new CreateIncomeViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
             NewExpense = new CreateExpenseViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
@@ -305,6 +319,43 @@ public class FinanceService : IFinanceService
     public decimal GetRecurringMonthlyTotal() =>
         _context.RecurringCosts.AsNoTracking()
             .Sum(r => r.Period == RecurringCostPeriod.Year ? r.Amount / 12m : r.Amount);
+
+    public decimal GetStaffSalaryMonthlyTotal() =>
+        _context.Employees.AsNoTracking().Sum(e => e.MonthlySalary);
+
+    public async Task<EmployeeViewModel> AddEmployeeAsync(CreateEmployeeViewModel model, CancellationToken cancellationToken = default)
+    {
+        var entity = new Employee
+        {
+            Name = model.Name.Trim(),
+            Role = string.IsNullOrWhiteSpace(model.Role) ? null : model.Role.Trim(),
+            MonthlySalary = model.MonthlySalary
+        };
+        _context.Employees.Add(entity);
+        await _context.SaveChangesAsync(cancellationToken);
+        return new EmployeeViewModel { Id = entity.Id, Name = entity.Name, Role = entity.Role, MonthlySalary = entity.MonthlySalary };
+    }
+
+    public async Task<EmployeeViewModel?> UpdateEmployeeAsync(int id, CreateEmployeeViewModel model, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.Employees.FindAsync([id], cancellationToken);
+        if (entity is null) return null;
+        entity.Name = model.Name.Trim();
+        entity.Role = string.IsNullOrWhiteSpace(model.Role) ? null : model.Role.Trim();
+        entity.MonthlySalary = model.MonthlySalary;
+        entity.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return new EmployeeViewModel { Id = entity.Id, Name = entity.Name, Role = entity.Role, MonthlySalary = entity.MonthlySalary };
+    }
+
+    public async Task<bool> DeleteEmployeeAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _context.Employees.FindAsync([id], cancellationToken);
+        if (entity is null) return false;
+        _context.Employees.Remove(entity);
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
 
     private static RecurringCostViewModel MapRecurring(RecurringCost entity) => new()
     {

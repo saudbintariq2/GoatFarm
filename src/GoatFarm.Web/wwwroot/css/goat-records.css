@@ -259,6 +259,9 @@
   .fincard .v{font-size:23px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
   .fincard .k{font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:2px}
   .fincard .k .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+  .rep3{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .barcell{position:relative;min-width:120px}
+  .bar{height:8px;border-radius:4px;background:var(--green);min-width:4px}
 
   .duerow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .duerow:last-child{border-bottom:none}
@@ -332,6 +335,7 @@
     .ration-row{grid-template-columns:1fr 100px}.ration-row .rcost{display:none}
     .result{grid-template-columns:1fr}
     .fin3{grid-template-columns:1fr}
+    .rep3{grid-template-columns:1fr}
     .milk4{grid-template-columns:1fr 1fr}
     .dash-fin4{grid-template-columns:1fr}
     .pager{flex-direction:column;align-items:stretch}

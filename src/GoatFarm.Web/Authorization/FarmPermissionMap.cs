@@ -14,6 +14,7 @@ public static class FarmPermissionMap
             ["Feed"] = FarmTabs.Feed,
             ["Milk"] = FarmTabs.Milk,
             ["Finance"] = FarmTabs.Finance,
+            ["Reports"] = FarmTabs.Reports,
             ["Vaccine"] = FarmTabs.Vaccines,
             ["Settings"] = FarmTabs.Settings
         };
@@ -82,12 +83,18 @@ public static class FarmPermissionMap
             ["Finance.AddRecurringCost"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.UpdateRecurringCost"] = (FarmTabs.Finance, FarmActions.Edit),
             ["Finance.DeleteRecurringCost"] = (FarmTabs.Finance, FarmActions.Delete),
+            ["Finance.AddEmployee"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.UpdateEmployee"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.DeleteEmployee"] = (FarmTabs.Finance, FarmActions.Delete),
+
+            ["Reports.GetData"] = (FarmTabs.Reports, FarmActions.View),
 
             ["Vaccine.GetData"] = (FarmTabs.Vaccines, FarmActions.View),
             ["Vaccine.Add"] = (FarmTabs.Vaccines, FarmActions.Add),
             ["Vaccine.Update"] = (FarmTabs.Vaccines, FarmActions.Edit),
             ["Vaccine.Delete"] = (FarmTabs.Vaccines, FarmActions.Delete),
             ["Vaccine.MarkDone"] = (FarmTabs.Vaccines, FarmActions.Edit),
+            ["Vaccine.GiveToGroup"] = (FarmTabs.Vaccines, FarmActions.Edit),
             ["Vaccine.UpdateHistoryBatch"] = (FarmTabs.Vaccines, FarmActions.Edit),
             ["Vaccine.DeleteHistoryBatch"] = (FarmTabs.Vaccines, FarmActions.Delete),
             ["Vaccine.SetReminderWindow"] = (FarmTabs.Vaccines, FarmActions.Edit),

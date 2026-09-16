@@ -42,8 +42,26 @@ public class FeedPrice : BaseEntity
 public class FeedPlan : BaseEntity
 {
     public GoatStatus StatusKey { get; set; }
+    public decimal MixKgPerDay { get; set; }
+    public decimal FodderKgPerDay { get; set; }
     public decimal MedicineCostPerGoatPerMonth { get; set; }
     public ICollection<FeedPlanItem> Items { get; set; } = [];
+}
+
+public class Employee : BaseEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Role { get; set; }
+    public decimal MonthlySalary { get; set; }
+}
+
+public class BreedingEmptyLog : BaseEntity
+{
+    public int GoatId { get; set; }
+    public Goat Goat { get; set; } = null!;
+    public DateOnly ScanDate { get; set; }
+    public DateOnly? MatedDate { get; set; }
+    public string? BuckTag { get; set; }
 }
 
 public class FeedPlanItem : BaseEntity

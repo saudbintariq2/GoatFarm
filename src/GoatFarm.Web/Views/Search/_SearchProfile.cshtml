@@ -96,24 +96,25 @@
         else
         {
             var plan = Model.FeedPlan;
-            var items = plan.Items.Where(i => i.GramsPerDay > 0).ToList();
             <div class="note" style="margin-bottom:12px">Based on the <b>@plan.StatusDisplay</b> feed plan (farm-level ration per goat).</div>
             <table class="tbl">
                 <thead><tr><th>Feed</th><th class="num-cell">Daily</th><th class="num-cell hide-sm">Cost/day</th></tr></thead>
                 <tbody>
-                @if (items.Count == 0)
+                @if (plan.MixKgPerDay <= 0 && plan.FodderKgPerDay <= 0)
                 {
                     <tr><td colspan="3" class="search-empty">No rations configured.</td></tr>
                 }
                 else
                 {
-                    @foreach (var item in items)
+                    @if (plan.MixKgPerDay > 0)
                     {
-                        <tr>
-                            <td>@item.DisplayName</td>
-                            <td class="num-cell">@item.GramsPerDay g</td>
-                            <td class="num-cell hide-sm">Rs @Math.Round(item.DailyCost).ToString("N0")</td>
-                        </tr>
+                        <tr><td>Mix (concentrate)</td><td class="num-cell">@plan.MixKgPerDay.ToString("F2") kg</td>
+                            <td class="num-cell hide-sm">Rs @Math.Round(plan.DailyFeedCost).ToString("N0")</td></tr>
+                    }
+                    @if (plan.FodderKgPerDay > 0)
+                    {
+                        <tr><td>Green fodder (own)</td><td class="num-cell">@plan.FodderKgPerDay.ToString("F1") kg</td>
+                            <td class="num-cell hide-sm"><span class="breed">not costed</span></td></tr>
                     }
                 }
                 </tbody>

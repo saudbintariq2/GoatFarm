@@ -29,6 +29,8 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     public DbSet<VaccinationHistory> VaccinationHistories => Set<VaccinationHistory>();
     public DbSet<Reminder> Reminders => Set<Reminder>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<BreedingEmptyLog> BreedingEmptyLogs => Set<BreedingEmptyLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

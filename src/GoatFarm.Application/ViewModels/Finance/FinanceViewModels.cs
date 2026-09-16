@@ -54,6 +54,28 @@ public class CreateRecurringCostViewModel
     public string Period { get; set; } = "month";
 }
 
+public class EmployeeViewModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Role { get; set; }
+    public decimal MonthlySalary { get; set; }
+}
+
+public class CreateEmployeeViewModel
+{
+    [Required(ErrorMessage = "Enter employee name")]
+    [StringLength(200)]
+    public string Name { get; set; } = string.Empty;
+
+    [StringLength(200)]
+    public string? Role { get; set; }
+
+    [Required]
+    [Range(0, double.MaxValue, ErrorMessage = "Enter salary")]
+    public decimal MonthlySalary { get; set; }
+}
+
 public class OwnerInvestmentViewModel
 {
     public int Id { get; set; }
@@ -142,6 +164,7 @@ public class FinancePageViewModel
     public decimal FeedBoughtKg { get; set; }
     public decimal MedicineMonthly { get; set; }
     public decimal RecurringMonthly { get; set; }
+    public decimal StaffSalaryMonthly { get; set; }
     public decimal VaccineBoughtMonthly { get; set; }
     public decimal ManualExpenseMonthly { get; set; }
     public decimal MilkIncome { get; set; }
@@ -152,6 +175,7 @@ public class FinancePageViewModel
     public IReadOnlyList<IncomeViewModel> Incomes { get; set; } = [];
     public IReadOnlyList<ExpenseViewModel> Expenses { get; set; } = [];
     public IReadOnlyList<RecurringCostViewModel> RecurringCosts { get; set; } = [];
+    public IReadOnlyList<EmployeeViewModel> Employees { get; set; } = [];
     public IReadOnlyList<OwnerInvestmentViewModel> OwnerInvestments { get; set; } = [];
     public CreateAssetViewModel NewAsset { get; set; } = new();
     public CreateIncomeViewModel NewIncome { get; set; } = new() { Date = DateOnly.FromDateTime(DateTime.Today) };

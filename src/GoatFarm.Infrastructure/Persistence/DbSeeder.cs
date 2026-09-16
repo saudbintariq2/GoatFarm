@@ -1,3 +1,4 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
@@ -25,17 +26,24 @@ public static class DbSeeder
 
         var planData = new Dictionary<GoatStatus, (int med, Dictionary<string, int> rations)>
         {
-            [GoatStatus.Kid] = (0, new() { ["wanda"] = 150, ["fodder"] = 500 }),
-            [GoatStatus.Milking] = (0, new() { ["wanda"] = 500, ["binola"] = 200, ["bran"] = 200, ["maize"] = 100, ["sheera"] = 50, ["fodder"] = 2000 }),
-            [GoatStatus.Pregnant] = (0, new() { ["wanda"] = 400, ["binola"] = 150, ["bran"] = 150, ["maize"] = 100, ["sheera"] = 50, ["fodder"] = 1500 }),
-            [GoatStatus.Dry] = (0, new() { ["wanda"] = 200, ["bran"] = 100, ["fodder"] = 1500 }),
-            [GoatStatus.Buck] = (0, new() { ["wanda"] = 400, ["binola"] = 100, ["bran"] = 100, ["maize"] = 100, ["fodder"] = 1500 }),
-            [GoatStatus.Sale] = (0, new() { ["wanda"] = 250, ["bran"] = 100, ["fodder"] = 1500 })
+            [GoatStatus.Kid] = (50, new() { ["wanda"] = 150, ["fodder"] = 500 }),
+            [GoatStatus.Milking] = (80, new() { ["wanda"] = 500, ["binola"] = 200, ["bran"] = 200, ["maize"] = 100, ["sheera"] = 50, ["fodder"] = 2000 }),
+            [GoatStatus.Pregnant] = (150, new() { ["wanda"] = 400, ["binola"] = 150, ["bran"] = 150, ["maize"] = 100, ["sheera"] = 50, ["fodder"] = 1500 }),
+            [GoatStatus.Dry] = (40, new() { ["wanda"] = 200, ["bran"] = 100, ["fodder"] = 1500 }),
+            [GoatStatus.Buck] = (60, new() { ["wanda"] = 400, ["binola"] = 100, ["bran"] = 100, ["maize"] = 100, ["fodder"] = 1500 }),
+            [GoatStatus.Sale] = (30, new() { ["wanda"] = 250, ["bran"] = 100, ["fodder"] = 1500 })
         };
 
         foreach (var (status, data) in planData)
         {
-            var plan = new FeedPlan { StatusKey = status, MedicineCostPerGoatPerMonth = data.med };
+            var defaults = MixRecipeHelper.DefaultPlans[status];
+            var plan = new FeedPlan
+            {
+                StatusKey = status,
+                MixKgPerDay = defaults.Mix,
+                FodderKgPerDay = defaults.Fodder,
+                MedicineCostPerGoatPerMonth = data.med
+            };
             foreach (var f in FeedTypes.All)
             {
                 plan.Items.Add(new FeedPlanItem
@@ -47,9 +55,18 @@ public static class DbSeeder
             context.FeedPlans.Add(plan);
         }
 
-        if (!await context.AppSettings.AnyAsync(s => s.Key == "RemindDays", cancellationToken))
+        if (!await context.AppSettings.AnyAsync(s => s.Key == AppSettingKeys.RemindDays, cancellationToken))
         {
-            context.AppSettings.Add(new AppSetting { Key = "RemindDays", Value = "30" });
+            context.AppSettings.Add(new AppSetting { Key = AppSettingKeys.RemindDays, Value = "30" });
+        }
+
+        if (!await context.AppSettings.AnyAsync(s => s.Key == AppSettingKeys.MixRecipe, cancellationToken))
+        {
+            context.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.MixRecipe,
+                Value = System.Text.Json.JsonSerializer.Serialize(MixRecipeHelper.DefaultRecipe)
+            });
         }
 
         context.Vaccines.AddRange(
