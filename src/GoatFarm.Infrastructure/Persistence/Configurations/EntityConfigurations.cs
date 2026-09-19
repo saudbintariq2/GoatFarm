@@ -46,6 +46,7 @@ public class FeedPriceConfiguration : IEntityTypeConfiguration<FeedPrice>
         builder.Property(x => x.DisplayName).IsRequired().HasMaxLength(200);
         builder.Property(x => x.PricePerKg).HasPrecision(18, 2);
         builder.Property(x => x.StockKg).HasPrecision(18, 2);
+        builder.Property(x => x.StockKgFull).HasPrecision(18, 2);
         builder.HasIndex(x => x.FeedType).IsUnique();
     }
 }
@@ -58,6 +59,7 @@ public class FeedPlanConfiguration : IEntityTypeConfiguration<FeedPlan>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.MixKgPerDay).HasPrecision(18, 3);
         builder.Property(x => x.FodderKgPerDay).HasPrecision(18, 3);
+        builder.Property(x => x.FodderDryKgPerDay).HasPrecision(18, 3);
         builder.Property(x => x.MedicineCostPerGoatPerMonth).HasPrecision(18, 2);
         builder.HasIndex(x => x.StatusKey).IsUnique();
         builder.HasMany(x => x.Items)
@@ -273,5 +275,46 @@ public class BreedingEmptyLogConfiguration : IEntityTypeConfiguration<BreedingEm
             .WithMany()
             .HasForeignKey(x => x.GoatId)
             .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class GoatWeightRecordConfiguration : IEntityTypeConfiguration<GoatWeightRecord>
+{
+    public void Configure(EntityTypeBuilder<GoatWeightRecord> builder)
+    {
+        builder.ToTable("GoatWeightRecords");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Kg).HasPrecision(18, 2);
+        builder.HasOne(x => x.Goat)
+            .WithMany(x => x.WeightRecords)
+            .HasForeignKey(x => x.GoatId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new { x.GoatId, x.Date });
+    }
+}
+
+public class DeathRecordConfiguration : IEntityTypeConfiguration<DeathRecord>
+{
+    public void Configure(EntityTypeBuilder<DeathRecord> builder)
+    {
+        builder.ToTable("DeathRecords");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Tag).IsRequired().HasMaxLength(50);
+        builder.Property(x => x.Breed).HasMaxLength(100);
+        builder.Property(x => x.Reason).HasMaxLength(500);
+        builder.Property(x => x.ValueLost).HasPrecision(18, 2);
+        builder.HasIndex(x => x.Date);
+    }
+}
+
+public class FeedUsageRecordConfiguration : IEntityTypeConfiguration<FeedUsageRecord>
+{
+    public void Configure(EntityTypeBuilder<FeedUsageRecord> builder)
+    {
+        builder.ToTable("FeedUsageRecords");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.FeedType).IsRequired().HasMaxLength(50);
+        builder.Property(x => x.Kg).HasPrecision(18, 3);
+        builder.HasIndex(x => x.Date);
     }
 }

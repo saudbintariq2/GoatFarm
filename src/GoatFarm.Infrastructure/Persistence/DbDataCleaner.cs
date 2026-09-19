@@ -23,6 +23,11 @@ public static class DbDataCleaner
         context.GoatGroups.RemoveRange(await context.GoatGroups.ToListAsync(cancellationToken));
         context.FeedPlans.RemoveRange(await context.FeedPlans.ToListAsync(cancellationToken));
         context.FeedPrices.RemoveRange(await context.FeedPrices.ToListAsync(cancellationToken));
+        context.FeedUsageRecords.RemoveRange(await context.FeedUsageRecords.ToListAsync(cancellationToken));
+        context.GoatWeightRecords.RemoveRange(await context.GoatWeightRecords.ToListAsync(cancellationToken));
+        context.DeathRecords.RemoveRange(await context.DeathRecords.ToListAsync(cancellationToken));
+        context.Employees.RemoveRange(await context.Employees.ToListAsync(cancellationToken));
+        context.BreedingEmptyLogs.RemoveRange(await context.BreedingEmptyLogs.ToListAsync(cancellationToken));
 
         await context.SaveChangesAsync(cancellationToken);
     }

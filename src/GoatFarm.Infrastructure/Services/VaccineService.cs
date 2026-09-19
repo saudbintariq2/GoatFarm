@@ -20,7 +20,7 @@ public class VaccineService : IVaccineService
         month ??= MonthHelper.CurrentMonthKey();
         var (monthStart, monthEnd) = MonthHelper.GetMonthRange(month);
         var window = remindDays ?? await GetRemindDaysAsync(cancellationToken);
-        var goats = await _context.Goats.AsNoTracking().ToListAsync(cancellationToken);
+        var goats = await _context.Goats.AsNoTracking().Where(g => !g.IsArchived).ToListAsync(cancellationToken);
         var vaccines = await _context.Vaccines.AsNoTracking().ToListAsync(cancellationToken);
         var log = await _context.VaccinationHistories.AsNoTracking().ToListAsync(cancellationToken);
         var reminders = await _context.Reminders.AsNoTracking().OrderBy(r => r.ReminderDate).ToListAsync(cancellationToken);
@@ -188,7 +188,7 @@ public class VaccineService : IVaccineService
         var vaccine = await _context.Vaccines.FindAsync([model.VaccineId], cancellationToken);
         if (vaccine is null) return 0;
 
-        var goats = await _context.Goats.AsNoTracking().Include(g => g.Group).ToListAsync(cancellationToken);
+        var goats = await _context.Goats.AsNoTracking().Include(g => g.Group).Where(g => !g.IsArchived).ToListAsync(cancellationToken);
         var selected = ResolveGoatsForTarget(goats, model.Target).ToList();
         foreach (var g in selected)
         {
@@ -208,7 +208,7 @@ public class VaccineService : IVaccineService
         var vaccine = await _context.Vaccines.FindAsync([vaccineId], cancellationToken);
         if (vaccine is null) return;
 
-        var goats = await _context.Goats.AsNoTracking().ToListAsync(cancellationToken);
+        var goats = await _context.Goats.AsNoTracking().Where(g => !g.IsArchived).ToListAsync(cancellationToken);
         var log = await _context.VaccinationHistories.AsNoTracking().ToListAsync(cancellationToken);
         var due = GetDueGoats(vaccine, goats, log);
         var today = DateOnly.FromDateTime(DateTime.Today);

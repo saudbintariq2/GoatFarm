@@ -508,6 +508,66 @@ const GoatRecords = (() => {
       extraHideIds: ['bulkbar', 'newGroupBtn']
     });
 
+    async function wdFound() {
+      const tag = normalizeTag(document.getElementById('wd-tag')?.value);
+      const el = document.getElementById('wd-found');
+      if (!el) return;
+      if (!tag) { el.textContent = ''; return; }
+      const row = findRowByTag(tag);
+      if (row) {
+        el.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ Found: ${esc(row.dataset.tag)}</span>`;
+        return;
+      }
+      try {
+        const goat = await api('/Goat/GetByTag?tag=' + encodeURIComponent(tag));
+        el.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ Found: ${esc(goat.tag)}</span>`;
+      } catch {
+        el.innerHTML = '<span style="color:#8a261c">No goat with that tag.</span>';
+      }
+    }
+
+    document.getElementById('wd-tag')?.addEventListener('input', wdFound);
+    document.getElementById('addWeight')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'edit')) return;
+      const tag = normalizeTag(document.getElementById('wd-tag')?.value);
+      const kg = +document.getElementById('wd-kg')?.value || 0;
+      const date = document.getElementById('wd-date')?.value || new Date().toISOString().slice(0, 10);
+      if (!tag) { await showModal('Scan or type a valid tag'); return; }
+      if (!kg) { await showModal('Enter the weight in kg'); return; }
+      const result = await api('/Goat/RecordWeight', {
+        method: 'POST',
+        body: JSON.stringify({ tag, kg, date })
+      });
+      const info = document.getElementById('wd-found');
+      if (info) info.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${esc(result.message)}</span>`;
+      document.getElementById('wd-kg').value = '';
+      document.getElementById('wd-tag').value = '';
+      showToast('Weight saved');
+    });
+
+    document.getElementById('addDeath')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'edit')) return;
+      const tag = normalizeTag(document.getElementById('wd-tag')?.value);
+      const date = document.getElementById('wd-date')?.value || new Date().toISOString().slice(0, 10);
+      if (!tag) { await showModal('Scan or type a valid tag'); return; }
+      const reason = await showModal('Reason for death (illness, accident, unknown…)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+      const confirmed = await showConfirm(`Record ${tag} as dead on ${date}? It will be removed from the live herd.`);
+      if (!confirmed) return;
+      const result = await api('/Goat/RecordDeath', {
+        method: 'POST',
+        body: JSON.stringify({ tag, date, reason: reason || null })
+      });
+      if (!result.success) {
+        await showModal(result.message || 'Could not record death');
+        return;
+      }
+      const info = document.getElementById('wd-found');
+      if (info) info.innerHTML = `<span style="color:#8a261c;font-weight:700">${esc(result.message)}</span>`;
+      document.getElementById('wd-tag').value = '';
+      showToast('Death recorded');
+      setTimeout(() => location.reload(), 800);
+    });
+
     if (opts.editGoat && opts.editGoat.id) {
       openGoatForEdit(opts.editGoat);
     } else {
@@ -536,12 +596,31 @@ const GoatRecords = (() => {
     });
     document.querySelectorAll('[data-mix]').forEach(inp => { inp.onchange = () => onSave(inp); });
     document.querySelectorAll('[data-plan]').forEach(inp => { inp.onchange = () => onSave(inp); });
+    document.querySelectorAll('[data-fodamt]').forEach(inp => { inp.onchange = () => onSave(inp); });
   }
 
   function initFeed() {
     let editingFeedBuyId = null;
+    let recipeGroup = 'milking';
+    let checkDraft = {};
+    let feedData = null;
+
+    const activeFeedTab = () =>
+      document.querySelector('.feed-subtab.active')?.dataset.feedtab || 'store';
 
     const feedMonth = () => document.getElementById('feedMonth')?.value || new Date().toISOString().slice(0, 7);
+
+    const showFeedTab = (tab) => {
+      document.querySelectorAll('.feed-subtab').forEach(b =>
+        b.classList.toggle('active', b.dataset.feedtab === tab));
+      document.querySelectorAll('.feedview').forEach(v => { v.style.display = 'none'; });
+      const el = document.getElementById('feed-' + tab);
+      if (el) el.style.display = '';
+    };
+
+    document.querySelectorAll('.feed-subtab').forEach(btn => {
+      btn.addEventListener('click', () => showFeedTab(btn.dataset.feedtab));
+    });
 
     const updateFbTotal = () => {
       const kg = +document.getElementById('fb-kg')?.value || 0;
@@ -555,8 +634,7 @@ const GoatRecords = (() => {
       const feedType = document.getElementById('fb-feed')?.value;
       const priceInput = document.querySelector(`[data-price="${feedType}"]`);
       const rateInput = document.getElementById('fb-rate');
-      if (priceInput && rateInput)
-        rateInput.value = priceInput.value;
+      if (priceInput && rateInput) rateInput.value = priceInput.value;
       updateFbTotal();
     });
 
@@ -565,23 +643,40 @@ const GoatRecords = (() => {
     const saveMixRecipe = async () => {
       const recipe = {};
       document.querySelectorAll('[data-mix]').forEach(inp => { recipe[inp.dataset.mix] = +inp.value || 0; });
-      await api('/Feed/UpdateMixRecipe', { method: 'POST', body: JSON.stringify({ recipe }) });
-      await reloadFeed();
+      await api('/Feed/UpdateMixRecipeForStatus', {
+        method: 'POST',
+        body: JSON.stringify({ statusKey: recipeGroup, recipe })
+      });
+      await reloadFeed(recipeGroup);
     };
 
     const savePlanField = async (inp) => {
       const statusKey = inp.dataset.plan;
-      const fld = inp.dataset.fld;
-      const row = document.querySelector(`[data-plan="${statusKey}"][data-fld="mix"]`);
-      const fodder = document.querySelector(`[data-plan="${statusKey}"][data-fld="fodder"]`);
-      const med = document.querySelector(`[data-plan="${statusKey}"][data-fld="med"]`);
       await api('/Feed/UpdatePlan', {
         method: 'POST',
         body: JSON.stringify({
           statusKey,
-          mixKgPerDay: +(row?.value || 0),
-          fodderKgPerDay: +(fodder?.value || 0),
-          medicineCostPerGoatPerMonth: +(med?.value || 0)
+          mixKgPerDay: +document.querySelector(`[data-plan="${statusKey}"][data-fld="mix"]`)?.value || 0,
+          fodderKgPerDay: +document.querySelector(`[data-plan="${statusKey}"][data-fld="fodder"]`)?.value || 0,
+          fodderDryKgPerDay: +document.querySelector(`[data-plan="${statusKey}"][data-fld="fodderDry"]`)?.value || 0,
+          medicineCostPerGoatPerMonth: 0
+        })
+      });
+      await reloadFeed();
+    };
+
+    const saveFodderPool = async () => {
+      const items = [...document.querySelectorAll('[data-foditem]')].map(el => ({
+        id: el.dataset.foditem,
+        label: el.dataset.fodlabel,
+        amount: +document.querySelector(`[data-fodamt="${el.dataset.foditem}"]`)?.value || 0
+      }));
+      await api('/Feed/UpdateFodderPool', {
+        method: 'POST',
+        body: JSON.stringify({
+          acres: +document.getElementById('fodderAcres')?.value || 0,
+          mode: document.getElementById('fodderMode')?.value || 'share',
+          items
         })
       });
       await reloadFeed();
@@ -589,8 +684,8 @@ const GoatRecords = (() => {
 
     function resetFeedBuyForm() {
       editingFeedBuyId = null;
-      document.getElementById('feedBuyFormTitle').textContent = 'Feed bought';
-      document.getElementById('addFeedBuy').textContent = '+ Add';
+      const addBtn = document.getElementById('addFeedBuy');
+      if (addBtn) addBtn.textContent = '+ Add';
       document.getElementById('fb-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('fb-kg').value = '';
       document.getElementById('fb-rate').value = '';
@@ -604,8 +699,8 @@ const GoatRecords = (() => {
     function loadFeedBuyForEdit(row) {
       if (!FarmPerms.can('feed', 'edit')) return;
       editingFeedBuyId = +row.dataset.id;
-      document.getElementById('feedBuyFormTitle').textContent = 'Edit feed purchase';
-      document.getElementById('addFeedBuy').textContent = 'Save';
+      const addBtn = document.getElementById('addFeedBuy');
+      if (addBtn) addBtn.textContent = 'Save';
       document.getElementById('fb-date').value = row.dataset.date || '';
       document.getElementById('fb-feed').value = row.dataset.feed || '';
       document.getElementById('fb-kg').value = row.dataset.kg || '';
@@ -618,69 +713,214 @@ const GoatRecords = (() => {
       document.getElementById('deleteFeedBuyBtn').style.display = '';
     }
 
-    async function reloadFeed() {
+    function renderMix(recipe) {
+      if (!recipe) return;
+      const nameEl = document.getElementById('recipeGroupName');
+      if (nameEl) nameEl.textContent = recipe.statusDisplay;
+      const mixList = document.getElementById('mixList');
+      if (!mixList) return;
+      mixList.innerHTML = (recipe.items || []).map(m =>
+        `<div class="ration-row"><div class="rn">${m.displayName}${m.percent ? ` <span class="breed"> · ${m.percent}%</span>` : ''}</div>
+          <div class="rin"><input type="number" min="0" step="0.5" data-mix="${m.feedType}" value="${m.kgInBatch}"><span class="u">kg</span></div>
+          <div class="rcost">${rs(m.batchCost)}</div></div>`).join('');
+      const res = document.getElementById('mixResult');
+      if (res) {
+        res.innerHTML =
+          `<div class="r"><div class="v">${(+recipe.totalKg || 0).toFixed(1)} kg</div><div class="k">batch size</div></div>
+           <div class="r"><div class="v">${rs(recipe.batchCost || 0)}</div><div class="k">cost of one batch</div></div>
+           <div class="r"><div class="v">${rs(recipe.costPerKg || 0)}</div><div class="k">mix cost per kg</div></div>`;
+      }
+      const cmp = document.getElementById('mixCompare');
+      if (cmp && recipe.allStatusCosts) {
+        cmp.innerHTML = '<b>All recipes:</b> ' + recipe.allStatusCosts.map(c =>
+          `<span style="${c.isActive ? 'color:var(--green-dark);font-weight:700' : 'color:var(--ink-soft)'}">${c.statusDisplay} ${rs(c.costPerKg)}/kg</span>`).join(' · ');
+      }
+      const bs = document.getElementById('mixBatch');
+      if (bs) {
+        const total = +recipe.totalKg || 0;
+        const match = [...bs.options].find(o => o.value !== 'custom' && Math.abs(+o.value - total) < 0.51);
+        bs.value = match ? match.value : 'custom';
+      }
+      document.querySelectorAll('[data-mix]').forEach(inp => { inp.onchange = () => saveMixRecipe(); });
+    }
+
+    function renderFodderPool(pool) {
+      const box = document.getElementById('fodderInputs');
+      if (!box || !pool) return;
+      box.innerHTML = (pool.items || []).map(it =>
+        `<div class="price-row" data-foditem="${it.id}" data-fodlabel="${it.label}">
+          <label>${it.label} <span class="del feed-foddel" data-delfod="${it.id}" title="remove" style="font-size:13px">×</span></label>
+          <div class="price-in"><span class="pre">Rs</span>
+          <input type="number" min="0" data-fodamt="${it.id}" value="${+it.amount || 0}" style="width:110px">
+          <span class="suf">/ year</span></div></div>`).join('') ||
+        '<div class="rule" style="grid-column:1/-1">No cost lines yet — add one below.</div>';
+      const mode = document.getElementById('fodderMode');
+      const acres = document.getElementById('fodderAcres');
+      if (mode) mode.value = pool.mode || 'share';
+      if (acres) acres.value = +pool.acres || 0;
+      const res = document.getElementById('fodderResult');
+      if (res) {
+        res.innerHTML =
+          `<div class="r"><div class="v">${rs(pool.yearlyTotal || 0)}</div><div class="k">fodder land / year</div></div>
+           <div class="r"><div class="v">${rs(pool.dailyTotal || 0)}</div><div class="k">per day for the whole herd</div></div>
+           <div class="r"><div class="v">${pool.averagePerGoatDay ? rs(pool.averagePerGoatDay) : '—'}</div><div class="k">average per goat / day</div></div>`;
+      }
+      const note = document.getElementById('fodderNote');
+      if (note) note.innerHTML = pool.noteHtml || '';
+      document.querySelectorAll('[data-fodamt]').forEach(inp => { inp.onchange = () => saveFodderPool(); });
+      document.querySelectorAll('.feed-foddel').forEach(x => {
+        x.onclick = async e => {
+          e.preventDefault();
+          if (!FarmPerms.can('feed', 'delete')) return;
+          const confirmed = await showConfirm('Remove this fodder cost line?');
+          if (!confirmed) return;
+          await api('/Feed/RemoveFodderPoolItem?itemId=' + encodeURIComponent(x.dataset.delfod), { method: 'DELETE' });
+          await reloadFeed();
+        };
+      });
+    }
+
+    function renderCheckList(rows) {
+      const box = document.getElementById('checkList');
+      if (!box) return;
+      box.innerHTML = (rows || []).map(f => {
+        const book = Math.round((+f.bookKg || 0) * 10) / 10;
+        const v = checkDraft[f.feedType];
+        const diff = (v === undefined || v === '') ? null : (+v - book);
+        const dTxt = diff === null ? '' : (diff === 0 ? 'matches' : (diff > 0 ? '+' : '') + diff.toFixed(1) + ' kg');
+        const dCol = diff === null ? '' : (Math.abs(diff) < 0.05 ? 'color:var(--green-dark)' : diff < 0 ? 'color:#8a261c;font-weight:700' : 'color:var(--amber);font-weight:700');
+        return `<div class="ration-row"><div class="rn">${f.displayName}
+            <span class="breed">· books say ${book} kg</span></div>
+          <div class="rin"><input type="number" min="0" step="0.5" data-check="${f.feedType}" value="${v === undefined ? '' : v}" placeholder="actual"><span class="u">kg</span></div>
+          <div class="rcost" style="${dCol}">${dTxt}</div></div>`;
+      }).join('');
+      box.querySelectorAll('[data-check]').forEach(inp => {
+        inp.oninput = () => { checkDraft[inp.dataset.check] = inp.value; renderCheckList(rows); };
+      });
+    }
+
+    function renderStoreStats(data) {
+      const stats = data.storeStats || {};
+      const cards = [
+        { n: Math.round(stats.totalStockKg || 0).toLocaleString('en-US') + ' kg', l: 'Total stock', col: 'var(--green)' },
+        { n: (stats.dailyUsageKg || 0).toFixed(0) + ' kg/day', l: 'Daily usage', col: 'var(--blue)' },
+        { n: rs(stats.stockValue || 0), l: 'Stock value', col: 'var(--amber)' },
+        { n: stats.lowStockCount || 0, l: 'Low stock', col: (stats.lowStockCount || 0) ? 'var(--red)' : 'var(--green)' }
+      ];
+      const el = document.getElementById('feedStats');
+      if (el) {
+        el.innerHTML = cards.map(c =>
+          `<div class="stat" style="cursor:default"><div class="num" style="font-size:21px">${c.n}</div>
+            <div class="lbl"><span class="dot" style="background:${c.col}"></span>${c.l}</div></div>`).join('');
+      }
+      const low = document.getElementById('lowAlert');
+      if (low) low.innerHTML = '';
+      const auto = document.getElementById('autoInfo');
+      if (auto && data.feedSettings) auto.innerHTML = data.feedSettings.autoInfoHtml || '';
+      const reorder = document.getElementById('reorderNote');
+      if (reorder) {
+        const note = data.reorderNote;
+        if (note && note.daysToMinimum <= 21) {
+          const txt = note.daysToMinimum <= 0
+            ? `<b>${note.displayName}</b> is already at minimum stock — runs out in ${note.daysUntilEmpty} days`
+            : `<b>${note.displayName}</b> reaches minimum stock in ${note.daysToMinimum} days (runs out in ${note.daysUntilEmpty})`;
+          reorder.innerHTML = `<div class="note" style="background:${note.isCritical ? 'var(--red-tint)' : 'var(--amber-tint)'};
+            border-color:${note.isCritical ? '#e6b5ad' : '#e9d4a8'};margin:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="flex:1">⚠ ${txt}</span>
+            <button type="button" class="btn btn-green btn-sm" id="reorderBtn">Create purchase</button></div>`;
+          document.getElementById('reorderBtn')?.addEventListener('click', () => {
+            const sel = document.getElementById('fb-feed');
+            if (sel) sel.value = note.feedType;
+            const priceInput = document.querySelector(`[data-price="${note.feedType}"]`);
+            if (priceInput) document.getElementById('fb-rate').value = priceInput.value;
+            showFeedTab('store');
+            document.getElementById('fb-kg')?.focus();
+            document.getElementById('fb-kg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        } else reorder.innerHTML = '';
+      }
+    }
+
+    async function reloadFeed(openRecipeStatus) {
+      if (openRecipeStatus) recipeGroup = openRecipeStatus;
       const month = feedMonth();
-      const data = await api('/Feed/GetData?month=' + encodeURIComponent(month));
+      const tab = activeFeedTab();
+      const data = await api('/Feed/GetData?month=' + encodeURIComponent(month) + '&tab=' + encodeURIComponent(tab) +
+        (recipeGroup ? '&status=' + encodeURIComponent(recipeGroup) : ''));
+      feedData = data;
+
       document.getElementById('grandMonth').textContent = rs(data.grandMonthly);
       document.getElementById('grandDay').textContent = rs(data.grandDaily);
-      document.getElementById('grandHead').textContent = 'for ' + data.totalGoats + ' goats';
-      const fodderEl = document.getElementById('grandFodder');
-      if (fodderEl) fodderEl.textContent = '+ ' + Math.round(data.fodderKgPerDayTotal || 0) + ' kg green fodder / day';
-      document.getElementById('feedBoughtMonth').textContent = rs(data.feedBoughtMonthTotal);
-      document.getElementById('feedBoughtKg').textContent = (data.feedBoughtKgTotal || 0).toFixed(1) + ' kg total';
+      document.getElementById('grandHead').textContent = data.grandHeadText || ('for ' + data.totalGoats + ' goats');
+      const perL = document.getElementById('grandPerL');
+      if (perL) perL.textContent = data.feedCostPerLitreText || '— per litre of milk';
 
-      document.getElementById('priceGrid').innerHTML = (data.mixPrices || []).map(p =>
+      const purchPrices = (data.allPrices || []).filter(p => p.feedType !== 'fodder');
+      document.getElementById('priceGrid').innerHTML = purchPrices.map(p =>
         `<div class="price-row"><label>${p.displayName} <span class="del feed-del" data-delfeed="${p.feedType}" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
           <input type="number" min="0" data-price="${p.feedType}" value="${p.pricePerKg}"><span class="suf">/ kg</span></div></div>`).join('');
 
-      const mixList = document.getElementById('mixList');
-      if (mixList) {
-        mixList.innerHTML = (data.mixRecipe || []).map(m =>
-          `<div class="ration-row"><div class="rn">${m.displayName}${m.percent ? ` <span class="breed"> · ${m.percent}%</span>` : ''}</div>
-            <div class="rin"><input type="number" min="0" step="0.5" data-mix="${m.feedType}" value="${m.kgInBatch}"><span class="u">kg</span></div>
-            <div class="rcost">${rs(m.batchCost)}</div></div>`).join('');
-        document.getElementById('mixTotalKg').textContent = (data.mixTotalKg || 0).toFixed(1) + ' kg';
-        document.getElementById('mixBatchCost').textContent = rs(data.mixBatchCost || 0);
-        document.getElementById('mixCostPerKg').textContent = rs(data.mixCostPerKg || 0);
+      const gp = document.getElementById('groupPlanRows');
+      if (gp) {
+        let tG = 0, tMix = 0, tD = 0, tF = 0, tM = 0;
+        const rows = (data.groupPlans || []).map(row => {
+          tG += row.goatCount; tMix += (+row.mixKgPerDay || 0) * row.goatCount;
+          tD += (+row.dailyCostPerGoat || 0) * row.goatCount;
+          tF += (+row.monthlyTotal || 0); tM += (+row.fodderCostPerGoatPerDay || 0) * row.goatCount;
+          return `<tr><td><span class="chip ${row.statusCssClass}">${row.statusDisplay}</span></td>
+            <td class="num-cell">${row.goatCount}</td>
+            <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="${row.statusKey}" data-fld="mix" value="${row.mixKgPerDay}"
+              style="width:70px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><input type="number" min="0" step="0.5" data-plan="${row.statusKey}" data-fld="fodder" value="${row.fodderKgPerDay}"
+              style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><input type="number" min="0" step="0.1" data-plan="${row.statusKey}" data-fld="fodderDry" value="${row.fodderDryKgPerDay}"
+              style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><span class="breed">${rs(row.fodderCostPerGoatPerDay || 0)}</span></td>
+            <td class="num-cell" style="font-weight:700">${rs(row.dailyCostPerGoat || 0)}</td>
+            <td class="num-cell" style="color:var(--green-dark);font-weight:700">${rs(row.monthlyTotal || 0)}</td>
+            <td><button type="button" class="btn btn-ghost btn-sm" data-recipe="${row.statusKey}">Recipe</button></td></tr>`;
+        }).join('');
+        gp.innerHTML = rows + (rows ? `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+          <td class="num-cell" style="font-weight:800">${tG}</td>
+          <td class="num-cell" style="font-weight:800">${tMix.toFixed(1)} kg</td>
+          <td class="num-cell hide-sm"></td><td class="num-cell hide-sm"></td>
+          <td class="num-cell hide-sm" style="font-weight:800">${rs(tM)}</td>
+          <td class="num-cell" style="font-weight:800">${rs(tD)}</td>
+          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(tF)}</td><td></td></tr>` : '');
+        document.querySelectorAll('[data-recipe]').forEach(b => {
+          b.onclick = async () => {
+            recipeGroup = b.dataset.recipe;
+            const recipe = await api('/Feed/GetMixRecipe?status=' + encodeURIComponent(recipeGroup));
+            document.getElementById('recipePanel').style.display = 'block';
+            renderMix(recipe);
+            document.getElementById('recipePanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          };
+        });
       }
+      const pfm = document.getElementById('planFodderMode');
+      if (pfm) pfm.innerHTML = data.planFodderModeHtml || '';
 
-      const feedOpts = (data.allPrices || data.mixPrices || []).map(p => `<option value="${p.feedType}">${p.displayName}</option>`).join('');
+      let buyHtml = (data.buyingList || []).map(b =>
+        `<tr><td>${b.displayName}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : ''}</td>
+          <td class="num-cell hide-sm">${b.kgPerDay.toFixed(1)}</td>
+          <td class="num-cell">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
+          <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>' : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
+      if (buyHtml && data.buyingListTotalKg) {
+        buyHtml += `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL TO BUY</td>
+          <td class="num-cell hide-sm"></td>
+          <td class="num-cell" style="font-weight:800">${Math.round(data.buyingListTotalKg).toLocaleString('en-US')} kg</td>
+          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(data.buyingListTotalCost || 0)}</td></tr>`;
+      }
+      document.getElementById('buyRows').innerHTML = buyHtml ||
+        '<tr><td colspan="4" class="empty">Set your mix recipe and group amounts first.</td></tr>';
+
+      const feedOpts = purchPrices.map(p => `<option value="${p.feedType}">${p.displayName}</option>`).join('');
       const fbFeed = document.getElementById('fb-feed');
       const curFeed = fbFeed?.value;
       if (fbFeed) {
         fbFeed.innerHTML = feedOpts;
         if ([...fbFeed.options].some(o => o.value === curFeed)) fbFeed.value = curFeed;
       }
-
-      const gp = document.getElementById('groupPlanRows');
-      if (gp) {
-        gp.innerHTML = (data.groupPlans || []).map(row =>
-          `<tr><td><span class="chip ${row.statusCssClass}">${row.statusDisplay}</span></td>
-            <td class="num-cell">${row.goatCount}</td>
-            <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="${row.statusKey}" data-fld="mix" value="${row.mixKgPerDay}"
-              style="width:74px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
-            <td class="num-cell hide-sm"><input type="number" min="0" step="0.5" data-plan="${row.statusKey}" data-fld="fodder" value="${row.fodderKgPerDay}"
-              style="width:74px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
-            <td class="num-cell hide-sm"><input type="number" min="0" data-plan="${row.statusKey}" data-fld="med" value="${row.medicineCostPerGoatPerMonth}"
-              style="width:80px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
-            <td class="num-cell" style="color:var(--green-dark);font-weight:700">${rs(row.monthlyTotal)}</td></tr>`).join('');
-      }
-
-      const cc = document.getElementById('catCostRows');
-      if (cc) {
-        cc.innerHTML = (data.categoryCosts || []).map(row =>
-          `<tr><td><span class="chip ${row.statusCssClass}">${row.statusDisplay}</span></td>
-            <td class="num-cell">${row.goatCount}</td><td class="num-cell hide-sm">${(+row.mixKgPerDay).toFixed(1)}</td>
-            <td class="num-cell">${rs(row.dailyCost)}</td><td class="num-cell" style="color:var(--green-dark)">${rs(row.monthlyCost)}</td>
-            <td class="num-cell hide-sm"><span class="breed">${row.sharePercent}%</span></td>
-            <td class="num-cell hide-sm">${(+row.fodderKgPerDay).toFixed(1)} kg</td></tr>`).join('');
-      }
-
-      document.getElementById('buyRows').innerHTML = (data.buyingList || []).map(b =>
-        `<tr><td>${b.displayName}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : ''}</td>
-          <td class="num-cell hide-sm">${b.kgPerDay.toFixed(1)}</td>
-          <td class="num-cell">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
-          <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>' : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
 
       document.getElementById('buyLogRows').innerHTML = (data.feedPurchases?.length ? data.feedPurchases.map(b =>
         `<tr class="feed-buy-row" data-id="${b.id}" data-date="${b.dateDisplay}" data-feed="${b.feedType}"
@@ -695,24 +935,33 @@ const GoatRecords = (() => {
         row.addEventListener('click', () => loadFeedBuyForEdit(row));
       });
 
+      renderFodderPool(data.fodderPool);
+      renderStoreStats(data);
+      renderStock(data.stock);
+      renderCheckList(data.stockCheckRows);
+      if (data.activeRecipe && document.getElementById('recipePanel')?.style.display === 'block')
+        renderMix(data.activeRecipe);
+
       bindFeedInputs(async (inp) => {
         if (inp?.dataset?.mix) await saveMixRecipe();
         else if (inp?.dataset?.plan) await savePlanField(inp);
+        else if (inp?.dataset?.fodamt !== undefined) await saveFodderPool();
         else await reloadFeed();
       });
       bindFeedDeleteButtons();
-      renderStock(data.stock);
     }
 
     function renderStock(stock) {
       const stockEl = document.getElementById('stockRows');
       if (!stockEl || !stock) return;
       stockEl.innerHTML = stock.map(s =>
-        `<tr><td>${s.displayName}</td>
-          <td class="num-cell"><input type="number" min="0" data-stock="${s.feedType}" value="${s.stockKg}"
-            style="width:78px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
-          <td class="num-cell hide-sm">${(+s.kgPerDay).toFixed(1)} kg</td>
-          <td class="num-cell" style="font-weight:700;${s.daysLeftColor || ''}">${s.daysLeftText}</td></tr>`).join('');
+        `<tr><td>${s.displayName}${s.isLowStock ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
+          <td class="num-cell hide-sm"><span class="breed">${Math.round(s.purchasedKg || 0).toLocaleString('en-US')} kg</span></td>
+          <td class="num-cell hide-sm"><span class="breed">${Math.round(s.usedKg || 0).toLocaleString('en-US')} kg</span></td>
+          <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${s.feedType}" value="${s.stockKg}"
+            style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
+          <td class="num-cell">${(+s.kgPerDay).toFixed(1)} kg</td>
+          <td class="num-cell" style="${s.daysLeftColor || ''}">${s.daysLeftText}</td></tr>`).join('');
       bindStockInputs();
     }
 
@@ -793,23 +1042,88 @@ const GoatRecords = (() => {
       flashStoredToast();
     });
 
-    document.querySelectorAll('#buyLogRows tr.feed-buy-row').forEach(row => {
-      row.addEventListener('click', () => loadFeedBuyForEdit(row));
+    document.getElementById('jumpPurchase')?.addEventListener('click', () => {
+      showFeedTab('store');
+      document.getElementById('fb-kg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('fb-kg')?.focus();
+    });
+    document.getElementById('jumpCheck')?.addEventListener('click', () => {
+      showFeedTab('store');
+      document.getElementById('checkList')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    document.getElementById('closeRecipe')?.addEventListener('click', () => {
+      document.getElementById('recipePanel').style.display = 'none';
+    });
+    document.getElementById('scaleBatch')?.addEventListener('click', async () => {
+      const recipe = await api('/Feed/GetMixRecipe?status=' + encodeURIComponent(recipeGroup));
+      const v = document.getElementById('mixBatch')?.value;
+      let target = v === 'custom' ? +(prompt('Batch size in kg?', String(Math.round(recipe.totalKg || 0))) || 0) : +v;
+      if (!target || target <= 0) return;
+      const cur = +recipe.totalKg || 0;
+      if (cur <= 0) { await showModal('Add some ingredients first, then scale.'); return; }
+      const factor = target / cur;
+      const scaled = {};
+      (recipe.items || []).forEach(m => { scaled[m.feedType] = Math.round((+m.kgInBatch || 0) * factor * 100) / 100; });
+      await api('/Feed/UpdateMixRecipeForStatus', {
+        method: 'POST',
+        body: JSON.stringify({ statusKey: recipeGroup, recipe: scaled })
+      });
+      await reloadFeed(recipeGroup);
+    });
+    document.getElementById('fodderMode')?.addEventListener('change', () => saveFodderPool());
+    document.getElementById('fodderAcres')?.addEventListener('change', () => saveFodderPool());
+    document.getElementById('addFodderLine')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'add')) return;
+      const label = document.getElementById('nf-fodname')?.value.trim();
+      const amount = +document.getElementById('nf-fodamt')?.value || 0;
+      if (!label) { await showModal('Enter a cost name'); return; }
+      try {
+        await api('/Feed/AddFodderPoolItem', { method: 'POST', body: JSON.stringify({ label, amount }) });
+        document.getElementById('nf-fodname').value = '';
+        document.getElementById('nf-fodamt').value = '';
+        await reloadFeed();
+      } catch (e) {
+        await showModal(e.message || 'Could not add cost line');
+      }
+    });
+    document.getElementById('fillCheck')?.addEventListener('click', () => {
+      checkDraft = {};
+      (feedData?.stockCheckRows || []).forEach(f => {
+        checkDraft[f.feedType] = Math.round((+f.bookKg || 0) * 10) / 10;
+      });
+      renderCheckList(feedData?.stockCheckRows);
+      const msg = document.getElementById('checkMsg');
+      if (msg) msg.innerHTML = '<span class="breed">Filled with the app\'s figures — change any that differ from your actual count.</span>';
+    });
+    document.getElementById('saveCheck')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'edit')) return;
+      const counts = {};
+      Object.entries(checkDraft).forEach(([k, v]) => {
+        if (v !== '' && v !== undefined) counts[k] = +v || 0;
+      });
+      if (!Object.keys(counts).length) { await showModal('Type what you actually counted in the store.'); return; }
+      const result = await api('/Feed/SaveStockCheck', { method: 'POST', body: JSON.stringify({ counts }) });
+      checkDraft = {};
+      const msg = document.getElementById('checkMsg');
+      if (msg) {
+        msg.innerHTML = `<span style="color:var(--green-dark);font-weight:700">${result.message}</span>` +
+          (result.detailHtml ? ` ${result.detailHtml}` : '');
+      }
+      await reloadFeed();
     });
 
     if (!FarmPerms.can('feed', 'edit')) {
-      FarmPerms.readonlyInputs('[data-price], [data-mix], [data-plan], [data-stock], #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price');
+      FarmPerms.readonlyInputs('[data-price], [data-mix], [data-plan], [data-stock], [data-check], [data-fodamt], #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price, #nf-fodname, #nf-fodamt, #fodderMode, #fodderAcres');
       FarmPerms.hide('addFeedType');
       FarmPerms.hide('addFeedBuy');
+      FarmPerms.hide('addFodderLine');
+      FarmPerms.hide('saveCheck');
+      FarmPerms.hide('fillCheck');
     } else {
-      bindFeedInputs(async (inp) => {
-        if (inp?.dataset?.mix) await saveMixRecipe();
-        else if (inp?.dataset?.plan) await savePlanField(inp);
-      });
-      bindFeedDeleteButtons();
       bindStockInputs();
     }
     FarmPerms.applyForm('feed', { addBtnId: 'addFeedBuy', deleteBtnId: 'deleteFeedBuyBtn', rowSelector: '#buyLogRows tr.feed-buy-row' });
+    reloadFeed();
   }
 
   function initBreeding() {
@@ -2484,23 +2798,363 @@ const GoatRecords = (() => {
     });
   }
 
+  function repKpiHtml(k) {
+    return `<div class="price-row" style="background:#FCFDFB;border:1px solid var(--line);border-radius:12px;padding:12px 14px">
+      <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;${k.color ? 'color:' + k.color : ''}">${k.value}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--ink-soft)">${k.label}</div>
+      ${k.sub ? `<div style="font-size:11px;color:var(--ink-soft);opacity:.8;margin-top:2px">${k.sub}</div>` : ''}</div>`;
+  }
+
+  function repDashKpiHtml(k) {
+    const dot = k.dotColor ? `<span class="dot" style="background:${k.dotColor}"></span>` : '';
+    return `<div class="stat" style="cursor:default"><div class="num" style="font-size:19px">${k.value}</div>
+      <div class="lbl">${dot}${k.label}</div></div>`;
+  }
+
+  function renderReportsData(d) {
+    if (!d) return;
+    const pre = d.preRevenue;
+    const fin = d.finance || {};
+
+    document.getElementById('rep-range').textContent = d.rangeLabel + ' · ' + d.monthCount + ' month' + (d.monthCount === 1 ? '' : 's');
+    document.getElementById('rep-note').innerHTML = d.noteHtml || '';
+
+    const dash = d.dashboard || {};
+    document.getElementById('dashKpi').innerHTML = (dash.kpis || []).map(repDashKpiHtml).join('');
+    document.getElementById('dashRatios').innerHTML = (dash.ratios || []).map(repKpiHtml).join('');
+
+    const th = document.getElementById('trendHead');
+    const ts = document.getElementById('trendSub');
+    const mh = document.getElementById('repMonthHead');
+    if (th) th.textContent = d.trendHeadLabel || 'Month';
+    if (ts) ts.textContent = d.trendSubLabel || 'by month';
+    if (mh) mh.textContent = d.trendLastColumnLabel || 'Net';
+
+    const trendRows = dash.trendRows || [];
+    const tRows = trendRows.map(r => {
+      const last = pre
+        ? `<td class="num-cell" style="color:#8a5b13">${rs(r.ownerInvestment)}</td>`
+        : `<td class="num-cell" style="font-weight:700;color:${r.net < 0 ? '#8a261c' : 'var(--green-dark)'}">${(r.net < 0 ? '– ' : '') + rs(Math.abs(r.net))}</td>`;
+      return `<tr><td><b>${r.key}</b></td>
+        <td class="num-cell hide-sm" style="color:var(--green-dark)">${rs(r.income)}</td>
+        <td class="num-cell" style="color:#8a261c">${rs(r.expense)}</td>${last}</tr>`;
+    }).join('');
+    const tNet = dash.trendTotalNet ?? 0;
+    const tPut = dash.trendTotalOwner ?? 0;
+    const totalLast = pre
+      ? `<td class="num-cell" style="font-weight:800;color:#8a5b13">${rs(tPut)}</td>`
+      : `<td class="num-cell" style="font-weight:800;color:${tNet < 0 ? '#8a261c' : 'var(--green-dark)'}">${(tNet < 0 ? '– ' : '') + rs(Math.abs(tNet))}</td>`;
+    document.getElementById('repMonthRows').innerHTML = (tRows ||
+      `<tr><td colspan="4" class="empty">Nothing recorded in this period.</td></tr>`) +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell hide-sm" style="font-weight:800">${rs(dash.trendTotalIncome || 0)}</td>
+        <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(dash.trendTotalExpense || 0)}</td>${totalLast}</tr>`;
+    window.__trend = { keys: trendRows.map(r => r.key), bucket: Object.fromEntries(trendRows.map(r => [r.key, { inc: r.income, out: r.expense, put: r.ownerInvestment }])), gmode: d.groupBy, label: d.trendHeadLabel };
+
+    const dashAlerts = dash.alerts || [];
+    const alertHtml = a => `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><span style="color:${a.color};font-weight:800">●</span> ${a.html}</div>`;
+    document.getElementById('alertList').innerHTML = dashAlerts.length
+      ? dashAlerts.map(alertHtml).join('') + (d.alerts?.items?.length > dashAlerts.length ? `<div class="rule" style="padding-top:10px">+${d.alerts.items.length - dashAlerts.length} more in the Alerts tab</div>` : '')
+      : `<div class="alldone">✓ Nothing needs attention right now.</div>`;
+    document.getElementById('alertListFull').innerHTML = (d.alerts?.items?.length ? d.alerts.items.map(alertHtml).join('') : `<div class="alldone">✓ Nothing needs attention right now.</div>`);
+
+    const herd = d.herd || {};
+    document.getElementById('repHerdMove').innerHTML = (herd.movement || []).map((r, i, arr) =>
+      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td style="${r.isTotal ? 'font-weight:800' : ''}">${r.label}</td>
+        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : '700'}">${r.count}</td></tr>`).join('');
+    document.getElementById('repHerdRows').innerHTML = (herd.composition || []).map(r =>
+      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${r.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${r.statusCssClass}">${r.statusDisplay}</span>`}</td>
+        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : '700'}">${r.count}</td>
+        <td class="hide-sm barcell">${r.isTotal ? '' : `<div class="bar" style="width:${Math.max(2, r.sharePercent)}%"></div>`}</td>
+        <td class="num-cell hide-sm">${r.isTotal ? '' : `<span class="breed">${r.sharePercent}%</span>`}</td>
+        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : ''}">${rs(r.value)}</td></tr>`).join('');
+    document.getElementById('repAgeGrid').innerHTML = (herd.ageSexBreed || []).map(repKpiHtml).join('');
+    document.getElementById('repHerdChg').innerHTML = (herd.changes?.length ? herd.changes.map(c =>
+      `<tr><td><span class="breed">${c.date}</span></td><td><span class="tag">${c.tag}</span></td>
+        <td class="hide-sm"><span class="breed">${c.breed}</span></td><td>${c.eventHtml}</td>
+        <td class="num-cell">${c.valueDisplay}</td></tr>`).join('') : `<tr><td colspan="5" class="empty">No herd changes in this period.</td></tr>`);
+
+    const br = d.breeding || {};
+    document.getElementById('repBreedGrid').innerHTML = (br.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repBreedNote').innerHTML = br.noteHtml || '';
+    document.getElementById('repLitter').innerHTML = (br.litter || []).map(r =>
+      `<tr><td>${r.label}</td><td class="num-cell" style="font-weight:700">${r.does}</td>
+        <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(2, r.barPercent)}%"></div></td>
+        <td class="num-cell">${r.kids}</td></tr>`).join('') +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell" style="font-weight:800">${br.litterTotalDoes || 0}</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800">${br.litterTotalKids || 0}</td></tr>`;
+    document.getElementById('repDueRows').innerHTML = (br.kiddingCalendar?.length ? br.kiddingCalendar.map(g =>
+      `<tr><td><span class="tag">${g.tag}</span></td><td class="hide-sm"><span class="breed">${g.matedDate}</span></td>
+        <td>${g.kidsDisplay}</td><td><b>${g.dueDate}</b></td>
+        <td class="num-cell" style="font-weight:700;color:${g.dueInColor}">${g.dueInText}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No confirmed pregnancies.</td></tr>`);
+    document.getElementById('repEmptyRows').innerHTML = (br.emptyScans?.length ? br.emptyScans.map(e =>
+      `<tr><td><span class="tag">${e.tag}</span></td><td class="hide-sm"><span class="breed">${e.matedDate}</span></td>
+        <td class="hide-sm"><span class="breed">${e.buckTag}</span></td><td><span class="breed">${e.scanDate}</span></td>
+        <td class="num-cell" style="${e.highlight ? 'color:#8a261c;font-weight:700' : ''}">${e.times}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No empty scans recorded.</td></tr>`);
+
+    const gr = d.growth || {};
+    document.getElementById('repGrowthKpi').innerHTML = (gr.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repGrowthNote').innerHTML = gr.noteHtml || '';
+    document.getElementById('repWeightRows').innerHTML = (gr.weights?.length ? gr.weights.map(w =>
+      `<tr><td><span class="tag">${w.tag}</span></td><td class="hide-sm"><span class="breed">${w.ageLabel}</span></td>
+        <td class="num-cell hide-sm"><span class="breed">${w.firstKg != null ? w.firstKg + ' kg' : '—'}</span></td>
+        <td class="num-cell" style="font-weight:700">${w.latestKg} kg</td>
+        <td class="num-cell" style="${w.underperforming ? 'color:#8a261c;font-weight:700' : ''}">${w.dailyGainDisplay}</td>
+        <td class="num-cell hide-sm"><span class="breed">${w.readings}</span></td></tr>`).join('') :
+      `<tr><td colspan="6" class="empty">No weights recorded yet.</td></tr>`);
+
+    const fd = d.feed || {};
+    document.getElementById('repFeedKpi').innerHTML = (fd.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repFeedStock').innerHTML = (fd.stock || []).map(f =>
+      `<tr><td>${f.name}${f.isLow ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
+        <td class="num-cell hide-sm"><span class="breed">${Math.round(f.purchasedKg).toLocaleString('en-US')}</span></td>
+        <td class="num-cell hide-sm"><span class="breed">${Math.round(f.consumedKg).toLocaleString('en-US')}</span></td>
+        <td class="num-cell" style="font-weight:700">${(Math.round(f.stockKg * 10) / 10).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm">${(+f.dailyUseKg).toFixed(1)}</td>
+        <td class="num-cell" style="${f.daysLeft != null && f.daysLeft < 7 ? 'color:#8a261c;font-weight:700' : ''}">${f.daysLeft == null ? '—' : f.daysLeft + ' d'}</td>
+        <td class="num-cell hide-sm"><span class="breed">Rs ${Math.round(f.avgCostPerKg)}</span></td>
+        <td class="num-cell">${rs(f.stockValue)}</td></tr>`).join('');
+    document.getElementById('repFeedGrp').innerHTML = (fd.costByGroup || []).map(x =>
+      `<tr${x.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${x.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${x.statusCssClass}">${x.statusDisplay}</span>`}</td>
+        <td class="num-cell" style="font-weight:${x.isTotal ? '800' : ''}">${x.goatCount}</td>
+        <td class="num-cell">${x.isTotal ? '' : rs(x.costPerGoatDay)}</td>
+        <td class="num-cell" style="color:var(--green-dark);font-weight:${x.isTotal ? '800' : '700'}">${rs(x.costPerMonth)}</td>
+        <td class="num-cell hide-sm">${x.isTotal ? '' : `<span class="breed">${x.sharePercent}%</span>`}</td></tr>`).join('');
+    document.getElementById('repFeedBuy').innerHTML = (fd.purchases?.length ? fd.purchases.map(b =>
+      `<tr><td>${b.feedName}</td><td class="num-cell">${Math.round(b.kg).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm"><span class="breed">Rs ${b.kg ? Math.round(b.avgRate) : 0}</span></td>
+        <td class="num-cell" style="color:var(--green-dark)">${rs(b.amount)}</td></tr>`).join('') +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell" style="font-weight:800">${Math.round(fd.purchasesTotalKg || 0).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm"></td><td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(fd.purchasesTotalAmount || 0)}</td></tr>` :
+      `<tr><td colspan="4" class="empty">No feed bought in this period.</td></tr>`);
+
+    const hl = d.health || {};
+    document.getElementById('repHealthKpi').innerHTML = (hl.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repVaccRows').innerHTML = (hl.vaccination?.length ? hl.vaccination.map(v =>
+      `<tr><td><b>${v.name}</b><div class="name">${v.ruleLabel}</div></td>
+        <td class="hide-sm"><span class="scopechip">${v.scopeLabel}</span></td>
+        <td class="num-cell">${v.done}</td>
+        <td class="num-cell" style="${v.dueNow ? 'color:#8a261c;font-weight:700' : ''}">${v.dueNow}</td>
+        <td class="num-cell hide-sm">${v.comingUp}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No vaccines set up.</td></tr>`);
+    document.getElementById('repDeathRows').innerHTML = (hl.deaths?.length ? hl.deaths.map(x =>
+      `<tr><td><span class="breed">${x.date}</span></td><td><span class="tag">${x.tag}</span></td>
+        <td class="hide-sm"><span class="breed">${x.ageLabel}</span></td><td>${x.reason}</td>
+        <td class="num-cell" style="color:#8a261c">${x.valueLost != null ? rs(x.valueLost) : '—'}</td></tr>`).join('') +
+      `<tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell" style="font-weight:800">${hl.deaths.length}</td><td class="hide-sm"></td><td></td>
+        <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(hl.deathsTotalValue || 0)}</td></tr>` :
+      `<tr><td colspan="5" class="empty">No deaths recorded in this period. Good.</td></tr>`);
+
+    document.getElementById('rep-expense').textContent = rs(fin.totalExpense || 0);
+    document.getElementById('rep-owner').textContent = rs(fin.totalOwnerInvestment || 0);
+    document.getElementById('rep-income').textContent = rs(fin.totalIncome || 0);
+    document.getElementById('rep-profit-lbl').textContent = fin.profitLabel || 'Net profit';
+    const pv = document.getElementById('rep-profit');
+    pv.textContent = (pre && fin.profitLabel === 'Still to fund' ? '– ' : (fin.profitIsNegative ? '– ' : '')) + rs(fin.profit || 0);
+    pv.style.color = pre ? (fin.profitLabel === 'Still to fund' ? 'var(--amber)' : 'var(--green-dark)') : (fin.profitIsNegative ? '#8a261c' : 'var(--green-dark)');
+
+    const expTot = fin.totalExpense || 0;
+    const incTot = fin.totalIncome || 0;
+    const ownTot = fin.totalOwnerInvestment || 0;
+    const eRows = fin.expenseCategories || [];
+    const eMax = eRows.length ? Math.max(...eRows.map(x => x.amount)) : 1;
+    document.getElementById('repExpRows').innerHTML = (eRows.length ? eRows.map(row =>
+      `<tr><td><b>${row.name}</b><div class="name">${row.percent}% of costs${row.extra || ''}</div></td>
+        <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(4, Math.round(row.amount / eMax * 100))}%;background:var(--red)"></div></td>
+        <td class="num-cell" style="color:#8a261c">${rs(row.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="3" class="empty">No costs in this period.</td></tr>`) +
+      `<tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(expTot)}</td></tr>`;
+
+    const iRows = fin.incomeSources || [];
+    const iMax = iRows.length ? Math.max(...iRows.map(x => x.amount)) : 1;
+    document.getElementById('repIncRows').innerHTML = (iRows.length ? iRows.map(row =>
+      `<tr><td><b>${row.name}</b><div class="name">${row.percent}% of income${row.extra || ''}</div></td>
+        <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(4, Math.round(row.amount / iMax * 100))}%"></div></td>
+        <td class="num-cell" style="color:var(--green-dark)">${rs(row.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="3" class="empty">No income in this period.</td></tr>`) +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(incTot)}</td></tr>`;
+
+    const ownList = fin.ownerRows || [];
+    document.getElementById('repOwnRows').innerHTML = (ownList.length ? ownList.map(o =>
+      `<tr><td><span class="breed">${o.date}</span></td><td><b>${o.note || 'Investment'}</b></td>
+        <td class="num-cell" style="color:#8a5b13">${rs(o.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="3" class="empty">No money added in this period.</td></tr>`) +
+      `<tr style="background:var(--amber-tint)"><td style="font-weight:800">TOTAL PUT IN</td><td></td>
+        <td class="num-cell" style="font-weight:800;color:#8a5b13">${rs(ownTot)}</td></tr>`;
+
+    document.getElementById('repExpList').innerHTML = (fin.expenseEntries?.length ? fin.expenseEntries.map(e =>
+      `<tr><td><span class="breed">${e.date}</span></td><td><span class="chip chip-exp">${e.type}</span></td>
+        <td class="hide-sm"><span class="breed">${e.comment || ''}</span></td><td class="num-cell">${rs(e.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="4" class="empty">You haven't added any cost entries in this period.</td></tr>`);
+
+    document.getElementById('repDayRows').innerHTML = (fin.dayRows?.length ? fin.dayRows.map(r =>
+      `<tr><td><b>${r.date}</b></td><td class="hide-sm"><span class="breed">${r.summary}</span></td>
+        <td class="num-cell hide-sm" style="color:var(--green-dark)">${r.income > 0 ? rs(r.income) : '—'}</td>
+        <td class="num-cell" style="color:#8a261c">${r.expense > 0 ? rs(r.expense) : '—'}</td>
+        <td class="num-cell" style="color:#8a5b13">${r.ownerInvestment > 0 ? rs(r.ownerInvestment) : '—'}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">Nothing recorded in this period.</td></tr>`);
+    document.getElementById('repDayNote').textContent = fin.dayNote || '';
+
+    const pr = d.profitability || {};
+    document.getElementById('repProfitKpi').innerHTML = (pr.unitEconomics || []).map(repKpiHtml).join('');
+    document.getElementById('repProfitNote').innerHTML = pr.noteHtml || '';
+    document.getElementById('repMilkKpi').innerHTML = (pr.milkEconomics || []).map(repKpiHtml).join('');
+    document.getElementById('repMilkRows').innerHTML = (pr.milkByMonth?.length ? pr.milkByMonth.map(m =>
+      `<tr><td><b>${m.month}</b></td><td class="num-cell">${Math.round(m.collectedLiters).toLocaleString('en-US')} L</td>
+        <td class="num-cell">${Math.round(m.soldLiters).toLocaleString('en-US')} L</td>
+        <td class="num-cell hide-sm"><span class="breed">${m.avgRate != null ? 'Rs ' + Math.round(m.avgRate) : '—'}</span></td>
+        <td class="num-cell" style="color:var(--green-dark)">${rs(m.income)}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No milk recorded in this period.</td></tr>`);
+
+    const inv = d.inventory || {};
+    document.getElementById('repInvKpi').innerHTML = (inv.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repInvFeed').innerHTML = (inv.feedStock || []).map(f =>
+      `<tr><td>${f.name}</td><td class="num-cell" style="font-weight:700">${(Math.round(f.quantityKg * 10) / 10).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm"><span class="breed">Rs ${f.ratePerKg}</span></td>
+        <td class="num-cell">${rs(f.value)}</td><td class="num-cell">${f.statusHtml}</td></tr>`).join('') +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td><td class="num-cell"></td>
+        <td class="num-cell hide-sm"></td><td class="num-cell" style="font-weight:800">${rs(inv.feedStockTotalValue || 0)}</td><td></td></tr>`;
+    document.getElementById('repInvAssets').innerHTML = (inv.assets?.length ? inv.assets.map(a =>
+      `<tr><td>${a.name}${a.note ? `<div class="name">${a.note}</div>` : ''}</td>
+        <td class="hide-sm"><span class="chip chip-cap">${a.type}</span></td>
+        <td class="num-cell">${rs(a.value)}</td></tr>`).join('') +
+      `<tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800">${rs(inv.assetsTotalValue || 0)}</td></tr>` :
+      `<tr><td colspan="3" class="empty">No assets recorded.</td></tr>`;
+
+    document.getElementById('repCompareRows').innerHTML = (d.comparison?.rows || []).map(r =>
+      `<tr><td><b>${r.label}</b></td>
+        <td class="num-cell" style="font-weight:700">${r.thisMonth}</td>
+        <td class="num-cell">${r.lastMonth}</td>
+        <td class="num-cell" style="color:${r.differenceColor};font-weight:700">${r.difference}</td>
+        <td class="num-cell hide-sm"><span class="breed">${r.percentChange || '—'}</span></td>
+        <td class="num-cell hide-sm">${r.yearToDate}</td></tr>`).join('');
+  }
+
   function initReports() {
-    const reload = () => {
+    if (!document.getElementById('rep-period')) return;
+
+    function repParams() {
       const period = document.getElementById('rep-period')?.value || 'month';
-      const params = new URLSearchParams({ period });
+      const groupBy = document.getElementById('rep-group')?.value || 'month';
+      const params = new URLSearchParams({ period, groupBy });
       if (period === 'custom') {
         params.set('from', document.getElementById('rep-from')?.value || '');
         params.set('to', document.getElementById('rep-to')?.value || '');
       }
-      location.href = '/Reports?' + params.toString();
-    };
+      return params;
+    }
+
+    async function reloadReports() {
+      const data = await api('/Reports/GetData?' + repParams().toString());
+      renderReportsData(data);
+    }
+
+    document.querySelectorAll('[data-reptab]').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('[data-reptab]').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        document.querySelectorAll('.repview').forEach(v => v.style.display = 'none');
+        document.getElementById('rep-' + t.dataset.reptab).style.display = 'block';
+      });
+    });
+
     document.getElementById('rep-period')?.addEventListener('change', e => {
       const custom = document.getElementById('rep-custom');
       if (custom) custom.style.display = e.target.value === 'custom' ? 'flex' : 'none';
-      if (e.target.value !== 'custom') reload();
+      if (e.target.value !== 'custom') reloadReports();
     });
-    document.getElementById('rep-from')?.addEventListener('change', reload);
-    document.getElementById('rep-to')?.addEventListener('change', reload);
+    document.getElementById('rep-from')?.addEventListener('change', reloadReports);
+    document.getElementById('rep-to')?.addEventListener('change', reloadReports);
+    document.getElementById('rep-group')?.addEventListener('change', reloadReports);
+
+    function csvEsc(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    function tableToCsv(tbodyId, headers) {
+      const tb = document.getElementById(tbodyId);
+      if (!tb) return [];
+      const out = [headers];
+      tb.querySelectorAll('tr').forEach(tr => {
+        const cells = [...tr.children].map(td => {
+          const inp = td.querySelector('input');
+          return (inp ? inp.value : td.textContent).replace(/\s+/g, ' ').trim();
+        });
+        if (cells.join('').trim()) out.push(cells);
+      });
+      return out;
+    }
+
+    document.getElementById('repCsv')?.addEventListener('click', () => {
+      const label = document.getElementById('rep-range')?.textContent?.split('·')[0]?.trim() || 'report';
+      const lines = [];
+      const push = (title, rows) => { if (!rows || rows.length < 2) return; lines.push([title]); rows.forEach(r => lines.push(r)); lines.push([]); };
+      lines.push(['Goat Records — Farm Report']);
+      lines.push(['Period', label]);
+      lines.push(['Generated', new Date().toISOString().slice(0, 16).replace('T', ' ')]);
+      lines.push([]);
+      const kp = [...document.getElementById('dashKpi')?.querySelectorAll('.stat') || []].map(c =>
+        [c.querySelector('.lbl')?.textContent?.trim(), c.querySelector('.num')?.textContent?.trim()]);
+      push('KEY FIGURES', [['Metric', 'Value'], ...kp]);
+      const T = window.__trend;
+      if (T) {
+        const rows = [[T.label, 'Income', 'Expenses', 'Net']];
+        T.keys.forEach(k => { const b = T.bucket[k]; rows.push([k, Math.round(b.inc), Math.round(b.out), Math.round(b.inc - b.out)]); });
+        push('INCOME VS EXPENSES (by ' + T.gmode + ')', rows);
+      }
+      push('HERD MOVEMENT', tableToCsv('repHerdMove', ['Item', 'Count']));
+      push('HERD COMPOSITION', tableToCsv('repHerdRows', ['Group', 'Goats', '', 'Share', 'Value']));
+      push('HERD CHANGES', tableToCsv('repHerdChg', ['Date', 'Tag', 'Breed', 'Event', 'Value']));
+      push('KIDDING CALENDAR', tableToCsv('repDueRows', ['Doe', 'Mated', 'Kids', 'Due date', 'Due in']));
+      push('LITTER SIZE', tableToCsv('repLitter', ['Litter', 'Does', '', 'Kids']));
+      push('EMPTY SCANS', tableToCsv('repEmptyRows', ['Doe', 'Mated', 'Buck', 'Scan date', 'Times']));
+      push('WEIGHTS', tableToCsv('repWeightRows', ['Tag', 'Age', 'First', 'Latest', 'Daily gain', 'Readings']));
+      push('FEED STOCK', tableToCsv('repFeedStock', ['Feed', 'Purchased', 'Consumed', 'Stock', 'Daily use', 'Days left', 'Avg cost/kg', 'Stock value']));
+      push('FEED COST BY GROUP', tableToCsv('repFeedGrp', ['Group', 'Goats', 'Rs/goat/day', 'Cost/month', 'Share']));
+      push('FEED PURCHASES', tableToCsv('repFeedBuy', ['Feed', 'kg', 'Avg rate', 'Total']));
+      push('VACCINATION STATUS', tableToCsv('repVaccRows', ['Vaccine', 'Applies to', 'Done', 'Due now', 'Coming up']));
+      push('DEATHS', tableToCsv('repDeathRows', ['Date', 'Tag', 'Age', 'Reason', 'Value lost']));
+      push('EXPENSES BY CATEGORY', tableToCsv('repExpRows', ['Category', '', 'Amount']));
+      push('REVENUE BY SOURCE', tableToCsv('repIncRows', ['Source', '', 'Amount']));
+      push('OWNER FUNDING', tableToCsv('repOwnRows', ['Date', 'Note', 'Amount']));
+      push('COST ENTRIES', tableToCsv('repExpList', ['Date', 'Type', 'Comment', 'Amount']));
+      push('DAY BY DAY', tableToCsv('repDayRows', ['Date', 'What happened', 'In', 'Spent', 'You put in']));
+      push('MILK BY MONTH', tableToCsv('repMilkRows', ['Month', 'Collected', 'Sold', 'Avg rate', 'Income']));
+      push('INVENTORY — FEED', tableToCsv('repInvFeed', ['Item', 'Quantity', 'Rate', 'Value', 'Status']));
+      push('INVENTORY — ASSETS', tableToCsv('repInvAssets', ['Asset', 'Type', 'Value']));
+      push('PERIOD COMPARISON', tableToCsv('repCompareRows', ['Metric', 'This month', 'Last month', 'Difference', '%', 'Year to date']));
+      const csv = lines.map(r => r.map(csvEsc).join(',')).join('\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'goat-records-report-' + label.replace(/[^0-9a-zA-Z]+/g, '-') + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('repPrint')?.addEventListener('click', () => {
+      const views = [...document.querySelectorAll('.repview')];
+      const prev = views.map(v => v.style.display);
+      views.forEach(v => v.style.display = 'block');
+      document.body.classList.add('printing');
+      const done = () => {
+        views.forEach((v, i) => v.style.display = prev[i]);
+        document.body.classList.remove('printing');
+        window.removeEventListener('afterprint', done);
+      };
+      window.addEventListener('afterprint', done);
+      setTimeout(() => window.print(), 120);
+    });
+
+    reloadReports();
   }
 
   function initBackupButtons() {

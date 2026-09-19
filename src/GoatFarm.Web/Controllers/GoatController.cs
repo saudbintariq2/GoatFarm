@@ -107,5 +107,19 @@ public class GoatController : Controller
         return ok ? Ok(new { success = true }) : NotFound();
     }
 
+    [HttpPost]
+    public async Task<IActionResult> RecordWeight([FromBody] RecordWeightViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return Json(await _goatService.RecordWeightAsync(model, cancellationToken));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> RecordDeath([FromBody] RecordDeathViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return Json(await _goatService.RecordDeathAsync(model, cancellationToken));
+    }
+
     public record CreateGroupRequest(string Name);
 }

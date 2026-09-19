@@ -58,7 +58,7 @@ public class StatisticsService : IStatisticsService
         var vaccine = await _vaccineService.GetVaccinePageAsync(null, month, cancellationToken);
         var reminders = await _reminderService.GetRemindersAsync(cancellationToken);
         var breeding = await _breedingService.GetBreedingPageAsync(cancellationToken);
-        var feed = await _feedService.GetFeedPageAsync(null, month, cancellationToken);
+        var feed = await _feedService.GetFeedPageAsync(null, month, cancellationToken: cancellationToken);
         var stats = await GetHerdStatsAsync(cancellationToken);
 
         var stockLow = feed.Stock.Count(s => s.DaysLeft is < 7);

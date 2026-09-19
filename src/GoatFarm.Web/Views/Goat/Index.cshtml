@@ -19,6 +19,21 @@
     <div class="stat" data-filter="st:buck"><div class="num">@Model.Stats.Bucks</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Bucks</div></div>
 </div>
 
+<div class="panel">
+    <div class="panel-head"><h2>Record weight or death</h2><span class="sub">scan the tag, enter the detail</span></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:1.4fr 1fr 1fr auto auto">
+            <div class="field"><label>Goat — scan or type tag</label>
+                <input id="wd-tag" placeholder="scan or type tag" autocomplete="off"></div>
+            <div class="field"><label>Weight (kg)</label><input type="number" id="wd-kg" min="0" step="0.1"></div>
+            <div class="field"><label>Date</label><input type="date" id="wd-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addWeight">Save weight</button></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost" id="addDeath">Record death</button></div>
+        </div>
+        <div class="rule" id="wd-found" style="margin-top:8px"></div>
+    </div>
+</div>
+
 <div class="panel" id="goatFormPanel">
     <div class="panel-head"><h2 id="goatFormTitle">Add a goat</h2></div>
     <div class="panel-body">

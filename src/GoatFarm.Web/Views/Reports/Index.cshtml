@@ -1,124 +1,274 @@
 @model GoatFarm.Application.ViewModels.Reports.ReportsPageViewModel
-@using GoatFarm.Application.Common
 
 <div class="filterbar" style="margin-bottom:14px">
     <div class="field"><label class="hide-sm">Period</label>
         <select id="rep-period">
+            <option value="today" selected="@(Model.Period == "today")">Today</option>
+            <option value="week" selected="@(Model.Period == "week")">This week</option>
             <option value="month" selected="@(Model.Period == "month")">This month</option>
+            <option value="lastmonth" selected="@(Model.Period == "lastmonth")">Last month</option>
+            <option value="3m" selected="@(Model.Period == "3m")">3 months</option>
+            <option value="6m" selected="@(Model.Period == "6m")">6 months</option>
             <option value="year" selected="@(Model.Period == "year")">This year</option>
             <option value="all" selected="@(Model.Period == "all")">All time</option>
-            <option value="custom" selected="@(Model.Period == "custom")">Pick dates…</option>
+            <option value="custom" selected="@(Model.Period == "custom")">Custom…</option>
         </select></div>
     <div class="field" id="rep-custom" style="display:@(Model.Period == "custom" ? "flex" : "none")">
         <label class="hide-sm">From</label><input type="date" id="rep-from" value="@Model.CustomFrom">
         <label class="hide-sm">To</label><input type="date" id="rep-to" value="@Model.CustomTo">
     </div>
+    <div class="field"><label class="hide-sm">View by</label>
+        <select id="rep-group">
+            <option value="day" selected="@(Model.GroupBy == "day")">Day</option>
+            <option value="week" selected="@(Model.GroupBy == "week")">Week</option>
+            <option value="month" selected="@(Model.GroupBy == "month")">Month</option>
+        </select></div>
+    <button type="button" class="btn btn-ghost btn-sm" id="repCsv">⬇ Download CSV</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="repPrint">🖨 Print / PDF</button>
     <span class="count-pill" id="rep-range">@Model.RangeLabel · @Model.MonthCount month@(Model.MonthCount == 1 ? "" : "s")</span>
 </div>
 
-<div class="rep3">
-    <div class="fincard"><div class="v" id="rep-expense">@DisplayHelper.FormatRs(Model.TotalExpense)</div>
-        <div class="k"><span class="dot" style="background:var(--red)"></span>Total spent</div></div>
-    <div class="fincard"><div class="v" id="rep-owner">@DisplayHelper.FormatRs(Model.TotalOwnerInvestment)</div>
-        <div class="k"><span class="dot" style="background:var(--amber)"></span>Money you put in</div></div>
-    <div class="fincard"><div class="v" id="rep-income">@DisplayHelper.FormatRs(Model.TotalIncome)</div>
-        <div class="k"><span class="dot" style="background:var(--green)"></span>Income (sales)</div></div>
-    <div class="fincard"><div class="v" id="rep-profit" style="color:@(Model.PreRevenue ? "var(--green-dark)" : Model.ProfitLabel == "Profit" && Model.TotalIncome - Model.TotalExpense < 0 ? "#8a261c" : "var(--green-dark)")">@DisplayHelper.FormatRs(Model.Profit)</div>
-        <div class="k"><span class="dot" style="background:var(--blue)"></span><span id="rep-profit-lbl">@Model.ProfitLabel</span></div></div>
+<div class="tabs" style="margin-top:0">
+    <button type="button" class="tab active" data-reptab="dash">Dashboard</button>
+    <button type="button" class="tab" data-reptab="herd">Herd</button>
+    <button type="button" class="tab" data-reptab="breeding">Breeding</button>
+    <button type="button" class="tab" data-reptab="growth">Growth</button>
+    <button type="button" class="tab" data-reptab="feed">Feed</button>
+    <button type="button" class="tab" data-reptab="health">Health</button>
+    <button type="button" class="tab" data-reptab="finance">Finance</button>
+    <button type="button" class="tab" data-reptab="profit">Profitability</button>
+    <button type="button" class="tab" data-reptab="inventory">Inventory</button>
+    <button type="button" class="tab" data-reptab="alerts">Alerts</button>
+    <button type="button" class="tab" data-reptab="compare">Comparison</button>
 </div>
 
-<div class="note" id="rep-note">@Html.Raw(Model.NoteHtml)</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>Money you put in</h2><span class="sub">your own funding for this period</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th>Note</th>
-        <th class="num-cell">Amount</th></tr></thead>
-        <tbody id="repOwnRows">
-        @foreach (var row in Model.OwnerRows)
-        {
-            <tr><td><span class="breed">@row.Date</span></td><td><b>@row.Note</b></td>
-                <td class="num-cell" style="color:#8a5b13">@DisplayHelper.FormatRs(row.Amount)</td></tr>
-        }
-        @if (!Model.OwnerRows.Any()) {<tr><td colspan="3" class="empty">No money added in this period.</td></tr>}
-        <tr style="background:var(--amber-tint)"><td style="font-weight:800">TOTAL PUT IN</td><td></td>
-            <td class="num-cell" style="font-weight:800;color:#8a5b13">@DisplayHelper.FormatRs(Model.TotalOwnerInvestment)</td></tr>
-        </tbody></table></div>
+<div class="repview" id="rep-dash">
+    <div class="stats" id="dashKpi" style="grid-template-columns:repeat(5,1fr)"></div>
+    <div class="note" id="rep-note"></div>
+    <div class="panel">
+        <div class="panel-head"><h2>Farm performance ratios</h2><span class="sub">the health of the operation</span></div>
+        <div class="panel-body"><div class="price-grid" id="dashRatios"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Income vs expenses</h2><span class="sub" id="trendSub">by month</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th id="trendHead">Month</th>
+            <th class="num-cell hide-sm">Income</th><th class="num-cell">Expenses</th>
+            <th class="num-cell" id="repMonthHead">Net</th></tr></thead>
+            <tbody id="repMonthRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Needs attention</h2><span class="sub">act on these</span></div>
+        <div class="panel-body"><div id="alertList"></div></div>
+    </div>
 </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Month by month</h2><span class="sub">income, cost and profit each month</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr><th>Month</th>
-        <th class="num-cell hide-sm">Income</th><th class="num-cell">Total cost</th>
-        <th class="num-cell">Profit</th></tr></thead>
-        <tbody id="repMonthRows">
-        @foreach (var row in Model.MonthRows)
-        {
-            <tr><td><b>@row.Month</b></td>
-                <td class="num-cell hide-sm" style="color:var(--green-dark)">@DisplayHelper.FormatRs(row.Income)</td>
-                <td class="num-cell" style="color:#8a261c">@DisplayHelper.FormatRs(row.Expense)</td>
-                <td class="num-cell" style="font-weight:700;color:@(row.Profit < 0 ? "#8a261c" : "var(--green-dark)")">@DisplayHelper.FormatRs(row.Profit)</td></tr>
-        }
-        </tbody></table></div>
+<div class="repview" id="rep-herd" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Herd movement</h2><span class="sub">opening to closing, this period</span></div>
+        <div class="panel-body"><table class="tbl"><tbody id="repHerdMove"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Herd composition</h2><span class="sub">who is on the farm now</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Group</th>
+            <th class="num-cell">Goats</th><th class="hide-sm"></th><th class="num-cell hide-sm">Share</th>
+            <th class="num-cell">Value</th></tr></thead><tbody id="repHerdRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>By age, sex &amp; breed</h2><span class="sub">herd structure</span></div>
+        <div class="panel-body"><div class="price-grid" id="repAgeGrid"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Additions &amp; losses</h2><span class="sub">what changed this period</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th>Tag</th>
+            <th class="hide-sm">Breed</th><th>Event</th><th class="num-cell">Value</th></tr></thead>
+            <tbody id="repHerdChg"></tbody></table></div>
+    </div>
 </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Day by day</h2><span class="sub">every day something was recorded</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th class="hide-sm">What happened</th>
-        <th class="num-cell hide-sm">In</th><th class="num-cell">Spent</th>
-        <th class="num-cell">You put in</th></tr></thead>
-        <tbody id="repDayRows">
-        @foreach (var row in Model.DayRows)
-        {
-            <tr><td><span class="breed">@row.Date</span></td><td class="hide-sm">@row.Summary</td>
-                <td class="num-cell hide-sm" style="color:var(--green-dark)">@(row.Income > 0 ? DisplayHelper.FormatRs(row.Income) : "—")</td>
-                <td class="num-cell" style="color:#8a261c">@(row.Expense > 0 ? DisplayHelper.FormatRs(row.Expense) : "—")</td>
-                <td class="num-cell" style="color:#8a5b13">@(row.OwnerInvestment > 0 ? DisplayHelper.FormatRs(row.OwnerInvestment) : "—")</td></tr>
-        }
-        @if (!Model.DayRows.Any()) {<tr><td colspan="5" class="empty">No dated entries in this period.</td></tr>}
-        </tbody></table></div>
+<div class="repview" id="rep-breeding" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Breeding performance</h2><span class="sub">how well crossing is working</span></div>
+        <div class="panel-body"><div class="price-grid" id="repBreedGrid"></div>
+            <div class="rule" id="repBreedNote" style="margin-top:12px"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Litter size from scans</h2><span class="sub">singles, twins, triplets</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Litter</th>
+            <th class="num-cell">Does</th><th class="hide-sm"></th><th class="num-cell">Kids</th></tr></thead>
+            <tbody id="repLitter"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Kidding calendar</h2><span class="sub">who is due, and when</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Mated</th>
+            <th>Kids</th><th>Due date</th><th class="num-cell">Due in</th></tr></thead>
+            <tbody id="repDueRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Empty scans</h2><span class="sub">does that did not take</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Mated</th>
+            <th class="hide-sm">Buck</th><th>Scan date</th><th class="num-cell">Times</th></tr></thead>
+            <tbody id="repEmptyRows"></tbody></table></div>
+    </div>
 </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Expenses by category</h2><span class="sub">where the money went</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr><th>Category</th>
-        <th class="hide-sm"></th><th class="num-cell">Amount</th></tr></thead>
-        <tbody id="repExpRows">
-        @foreach (var row in Model.ExpenseCategories)
-        {
-            <tr><td><b>@row.Name</b><div class="name">@row.Percent% of costs@(row.Extra)</div></td>
-                <td class="hide-sm barcell"><div class="bar" style="width:@(row.BarWidth)%;background:var(--red)"></div></td>
-                <td class="num-cell" style="color:#8a261c">@DisplayHelper.FormatRs(row.Amount)</td></tr>
-        }
-        </tbody></table></div>
+<div class="repview" id="rep-growth" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Growth &amp; weight</h2><span class="sub">from recorded weights</span></div>
+        <div class="panel-body"><div class="price-grid" id="repGrowthKpi"></div>
+            <div class="rule" id="repGrowthNote" style="margin-top:12px"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Animal weights</h2><span class="sub">latest weight and daily gain</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Tag</th><th class="hide-sm">Age</th>
+            <th class="num-cell hide-sm">First</th><th class="num-cell">Latest</th>
+            <th class="num-cell">Daily gain</th><th class="num-cell hide-sm">Readings</th></tr></thead>
+            <tbody id="repWeightRows"></tbody></table></div>
+    </div>
 </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Income by source</h2><span class="sub">where the money came from</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr><th>Source</th>
-        <th class="hide-sm"></th><th class="num-cell">Amount</th></tr></thead>
-        <tbody id="repIncRows">
-        @foreach (var row in Model.IncomeSources)
-        {
-            <tr><td><b>@row.Name</b><div class="name">@row.Percent% of income@(row.Extra)</div></td>
-                <td class="hide-sm barcell"><div class="bar" style="width:@(row.BarWidth)%"></div></td>
-                <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(row.Amount)</td></tr>
-        }
-        </tbody></table></div>
+<div class="repview" id="rep-feed" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Feed efficiency</h2><span class="sub">what feed is costing you</span></div>
+        <div class="panel-body"><div class="price-grid" id="repFeedKpi"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Feed stock &amp; consumption</h2><span class="sub">per feed</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Feed</th>
+            <th class="num-cell hide-sm">Purchased</th><th class="num-cell hide-sm">Consumed</th>
+            <th class="num-cell">Stock</th><th class="num-cell hide-sm">Daily use</th>
+            <th class="num-cell">Days left</th><th class="num-cell hide-sm">Avg cost/kg</th>
+            <th class="num-cell">Stock value</th></tr></thead><tbody id="repFeedStock"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Cost by group</h2><span class="sub">which animals eat the budget</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Group</th><th class="num-cell">Goats</th>
+            <th class="num-cell">Rs/goat/day</th><th class="num-cell">Cost/month</th>
+            <th class="num-cell hide-sm">Share</th></tr></thead><tbody id="repFeedGrp"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Feed purchases</h2><span class="sub">this period</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Feed</th>
+            <th class="num-cell">kg</th><th class="num-cell hide-sm">Avg rate</th>
+            <th class="num-cell">Total</th></tr></thead><tbody id="repFeedBuy"></tbody></table></div>
+    </div>
 </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Expense entries you added</h2><span class="sub">every cost you logged</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th>Type</th>
-        <th class="hide-sm">Comment</th><th class="num-cell">Amount</th></tr></thead>
-        <tbody id="repExpList">
-        @foreach (var row in Model.ExpenseEntries)
-        {
-            <tr><td><span class="breed">@row.Date</span></td><td>@row.Type</td>
-                <td class="hide-sm"><span class="name">@row.Comment</span></td>
-                <td class="num-cell" style="color:#8a261c">@DisplayHelper.FormatRs(row.Amount)</td></tr>
-        }
-        @if (!Model.ExpenseEntries.Any()) {<tr><td colspan="4" class="empty">No manual costs in this period.</td></tr>}
-        </tbody></table></div>
+<div class="repview" id="rep-health" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Health &amp; vaccination</h2><span class="sub">cover and cost</span></div>
+        <div class="panel-body"><div class="price-grid" id="repHealthKpi"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Vaccination status</h2><span class="sub">by vaccine</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Vaccine</th><th class="hide-sm">Applies to</th>
+            <th class="num-cell">Done</th><th class="num-cell">Due now</th>
+            <th class="num-cell hide-sm">Coming up</th></tr></thead><tbody id="repVaccRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Deaths</h2><span class="sub">losses recorded</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th>Tag</th>
+            <th class="hide-sm">Age</th><th>Reason</th><th class="num-cell">Value lost</th></tr></thead>
+            <tbody id="repDeathRows"></tbody></table></div>
+    </div>
+</div>
+
+<div class="repview" id="rep-finance" style="display:none">
+    <div class="rep3">
+        <div class="fincard"><div class="v" id="rep-expense">Rs 0</div>
+            <div class="k"><span class="dot" style="background:var(--red)"></span>Total expenses</div></div>
+        <div class="fincard"><div class="v" id="rep-owner">Rs 0</div>
+            <div class="k"><span class="dot" style="background:var(--amber)"></span>Money you put in</div></div>
+        <div class="fincard"><div class="v" id="rep-income">Rs 0</div>
+            <div class="k"><span class="dot" style="background:var(--green)"></span>Total revenue</div></div>
+        <div class="fincard"><div class="v" id="rep-profit">Rs 0</div>
+            <div class="k"><span class="dot" style="background:var(--blue)"></span><span id="rep-profit-lbl">Net profit</span></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Expenses by category</h2><span class="sub">where the money went</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Category</th>
+            <th class="hide-sm"></th><th class="num-cell">Amount</th></tr></thead>
+            <tbody id="repExpRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Revenue by source</h2><span class="sub">where the money came from</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Source</th>
+            <th class="hide-sm"></th><th class="num-cell">Amount</th></tr></thead>
+            <tbody id="repIncRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Money you put in</h2><span class="sub">owner funding</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th>Note</th>
+            <th class="num-cell">Amount</th></tr></thead><tbody id="repOwnRows"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Every cost entry</h2><span class="sub">what you logged</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th>Type</th>
+            <th class="hide-sm">Comment</th><th class="num-cell">Amount</th></tr></thead>
+            <tbody id="repExpList"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Day by day</h2><span class="sub">every day with a record</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Date</th><th class="hide-sm">What happened</th>
+            <th class="num-cell hide-sm">In</th><th class="num-cell">Spent</th>
+            <th class="num-cell">You put in</th></tr></thead><tbody id="repDayRows"></tbody></table>
+            <div class="rule" id="repDayNote" style="margin-top:10px"></div></div>
+    </div>
+</div>
+
+<div class="repview" id="rep-profit" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Cost &amp; profitability</h2><span class="sub">unit economics</span></div>
+        <div class="panel-body"><div class="price-grid" id="repProfitKpi"></div>
+            <div class="rule" id="repProfitNote" style="margin-top:12px"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Milk economics</h2><span class="sub">production and margin</span></div>
+        <div class="panel-body"><div class="price-grid" id="repMilkKpi"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Milk by month</h2><span class="sub">collected, sold and earned</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Month</th>
+            <th class="num-cell">Collected</th><th class="num-cell">Sold</th>
+            <th class="num-cell hide-sm">Avg rate</th><th class="num-cell">Income</th></tr></thead>
+            <tbody id="repMilkRows"></tbody></table></div>
+    </div>
+</div>
+
+<div class="repview" id="rep-inventory" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Inventory value</h2><span class="sub">what the farm holds</span></div>
+        <div class="panel-body"><div class="price-grid" id="repInvKpi"></div></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Feed stock</h2><span class="sub">quantity and value</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Item</th>
+            <th class="num-cell">Quantity</th><th class="num-cell hide-sm">Rate</th>
+            <th class="num-cell">Value</th><th class="num-cell">Status</th></tr></thead>
+            <tbody id="repInvFeed"></tbody></table></div>
+    </div>
+    <div class="panel">
+        <div class="panel-head"><h2>Assets &amp; equipment</h2><span class="sub">capital items</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Asset</th><th class="hide-sm">Type</th>
+            <th class="num-cell">Value</th></tr></thead><tbody id="repInvAssets"></tbody></table></div>
+    </div>
+</div>
+
+<div class="repview" id="rep-alerts" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Alerts &amp; actions</h2><span class="sub">everything needing attention</span></div>
+        <div class="panel-body"><div id="alertListFull"></div></div>
+    </div>
+</div>
+
+<div class="repview" id="rep-compare" style="display:none">
+    <div class="panel">
+        <div class="panel-head"><h2>Period comparison</h2><span class="sub">this month vs last month</span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Metric</th>
+            <th class="num-cell">This month</th><th class="num-cell">Last month</th>
+            <th class="num-cell">Difference</th><th class="num-cell hide-sm">%</th>
+            <th class="num-cell hide-sm">Year to date</th></tr></thead>
+            <tbody id="repCompareRows"></tbody></table></div>
+    </div>
 </div>
 
 @section Scripts {<script>GoatRecords.initReports();</script>}

@@ -1,187 +1,468 @@
 @model GoatFarm.Application.ViewModels.Feed.FeedPageViewModel
+
 @using GoatFarm.Application.Common
+
 @using System.Globalization
 
+
+
 <div class="bignum">
-    <div><div class="lbl">Feed cost per day (mix you buy)</div><div class="big" id="grandDay">@DisplayHelper.FormatRs(Model.GrandDaily)</div>
-        <div class="lbl" id="grandHead">for @Model.TotalGoats goats</div></div>
-    <div class="side"><span class="lbl">Per month</span><b id="grandMonth">@DisplayHelper.FormatRs(Model.GrandMonthly)</b>
-        <span class="lbl" id="grandFodder">+ @Model.FodderKgPerDayTotal.ToString("F0") kg green fodder / day</span></div>
-</div>
-<div class="note"><b>Green fodder is not costed here</b> — you grow and cut it yourself, so its real cost is
-    already in Running costs (land rent, seeding, cutting, water). It's tracked in <b>kg</b> so you know how
-    much to cut and grow. The money figures above are the <b>mix you actually buy</b>, plus medicine.</div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Feed prices</h2><span class="sub">market rate per kg — bought feeds only</span></div>
-    <div class="panel-body"><div class="price-grid" id="priceGrid">
-        @foreach (var p in Model.MixPrices)
-        {
-            <div class="price-row"><label>@p.DisplayName <span class="del feed-del" data-delfeed="@p.FeedType" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
-                <input type="number" min="0" data-price="@p.FeedType" value="@p.PricePerKg"><span class="suf">/ kg</span></div></div>
-        }
+    <div><div class="lbl">Feed cost per day</div><div class="big" id="grandDay">@DisplayHelper.FormatRs(Model.GrandDaily)</div>
+
+        <div class="lbl" id="grandHead">@Model.GrandHeadText</div></div>
+
+    <div class="side">
+
+        <span class="lbl">Per month</span><b id="grandMonth">@DisplayHelper.FormatRs(Model.GrandMonthly)</b>
+
+        <span class="lbl" id="grandPerL">@Model.FeedCostPerLitreText</span></div>
+
+</div>
+
+
+
+<div class="tabs feed-subtabs" style="margin-top:0">
+
+    <button type="button" class="tab feed-subtab @(Model.ActiveSubTab == "store" ? "active" : "")" data-feedtab="store">Store</button>
+
+    <button type="button" class="tab feed-subtab @(Model.ActiveSubTab == "order" ? "active" : "")" data-feedtab="order">Order list</button>
+
+    <button type="button" class="tab feed-subtab @(Model.ActiveSubTab == "plan" ? "active" : "")" data-feedtab="plan">Plan &amp; recipes</button>
+
+</div>
+
+
+
+<div class="feedview" id="feed-store" style="@(Model.ActiveSubTab == "store" ? "" : "display:none")">
+
+    <div id="lowAlert"></div>
+
+    <div class="panel">
+
+        <div class="panel-head"><h2>Feed management</h2>
+
+            <div class="filterbar">
+
+                <button type="button" class="btn btn-ghost btn-sm" id="jumpPurchase">+ Purchase</button>
+
+                <button type="button" class="btn btn-ghost btn-sm" id="jumpCheck">+ Stock check</button>
+
+            </div>
+
+        </div>
+
+        <div class="panel-body">
+
+            <div class="stats" id="feedStats" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px"></div>
+
+            <table class="tbl"><thead><tr><th>Feed</th>
+
+                <th class="num-cell hide-sm">Purchased</th><th class="num-cell hide-sm">Used</th>
+
+                <th class="num-cell">Available</th><th class="num-cell">Daily use</th>
+
+                <th class="num-cell">Left</th></tr></thead>
+
+                <tbody id="stockRows">
+
+                @foreach (var s in Model.Stock)
+
+                {
+
+                    <tr><td>@s.DisplayName@if(s.IsLowStock){<text> <span class="chip chip-exp">LOW</span></text>}</td>
+
+                        <td class="num-cell hide-sm"><span class="breed">@Math.Round(s.PurchasedKg).ToString("N0") kg</span></td>
+
+                        <td class="num-cell hide-sm"><span class="breed">@Math.Round(s.UsedKg).ToString("N0") kg</span></td>
+
+                        <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="@s.FeedType" value="@s.StockKg.ToString("0.##", CultureInfo.InvariantCulture)"
+
+                            style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
+
+                        <td class="num-cell">@s.KgPerDay.ToString("F1") kg</td>
+
+                        <td class="num-cell" style="@s.DaysLeftColor">@s.DaysLeftText</td></tr>
+
+                }
+
+                </tbody></table>
+
+            <div id="reorderNote" style="margin-top:14px"></div>
+
+            <div class="rule" id="autoInfo" style="margin-top:10px">@Html.Raw(Model.FeedSettings.AutoInfoHtml)</div>
+
+        </div>
+
     </div>
-        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-            <div class="field" style="flex:1;min-width:150px"><label>Add a new feed type</label>
-                <input id="nf-name" placeholder="e.g. Silage / Corn gluten"></div>
-            <div class="field"><label>Price (Rs/kg)</label><input type="number" id="nf-price" min="0" style="width:110px"></div>
-            <button type="button" class="btn btn-green" id="addFeedType">+ Add feed</button>
+
+
+
+    <div class="panel">
+
+        <div class="panel-head"><h2>Monthly stock check</h2><span class="sub">count the store, correct the books</span></div>
+
+        <div class="panel-body">
+
+            <div class="note" style="margin:0 0 14px 0">Once a month, weigh what is actually in the store and type
+
+                it here. The app shows the <b>difference</b> against its own figure — that gap is real feeding above
+
+                or below your plan, and it tells you whether your plan needs adjusting.</div>
+
+            <div id="checkList"></div>
+
+            <div style="margin-top:12px">
+
+                <button type="button" class="btn btn-green" id="saveCheck">Save stock check</button>
+
+                <button type="button" class="btn btn-ghost" id="fillCheck">Fill with book figures</button></div>
+
+            <div class="rule" id="checkMsg" style="margin-top:10px"></div>
+
         </div>
+
     </div>
-</div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Mix recipe</h2><span class="sub">what goes into one batch</span></div>
-    <div class="panel-body">
-        <div class="note" style="margin:0 0 14px 0">Build the batch you actually mix — put the kg of each feed
-            that goes in. The app works out your <b>mix cost per kg</b>, then you just set how many kg of this mix
-            each group eats per day.</div>
-        <div id="mixList">
-            @foreach (var m in Model.MixRecipe)
-            {
-                <div class="ration-row"><div class="rn">@m.DisplayName@if(m.Percent > 0){<span class="breed"> · @m.Percent%</span>}</div>
-                    <div class="rin"><input type="number" min="0" step="0.5" data-mix="@m.FeedType" value="@m.KgInBatch.ToString("0.##", CultureInfo.InvariantCulture)"><span class="u">kg</span></div>
-                    <div class="rcost">@DisplayHelper.FormatRs(m.BatchCost)</div></div>
-            }
+
+
+    <div class="panel">
+
+        <div class="panel-head"><h2>Feed bought</h2><span class="sub">purchases → stock &amp; Finance</span></div>
+
+        <div class="panel-body">
+
+            <div class="filterbar" style="margin-bottom:14px">
+
+                <div class="field"><label class="hide-sm">Month</label><input type="month" id="feedMonth" value="@Model.FeedMonth"></div>
+
+            </div>
+
+            <table class="tbl"><thead><tr><th>Date</th><th>Feed</th><th class="num-cell">Qty</th>
+
+                <th class="num-cell hide-sm">Rate/kg</th><th class="num-cell">Total</th>
+
+                <th class="hide-sm">Comment</th></tr></thead>
+
+                <tbody id="buyLogRows">
+
+                @foreach (var b in Model.FeedPurchases)
+
+                {
+
+                    <tr class="feed-buy-row" data-id="@b.Id" data-date="@b.DateDisplay" data-feed="@b.FeedType"
+
+                        data-kg="@b.Kg.ToString(CultureInfo.InvariantCulture)"
+
+                        data-rate="@b.RatePerKg.ToString(CultureInfo.InvariantCulture)"
+
+                        data-comment="@b.Comment">
+
+                        <td><span class="breed">@b.DateDisplay</span></td>
+
+                        <td>@b.FeedDisplayName</td>
+
+                        <td class="num-cell">@b.Kg.ToString("N1") kg</td>
+
+                        <td class="num-cell hide-sm">Rs @b.RatePerKg</td>
+
+                        <td class="num-cell">@DisplayHelper.FormatRs(b.Amount)</td>
+
+                        <td class="hide-sm">@if(!string.IsNullOrEmpty(b.Comment)){<span class="name">@b.Comment</span>}</td>
+
+                    </tr>
+
+                }
+
+                @if (!Model.FeedPurchases.Any()) {<tr class="feed-buy-empty"><td colspan="6" class="empty">No feed purchases logged this month.</td></tr>}
+
+                </tbody></table>
+
+            <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .8fr .9fr .9fr 1.2fr auto">
+
+                <div class="field"><label>Date</label><input type="date" id="fb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+
+                <div class="field"><label>Feed</label><select id="fb-feed">
+
+                    @foreach (var p in Model.AllPrices.Where(p => p.FeedType != "fodder")){<option value="@p.FeedType">@p.DisplayName</option>}
+
+                </select></div>
+
+                <div class="field"><label>Qty (kg)</label><input type="number" id="fb-kg" min="0" step="0.5"></div>
+
+                <div class="field"><label>Rate/kg</label><input type="number" id="fb-rate" min="0"></div>
+
+                <div class="field"><label>Total</label><input type="number" id="fb-total" disabled placeholder="auto"></div>
+
+                <div class="field"><label>Comment</label><input id="fb-note" placeholder="optional"></div>
+
+                <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addFeedBuy">+ Add</button></div>
+
+            </div>
+
+            <div class="goat-form-actions">
+
+                <button type="button" class="btn btn-ghost" id="cancelFeedBuyBtn" style="display:none">Cancel</button>
+
+                <button type="button" class="btn btn-danger" id="deleteFeedBuyBtn" style="display:none">Delete</button>
+
+            </div>
+
         </div>
-        <div class="result" id="mixResult">
-            <div class="r"><div class="v" id="mixTotalKg">@Model.MixTotalKg.ToString("F1") kg</div><div class="k">batch size</div></div>
-            <div class="r"><div class="v" id="mixBatchCost">@DisplayHelper.FormatRs(Model.MixBatchCost)</div><div class="k">cost of one batch</div></div>
-            <div class="r"><div class="v" id="mixCostPerKg">@DisplayHelper.FormatRs(Model.MixCostPerKg)</div><div class="k">mix cost per kg</div></div>
-        </div>
+
     </div>
+
 </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Feed plan per group</h2><span class="sub">kg of mix + extras per goat / day</span></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Group</th><th class="num-cell">Goats</th>
-            <th class="num-cell">Mix kg/goat/day</th><th class="num-cell hide-sm">Fodder kg/day (own)</th>
-            <th class="num-cell hide-sm">Medicine Rs/month</th>
-            <th class="num-cell">Cost / month</th></tr></thead>
-        <tbody id="groupPlanRows">
-        @foreach (var row in Model.GroupPlans)
-        {
-            <tr><td><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
-                <td class="num-cell">@row.GoatCount</td>
-                <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="@row.StatusKey" data-fld="mix" value="@row.MixKgPerDay.ToString("0.##", CultureInfo.InvariantCulture)"
-                    style="width:74px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
-                <td class="num-cell hide-sm"><input type="number" min="0" step="0.5" data-plan="@row.StatusKey" data-fld="fodder" value="@row.FodderKgPerDay.ToString("0.##", CultureInfo.InvariantCulture)"
-                    style="width:74px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
-                <td class="num-cell hide-sm"><input type="number" min="0" data-plan="@row.StatusKey" data-fld="med" value="@row.MedicineCostPerGoatPerMonth.ToString("0.##", CultureInfo.InvariantCulture)"
-                    style="width:80px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
-                <td class="num-cell" style="color:var(--green-dark);font-weight:700">@DisplayHelper.FormatRs(row.MonthlyTotal)</td></tr>
-        }
-        </tbody></table>
-    </div>
-</div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Feed cost by category</h2><span class="sub">what each group costs you</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr><th>Category</th><th class="num-cell">Goats</th>
-        <th class="num-cell hide-sm">Mix kg/day</th><th class="num-cell">Cost / day</th>
-        <th class="num-cell">Cost / month</th><th class="num-cell hide-sm">Share</th>
-        <th class="num-cell hide-sm">Fodder kg/day</th></tr></thead>
-        <tbody id="catCostRows">
-        @foreach (var row in Model.CategoryCosts)
-        {
-            <tr><td><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
-                <td class="num-cell">@row.GoatCount</td>
-                <td class="num-cell hide-sm">@row.MixKgPerDay.ToString("F1")</td>
-                <td class="num-cell">@DisplayHelper.FormatRs(row.DailyCost)</td>
-                <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(row.MonthlyCost)</td>
-                <td class="num-cell hide-sm"><span class="breed">@row.SharePercent%</span></td>
-                <td class="num-cell hide-sm">@row.FodderKgPerDay.ToString("F1") kg</td></tr>
-        }
-        </tbody></table></div>
-</div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Buying list — this month</h2><span class="sub">how much to buy for next month</span></div>
-    <div class="panel-body"><table class="tbl"><thead><tr>
-        <th>Feed</th><th class="num-cell hide-sm">kg / day</th><th class="num-cell">kg / month</th>
-        <th class="num-cell">Rs / month</th>
-    </tr></thead><tbody id="buyRows">
-        @foreach (var b in Model.BuyingList)
-        {
-            <tr><td>@b.DisplayName@if(b.IsOwnLand){<div class="name">grown on your land — not bought</div>}</td>
-                <td class="num-cell hide-sm">@b.KgPerDay.ToString("F1")</td>
-                <td class="num-cell">@Math.Round(b.KgPerMonth).ToString("N0")</td>
-                <td class="num-cell">@(b.IsOwnLand ? Html.Raw("<span class=\"breed\">own land</span>") : Html.Raw($"<span style=\"color:var(--green-dark)\">{DisplayHelper.FormatRs(b.CostPerMonth)}</span>"))</td></tr>
-        }
-    </tbody></table></div>
-</div>
+<div class="feedview" id="feed-order" style="@(Model.ActiveSubTab == "order" ? "" : "display:none")">
 
-<div class="panel">
-    <div class="panel-head"><h2 id="feedBuyFormTitle">Feed bought</h2><span class="sub">actual purchases → Finance</span></div>
-    <div class="panel-body">
-        <div class="filterbar" style="margin-bottom:14px">
-            <div class="field"><label class="hide-sm">Month</label><input type="month" id="feedMonth" value="@Model.FeedMonth"></div>
-        </div>
-        <div class="bignum" style="margin-bottom:14px;padding:14px 18px">
-            <div><div class="lbl">Feed bought this month</div><div class="big" id="feedBoughtMonth" style="font-size:26px">@DisplayHelper.FormatRs(Model.FeedBoughtMonthTotal)</div></div>
-            <div class="side"><span class="lbl" id="feedBoughtKg">@Model.FeedBoughtKgTotal.ToString("N1") kg total</span></div>
-        </div>
-        <table class="tbl"><thead><tr><th>Date</th><th>Feed</th><th class="num-cell">Qty</th>
-            <th class="num-cell hide-sm">Rate/kg</th><th class="num-cell">Total</th>
-            <th class="hide-sm">Comment</th></tr></thead>
-            <tbody id="buyLogRows">
-            @foreach (var b in Model.FeedPurchases)
-            {
-                <tr class="feed-buy-row" data-id="@b.Id" data-date="@b.DateDisplay" data-feed="@b.FeedType"
-                    data-kg="@b.Kg.ToString(CultureInfo.InvariantCulture)"
-                    data-rate="@b.RatePerKg.ToString(CultureInfo.InvariantCulture)"
-                    data-comment="@b.Comment">
-                    <td><span class="breed">@b.DateDisplay</span></td>
-                    <td>@b.FeedDisplayName</td>
-                    <td class="num-cell">@b.Kg.ToString("N1") kg</td>
-                    <td class="num-cell hide-sm">Rs @b.RatePerKg</td>
-                    <td class="num-cell">@DisplayHelper.FormatRs(b.Amount)</td>
-                    <td class="hide-sm">@if(!string.IsNullOrEmpty(b.Comment)){<span class="name">@b.Comment</span>}</td>
-                </tr>
-            }
-            @if (!Model.FeedPurchases.Any()) {<tr class="feed-buy-empty"><td colspan="6" class="empty">No feed purchases logged this month.</td></tr>}
+    <div class="panel">
+
+        <div class="panel-head"><h2>Buy this month</h2><span class="sub">for a 30-day month</span></div>
+
+        <div class="panel-body">
+
+            <div class="note" style="margin:0 0 12px 0">Worked out from each group's recipe and how many goats you
+
+                have. Green fodder shows in kg only — you cut that from your own land.</div>
+
+            <table class="tbl"><thead><tr>
+
+                <th>Feed</th><th class="num-cell hide-sm">kg / day</th><th class="num-cell">kg / month</th>
+
+                <th class="num-cell">Rs / month</th></tr></thead><tbody id="buyRows">
+
+                @foreach (var b in Model.BuyingList)
+
+                {
+
+                    <tr><td>@b.DisplayName@if(b.IsOwnLand){<div class="name">grown on your land — not bought</div>}</td>
+
+                        <td class="num-cell hide-sm">@b.KgPerDay.ToString("F1")</td>
+
+                        <td class="num-cell">@Math.Round(b.KgPerMonth).ToString("N0")</td>
+
+                        <td class="num-cell">@(b.IsOwnLand ? Html.Raw("<span class=\"breed\">own land</span>") : Html.Raw($"<span style=\"color:var(--green-dark)\">{DisplayHelper.FormatRs(b.CostPerMonth)}</span>"))</td></tr>
+
+                }
+
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:1fr 1.3fr .8fr .9fr .9fr auto">
-            <div class="field"><label>Date</label><input type="date" id="fb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label>Feed</label><select id="fb-feed">
-                @foreach (var p in Model.AllPrices){<option value="@p.FeedType">@p.DisplayName</option>}
-            </select></div>
-            <div class="field"><label>Qty (kg)</label><input type="number" id="fb-kg" min="0" step="0.5"></div>
-            <div class="field"><label>Rate/kg</label><input type="number" id="fb-rate" min="0"></div>
-            <div class="field"><label>Total</label><input type="number" id="fb-total" disabled placeholder="auto"></div>
-            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addFeedBuy">+ Add</button></div>
+
         </div>
-        <div class="field field-comment" style="margin-top:10px">
-            <label>Comment</label><input id="fb-note" placeholder="optional">
-        </div>
-        <div class="goat-form-actions">
-            <button type="button" class="btn btn-ghost" id="cancelFeedBuyBtn" style="display:none">Cancel</button>
-            <button type="button" class="btn btn-danger" id="deleteFeedBuyBtn" style="display:none">Delete</button>
-        </div>
+
     </div>
+
 </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Feed stock</h2><span class="sub">bought feeds in the store</span></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Feed</th><th class="num-cell">Stock</th>
-            <th class="num-cell hide-sm">Used / day</th><th class="num-cell">Days left</th></tr></thead>
-            <tbody id="stockRows">
-            @foreach (var s in Model.Stock)
-            {
-                <tr>
-                    <td>@s.DisplayName</td>
-                    <td class="num-cell">
-                        <input type="number" min="0" data-stock="@s.FeedType" value="@s.StockKg.ToString("0.##", CultureInfo.InvariantCulture)"
-                            style="width:78px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg
-                    </td>
-                    <td class="num-cell hide-sm">@s.KgPerDay.ToString("F1") kg</td>
-                    <td class="num-cell" style="font-weight:700;@s.DaysLeftColor">@s.DaysLeftText</td>
-                </tr>
-            }
-            </tbody></table>
+
+
+<div class="feedview" id="feed-plan" style="@(Model.ActiveSubTab == "plan" ? "" : "display:none")">
+
+    <div class="panel">
+
+        <div class="panel-head"><h2>Green fodder cost</h2><span class="sub">cost the land, not the kilos</span></div>
+
+        <div class="panel-body">
+
+            <div class="note" style="margin:0 0 14px 0"><b>You cannot weigh fresh-cut fodder — so don't try.</b>
+
+                Put in what the fodder land costs you for a <b>year</b>, and the app spreads it over the herd to give
+
+                a real cost per goat per day. <b>Nothing is charged twice:</b> these amounts are already in your
+
+                Running costs — here they are only <i>allocated</i> to feed so your cost per goat is complete.</div>
+
+            <div class="price-grid" id="fodderInputs"></div>
+
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+
+                <div class="field" style="flex:1;min-width:170px"><label>Add another fodder cost</label>
+
+                    <input id="nf-fodname" placeholder="e.g. Fertiliser, Tractor diesel, Seed transport"></div>
+
+                <div class="field"><label>Amount / year (Rs)</label><input type="number" id="nf-fodamt" min="0" style="width:120px"></div>
+
+                <button type="button" class="btn btn-green" id="addFodderLine">+ Add cost</button>
+
+            </div>
+
+            <div class="filterbar" style="margin-top:14px">
+
+                <div class="field"><label class="hide-sm">Split between goats</label>
+
+                    <select id="fodderMode">
+                        @if (Model.FodderPool.Mode == "equal")
+                        {
+                            <option value="share">By how much each group eats</option>
+                            <option value="equal" selected>Equally per goat</option>
+                        }
+                        else
+                        {
+                            <option value="share" selected>By how much each group eats</option>
+                            <option value="equal">Equally per goat</option>
+                        }
+                    </select></div>
+
+                <div class="field"><label class="hide-sm">Acres under fodder</label>
+
+                    <input type="number" id="fodderAcres" min="0" step="0.5" style="width:90px" value="@Model.FodderPool.Acres.ToString(CultureInfo.InvariantCulture)"></div>
+
+            </div>
+
+            <div class="result" id="fodderResult"></div>
+
+            <div class="rule" id="fodderNote" style="margin-top:12px">@Html.Raw(Model.FodderPool.NoteHtml)</div>
+
+        </div>
+
     </div>
+
+
+
+    <div class="panel">
+
+        <div class="panel-head"><h2>Feed plan</h2><span class="sub">set once — what one goat eats per day</span></div>
+
+        <div class="panel-body">
+
+            <div class="note" style="margin:0 0 14px 0">One row per group — set what <b>one goat</b> in that group
+
+                eats per day, and the cost works itself out. Press <b>Recipe</b> to change what goes into that group's mix.</div>
+
+            <table class="tbl"><thead><tr><th>Group</th><th class="num-cell">Goats</th>
+
+                <th class="num-cell">Mix kg/goat</th><th class="num-cell hide-sm">Green kg <span style="font-weight:400;text-transform:none">(share)</span></th>
+
+                <th class="num-cell hide-sm">Dry kg</th>
+
+                <th class="num-cell hide-sm">Fodder Rs/day</th>
+
+                <th class="num-cell">Rs/goat/day</th><th class="num-cell">Cost / month</th>
+
+                <th style="width:90px"></th></tr></thead>
+
+                <tbody id="groupPlanRows">
+
+                @foreach (var row in Model.GroupPlans)
+
+                {
+
+                    <tr><td><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
+
+                        <td class="num-cell">@row.GoatCount</td>
+
+                        <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="@row.StatusKey" data-fld="mix" value="@row.MixKgPerDay.ToString("0.##", CultureInfo.InvariantCulture)"
+
+                            style="width:70px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+
+                        <td class="num-cell hide-sm"><input type="number" min="0" step="0.5" data-plan="@row.StatusKey" data-fld="fodder" value="@row.FodderKgPerDay.ToString("0.##", CultureInfo.InvariantCulture)"
+
+                            style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+
+                        <td class="num-cell hide-sm"><input type="number" min="0" step="0.1" data-plan="@row.StatusKey" data-fld="fodderDry" value="@row.FodderDryKgPerDay.ToString("0.##", CultureInfo.InvariantCulture)"
+
+                            style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+
+                        <td class="num-cell hide-sm"><span class="breed">@DisplayHelper.FormatRs(row.FodderCostPerGoatPerDay)</span></td>
+
+                        <td class="num-cell" style="font-weight:700">@DisplayHelper.FormatRs(row.DailyCostPerGoat)</td>
+
+                        <td class="num-cell" style="color:var(--green-dark);font-weight:700">@DisplayHelper.FormatRs(row.MonthlyTotal)</td>
+
+                        <td><button type="button" class="btn btn-ghost btn-sm" data-recipe="@row.StatusKey">Recipe</button></td></tr>
+
+                }
+
+                </tbody></table>
+
+            <div class="rule" id="planFodderMode" style="margin-top:12px">@Html.Raw(Model.PlanFodderModeHtml)</div>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="panel" id="recipePanel" style="display:none">
+
+        <div class="panel-head"><h2>Recipe — <span id="recipeGroupName">@(Model.ActiveRecipe?.StatusDisplay ?? "Milking")</span></h2>
+
+            <div class="filterbar">
+
+                <div class="field"><label class="hide-sm">Batch</label>
+
+                    <select id="mixBatch">
+
+                        <option value="50">50 kg</option><option value="100">100 kg</option>
+
+                        <option value="150">150 kg</option><option value="200">200 kg</option>
+
+                        <option value="250">250 kg</option><option value="500">500 kg</option>
+
+                        <option value="custom">Custom</option></select></div>
+
+                <button type="button" class="btn btn-ghost btn-sm" id="scaleBatch">Scale</button>
+
+                <button type="button" class="btn btn-ghost btn-sm" id="closeRecipe">Close</button>
+
+            </div>
+
+        </div>
+
+        <div class="panel-body">
+
+            <div id="mixList"></div>
+
+            <div class="result" id="mixResult"></div>
+
+            <div class="rule" id="mixCompare" style="margin-top:12px"></div>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="panel">
+
+        <div class="panel-head"><h2>Feed prices</h2><span class="sub">market rate per kg</span></div>
+
+        <div class="panel-body"><div class="price-grid" id="priceGrid">
+
+            @foreach (var p in Model.MixPrices.Concat(Model.AllPrices.Where(x => x.FeedType == "fodderdry")).DistinctBy(x => x.FeedType))
+
+            {
+
+                <div class="price-row"><label>@p.DisplayName <span class="del feed-del" data-delfeed="@p.FeedType" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
+
+                    <input type="number" min="0" data-price="@p.FeedType" value="@p.PricePerKg"><span class="suf">/ kg</span></div></div>
+
+            }
+
+        </div>
+
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+
+                <div class="field" style="flex:1;min-width:150px"><label>Add a new feed type</label>
+
+                    <input id="nf-name" placeholder="e.g. Silage / Corn gluten"></div>
+
+                <div class="field"><label>Price (Rs/kg)</label><input type="number" id="nf-price" min="0" style="width:110px"></div>
+
+                <button type="button" class="btn btn-green" id="addFeedType">+ Add feed</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
 </div>
+
+
 
 @section Scripts {<script>GoatRecords.initFeed();</script>}
+
+

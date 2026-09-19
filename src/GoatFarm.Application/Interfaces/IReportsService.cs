@@ -8,5 +8,6 @@ public interface IReportsService
         string? period,
         string? customFrom,
         string? customTo,
+        string? groupBy = null,
         CancellationToken cancellationToken = default);
 }

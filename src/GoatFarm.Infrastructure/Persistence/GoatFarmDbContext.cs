@@ -31,6 +31,9 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<BreedingEmptyLog> BreedingEmptyLogs => Set<BreedingEmptyLog>();
+    public DbSet<GoatWeightRecord> GoatWeightRecords => Set<GoatWeightRecord>();
+    public DbSet<DeathRecord> DeathRecords => Set<DeathRecord>();
+    public DbSet<FeedUsageRecord> FeedUsageRecords => Set<FeedUsageRecord>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

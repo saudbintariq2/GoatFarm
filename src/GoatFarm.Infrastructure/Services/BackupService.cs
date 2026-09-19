@@ -40,6 +40,15 @@ public class BackupService : Application.Interfaces.IBackupService
             employees = await _context.Employees.AsNoTracking().ToListAsync(cancellationToken),
             breedingEmptyLogs = await _context.BreedingEmptyLogs.AsNoTracking().ToListAsync(cancellationToken),
             mixRecipe = await GetMixRecipeExportAsync(cancellationToken),
+            mixRecipes = await GetAppSettingJsonAsync(Domain.Constants.AppSettingKeys.MixRecipes, cancellationToken),
+            fodderPool = await GetAppSettingJsonAsync(Domain.Constants.AppSettingKeys.FodderPool, cancellationToken),
+            feedSettings = await GetAppSettingJsonAsync(Domain.Constants.AppSettingKeys.FeedSettings, cancellationToken),
+            feedFull = await _context.FeedPrices.AsNoTracking()
+                .Where(p => p.StockKgFull > 0)
+                .ToDictionaryAsync(p => p.FeedType, p => p.StockKgFull, cancellationToken),
+            feedUsage = await _context.FeedUsageRecords.AsNoTracking().ToListAsync(cancellationToken),
+            deaths = await _context.DeathRecords.AsNoTracking().ToListAsync(cancellationToken),
+            goatWeights = await _context.GoatWeightRecords.AsNoTracking().ToListAsync(cancellationToken),
             lookupSettings = await _context.AppSettings.AsNoTracking()
                 .Where(s => s.Key.StartsWith("Lookup."))
                 .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken),
@@ -52,6 +61,15 @@ public class BackupService : Application.Interfaces.IBackupService
         var setting = await _context.AppSettings.AsNoTracking()
             .FirstOrDefaultAsync(s => s.Key == Domain.Constants.AppSettingKeys.MixRecipe, cancellationToken);
         return setting?.Value;
+    }
+
+    private async Task<object?> GetAppSettingJsonAsync(string key, CancellationToken cancellationToken)
+    {
+        var setting = await _context.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+        if (setting?.Value is null) return null;
+        try { return JsonSerializer.Deserialize<object>(setting.Value); }
+        catch { return setting.Value; }
     }
 
     public async Task ImportAsync(string json, CancellationToken cancellationToken = default)

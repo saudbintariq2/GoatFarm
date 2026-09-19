@@ -45,6 +45,9 @@ internal static class BackupImportHelper
         context.Reminders.RemoveRange(await context.Reminders.ToListAsync(cancellationToken));
         context.BreedingEmptyLogs.RemoveRange(await context.BreedingEmptyLogs.ToListAsync(cancellationToken));
         context.Employees.RemoveRange(await context.Employees.ToListAsync(cancellationToken));
+        context.FeedUsageRecords.RemoveRange(await context.FeedUsageRecords.ToListAsync(cancellationToken));
+        context.GoatWeightRecords.RemoveRange(await context.GoatWeightRecords.ToListAsync(cancellationToken));
+        context.DeathRecords.RemoveRange(await context.DeathRecords.ToListAsync(cancellationToken));
         await context.SaveChangesAsync(cancellationToken);
     }
 
@@ -91,6 +94,8 @@ internal static class BackupImportHelper
             });
         }
 
+        await ImportV41ExtrasAsync(context, root, goatIdMap, null, cancellationToken);
+
         await ImportLookupListsV19Async(context, root, cancellationToken);
         await ImportRemindDaysAsync(context, root, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
@@ -116,7 +121,8 @@ internal static class BackupImportHelper
                     FeedType = GetString(item, "feedType", "FeedType") ?? "",
                     DisplayName = GetString(item, "displayName", "DisplayName") ?? "",
                     PricePerKg = GetDecimal(item, "pricePerKg", "PricePerKg"),
-                    StockKg = GetDecimal(item, "stockKg", "StockKg")
+                    StockKg = GetDecimal(item, "stockKg", "StockKg"),
+                    StockKgFull = GetDecimal(item, "stockKgFull", "StockKgFull")
                 });
             }
         }
@@ -136,6 +142,7 @@ internal static class BackupImportHelper
                     StatusKey = status,
                     MixKgPerDay = GetDecimal(planEl, "mixKgPerDay", "MixKgPerDay"),
                     FodderKgPerDay = GetDecimal(planEl, "fodderKgPerDay", "FodderKgPerDay"),
+                    FodderDryKgPerDay = GetDecimal(planEl, "fodderDryKgPerDay", "FodderDryKgPerDay"),
                     MedicineCostPerGoatPerMonth = GetDecimal(planEl, "medicineCostPerGoatPerMonth", "MedicineCostPerGoatPerMonth")
                 };
                 if (planEl.TryGetProperty("items", out var items) || planEl.TryGetProperty("Items", out items))
@@ -232,6 +239,8 @@ internal static class BackupImportHelper
             });
         }
 
+        await ImportV41ExtrasAsync(context, root, BuildGoatIdRemap(root, goatTagMap), goatTagMap, cancellationToken);
+
         await ImportLookupSettingsAsync(context, root, cancellationToken);
         await ImportRemindDaysAsync(context, root, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
@@ -241,6 +250,87 @@ internal static class BackupImportHelper
             if (!doc.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array) return;
             foreach (var item in arr.EnumerateArray())
                 context.Add(map(item));
+        }
+    }
+
+    private static async Task ImportV41ExtrasAsync(
+        GoatFarmDbContext context,
+        JsonElement root,
+        Dictionary<string, int> goatIdByOld,
+        Dictionary<string, int>? goatTagMap,
+        CancellationToken cancellationToken)
+    {
+        goatTagMap ??= await context.Goats.AsNoTracking()
+            .ToDictionaryAsync(g => g.Tag, g => g.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        void ImportAppSettingJson(JsonElement doc, string key, string settingKey)
+        {
+            if (!doc.TryGetProperty(key, out var el)) return;
+            context.AppSettings.Add(new AppSetting { Key = settingKey, Value = el.GetRawText() });
+        }
+
+        ImportAppSettingJson(root, "mixRecipes", AppSettingKeys.MixRecipes);
+        ImportAppSettingJson(root, "fodderPool", AppSettingKeys.FodderPool);
+        ImportAppSettingJson(root, "feedSettings", AppSettingKeys.FeedSettings);
+
+        if (root.TryGetProperty("deaths", out var deaths) && deaths.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var d in deaths.EnumerateArray())
+            {
+                var goatId = GetInt(d, "goatId", "GoatId");
+                if (goatId <= 0 && TryResolveGoatId(d, goatTagMap, goatIdByOld, out var mapped))
+                    goatId = mapped;
+                if (goatId <= 0)
+                {
+                    var tag = GetString(d, "tag", "Tag");
+                    if (!string.IsNullOrWhiteSpace(tag) && goatTagMap.TryGetValue(tag.Trim(), out var byTag))
+                        goatId = byTag;
+                }
+                if (goatId <= 0) continue;
+                context.DeathRecords.Add(new DeathRecord
+                {
+                    GoatId = goatId,
+                    Tag = GetString(d, "tag", "Tag") ?? "",
+                    Breed = GetString(d, "breed", "Breed"),
+                    Date = ParseDateRequired(d, "date", "Date"),
+                    Reason = GetString(d, "reason", "Reason"),
+                    AgeDays = GetNullableInt(d, "ageDays", "AgeDays"),
+                    ValueLost = GetDecimal(d, "valueLost", "ValueLost", "price", "Price")
+                });
+            }
+        }
+
+        if (root.TryGetProperty("feedUsage", out var feedUsage) && feedUsage.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in feedUsage.EnumerateArray())
+                context.FeedUsageRecords.Add(ImportFeedUsage(item));
+        }
+
+        if (root.TryGetProperty("goatWeights", out var goatWeights) && goatWeights.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var w in goatWeights.EnumerateArray())
+            {
+                var goatId = GetInt(w, "goatId", "GoatId");
+                if (goatId <= 0 && TryResolveGoatId(w, goatTagMap, goatIdByOld, out var mapped))
+                    goatId = mapped;
+                if (goatId <= 0) continue;
+                context.GoatWeightRecords.Add(new GoatWeightRecord
+                {
+                    GoatId = goatId,
+                    Date = ParseDateRequired(w, "date", "Date"),
+                    Kg = GetDecimal(w, "kg", "Kg")
+                });
+            }
+        }
+
+        if (root.TryGetProperty("feedFull", out var feedFull) && feedFull.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in feedFull.EnumerateObject())
+            {
+                var price = await context.FeedPrices.FirstOrDefaultAsync(p => p.FeedType == prop.Name, cancellationToken);
+                if (price is not null)
+                    price.StockKgFull = prop.Value.GetDecimal();
+            }
         }
     }
 
@@ -326,6 +416,7 @@ internal static class BackupImportHelper
                 StatusKey = status,
                 MixKgPerDay = GetDecimal(statusProp.Value, "mix", "Mix"),
                 FodderKgPerDay = GetDecimal(statusProp.Value, "fodder", "Fodder"),
+                FodderDryKgPerDay = GetDecimal(statusProp.Value, "fodderDry", "FodderDry", "dryFodder", "DryFodder"),
                 MedicineCostPerGoatPerMonth = GetDecimal(statusProp.Value, "med", "Med")
             };
 
@@ -369,7 +460,10 @@ internal static class BackupImportHelper
                 MatedDate = ParseDate(g, "matedDate", "MatedDate", "matedDate"),
                 BuckTag = GetString(g, "buck", "BuckTag", "buckTag"),
                 KidsCount = GetNullableInt(g, "kids", "KidsCount", "kidsCount"),
-                UltrasoundDate = ParseDate(g, "usDate", "UltrasoundDate", "ultrasoundDate")
+                UltrasoundDate = ParseDate(g, "usDate", "UltrasoundDate", "ultrasoundDate"),
+                IsArchived = GetBool(g, "isArchived", "IsArchived", "archived"),
+                ArchivedReason = GetString(g, "archivedReason", "ArchivedReason", "archivedReason"),
+                ArchivedDate = ParseDate(g, "archivedDate", "ArchivedDate", "archivedDate")
             };
 
             var groupName = GetString(g, "group", "Group");
@@ -402,7 +496,10 @@ internal static class BackupImportHelper
             MatedDate = ParseDate(g, "matedDate", "MatedDate", "matedDate"),
             BuckTag = GetString(g, "buckTag", "BuckTag", "buck"),
             KidsCount = GetNullableInt(g, "kidsCount", "KidsCount", "kids"),
-            UltrasoundDate = ParseDate(g, "ultrasoundDate", "UltrasoundDate", "usDate")
+            UltrasoundDate = ParseDate(g, "ultrasoundDate", "UltrasoundDate", "usDate"),
+            IsArchived = GetBool(g, "isArchived", "IsArchived", "archived"),
+            ArchivedReason = GetString(g, "archivedReason", "ArchivedReason", "archivedReason"),
+            ArchivedDate = ParseDate(g, "archivedDate", "ArchivedDate", "archivedDate")
         };
 
         var groupName = ResolveGroupName(g);
@@ -532,6 +629,15 @@ internal static class BackupImportHelper
         Name = GetString(el, "name", "Name") ?? "",
         Role = GetString(el, "role", "Role"),
         MonthlySalary = GetDecimal(el, "salary", "Salary", "monthlySalary", "MonthlySalary")
+    };
+
+    private static FeedUsageRecord ImportFeedUsage(JsonElement el) => new()
+    {
+        Date = ParseDateRequired(el, "date", "Date"),
+        FeedType = GetString(el, "feed", "Feed", "feedType", "FeedType") ?? "",
+        Kg = GetDecimal(el, "kg", "Kg"),
+        IsAutomatic = GetBool(el, "auto", "Auto", "isAutomatic", "IsAutomatic"),
+        IsStockCheck = GetBool(el, "check", "Check", "isStockCheck", "IsStockCheck")
     };
 
     private static VaccinePurchase ImportVaccinePurchase(JsonElement el) => new()
@@ -826,6 +932,18 @@ internal static class BackupImportHelper
         }
 
         return null;
+    }
+
+    private static bool GetBool(JsonElement el, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!el.TryGetProperty(name, out var val)) continue;
+            if (val.ValueKind == JsonValueKind.True) return true;
+            if (val.ValueKind == JsonValueKind.False) return false;
+        }
+
+        return false;
     }
 
     private static DateOnly? ParseDate(JsonElement el, params string[] names)

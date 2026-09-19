@@ -11,13 +11,13 @@ public class ReportsController : Controller
     public ReportsController(IReportsService reportsService) => _reportsService = reportsService;
 
     [HttpGet]
-    public async Task<IActionResult> Index(string? period, string? from, string? to, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(string? period, string? from, string? to, string? groupBy, CancellationToken cancellationToken)
     {
         ViewData["ActiveTab"] = "reports";
-        return View(await _reportsService.GetReportsPageAsync(period, from, to, cancellationToken));
+        return View(await _reportsService.GetReportsPageAsync(period, from, to, groupBy, cancellationToken));
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetData(string? period, string? from, string? to, CancellationToken cancellationToken) =>
-        Json(await _reportsService.GetReportsPageAsync(period, from, to, cancellationToken));
+    public async Task<IActionResult> GetData(string? period, string? from, string? to, string? groupBy, CancellationToken cancellationToken) =>
+        Json(await _reportsService.GetReportsPageAsync(period, from, to, groupBy, cancellationToken));
 }

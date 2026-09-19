@@ -42,6 +42,7 @@ public static class DbSeeder
                 StatusKey = status,
                 MixKgPerDay = defaults.Mix,
                 FodderKgPerDay = defaults.Fodder,
+                FodderDryKgPerDay = defaults.FodderDry,
                 MedicineCostPerGoatPerMonth = data.med
             };
             foreach (var f in FeedTypes.All)
@@ -66,6 +67,36 @@ public static class DbSeeder
             {
                 Key = AppSettingKeys.MixRecipe,
                 Value = System.Text.Json.JsonSerializer.Serialize(MixRecipeHelper.DefaultRecipe)
+            });
+        }
+
+        if (!await context.AppSettings.AnyAsync(s => s.Key == AppSettingKeys.MixRecipes, cancellationToken))
+        {
+            var perStatus = MixRecipeHelper.DefaultRecipesPerStatus.ToDictionary(
+                p => DisplayHelper.StatusKey(p.Key),
+                p => p.Value);
+            context.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.MixRecipes,
+                Value = System.Text.Json.JsonSerializer.Serialize(perStatus)
+            });
+        }
+
+        if (!await context.AppSettings.AnyAsync(s => s.Key == AppSettingKeys.FodderPool, cancellationToken))
+        {
+            context.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.FodderPool,
+                Value = System.Text.Json.JsonSerializer.Serialize(FodderPoolHelper.DefaultPool())
+            });
+        }
+
+        if (!await context.AppSettings.AnyAsync(s => s.Key == AppSettingKeys.FeedSettings, cancellationToken))
+        {
+            context.AppSettings.Add(new AppSetting
+            {
+                Key = AppSettingKeys.FeedSettings,
+                Value = System.Text.Json.JsonSerializer.Serialize(new FeedSettingsDto())
             });
         }
 

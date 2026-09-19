@@ -17,4 +17,6 @@ public interface IGoatService
     int CountByStatus(GoatStatus status, IReadOnlyList<GoatViewModel>? goats = null);
     int GetAgeInDays(DateOnly eventDate);
     string GetAgeLabel(int days);
+    Task<WeightDeathResultViewModel> RecordWeightAsync(RecordWeightViewModel model, CancellationToken cancellationToken = default);
+    Task<WeightDeathResultViewModel> RecordDeathAsync(RecordDeathViewModel model, CancellationToken cancellationToken = default);
 }

@@ -1,5 +1,4 @@
 using GoatFarm.Application.Common;
-using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Goats;
 using GoatFarm.Domain.Entities;
@@ -24,7 +23,7 @@ public class GoatService : IGoatService
     {
         pageSize = pageSize <= 0 ? DefaultPageSize : pageSize;
 
-        var goats = await _context.Goats
+        var goats = await LiveGoatsQuery()
             .Include(g => g.Group)
             .AsNoTracking()
             .OrderByDescending(g => g.Id)
@@ -105,8 +104,11 @@ public class GoatService : IGoatService
     }
 
     private Task<Goat?> MatchTagAsync(string tag, CancellationToken cancellationToken) =>
-        _context.Goats.Include(g => g.Group).AsNoTracking()
+        LiveGoatsQuery().Include(g => g.Group).AsNoTracking()
             .FirstOrDefaultAsync(g => g.Tag.ToLower() == tag.ToLower(), cancellationToken);
+
+    public IQueryable<Goat> LiveGoatsQuery() =>
+        _context.Goats.Where(g => !g.IsArchived);
 
     private static string NormalizeTag(string tag)
     {
@@ -231,7 +233,62 @@ public class GoatService : IGoatService
     public int CountByStatus(GoatStatus status, IReadOnlyList<GoatViewModel>? goats = null)
     {
         if (goats is not null) return goats.Count(g => g.Status == status);
-        return _context.Goats.Count(g => g.Status == status);
+        return LiveGoatsQuery().Count(g => g.Status == status);
+    }
+
+    public async Task<WeightDeathResultViewModel> RecordWeightAsync(
+        RecordWeightViewModel model, CancellationToken cancellationToken = default)
+    {
+        var goat = await FindGoatByTagAsync(model.Tag, cancellationToken);
+        if (goat is null)
+            return new WeightDeathResultViewModel { Success = false, Message = "No goat found with that tag." };
+
+        _context.GoatWeightRecords.Add(new GoatWeightRecord
+        {
+            GoatId = goat.Id,
+            Date = model.Date,
+            Kg = model.Kg
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+        return new WeightDeathResultViewModel
+        {
+            Success = true,
+            Tag = goat.Tag,
+            Message = $"Weight saved for {goat.Tag}."
+        };
+    }
+
+    public async Task<WeightDeathResultViewModel> RecordDeathAsync(
+        RecordDeathViewModel model, CancellationToken cancellationToken = default)
+    {
+        var goat = await _context.Goats.FirstOrDefaultAsync(g => g.Tag.ToLower() == model.Tag.Trim().ToLower() && !g.IsArchived, cancellationToken);
+        if (goat is null)
+            return new WeightDeathResultViewModel { Success = false, Message = "No live goat found with that tag." };
+
+        var ageDays = GetAgeInDays(goat.EventDate);
+        _context.DeathRecords.Add(new DeathRecord
+        {
+            GoatId = goat.Id,
+            Tag = goat.Tag,
+            Breed = goat.Breed,
+            Date = model.Date,
+            Reason = string.IsNullOrWhiteSpace(model.Reason) ? null : model.Reason.Trim(),
+            AgeDays = ageDays,
+            ValueLost = goat.PurchasePrice
+        });
+
+        goat.IsArchived = true;
+        goat.ArchivedReason = "died";
+        goat.ArchivedDate = model.Date;
+        goat.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return new WeightDeathResultViewModel
+        {
+            Success = true,
+            Tag = goat.Tag,
+            Message = $"Recorded: {goat.Tag} died on {model.Date:yyyy-MM-dd}."
+        };
     }
 
     public int GetAgeInDays(DateOnly eventDate)

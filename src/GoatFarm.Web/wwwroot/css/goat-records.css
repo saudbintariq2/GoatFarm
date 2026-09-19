@@ -324,6 +324,15 @@
   .toast-success{background:var(--green-tint);border-color:var(--green);color:var(--green-dark)}
   .toast-error{background:var(--red-tint);border-color:#d4847a;color:#8a261c}
 
+  @media print{
+    body{padding:0;background:#fff}
+    .tabs,.filterbar button,#repCsv,#repPrint,.bulkbar,.del{display:none !important}
+    .view:not(.active){display:none}
+    .panel{break-inside:avoid;box-shadow:none;border-color:#ccc}
+    .hide-sm{display:table-cell !important}
+    .stat{box-shadow:none}
+  }
+
   @media(max-width:760px){
     .stats{grid-template-columns:repeat(2,1fr)}
     .add-grid{grid-template-columns:1fr 1fr}

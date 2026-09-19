@@ -23,7 +23,10 @@ public class BreedingService : IBreedingService
 
     public async Task<BreedingPageViewModel> GetBreedingPageAsync(CancellationToken cancellationToken = default)
     {
-        var goats = await _context.Goats.AsNoTracking().OrderBy(g => g.Tag).ToListAsync(cancellationToken);
+        var goats = await _context.Goats.AsNoTracking()
+            .Where(g => !g.IsArchived)
+            .OrderBy(g => g.Tag)
+            .ToListAsync(cancellationToken);
         var prep = goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue).ToList();
         var exp = goats.Where(g => g.MatedDate.HasValue).ToList();
 

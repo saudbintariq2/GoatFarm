@@ -9,6 +9,7 @@ public static class FeedTypes
     public const string Maize = "maize";
     public const string Sheera = "sheera";
     public const string Fodder = "fodder";
+    public const string FodderDry = "fodderdry";
 
     public static readonly IReadOnlyList<(string Key, string Name)> All =
     [
@@ -18,6 +19,17 @@ public static class FeedTypes
         (Bran, "Wheat bran (choker)"),
         (Maize, "Maize (makai)"),
         (Sheera, "Sheera (molasses)"),
-        (Fodder, "Green fodder (chaara)")
+        (Fodder, "Green fodder (chaara)"),
+        (FodderDry, "Dry fodder (toori / bhoosa)")
     ];
+
+    public static bool IsGreenFodder(string feedType) =>
+        string.Equals(feedType, Fodder, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsPurchasable(string feedType) =>
+        !IsGreenFodder(feedType);
+
+    public static bool IsMixIngredient(string feedType) =>
+        IsPurchasable(feedType) &&
+        !string.Equals(feedType, FodderDry, StringComparison.OrdinalIgnoreCase);
 }

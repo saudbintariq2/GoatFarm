@@ -28,7 +28,39 @@ public class Goat : BaseEntity
     public string? BuckTag { get; set; }
     public int? KidsCount { get; set; }
     public DateOnly? UltrasoundDate { get; set; }
+    public bool IsArchived { get; set; }
+    public string? ArchivedReason { get; set; }
+    public DateOnly? ArchivedDate { get; set; }
     public ICollection<VaccinationHistory> VaccinationHistories { get; set; } = [];
+    public ICollection<GoatWeightRecord> WeightRecords { get; set; } = [];
+}
+
+public class GoatWeightRecord : BaseEntity
+{
+    public int GoatId { get; set; }
+    public Goat Goat { get; set; } = null!;
+    public DateOnly Date { get; set; }
+    public decimal Kg { get; set; }
+}
+
+public class DeathRecord : BaseEntity
+{
+    public int GoatId { get; set; }
+    public string Tag { get; set; } = string.Empty;
+    public string? Breed { get; set; }
+    public DateOnly Date { get; set; }
+    public string? Reason { get; set; }
+    public int? AgeDays { get; set; }
+    public decimal ValueLost { get; set; }
+}
+
+public class FeedUsageRecord : BaseEntity
+{
+    public DateOnly Date { get; set; }
+    public string FeedType { get; set; } = string.Empty;
+    public decimal Kg { get; set; }
+    public bool IsAutomatic { get; set; }
+    public bool IsStockCheck { get; set; }
 }
 
 public class FeedPrice : BaseEntity
@@ -37,6 +69,7 @@ public class FeedPrice : BaseEntity
     public string DisplayName { get; set; } = string.Empty;
     public decimal PricePerKg { get; set; }
     public decimal StockKg { get; set; }
+    public decimal StockKgFull { get; set; }
 }
 
 public class FeedPlan : BaseEntity
@@ -44,6 +77,7 @@ public class FeedPlan : BaseEntity
     public GoatStatus StatusKey { get; set; }
     public decimal MixKgPerDay { get; set; }
     public decimal FodderKgPerDay { get; set; }
+    public decimal FodderDryKgPerDay { get; set; }
     public decimal MedicineCostPerGoatPerMonth { get; set; }
     public ICollection<FeedPlanItem> Items { get; set; } = [];
 }
