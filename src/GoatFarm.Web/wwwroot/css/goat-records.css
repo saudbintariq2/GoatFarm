@@ -5,11 +5,14 @@
     --amber:#C2842A;--amber-tint:#F7EDDA;--pink:#B5446E;--pink-tint:#F6E4EC;
     --blue:#2E6F8E;--blue-tint:#E1EEF3;--red:#B23A2E;--red-tint:#FBE7E3;
     --shadow:0 1px 2px rgba(27,42,30,.06),0 8px 24px rgba(27,42,30,.06);
+    --page-max:1040px;
+    --page-gutter:16px;
+    --stat-min:140px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);
-    line-height:1.45;-webkit-font-smoothing:antialiased;padding:16px}
-  .wrap{max-width:1040px;margin:0 auto}
+    line-height:1.45;-webkit-font-smoothing:antialiased;padding:var(--page-gutter)}
+  .wrap{width:100%;max-width:min(100%,var(--page-max));margin:0 auto}
   .top{display:flex;align-items:center;gap:12px;margin-bottom:6px}
   .logo{width:42px;height:42px;border-radius:12px;background:var(--green);
     display:grid;place-items:center;font-size:22px;flex-shrink:0;box-shadow:var(--shadow)}
@@ -37,13 +40,17 @@
   .tabs{display:flex;gap:6px;margin:18px 0;background:#fff;border:1px solid var(--line);
     border-radius:12px;padding:5px;box-shadow:var(--shadow);width:fit-content;flex-wrap:wrap}
   .tabs-bar{width:100%;max-width:100%;justify-content:space-between;align-items:center;flex-wrap:nowrap}
-  .tabs-main{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .tabs-main{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1;min-width:0}
+  .rep-subtabs{width:100%;flex-wrap:wrap;gap:5px}
+  .rep-subtabs .rep-subtab{flex:1 1 auto;min-width:88px;text-align:center;padding:8px 12px;font-size:13px}
   .tab-settings{margin-left:auto;flex-shrink:0}
   .tab{font-family:inherit;font-size:14px;font-weight:600;padding:8px 18px;border-radius:8px;
     border:none;background:none;color:var(--ink-soft);cursor:pointer;transition:.15s;text-decoration:none;display:inline-block}
   .tab.active{background:var(--green);color:#fff}
 
-  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(var(--stat-min),1fr));gap:10px;margin-bottom:18px}
+  #dashKpi.stats{--stat-min:150px}
+  #feedStats.stats{--stat-min:160px}
   .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;
     padding:12px 14px;box-shadow:var(--shadow);cursor:pointer;transition:.15s}
   .stat:hover{transform:translateY(-2px);border-color:var(--green)}
@@ -59,7 +66,7 @@
   .panel-head .sub{font-size:12px;color:var(--ink-soft);font-weight:500}
   .panel-body{padding:16px 18px}
 
-  .add-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end}
+  .add-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end}
   .field{display:flex;flex-direction:column;gap:5px}
   .field label{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
   .field input,.field select,.field textarea{font-family:inherit;font-size:14px;padding:9px 10px;
@@ -172,7 +179,7 @@
     border:1px solid #e9d4a8;border-radius:11px;padding:11px 14px;margin-bottom:16px;line-height:1.5}
   .note b{color:#7a5210}
 
-  .price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .price-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
   .price-row{display:flex;flex-direction:column;gap:5px}
   .price-row label{font-size:12px;font-weight:600}
   .price-in{display:flex;align-items:center;gap:6px}
@@ -207,8 +214,8 @@
   .bignum .side{text-align:right;font-size:13px;opacity:.9}
   .bignum .side b{font-size:18px;display:block;font-variant-numeric:tabular-nums}
 
-  .fin3{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
-  .milk4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .fin3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:16px}
+  .milk4{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px}
 
   .dash-panel{margin-bottom:16px}
   .dash-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -259,7 +266,7 @@
   .fincard .v{font-size:23px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
   .fincard .k{font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:2px}
   .fincard .k .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
-  .rep3{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .rep3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:16px}
   .barcell{position:relative;min-width:120px}
   .bar{height:8px;border-radius:4px;background:var(--green);min-width:4px}
 
@@ -333,9 +340,32 @@
     .stat{box-shadow:none}
   }
 
+  @media(min-width:768px){
+    :root{--page-max:1200px;--page-gutter:20px}
+  }
+
+  @media(min-width:1024px){
+    :root{--page-max:1320px;--page-gutter:24px}
+    .rep-subtabs .rep-subtab{font-size:14px;padding:8px 14px}
+  }
+
+  @media(min-width:1440px){
+    :root{--page-max:1440px;--page-gutter:28px}
+  }
+
+  @media(max-width:900px){
+    .add-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .policy-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .rep-subtabs .rep-subtab{flex:1 1 calc(25% - 5px);min-width:72px;font-size:12px;padding:7px 8px}
+    .tabs-bar{flex-wrap:wrap}
+  }
+
   @media(max-width:760px){
-    .stats{grid-template-columns:repeat(2,1fr)}
-    .add-grid{grid-template-columns:1fr 1fr}
+    :root{--stat-min:120px}
+    .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+    #dashKpi.stats,#feedStats.stats{--stat-min:120px}
+    .add-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .rep-subtabs .rep-subtab{flex:1 1 calc(50% - 5px);min-width:0;font-size:12px}
     .goat-add-grid .field-tag,.goat-add-grid .field-comment-goat{grid-column:1 / -1}
     .policy-grid{grid-template-columns:1fr}
     .dash-breed3{grid-template-columns:1fr}
@@ -351,4 +381,5 @@
     .pager-nav{justify-content:center}
     .tabs-bar{flex-wrap:wrap}
     .tab-settings{margin-left:0;width:100%;margin-top:4px;text-align:center}
+    .panel-body{overflow-x:auto;-webkit-overflow-scrolling:touch}
   }
