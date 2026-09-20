@@ -28,18 +28,18 @@
     <span class="count-pill" id="rep-range">@Model.RangeLabel · @Model.MonthCount month@(Model.MonthCount == 1 ? "" : "s")</span>
 </div>
 
-<div class="tabs" style="margin-top:0">
-    <button type="button" class="tab active" data-reptab="dash">Dashboard</button>
-    <button type="button" class="tab" data-reptab="herd">Herd</button>
-    <button type="button" class="tab" data-reptab="breeding">Breeding</button>
-    <button type="button" class="tab" data-reptab="growth">Growth</button>
-    <button type="button" class="tab" data-reptab="feed">Feed</button>
-    <button type="button" class="tab" data-reptab="health">Health</button>
-    <button type="button" class="tab" data-reptab="finance">Finance</button>
-    <button type="button" class="tab" data-reptab="profit">Profitability</button>
-    <button type="button" class="tab" data-reptab="inventory">Inventory</button>
-    <button type="button" class="tab" data-reptab="alerts">Alerts</button>
-    <button type="button" class="tab" data-reptab="compare">Comparison</button>
+<div class="tabs rep-subtabs" id="rep-tabs" style="margin-top:0">
+    <button type="button" class="tab rep-subtab active" data-reptab="dash">Dashboard</button>
+    <button type="button" class="tab rep-subtab" data-reptab="herd">Herd</button>
+    <button type="button" class="tab rep-subtab" data-reptab="breeding">Breeding</button>
+    <button type="button" class="tab rep-subtab" data-reptab="growth">Growth</button>
+    <button type="button" class="tab rep-subtab" data-reptab="feed">Feed</button>
+    <button type="button" class="tab rep-subtab" data-reptab="health">Health</button>
+    <button type="button" class="tab rep-subtab" data-reptab="finance">Finance</button>
+    <button type="button" class="tab rep-subtab" data-reptab="profit">Profitability</button>
+    <button type="button" class="tab rep-subtab" data-reptab="inventory">Inventory</button>
+    <button type="button" class="tab rep-subtab" data-reptab="alerts">Alerts</button>
+    <button type="button" class="tab rep-subtab" data-reptab="compare">Comparison</button>
 </div>
 
 <div class="repview" id="rep-dash">

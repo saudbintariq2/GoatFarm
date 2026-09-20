@@ -2811,12 +2811,24 @@ const GoatRecords = (() => {
       <div class="lbl">${dot}${k.label}</div></div>`;
   }
 
+  function showRepTab(tabKey) {
+    if (!tabKey) return;
+    document.querySelectorAll('.rep-subtab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.reptab === tabKey);
+    });
+    document.querySelectorAll('.repview').forEach(view => { view.style.display = 'none'; });
+    const panel = document.getElementById('rep-' + tabKey);
+    if (panel) panel.style.display = '';
+  }
+
   function renderReportsData(d) {
     if (!d) return;
+    try {
     const pre = d.preRevenue;
     const fin = d.finance || {};
 
-    document.getElementById('rep-range').textContent = d.rangeLabel + ' · ' + d.monthCount + ' month' + (d.monthCount === 1 ? '' : 's');
+    const repRange = document.getElementById('rep-range');
+    if (repRange) repRange.textContent = d.rangeLabel + ' · ' + d.monthCount + ' month' + (d.monthCount === 1 ? '' : 's');
     document.getElementById('rep-note').innerHTML = d.noteHtml || '';
 
     const dash = d.dashboard || {};
@@ -3029,17 +3041,26 @@ const GoatRecords = (() => {
         <td class="num-cell" style="font-weight:800">${rs(inv.assetsTotalValue || 0)}</td></tr>` :
       `<tr><td colspan="3" class="empty">No assets recorded.</td></tr>`;
 
-    document.getElementById('repCompareRows').innerHTML = (d.comparison?.rows || []).map(r =>
-      `<tr><td><b>${r.label}</b></td>
-        <td class="num-cell" style="font-weight:700">${r.thisMonth}</td>
-        <td class="num-cell">${r.lastMonth}</td>
-        <td class="num-cell" style="color:${r.differenceColor};font-weight:700">${r.difference}</td>
-        <td class="num-cell hide-sm"><span class="breed">${r.percentChange || '—'}</span></td>
-        <td class="num-cell hide-sm">${r.yearToDate}</td></tr>`).join('');
+    const repCompareRows = document.getElementById('repCompareRows');
+    if (repCompareRows) {
+      repCompareRows.innerHTML = (d.comparison?.rows || []).map(r =>
+        `<tr><td><b>${r.label}</b></td>
+          <td class="num-cell" style="font-weight:700">${r.thisMonth}</td>
+          <td class="num-cell">${r.lastMonth}</td>
+          <td class="num-cell" style="color:${r.differenceColor};font-weight:700">${r.difference}</td>
+          <td class="num-cell hide-sm"><span class="breed">${r.percentChange || '—'}</span></td>
+          <td class="num-cell hide-sm">${r.yearToDate}</td></tr>`).join('');
+    }
+    } catch (err) {
+      console.error('Reports render failed', err);
+    }
   }
 
   function initReports() {
-    if (!document.getElementById('rep-period')) return;
+    const root = document.getElementById('rep-period');
+    if (!root) return;
+    if (document.body.dataset.reportsInit === '1') return;
+    document.body.dataset.reportsInit = '1';
 
     function repParams() {
       const period = document.getElementById('rep-period')?.value || 'month';
@@ -3053,18 +3074,30 @@ const GoatRecords = (() => {
     }
 
     async function reloadReports() {
-      const data = await api('/Reports/GetData?' + repParams().toString());
-      renderReportsData(data);
+      try {
+        const data = await api('/Reports/GetData?' + repParams().toString());
+        renderReportsData(data);
+      } catch {
+        /* api() already surfaced the error modal */
+      }
     }
 
-    document.querySelectorAll('[data-reptab]').forEach(t => {
-      t.addEventListener('click', () => {
-        document.querySelectorAll('[data-reptab]').forEach(x => x.classList.remove('active'));
-        t.classList.add('active');
-        document.querySelectorAll('.repview').forEach(v => v.style.display = 'none');
-        document.getElementById('rep-' + t.dataset.reptab).style.display = 'block';
+    const tabsRoot = document.getElementById('rep-tabs');
+    if (tabsRoot) {
+      tabsRoot.addEventListener('click', e => {
+        const tab = e.target.closest('[data-reptab]');
+        if (!tab) return;
+        e.preventDefault();
+        showRepTab(tab.dataset.reptab);
       });
-    });
+    } else {
+      document.querySelectorAll('[data-reptab]').forEach(t => {
+        t.addEventListener('click', e => {
+          e.preventDefault();
+          showRepTab(t.dataset.reptab);
+        });
+      });
+    }
 
     document.getElementById('rep-period')?.addEventListener('change', e => {
       const custom = document.getElementById('rep-custom');
@@ -3154,6 +3187,8 @@ const GoatRecords = (() => {
       setTimeout(() => window.print(), 120);
     });
 
+    const initialTab = document.querySelector('.rep-subtab.active')?.dataset.reptab || 'dash';
+    showRepTab(initialTab);
     reloadReports();
   }
 
@@ -3187,6 +3222,7 @@ const GoatRecords = (() => {
   }
 
   initBackupButtons();
+  initReports();
 
   return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
 })();
