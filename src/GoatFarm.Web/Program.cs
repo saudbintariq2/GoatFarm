@@ -6,21 +6,31 @@ using GoatFarm.Web.Middleware;
 using GoatFarm.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using GoatFarm.Infrastructure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var home = Environment.GetEnvironmentVariable("HOME");
-if (!string.IsNullOrEmpty(home))
-{
-    var keysPath = Path.Combine(home, "ASP.NET", "DataProtection-Keys");
-    Directory.CreateDirectory(keysPath);
-    builder.Services.AddDataProtection()
-        .SetApplicationName("GoatFarm")
-        .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
-}
+var keysPath = !string.IsNullOrEmpty(home)
+    ? Path.Combine(home, "ASP.NET", "DataProtection-Keys")
+    : Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "GoatFarm",
+        "DataProtection-Keys");
+Directory.CreateDirectory(keysPath);
+builder.Services.AddDataProtection()
+    .SetApplicationName("GoatFarm")
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "__GoatFarm.Antiforgery";
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
 
 builder.Services.AddControllersWithViews(options =>
 {
@@ -59,6 +69,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 });
 
 var app = builder.Build();
@@ -77,7 +89,9 @@ else
     app.UseDeveloperExceptionPage();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();

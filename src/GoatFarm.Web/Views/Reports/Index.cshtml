@@ -271,4 +271,11 @@
     </div>
 </div>
 
-@section Scripts {<script>GoatRecords.initReports();</script>}
+@section Scripts {
+<script>
+GoatRecords.initReports(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model, new System.Text.Json.JsonSerializerOptions
+{
+    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+})));
+</script>
+}

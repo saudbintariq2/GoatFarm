@@ -172,7 +172,9 @@ const GoatRecords = (() => {
     }
     if (res.status === 204) return null;
     const ct = res.headers.get('content-type') || '';
-    return ct.includes('json') ? res.json() : null;
+    if (ct.includes('json')) return res.json();
+    await showModal('Could not load data from the server. Try refreshing the page or signing in again.');
+    throw new Error('Expected JSON response');
   }
 
   async function initEditableDropdown(selectId, listKey, prefixItems = []) {
@@ -2818,7 +2820,7 @@ const GoatRecords = (() => {
     });
     document.querySelectorAll('.repview').forEach(view => { view.style.display = 'none'; });
     const panel = document.getElementById('rep-' + tabKey);
-    if (panel) panel.style.display = '';
+    if (panel) panel.style.display = 'block';
   }
 
   function renderReportsData(d) {
@@ -3039,7 +3041,7 @@ const GoatRecords = (() => {
         <td class="num-cell">${rs(a.value)}</td></tr>`).join('') +
       `<tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
         <td class="num-cell" style="font-weight:800">${rs(inv.assetsTotalValue || 0)}</td></tr>` :
-      `<tr><td colspan="3" class="empty">No assets recorded.</td></tr>`;
+      `<tr><td colspan="3" class="empty">No assets recorded.</td></tr>`);
 
     const repCompareRows = document.getElementById('repCompareRows');
     if (repCompareRows) {
@@ -3056,11 +3058,11 @@ const GoatRecords = (() => {
     }
   }
 
-  function initReports() {
+  function initReports(initialData) {
     const root = document.getElementById('rep-period');
     if (!root) return;
-    if (document.body.dataset.reportsInit === '1') return;
-    document.body.dataset.reportsInit = '1';
+    const firstInit = document.body.dataset.reportsInit !== '1';
+    if (firstInit) document.body.dataset.reportsInit = '1';
 
     function repParams() {
       const period = document.getElementById('rep-period')?.value || 'month';
@@ -3082,31 +3084,33 @@ const GoatRecords = (() => {
       }
     }
 
-    const tabsRoot = document.getElementById('rep-tabs');
-    if (tabsRoot) {
-      tabsRoot.addEventListener('click', e => {
-        const tab = e.target.closest('[data-reptab]');
-        if (!tab) return;
-        e.preventDefault();
-        showRepTab(tab.dataset.reptab);
-      });
-    } else {
-      document.querySelectorAll('[data-reptab]').forEach(t => {
-        t.addEventListener('click', e => {
+    if (firstInit) {
+      const tabsRoot = document.getElementById('rep-tabs');
+      if (tabsRoot) {
+        tabsRoot.addEventListener('click', e => {
+          const tab = e.target.closest('[data-reptab]');
+          if (!tab || !tabsRoot.contains(tab)) return;
           e.preventDefault();
-          showRepTab(t.dataset.reptab);
+          showRepTab(tab.dataset.reptab);
         });
-      });
-    }
+      } else {
+        document.querySelectorAll('[data-reptab]').forEach(t => {
+          t.addEventListener('click', e => {
+            e.preventDefault();
+            showRepTab(t.dataset.reptab);
+          });
+        });
+      }
 
-    document.getElementById('rep-period')?.addEventListener('change', e => {
-      const custom = document.getElementById('rep-custom');
-      if (custom) custom.style.display = e.target.value === 'custom' ? 'flex' : 'none';
-      if (e.target.value !== 'custom') reloadReports();
-    });
-    document.getElementById('rep-from')?.addEventListener('change', reloadReports);
-    document.getElementById('rep-to')?.addEventListener('change', reloadReports);
-    document.getElementById('rep-group')?.addEventListener('change', reloadReports);
+      document.getElementById('rep-period')?.addEventListener('change', e => {
+        const custom = document.getElementById('rep-custom');
+        if (custom) custom.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+        if (e.target.value !== 'custom') reloadReports();
+      });
+      document.getElementById('rep-from')?.addEventListener('change', reloadReports);
+      document.getElementById('rep-to')?.addEventListener('change', reloadReports);
+      document.getElementById('rep-group')?.addEventListener('change', reloadReports);
+    }
 
     function csvEsc(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
     function tableToCsv(tbodyId, headers) {
@@ -3123,7 +3127,7 @@ const GoatRecords = (() => {
       return out;
     }
 
-    document.getElementById('repCsv')?.addEventListener('click', () => {
+    if (firstInit) document.getElementById('repCsv')?.addEventListener('click', () => {
       const label = document.getElementById('rep-range')?.textContent?.split('·')[0]?.trim() || 'report';
       const lines = [];
       const push = (title, rows) => { if (!rows || rows.length < 2) return; lines.push([title]); rows.forEach(r => lines.push(r)); lines.push([]); };
@@ -3173,7 +3177,7 @@ const GoatRecords = (() => {
       URL.revokeObjectURL(url);
     });
 
-    document.getElementById('repPrint')?.addEventListener('click', () => {
+    if (firstInit) document.getElementById('repPrint')?.addEventListener('click', () => {
       const views = [...document.querySelectorAll('.repview')];
       const prev = views.map(v => v.style.display);
       views.forEach(v => v.style.display = 'block');
@@ -3187,6 +3191,7 @@ const GoatRecords = (() => {
       setTimeout(() => window.print(), 120);
     });
 
+    if (initialData) renderReportsData(initialData);
     const initialTab = document.querySelector('.rep-subtab.active')?.dataset.reptab || 'dash';
     showRepTab(initialTab);
     reloadReports();
@@ -3222,7 +3227,6 @@ const GoatRecords = (() => {
   }
 
   initBackupButtons();
-  initReports();
 
   return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
 })();
