@@ -1,3 +1,4 @@
+using System.Net;
 using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Reports;
@@ -15,7 +16,7 @@ public class ReportsService : IReportsService
     private static readonly GoatStatus[] StatusOrder =
     [
         GoatStatus.Kid, GoatStatus.Milking, GoatStatus.Pregnant,
-        GoatStatus.Dry, GoatStatus.Buck, GoatStatus.Sale
+        GoatStatus.Dry, GoatStatus.Buck, GoatStatus.Sale, GoatStatus.Meat
     ];
 
     private static readonly string[] MedExpenseTypes =
@@ -274,7 +275,9 @@ public class ReportsService : IReportsService
         var weightRows = rows.OrderByDescending(x => x.Adg ?? 0).Select(x => new ReportWeightRowViewModel
         {
             Tag = x.Goat.Tag,
-            AgeLabel = _goatService.GetAgeLabel(_goatService.GetAgeInDays(x.Goat.EventDate)),
+            AgeLabel = BreedingRules.BirthDate(x.Goat) is { } born
+                ? (BreedingRules.AgeIsEstimated(x.Goat) ? "about " : "") + _goatService.GetAgeLabel(_goatService.GetAgeInDays(born))
+                : "age unknown",
             FirstKg = x.N > 1 ? x.First.Kg : null,
             LatestKg = x.Last.Kg,
             DailyGainDisplay = x.Adg.HasValue ? $"{x.Adg.Value * 1000:F0} g" : "—",
@@ -320,9 +323,9 @@ public class ReportsService : IReportsService
             KpiDot("Deaths", deathsP.Count.ToString(), "var(--red)"),
             KpiDot("Feed stock", minDays.HasValue ? $"{minDays} d" : "—", "var(--blue)"),
             KpiDot("Feed cost", DisplayHelper.FormatRs(feedMonth * range.MonthCount), "var(--amber)"),
-            KpiDot("Revenue", DisplayHelper.FormatRs(incTot), "var(--green)"),
-            KpiDot("Expenses", DisplayHelper.FormatRs(expTot), "var(--red)"),
-            KpiDot("Net profit", (net < 0 ? "– " : "") + DisplayHelper.FormatRs(Math.Abs(net)), net < 0 ? "var(--red)" : "var(--green)"),
+            Fin(KpiDot("Revenue", DisplayHelper.FormatRs(incTot), "var(--green)")),
+            Fin(KpiDot("Expenses", DisplayHelper.FormatRs(expTot), "var(--red)")),
+            Fin(KpiDot("Net profit", (net < 0 ? "– " : "") + DisplayHelper.FormatRs(Math.Abs(net)), net < 0 ? "var(--red)" : "var(--green)")),
             KpiDot("Vaccines due", vaccDueTotal.ToString(), vaccDueTotal > 0 ? "var(--amber)" : "var(--green)")
         };
 
@@ -335,7 +338,7 @@ public class ReportsService : IReportsService
             Kpi("Feed cost/goat/day", herdSize > 0 ? DisplayHelper.FormatRs(feedMonthly / 30 / herdSize) : "—", "all groups"),
             Kpi("Feed cost/litre", costPerL.HasValue ? "Rs " + costPerL.Value.ToString("F1") : "—", "milk collected",
                 costPerL is > 60 ? "#8a261c" : null),
-            Kpi("Health cost/goat", herdSize > 0 ? DisplayHelper.FormatRs((vaccCost + medCost) / herdSize) : "—", "vaccines + medicine")
+            Fin(Kpi("Health cost/goat", herdSize > 0 ? DisplayHelper.FormatRs((vaccCost + medCost) / herdSize) : "—", "vaccines + medicine"))
         };
 
         return new ReportDashboardSectionViewModel
@@ -535,7 +538,7 @@ public class ReportsService : IReportsService
             Kpi("Cost per litre", costPerL.HasValue ? "Rs " + costPerL.Value.ToString("F1") : "—", "feed ÷ milk collected",
                 costPerL is > 60 ? "#8a261c" : "var(--green-dark)"),
             Kpi("Feed bought", DisplayHelper.FormatRs(feedPeriod), "actual spend"),
-            Kpi("Feed share of costs", feedShare + "%", "of running costs", feedShare > 75 ? "#8a261c" : null),
+            Fin(Kpi("Feed share of costs", feedShare + "%", "of running costs", feedShare > 75 ? "#8a261c" : null)),
             Kpi("Stock value", DisplayHelper.FormatRs(stockVal), "in the store")
         };
 
@@ -635,8 +638,8 @@ public class ReportsService : IReportsService
             Kpi("Coming up", vaccUp.ToString(), $"within {remindDays} days", "var(--amber)"),
             Kpi("Doses given", vaccDone.ToString(), "in this period", "var(--green-dark)"),
             Kpi("Vaccine cost", DisplayHelper.FormatRs(vaccCost), "purchases this period"),
-            Kpi("Medicine & vet", DisplayHelper.FormatRs(medCost), medCost > 0 ? "actually spent" : "nothing spent this period"),
-            Kpi("Health cost/goat", totalGoats > 0 ? DisplayHelper.FormatRs((vaccCost + medCost) / totalGoats) : "—", "actual spend ÷ herd")
+            Fin(Kpi("Medicine & vet", DisplayHelper.FormatRs(medCost), medCost > 0 ? "actually spent" : "nothing spent this period")),
+            Fin(Kpi("Health cost/goat", totalGoats > 0 ? DisplayHelper.FormatRs((vaccCost + medCost) / totalGoats) : "—", "actual spend ÷ herd"))
         };
 
         var vaccRows = vaccines.Select(v => new ReportVaccineStatusRowViewModel
@@ -758,8 +761,8 @@ public class ReportsService : IReportsService
         {
             Kpi("Feed stock value", DisplayHelper.FormatRs(stockVal), "in the store"),
             Kpi("Livestock value", DisplayHelper.FormatRs(livestockValue), "bought goats at cost"),
-            Kpi("Assets & equipment", DisplayHelper.FormatRs(assetsValue), assets.Count + " items"),
-            Kpi("Total capital", DisplayHelper.FormatRs(livestockValue + assetsValue), "livestock + assets", "var(--blue)"),
+            Fin(Kpi("Assets & equipment", DisplayHelper.FormatRs(assetsValue), assets.Count + " items")),
+            Fin(Kpi("Total capital", DisplayHelper.FormatRs(livestockValue + assetsValue), "livestock + assets", "var(--blue)")),
             Kpi("Low stock items", LowCount(feedPrices).ToString(), "at or under 20%", LowCount(feedPrices) > 0 ? "#8a261c" : "var(--green-dark)"),
             Kpi("Out of stock", OutCount(feedPrices).ToString(), "nothing left", "#8a261c")
         };
@@ -819,23 +822,23 @@ public class ReportsService : IReportsService
         foreach (var f in feedPrices.Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase)))
         {
             if (f.StockKgFull > 0 && f.StockKg / f.StockKgFull <= 0.2m)
-                al.Add(Alert("#8a261c", $"Low feed stock: <b>{f.DisplayName}</b> — {Math.Round(f.StockKg / f.StockKgFull * 100)}% left"));
+                al.Add(Alert("#8a261c", $"Low feed stock: <b>{H(f.DisplayName)}</b> — {Math.Round(f.StockKg / f.StockKgFull * 100)}% left"));
             if (f.StockKg <= 0)
-                al.Add(Alert("#8a261c", $"Out of stock: <b>{f.DisplayName}</b>"));
+                al.Add(Alert("#8a261c", $"Out of stock: <b>{H(f.DisplayName)}</b>"));
         }
 
         foreach (var v in vaccines)
         {
             var d = GetDueGoats(v, goats, log);
             if (d.Count > 0)
-                al.Add(Alert("var(--amber)", $"<b>{v.Name}</b> due for {d.Count} goat(s)"));
+                al.Add(Alert("var(--amber)", $"<b>{H(v.Name)}</b> due for {d.Count} goat(s)"));
         }
 
         foreach (var g in goats.Where(g => g.MatedDate.HasValue && (!g.KidsCount.HasValue || g.KidsCount == 0)))
         {
             var days = _goatService.GetAgeInDays(g.MatedDate!.Value);
             if (days >= 45)
-                al.Add(Alert("var(--blue)", $"Scan due: <b>{g.Tag}</b> crossed {days} days ago"));
+                al.Add(Alert("var(--blue)", $"Scan due: <b>{H(g.Tag)}</b> crossed {days} days ago"));
         }
 
         foreach (var g in confirmed)
@@ -843,14 +846,14 @@ public class ReportsService : IReportsService
             var kd = BreedingHelper.ExpectedKidding(g.MatedDate!.Value);
             var d = BreedingHelper.DaysUntil(kd);
             if (d <= 14)
-                al.Add(Alert("var(--pink)", $"Expected kidding: <b>{g.Tag}</b> in {d} days"));
+                al.Add(Alert("var(--pink)", $"Expected kidding: <b>{H(g.Tag)}</b> in {d} days"));
         }
 
         foreach (var g in goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue))
         {
             var start = g.PrepCrossDate!.Value.AddDays(-BreedingHelper.PrepDietLeadDays);
             if (BreedingHelper.DaysUntil(start) <= 0)
-                al.Add(Alert("var(--amber)", $"Build-up feeding now: <b>{g.Tag}</b> — cross on {g.PrepCrossDate:yyyy-MM-dd}"));
+                al.Add(Alert("var(--amber)", $"Build-up feeding now: <b>{H(g.Tag)}</b> — cross on {g.PrepCrossDate:yyyy-MM-dd}"));
         }
 
         foreach (var tag in underperformingTags)
@@ -860,7 +863,7 @@ public class ReportsService : IReportsService
             {
                 var adg = (recs[^1].Kg - recs[0].Kg) / Math.Max(1,
                     (recs[^1].Date.ToDateTime(TimeOnly.MinValue) - recs[0].Date.ToDateTime(TimeOnly.MinValue)).Days);
-                al.Add(Alert("var(--amber)", $"Low weight gain: <b>{tag}</b> at {adg * 1000:F0} g/day"));
+                al.Add(Alert("var(--amber)", $"Low weight gain: <b>{H(tag)}</b> at {adg * 1000:F0} g/day"));
             }
         }
 
@@ -869,7 +872,7 @@ public class ReportsService : IReportsService
             var d = BreedingHelper.DaysUntil(r.ReminderDate);
             if (d <= remindDays)
                 al.Add(Alert(d < 0 ? "#8a261c" : "var(--amber)",
-                    $"{r.Title} — {(d < 0 ? "overdue" : "in " + d + " days")}"));
+                    $"{H(r.Title)} — {(d < 0 ? "overdue" : "in " + d + " days")}"));
         }
 
         return new ReportAlertsSectionViewModel { Items = al };
@@ -895,6 +898,7 @@ public class ReportsService : IReportsService
         var b = SumFor(lastM);
         var y = SumFor(yr);
 
+        // Every money row here is income, expense, profit or owner funding.
         var rows = new (string Label, Func<PeriodSum, decimal> Get, bool Money, bool LowerIsGood)[]
         {
             ("Revenue", s => s.Inc, true, false),
@@ -922,7 +926,8 @@ public class ReportsService : IReportsService
                 Difference = (d > 0 ? "+" : "") + FormatCompare(d, row.Money),
                 DifferenceColor = d == 0 ? "var(--ink-soft)" : good ? "var(--green-dark)" : "#8a261c",
                 PercentChange = pct.HasValue ? (pct > 0 ? "+" : "") + pct + "%" : "—",
-                YearToDate = FormatCompare(yv, row.Money)
+                YearToDate = FormatCompare(yv, row.Money),
+                IsFinancial = row.Money
             };
         }).ToList();
 
@@ -1126,8 +1131,17 @@ public class ReportsService : IReportsService
     private static ReportKpiViewModel KpiDot(string label, string value, string dotColor) =>
         new() { Label = label, Value = value, DotColor = dotColor };
 
+    private static ReportKpiViewModel Fin(ReportKpiViewModel kpi)
+    {
+        kpi.IsFinancial = true;
+        return kpi;
+    }
+
+    /// <summary>Alert HTML is rendered as markup; every user-entered value inside it must go through this.</summary>
     private static ReportAlertItemViewModel Alert(string color, string html) =>
         new() { Color = color, Html = html };
+
+    private static string H(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
 
     private Dictionary<string, decimal> BuildIncomeMap(
         IReadOnlyList<Income> incomes, IReadOnlyList<MilkSale> milkSales, ReportRange range)

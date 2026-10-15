@@ -1,6 +1,14 @@
 ﻿@inject IConfiguration Configuration
 
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+
+
+
 @using GoatFarm.Domain.Constants
+
+@using System.Security.Claims
+
+
 
 @{
 
@@ -17,8 +25,114 @@
     var farmPermissionsJson = ViewData["FarmPermissionsJson"]?.ToString() ?? "{}";
 
     var farmUserRole = ViewData["FarmUserRole"]?.ToString() ?? "";
+    var farmUserFullName = ViewData["FarmUserFullName"]?.ToString() ?? "";
+
+    var bodyClass = ViewData["BodyClass"]?.ToString() ?? "";
+
+    var useShell = isAuthenticated && !bodyClass.Contains("auth-page");
+
+
+
+    var navItems = new (string Tab, string Controller, string Label, string ActiveKey)[]
+
+    {
+
+        (FarmTabs.Dashboard, "Dashboard", "Dashboard", "dashboard"),
+
+        (FarmTabs.Herd, "Goat", "Herd", "herd"),
+
+        (FarmTabs.Breeding, "Breeding", "Breeding", "breeding"),
+
+        (FarmTabs.Milk, "Milk", "Milk Production", "milk"),
+
+        (FarmTabs.Feed, "Feed", "Feed & Inventory", "feed"),
+
+        (FarmTabs.Vaccines, "Vaccine", "Health", "health"),
+
+        (FarmTabs.Finance, "Finance", "Finance", "finance"),
+
+        (FarmTabs.Reports, "Reports", "Reports", "reports"),
+
+        (FarmTabs.Tasks, "Tasks", "Tasks", "tasks"),
+
+        (FarmTabs.Search, "Search", "Search", "search")
+
+    };
+
+
+
+    var pageTitles = new Dictionary<string, (string Title, string Sub, string Icon)>(StringComparer.OrdinalIgnoreCase)
+
+    {
+
+        ["dashboard"] = ("Dashboard", "Today at the farm, at a glance", "🏠"),
+
+        ["tasks"] = ("Tasks", "Assign work and follow it through", "✅"),
+
+        ["herd"] = ("The herd", "Manage and track all your goats", "🐐"),
+
+        ["breeding"] = ("Breeding", "Ready → crossed → scan → birth", "💞"),
+
+        ["health"] = ("Vaccines & health", "Schedules, due lists and purchases", "💉"),
+
+        ["milk"] = ("Milk", "Collect, sell and account for waste", "🥛"),
+
+        ["feed"] = ("Feed & stock", "Store, usage, plans and recipes", "🌾"),
+
+        ["finance"] = ("Finance", "Money in, money out, salaries", "💰"),
+
+        ["reports"] = ("Reports", "Figures you can export", "📊"),
+
+        ["search"] = ("Search", "Open a goat by tag or RFID", "🔎"),
+
+        ["settings"] = ("Settings", "People, roles and password rules", "⚙️")
+
+    };
+
+    pageTitles.TryGetValue(activeTab, out var pageMeta);
+
+
+
+    var displayName = !string.IsNullOrWhiteSpace(farmUserFullName)
+        ? farmUserFullName.Trim()
+        : User.FindFirst("FullName")?.Value
+            ?? User.FindFirst(ClaimTypes.GivenName)?.Value
+            ?? (User.Identity?.Name?.Contains('@') == true
+                ? User.Identity.Name.Split('@')[0].Replace('.', ' ')
+                : User.Identity?.Name ?? "User");
+
+    displayName = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(displayName.Trim());
+    var roleLabel = string.IsNullOrWhiteSpace(farmUserRole) ? "Team member" : farmUserRole.Trim();
+
+    var initials = string.Concat(displayName.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+
+        .Take(2).Select(p => char.ToUpperInvariant(p[0])));
+
+    if (string.IsNullOrEmpty(initials) && !string.IsNullOrEmpty(User.Identity?.Name))
+
+        initials = User.Identity.Name[..Math.Min(2, User.Identity.Name.Length)].ToUpperInvariant();
+
+
+
+    var heroTitle = string.IsNullOrEmpty(pageMeta.Title) || activeTab == "dashboard"
+
+        ? farmName
+
+        : pageMeta.Title;
+
+    var heroEyebrow = activeTab == "dashboard" ? "Welcome Back," : farmName;
+
+    var heroTag = activeTab == "dashboard"
+
+        ? "Manage your herd, milk, feed, health and operations — all in one place."
+
+        : (pageMeta.Sub ?? "Goat farm management");
+
+    var brandUpper = farmName.ToUpperInvariant();
 
 }
+
+
 
 <!DOCTYPE html>
 
@@ -30,17 +144,21 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <meta name="csrf-token" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken">
+
     <title>@farmName — Farm Software</title>
 
-    <link rel="icon" href="~/favicon.svg" type="image/svg+xml" asp-append-version="true" />
+    <link rel="icon" href="~/images/goat-logo.png" type="image/png" asp-append-version="true" />
 
-    <link rel="alternate icon" href="~/favicon.svg" asp-append-version="true" />
+    <link rel="alternate icon" href="~/images/goat-logo.png" type="image/png" asp-append-version="true" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
 
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="~/css/farm-pro.css" asp-append-version="true" />
 
     <link rel="stylesheet" href="~/css/goat-records.css" asp-append-version="true" />
 
@@ -48,89 +166,210 @@
 
 </head>
 
-<body class="@(ViewData["BodyClass"]?.ToString() ?? "")">
+<body class="farm-pro @bodyClass @(useShell ? "has-shell" : "")">
 
-    <div class="wrap">
+    @if (useShell)
 
-        @if (isAuthenticated)
-        {
-            <div class="top" style="flex-wrap:wrap">
-                <div class="logo">🐐</div>
-                <div style="flex:1;min-width:160px"><h1>@farmName</h1><p>@farmLocation</p></div>
-                <div class="top-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                    @if (visibleTabs.Contains(FarmTabs.Dashboard))
-                    {
-                        <button type="button" class="btn btn-ghost btn-sm" id="exportBtn">⬇ Export Data</button>
-                        <button type="button" class="btn btn-ghost btn-sm" id="importBtn">⬆ Import Data</button>
-                        <input type="file" id="importFile" accept="application/json" style="display:none">
-                    }
-                    @if (!string.IsNullOrEmpty(farmUserRole))
-                    {
-                        <span class="scopechip">@farmUserRole</span>
-                    }
-                    <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0">
+    {
 
-                        @Html.AntiForgeryToken()
+        <a class="skip-link" href="#mainContent">Skip to content</a>
 
-                        <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+        <div class="shell">
 
-                    </form>
-                </div>
-            </div>
-        }
+            <aside class="side-nav" id="sideNav" aria-label="Main navigation">
 
+                <div class="side-brand">
 
+                    <div class="logo" aria-hidden="true">
+                        @await Html.PartialAsync("_GoatLogoMark")
+                    </div>
 
-        @if (isAuthenticated && visibleTabs.Count > 0)
-        {
-            <div class="tabs tabs-bar">
-                <div class="tabs-main">
-                    @if (visibleTabs.Contains(FarmTabs.Dashboard))
-                    {
-                        <a class="tab @(activeTab == "dashboard" ? "active" : "")" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Herd))
-                    {
-                        <a class="tab @(activeTab == "herd" ? "active" : "")" asp-controller="Goat" asp-action="Index">Herd</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Breeding))
-                    {
-                        <a class="tab @(activeTab == "breeding" ? "active" : "")" asp-controller="Breeding" asp-action="Index">Breeding</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Feed))
-                    {
-                        <a class="tab @(activeTab == "feed" ? "active" : "")" asp-controller="Feed" asp-action="Index">Feed &amp; Cost</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Milk))
-                    {
-                        <a class="tab @(activeTab == "milk" ? "active" : "")" asp-controller="Milk" asp-action="Index">Milk</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Vaccines))
-                    {
-                        <a class="tab @(activeTab == "health" ? "active" : "")" asp-controller="Vaccine" asp-action="Index">Vaccines</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Finance))
-                    {
-                        <a class="tab @(activeTab == "finance" ? "active" : "")" asp-controller="Finance" asp-action="Index">Finance</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Reports))
-                    {
-                        <a class="tab @(activeTab == "reports" ? "active" : "")" asp-controller="Reports" asp-action="Index">Reports</a>
-                    }
-                    @if (visibleTabs.Contains(FarmTabs.Search))
-                    {
-                        <a class="tab @(activeTab == "search" ? "active" : "")" asp-controller="Search" asp-action="Index">Search</a>
-                    }
+                    <div class="side-brand-text">
+
+                        <b>@brandUpper</b>
+
+                        <span>GOAT FARM MANAGEMENT</span>
+
+                    </div>
+
                 </div>
 
-                @if (visibleTabs.Contains(FarmTabs.Settings))
-                {
-                    <a class="tab tab-settings @(activeTab == "settings" ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a>
-                }
+                <nav class="side-nav-primary">
+
+                    @foreach (var item in navItems)
+
+                    {
+
+                        if (!visibleTabs.Contains(item.Tab)) { continue; }
+
+                        var isActive = activeTab == item.ActiveKey;
+
+                        <a class="nav-link @(isActive ? "active" : "")" asp-controller="@item.Controller" asp-action="Index"
+
+                           aria-current="@(isActive ? "page" : null)" title="@item.Label">
+
+                            <span class="nav-ico" aria-hidden="true">@await Html.PartialAsync("_NavIcon", item.ActiveKey)</span>
+
+                            <span class="nav-label">@item.Label</span>
+
+                        </a>
+
+                    }
+
+                </nav>
+
+                <div class="side-footer">
+
+                    <button type="button" class="side-ai-assistant" id="sideAiAssistantBtn" title="AI Assistant (coming soon)">
+                        <span class="side-ai-spark" aria-hidden="true">✦</span>
+                        <span class="side-ai-label">AI Assistant</span>
+                    </button>
+
+                    @if (visibleTabs.Contains(FarmTabs.Settings))
+
+                    {
+
+                        <a class="side-footer-link" asp-controller="Settings" asp-action="Index">
+
+                            <span aria-hidden="true">⚙</span> Settings
+
+                        </a>
+
+                    }
+
+                    <a class="side-footer-link" href="#" title="Help documentation coming soon">
+
+                        <span aria-hidden="true">?</span> Help
+
+                    </a>
+
+                    <div class="side-user">
+
+                        <div class="side-user-avatar" aria-hidden="true">@initials</div>
+
+                        <div class="side-user-text">
+
+                            <b class="side-user-name" title="@displayName">@displayName</b>
+
+                            <span class="side-user-role" title="@roleLabel">@roleLabel</span>
+
+                        </div>
+
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="side-user-out">
+
+                            @Html.AntiForgeryToken()
+
+                            <button type="submit" class="side-user-chevron" aria-label="Sign out">›</button>
+
+                        </form>
+
+                    </div>
+
+                </div>
+
+            </aside>
+
+            <div class="nav-scrim" id="navScrim" hidden></div>
+
+
+
+            <div class="shell-main">
+
+                <header class="farm-header topbar">
+
+                    <button type="button" class="nav-toggle" id="navToggle" aria-controls="sideNav" aria-expanded="false" aria-label="Show or hide navigation">☰</button>
+
+                    <div class="farm-header-inner">
+
+                        <div class="farm-header-welcome">
+
+                            <p class="farm-header-eyebrow">@heroEyebrow</p>
+
+                            <h1 class="farm-header-title">@heroTitle <span class="farm-header-sun" aria-hidden="true">☀</span></h1>
+
+                            <p class="farm-header-tag">@heroTag</p>
+
+                        </div>
+
+                        <div class="farm-header-tools">
+
+                            @if (visibleTabs.Contains(FarmTabs.Search))
+
+                            {
+
+                                <form class="top-search scanbar farm-header-search" id="globalSearchForm" method="get" asp-controller="Search" asp-action="Index" role="search">
+
+                                    <label for="globalTag" class="sr-only">Scan or enter tag / RFID ID</label>
+
+                                    <span class="scanico" aria-hidden="true">⌕</span>
+
+                                    <input id="globalTag" name="tag" placeholder="Scan or enter tag / RFID ID…" autocomplete="off" spellcheck="false" maxlength="64">
+
+                                    <button type="submit" class="btn btn-green btn-sm global-search-btn">Search</button>
+
+                                </form>
+
+                            }
+
+                            @if (visibleTabs.Contains(FarmTabs.Tasks))
+
+                            {
+
+                                <a class="farm-header-bell" asp-controller="Tasks" asp-action="Index" asp-route-filter="mine" title="My open tasks">
+
+                                    <span aria-hidden="true">🔔</span>
+
+                                    <span class="farm-header-bell-badge" id="headerNotifBadge" hidden>0</span>
+
+                                </a>
+
+                            }
+
+                            <div class="farm-header-datetime" aria-live="polite">
+
+                                <span class="farm-header-cal" aria-hidden="true">📅</span>
+
+                                <div>
+
+                                    <b id="headerClockDate">@DateTime.Now.ToString("ddd, d MMM yyyy")</b>
+
+                                    <span id="headerClockTime">@DateTime.Now.ToString("hh:mm tt")</span>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </header>
+
+                <main id="mainContent" class="wrap" tabindex="-1">
+
+                    @RenderBody()
+
+                </main>
+
             </div>
-        }
-        @RenderBody()
-    </div>
+
+        </div>
+
+    }
+
+    else
+
+    {
+
+        <div class="wrap">
+
+            @RenderBody()
+
+        </div>
+
+    }
+
+
 
     <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
 
@@ -164,15 +403,49 @@
 
         <script>
 
-                window.FarmPermissions = @Html.Raw(farmPermissionsJson);
+            window.FarmPermissions = @Html.Raw(farmPermissionsJson);
 
-                window.FarmUserRole = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(farmUserRole));
+            window.FarmUserRole = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(farmUserRole));
 
         </script>
 
     }
 
     <script src="~/js/goat-records.js" asp-append-version="true"></script>
+
+    @if (useShell)
+
+    {
+
+        <script>
+
+            (() => {
+
+                const tick = () => {
+
+                    const d = new Date();
+
+                    const dateEl = document.getElementById('headerClockDate');
+
+                    const timeEl = document.getElementById('headerClockTime');
+
+                    if (!dateEl || !timeEl) return;
+
+                    dateEl.textContent = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+                    timeEl.textContent = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+                };
+
+                tick();
+
+                setInterval(tick, 30000);
+
+            })();
+
+        </script>
+
+    }
 
     @await RenderSectionAsync("Scripts", required: false)
 

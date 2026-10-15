@@ -7,5 +7,6 @@ public enum GoatStatus
     Pregnant = 2,
     Dry = 3,
     Buck = 4,
-    Sale = 5
+    Sale = 5,
+    Meat = 6
 }

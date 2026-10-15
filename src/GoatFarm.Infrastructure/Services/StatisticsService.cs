@@ -2,6 +2,9 @@ using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Dashboard;
 using GoatFarm.Application.ViewModels.Goats;
+using GoatFarm.Domain.Enums;
+using GoatFarm.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace GoatFarm.Infrastructure.Services;
@@ -17,6 +20,7 @@ public class StatisticsService : IStatisticsService
     private readonly IVaccineService _vaccineService;
     private readonly IReminderService _reminderService;
     private readonly IBreedingService _breedingService;
+    private readonly GoatFarmDbContext _context;
     private readonly IMemoryCache _cache;
 
     public StatisticsService(
@@ -27,6 +31,7 @@ public class StatisticsService : IStatisticsService
         IVaccineService vaccineService,
         IReminderService reminderService,
         IBreedingService breedingService,
+        GoatFarmDbContext context,
         IMemoryCache cache)
     {
         _goatService = goatService;
@@ -36,6 +41,7 @@ public class StatisticsService : IStatisticsService
         _vaccineService = vaccineService;
         _reminderService = reminderService;
         _breedingService = breedingService;
+        _context = context;
         _cache = cache;
     }
 
@@ -62,6 +68,87 @@ public class StatisticsService : IStatisticsService
         var stats = await GetHerdStatsAsync(cancellationToken);
 
         var stockLow = feed.Stock.Count(s => s.DaysLeft is < 7);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var weekStart = today.AddDays(-6);
+
+        var milkToday = await _context.MilkProductions.AsNoTracking()
+            .Where(p => p.Date == today)
+            .SumAsync(p => p.Liters, cancellationToken);
+
+        var milkGrouped = await _context.MilkProductions.AsNoTracking()
+            .Where(p => p.Date >= weekStart && p.Date <= today)
+            .GroupBy(p => p.Date)
+            .Select(g => new { g.Key, Liters = g.Sum(p => p.Liters) })
+            .ToListAsync(cancellationToken);
+        var milkByDate = milkGrouped.ToDictionary(x => x.Key, x => x.Liters);
+
+        var milkLast7 = Enumerable.Range(0, 7)
+            .Select(i =>
+            {
+                var d = weekStart.AddDays(i);
+                milkByDate.TryGetValue(d, out var liters);
+                return new DashboardMilkDayViewModel
+                {
+                    Label = d.ToString("MMM d"),
+                    Liters = liters,
+                    IsToday = d == today
+                };
+            })
+            .ToList();
+
+        var breeds = await _context.Goats.AsNoTracking()
+            .Where(g => !g.IsArchived)
+            .GroupBy(g => string.IsNullOrWhiteSpace(g.Breed) ? "Mixed" : g.Breed.Trim())
+            .Select(g => new DashboardBreedSliceViewModel { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(b => b.Count)
+            .Take(6)
+            .ToListAsync(cancellationToken);
+
+        var healthRows = await _context.Goats.AsNoTracking()
+            .Where(g => !g.IsArchived)
+            .GroupBy(g => g.HealthState)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var healthHealthy = healthRows.FirstOrDefault(h => h.Key == GoatHealthState.Healthy)?.Count ?? 0;
+        var healthSick = healthRows.FirstOrDefault(h => h.Key == GoatHealthState.Sick)?.Count ?? 0;
+        var healthObs = healthRows.Where(h => h.Key is GoatHealthState.UnderTreatment or GoatHealthState.Recovering)
+            .Sum(h => h.Count);
+
+        var pendingVacc = vaccine.DueNowCount + reminders.Count(r =>
+            r.ReminderDate >= today && r.ReminderDate <= today.AddDays(7) &&
+            (r.Title.Contains("vaccin", StringComparison.OrdinalIgnoreCase) ||
+             r.Title.Contains("dose", StringComparison.OrdinalIgnoreCase)));
+
+        var activities = await BuildRecentActivitiesAsync(today, cancellationToken);
+
+        var recentSales = finance.Incomes
+            .OrderByDescending(i => i.Date)
+            .Take(5)
+            .Select(i => new DashboardLedgerRowViewModel
+            {
+                Date = i.Date,
+                DateDisplay = i.Date.ToString("d MMM"),
+                Title = i.Type,
+                Detail = i.Comment,
+                Amount = i.Amount,
+                AmountDisplay = DisplayHelper.FormatRs(i.Amount)
+            })
+            .ToList();
+
+        var recentExpenses = finance.Expenses
+            .OrderByDescending(e => e.Date)
+            .Take(5)
+            .Select(e => new DashboardLedgerRowViewModel
+            {
+                Date = e.Date,
+                DateDisplay = e.Date.ToString("d MMM"),
+                Title = e.Type,
+                Detail = e.Comment,
+                Amount = e.Amount,
+                AmountDisplay = DisplayHelper.FormatRs(e.Amount)
+            })
+            .ToList();
 
         return new DashboardViewModel
         {
@@ -86,7 +173,82 @@ public class StatisticsService : IStatisticsService
             DueNowCount = vaccine.DueNowCount,
             DueNowNote = vaccine.DueNowNote,
             DueNow = vaccine.DueNow,
-            Reminders = reminders
+            Reminders = reminders,
+            MilkTodayLiters = milkToday,
+            MilkLast7Days = milkLast7,
+            BreedDistribution = breeds,
+            HealthHealthy = healthHealthy,
+            HealthUnderObservation = healthObs,
+            HealthSick = healthSick,
+            PendingVaccinations = pendingVacc,
+            RecentActivities = activities,
+            RecentSales = recentSales,
+            RecentExpenses = recentExpenses
+        };
+    }
+
+    private async Task<List<DashboardActivityViewModel>> BuildRecentActivitiesAsync(DateOnly today, CancellationToken cancellationToken)
+    {
+        var items = new List<DashboardActivityViewModel>();
+
+        var milkRows = await _context.MilkProductions.AsNoTracking()
+            .OrderByDescending(p => p.Date)
+            .Take(3)
+            .ToListAsync(cancellationToken);
+        foreach (var p in milkRows)
+            items.Add(new DashboardActivityViewModel
+            {
+                Icon = "🥛",
+                Text = $"Milk recorded — {p.Liters:N1} L",
+                When = ActivityWhen(p.Date, today),
+                SortDate = p.Date,
+                Href = "/Milk"
+            });
+
+        var feedRows = await _context.FeedPurchases.AsNoTracking()
+            .OrderByDescending(p => p.Date)
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        foreach (var p in feedRows)
+            items.Add(new DashboardActivityViewModel
+            {
+                Icon = "🌾",
+                Text = $"Feed purchased — {p.Kg:N0} kg",
+                When = ActivityWhen(p.Date, today),
+                SortDate = p.Date,
+                Href = "/Feed"
+            });
+
+        var crosses = await _context.BreedingEvents.AsNoTracking()
+            .Where(e => e.Outcome == BreedingOutcome.Open || e.Outcome == BreedingOutcome.ConfirmedPregnant)
+            .OrderByDescending(e => e.MatedDate)
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        foreach (var e in crosses)
+            items.Add(new DashboardActivityViewModel
+            {
+                Icon = "💞",
+                Text = "Breeding cross recorded",
+                When = ActivityWhen(e.MatedDate, today),
+                SortDate = e.MatedDate,
+                Href = "/Breeding"
+            });
+
+        return items
+            .OrderByDescending(a => a.SortDate)
+            .Take(8)
+            .ToList();
+    }
+
+    private static string ActivityWhen(DateOnly date, DateOnly today)
+    {
+        var days = date.DayNumber - today.DayNumber;
+        return days switch
+        {
+            0 => "Today",
+            -1 => "Yesterday",
+            > 0 and <= 7 => date.ToString("d MMM"),
+            _ => date.ToString("d MMM yyyy")
         };
     }
 

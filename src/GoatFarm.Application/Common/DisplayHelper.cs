@@ -11,7 +11,27 @@ public static class DisplayHelper
         [GoatStatus.Milking] = ("Milking", "chip-milk"),
         [GoatStatus.Dry] = ("Dry", "chip-dry"),
         [GoatStatus.Buck] = ("Buck", "chip-buck"),
-        [GoatStatus.Sale] = ("For sale", "chip-sale")
+        [GoatStatus.Sale] = ("For sale", "chip-sale"),
+        [GoatStatus.Meat] = ("Meat / finishing", "chip-meat")
+    };
+
+    private static readonly Dictionary<GoatHealthState, string> HealthMap = new()
+    {
+        [GoatHealthState.Healthy] = "Healthy",
+        [GoatHealthState.Sick] = "Sick",
+        [GoatHealthState.UnderTreatment] = "Under treatment",
+        [GoatHealthState.Recovering] = "Recovering"
+    };
+
+    public static string GetHealthLabel(GoatHealthState state) =>
+        HealthMap.TryGetValue(state, out var v) ? v : state.ToString();
+
+    public static string GetBreedingStageLabel(BreedingStage stage) => stage switch
+    {
+        BreedingStage.Ready => "Ready for cross",
+        BreedingStage.ScanPending => "Crossed — awaiting scan",
+        BreedingStage.ConfirmedPregnant => "Confirmed pregnant",
+        _ => ""
     };
 
     private static readonly Dictionary<VaccineScope, string> ScopeMap = new()

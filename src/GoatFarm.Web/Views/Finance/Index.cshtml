@@ -188,7 +188,7 @@
 </div>
 
 <div class="panel">
-    <div class="panel-head"><h2 id="recurFormTitle">Fixed &amp; recurring costs</h2><span class="sub">rent, salaries — spread into monthly running costs</span></div>
+    <div class="panel-head"><h2 id="recurFormTitle">Fixed &amp; recurring costs</h2><span class="sub">rent and fixed costs — spread into monthly running costs (salaries come from Employees)</span></div>
     <div class="panel-body">
         <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Period</th>
             <th class="num-cell">Amount</th><th class="num-cell">Per month</th></tr></thead>
@@ -223,7 +223,7 @@
 </div>
 
 <div class="panel">
-    <div class="panel-head"><h2 id="expenseFormTitle">Running costs</h2><span class="sub">salaries, cultivation, feed bought, medicine, vaccines</span></div>
+    <div class="panel-head"><h2 id="expenseFormTitle">Running costs</h2><span class="sub">cultivation, feed bought, medicine, vaccines — salaries come from Employees</span></div>
     <div class="panel-body">
         <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Date</th>
             <th class="num-cell">Amount</th></tr></thead>
@@ -247,7 +247,8 @@
             {
                 <tr class="fin-row fin-expense-row" data-id="@e.Id" data-type="@e.Type" data-date="@e.DateDisplay"
                     data-amount="@e.Amount.ToString(CultureInfo.InvariantCulture)" data-comment="@e.Comment">
-                    <td><span class="chip chip-exp">@e.Type</span>@if(!string.IsNullOrEmpty(e.Comment)){<div class="name">@e.Comment</div>}</td>
+                    <td><span class="chip chip-exp">@e.Type</span>@if (SalaryExpenseRules.Classify(e.Type) != SalaryExpenseKind.None)
+                        {<span class="chip chip-legacy" title="Salary types are no longer accepted as expenses — see the salary check below">old type · may be counted twice</span>}@if(!string.IsNullOrEmpty(e.Comment)){<div class="name">@e.Comment</div>}</td>
                     <td class="hide-sm"><span class="breed">@e.DateDisplay</span></td>
                     <td class="num-cell">@DisplayHelper.FormatRs(e.Amount)</td>
                 </tr>
@@ -270,5 +271,46 @@
         </div>
     </div>
 </div>
+
+@{ var recon = (GoatFarm.Application.ViewModels.Finance.SalaryReconciliationViewModel)ViewBag.SalaryReconciliation!; }
+@if (!recon.HasFindings)
+{
+<div class="panel" id="salaryReconciliationEmpty">
+    <div class="panel-head"><h2>Salary check</h2><span class="sub">read-only · nothing is changed automatically</span></div>
+    <div class="panel-body">
+        <div class="alldone">No salary-type expenses or recurring costs were found. New salary advances are blocked because salaries already come from Employees.</div>
+    </div>
+</div>
+}
+@if (recon.HasFindings)
+{
+<div class="panel" id="salaryReconciliation">
+    <div class="panel-head"><h2>Salary check</h2><span class="sub">read-only · nothing is changed automatically</span></div>
+    <div class="panel-body">
+        <div class="note" style="margin-top:0">Staff salaries are counted every month from the Employees list
+            (@recon.EmployeeCount staff, @DisplayHelper.FormatRs(recon.AutoSalaryMonthly) a month, at today's salaries).
+            The entries below look like salary or advance payments, so the totals may count the same money twice.
+            <b>Counted twice:</b> @DisplayHelper.FormatRs(recon.ConfirmedTotal) ·
+            <b>Needs review:</b> @DisplayHelper.FormatRs(recon.NeedsReviewTotal) ·
+            <b>Not counted twice:</b> @DisplayHelper.FormatRs(recon.NotDoubleCountedTotal)
+            @if (recon.RecurringFlaggedMonthly > 0) {<text> · <b>Recurring salary costs:</b> @DisplayHelper.FormatRs(recon.RecurringFlaggedMonthly) every month</text>}</div>
+        <table class="tbl"><thead><tr><th>Entry</th><th class="hide-sm">Date</th><th>Finding</th><th class="num-cell">Amount</th></tr></thead>
+            <tbody id="salaryReconRows">
+            @foreach (var r in recon.Rows)
+            {
+                <tr data-outcome="@r.Outcome" data-source="@r.Source" data-id="@r.Id">
+                    <td><span class="chip chip-exp">@r.Type</span><div class="name">@r.Source@(string.IsNullOrEmpty(r.Comment) ? "" : " · " + r.Comment)</div></td>
+                    <td class="hide-sm"><span class="breed">@r.DateDisplay</span></td>
+                    <td><b>@r.OutcomeLabel</b><div class="name">@r.Reason</div></td>
+                    <td class="num-cell">@DisplayHelper.FormatRs(r.Amount)</td>
+                </tr>
+            }
+            </tbody></table>
+        <div class="rule" style="margin-top:10px">To correct an entry that is counted twice, the owner can delete it above
+            (export a backup first — deleting removes the record). Entries marked "Needs review" must be checked by hand.
+            A correction that keeps the record but leaves it out of totals needs the accounting ledger, which is not built yet.</div>
+    </div>
+</div>
+}
 
 @section Scripts {<script>GoatRecords.initFinance();</script>}

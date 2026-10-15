@@ -51,6 +51,24 @@ public static class FeedPlanMigrator
         }
 
         var plans = await context.FeedPlans.Include(p => p.Items).ToListAsync(cancellationToken);
+        if (plans.Count > 0)
+        {
+            foreach (var (status, defaults) in MixRecipeHelper.DefaultPlans)
+            {
+                if (plans.Any(p => p.StatusKey == status)) continue;
+                var added = new FeedPlan
+                {
+                    StatusKey = status,
+                    MixKgPerDay = defaults.Mix,
+                    FodderKgPerDay = defaults.Fodder,
+                    FodderDryKgPerDay = defaults.FodderDry,
+                    MedicineCostPerGoatPerMonth = defaults.Med
+                };
+                context.FeedPlans.Add(added);
+                plans.Add(added);
+            }
+        }
+
         foreach (var plan in plans)
         {
             if (plan.MixKgPerDay > 0 || plan.FodderKgPerDay > 0 || plan.FodderDryKgPerDay > 0) continue;

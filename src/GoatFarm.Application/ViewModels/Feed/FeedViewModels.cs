@@ -466,14 +466,20 @@ public class CreateFeedPurchaseViewModel
 
 {
 
+    [System.ComponentModel.DataAnnotations.Required]
     public DateOnly Date { get; set; }
 
+    [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Pick the feed")]
+    [System.ComponentModel.DataAnnotations.StringLength(100)]
     public string FeedType { get; set; } = string.Empty;
 
+    [System.ComponentModel.DataAnnotations.Range(0.01, 1_000_000, ErrorMessage = "Enter the quantity in kg")]
     public decimal Kg { get; set; }
 
+    [System.ComponentModel.DataAnnotations.Range(0.01, 1_000_000, ErrorMessage = "Enter the rate per kg")]
     public decimal RatePerKg { get; set; }
 
+    [System.ComponentModel.DataAnnotations.StringLength(500)]
     public string? Comment { get; set; }
 
 }

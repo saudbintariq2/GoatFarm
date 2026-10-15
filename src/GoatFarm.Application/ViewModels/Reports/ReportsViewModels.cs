@@ -13,6 +13,8 @@ public class ReportsPageViewModel
     public string TrendHeadLabel { get; set; } = "Month";
     public string TrendSubLabel { get; set; } = "by month";
     public string TrendLastColumnLabel { get; set; } = "Net";
+    /// <summary>True when financial sections were removed because the user lacks Finance view.</summary>
+    public bool FinanceHidden { get; set; }
 
     public ReportDashboardSectionViewModel Dashboard { get; set; } = new();
     public ReportHerdSectionViewModel Herd { get; set; } = new();
@@ -34,6 +36,8 @@ public class ReportKpiViewModel
     public string? Sub { get; set; }
     public string? Color { get; set; }
     public string? DotColor { get; set; }
+    /// <summary>Income, expense, profit, owner-funding or capital figure — removed for users without Finance view.</summary>
+    public bool IsFinancial { get; set; }
 }
 
 public class ReportDashboardSectionViewModel
@@ -303,6 +307,7 @@ public class ReportCompareRowViewModel
     public string DifferenceColor { get; set; } = string.Empty;
     public string? PercentChange { get; set; }
     public string YearToDate { get; set; } = string.Empty;
+    public bool IsFinancial { get; set; }
 }
 
 public class ReportOwnerRowViewModel

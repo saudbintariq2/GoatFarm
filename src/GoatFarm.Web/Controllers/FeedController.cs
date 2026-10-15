@@ -10,8 +10,6 @@ namespace GoatFarm.Web.Controllers;
 
 
 
-[IgnoreAntiforgeryToken]
-
 public class FeedController : Controller
 
 {
@@ -200,7 +198,14 @@ public class FeedController : Controller
 
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        return Json(await _feedService.AddFeedPurchaseAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _feedService.AddFeedPurchaseAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
     }
 
@@ -214,9 +219,15 @@ public class FeedController : Controller
 
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var result = await _feedService.UpdateFeedPurchaseAsync(id, model, cancellationToken);
-
-        return result is null ? NotFound() : Json(result);
+        try
+        {
+            var result = await _feedService.UpdateFeedPurchaseAsync(id, model, cancellationToken);
+            return result is null ? NotFound() : Json(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
     }
 

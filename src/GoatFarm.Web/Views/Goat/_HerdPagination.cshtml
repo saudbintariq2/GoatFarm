@@ -20,7 +20,8 @@
         pages.Add(total);
     }
 
-    string PageUrl(int p) => Url.Action("Index", "Goat", new { filter, page = p }) ?? "#";
+    var search = ViewBag.HerdSearch as string;
+    string PageUrl(int p) => Url.Action("Index", "Goat", new { filter, page = p, q = search }) ?? "#";
 }
 
 @if (Model.TotalItems > 0)

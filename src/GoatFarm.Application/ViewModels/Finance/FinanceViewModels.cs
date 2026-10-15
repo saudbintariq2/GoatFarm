@@ -132,6 +132,9 @@ public class CreateExpenseViewModel
 
     [StringLength(500)]
     public string? Comment { get; set; }
+
+    /// <summary>Set after the user has seen and accepted a possible-duplicate warning.</summary>
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class CreateOwnerInvestmentViewModel

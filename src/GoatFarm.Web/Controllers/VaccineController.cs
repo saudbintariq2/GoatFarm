@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
-[IgnoreAntiforgeryToken]
 public class VaccineController : Controller
 {
     private readonly IVaccineService _vaccineService;
@@ -124,7 +123,6 @@ public class VaccineController : Controller
     public record ReminderWindowRequest(int Days);
 }
 
-[IgnoreAntiforgeryToken]
 public class ReminderController : Controller
 {
     private readonly IReminderService _reminderService;

@@ -1,5 +1,6 @@
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
+using GoatFarm.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -17,11 +18,73 @@ public class GoatConfiguration : IEntityTypeConfiguration<Goat>
         builder.Property(x => x.Breed).IsRequired().HasMaxLength(100);
         builder.Property(x => x.PurchasePrice).HasPrecision(18, 2);
         builder.Property(x => x.BuckTag).HasMaxLength(50);
+        builder.Property(x => x.Owner).HasMaxLength(100);
+        builder.Property(x => x.SireTagText).HasMaxLength(50);
+        builder.Property(x => x.DamTagText).HasMaxLength(50);
         builder.HasIndex(x => x.Tag).IsUnique();
+        builder.HasIndex(x => x.SireId);
+        builder.HasIndex(x => x.DamId);
+        builder.HasIndex(x => new { x.IsArchived, x.Status });
+        builder.HasIndex(x => new { x.IsArchived, x.EventDate });
+        builder.HasIndex(x => new { x.IsArchived, x.MatedDate });
+        builder.HasIndex(x => new { x.IsArchived, x.HealthState });
         builder.HasOne(x => x.Group)
             .WithMany(x => x.Goats)
             .HasForeignKey(x => x.GroupId)
             .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.Sire)
+            .WithMany()
+            .HasForeignKey(x => x.SireId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Dam)
+            .WithMany()
+            .HasForeignKey(x => x.DamId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.KiddingRecord)
+            .WithMany(x => x.Kids)
+            .HasForeignKey(x => x.KiddingRecordId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class BreedingEventConfiguration : IEntityTypeConfiguration<BreedingEvent>
+{
+    public void Configure(EntityTypeBuilder<BreedingEvent> builder)
+    {
+        builder.ToTable("BreedingEvents");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.BuckTagText).HasMaxLength(50);
+        builder.Property(x => x.Notes).HasMaxLength(500);
+        builder.HasOne(x => x.Doe)
+            .WithMany()
+            .HasForeignKey(x => x.DoeId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Buck)
+            .WithMany()
+            .HasForeignKey(x => x.BuckId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => new { x.DoeId, x.Outcome });
+        builder.HasIndex(x => x.MatedDate);
+    }
+}
+
+public class KiddingRecordConfiguration : IEntityTypeConfiguration<KiddingRecord>
+{
+    public void Configure(EntityTypeBuilder<KiddingRecord> builder)
+    {
+        builder.ToTable("KiddingRecords");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Notes).HasMaxLength(1000);
+        builder.HasIndex(x => x.ClientRequestId).IsUnique();
+        builder.HasIndex(x => x.KiddingDate);
+        builder.HasOne(x => x.Doe)
+            .WithMany()
+            .HasForeignKey(x => x.DoeId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.BreedingEvent)
+            .WithMany()
+            .HasForeignKey(x => x.BreedingEventId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -304,6 +367,33 @@ public class DeathRecordConfiguration : IEntityTypeConfiguration<DeathRecord>
         builder.Property(x => x.Reason).HasMaxLength(500);
         builder.Property(x => x.ValueLost).HasPrecision(18, 2);
         builder.HasIndex(x => x.Date);
+    }
+}
+
+public class FarmTaskConfiguration : IEntityTypeConfiguration<FarmTask>
+{
+    public void Configure(EntityTypeBuilder<FarmTask> builder)
+    {
+        builder.ToTable("FarmTasks");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Title).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Notes).HasMaxLength(2000);
+        builder.Property(x => x.CreatedByUserId).HasMaxLength(450);
+        builder.Property(x => x.AssigneeUserId).HasMaxLength(450);
+        builder.HasOne<ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(x => x.AssigneeUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(x => x.CreatedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.Goat)
+            .WithMany()
+            .HasForeignKey(x => x.GoatId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => new { x.Status, x.DueDate });
+        builder.HasIndex(x => x.AssigneeUserId);
     }
 }
 

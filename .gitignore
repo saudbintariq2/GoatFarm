@@ -38,3 +38,6 @@ Desktop.ini
 *.tmp
 *.cache
 _railway-build-test/
+
+# Local snapshots (often > GitHub 100 MB limit)
+_backups/

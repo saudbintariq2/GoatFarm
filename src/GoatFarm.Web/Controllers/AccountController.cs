@@ -52,10 +52,16 @@ public class AccountController : Controller
             user.UserName!,
             model.Password,
             model.RememberMe,
-            lockoutOnFailure: false);
+            lockoutOnFailure: true);
 
         if (result.Succeeded)
             return RedirectToLocal(model.ReturnUrl);
+
+        if (result.IsLockedOut)
+        {
+            ModelState.AddModelError(string.Empty, "Too many failed attempts. Try again in 15 minutes or ask an administrator.");
+            return View(model);
+        }
 
         ModelState.AddModelError(string.Empty, "Invalid email or password.");
         return View(model);
@@ -70,7 +76,11 @@ public class AccountController : Controller
     }
 
     [HttpGet]
-    public IActionResult AccessDenied() => View();
+    public IActionResult AccessDenied()
+    {
+        ViewData["BodyClass"] = "auth-page";
+        return View();
+    }
 
     private IActionResult RedirectToLocal(string? returnUrl)
     {

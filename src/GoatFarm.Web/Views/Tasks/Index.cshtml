@@ -1,0 +1,137 @@
+@model GoatFarm.Application.ViewModels.Tasks.TasksPageViewModel
+@using GoatFarm.Domain.Enums
+@using GoatFarm.Application.ViewModels.Tasks
+@{
+    ViewData["Title"] = "Tasks";
+    var columns = new (string Title, FarmTaskStatus Status, IReadOnlyList<TaskViewModel> Items)[]
+    {
+        ("To do", FarmTaskStatus.ToDo, Model.ToDo),
+        ("In progress", FarmTaskStatus.InProgress, Model.InProgress),
+        ("Completed (last 30 days)", FarmTaskStatus.Completed, Model.Completed)
+    };
+    string PriorityCss(FarmTaskPriority p) => p switch
+    {
+        FarmTaskPriority.Urgent => "chip-urgent",
+        FarmTaskPriority.High => "chip-high",
+        _ => "chip-dry"
+    };
+}
+
+<div class="note"><b>Tasks</b> — farm work assigned to people. Anyone can move a task assigned to them (or to everyone)
+    through <b>To do → In progress → Completed</b>. Vaccine-scope reminders stay on the Vaccines page and are listed on the right.</div>
+
+<div class="stats" id="taskKpis">
+    <a class="stat task-kpi" href="?filter=all"><div class="num">@Model.Kpis.Open</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Open</div></a>
+    <a class="stat task-kpi" href="?filter=mine"><div class="num">@Model.Kpis.Mine</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>My tasks</div></a>
+    <a class="stat task-kpi" href="?filter=urgent"><div class="num">@Model.Kpis.Urgent</div><div class="lbl"><span class="dot" style="background:var(--red)"></span>Urgent</div></a>
+    <a class="stat task-kpi" href="?filter=overdue"><div class="num">@Model.Kpis.Overdue</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Overdue</div></a>
+    <div class="stat"><div class="num">@Model.Kpis.CompletedLast30Days</div><div class="lbl"><span class="dot" style="background:var(--green-dark)"></span>Done (30 days)</div></div>
+</div>
+
+<div class="panel" id="taskFormPanel">
+    <div class="panel-head"><h2 id="taskFormTitle">Add a task</h2><span class="sub">assign it to a person or to everyone</span></div>
+    <div class="panel-body">
+        <div class="add-grid task-grid">
+            <div class="field task-title-field"><label for="t-title">Task</label><input id="t-title" maxlength="200" placeholder="e.g. Clean the milking area"></div>
+            <div class="field"><label for="t-assignee">Assign to</label>
+                <select id="t-assignee">
+                    <option value="">Everyone</option>
+                    @foreach (var u in Model.Users) { <option value="@u.Id">@u.Name</option> }
+                </select></div>
+            <div class="field"><label for="t-due">Due date</label><input type="date" id="t-due"></div>
+            <div class="field"><label for="t-priority">Priority</label>
+                <select id="t-priority"><option value="Normal">Normal</option><option value="High">High</option><option value="Urgent">Urgent</option></select></div>
+            <div class="field"><label for="t-type">Type</label>
+                <select id="t-type"><option value="Task">Task</option><option value="Reminder">Reminder</option></select></div>
+            <div class="field"><label for="t-goat">Goat tag (optional)</label><input id="t-goat" maxlength="50" placeholder="tag"></div>
+            <div class="field task-notes-field"><label for="t-notes">Notes</label><input id="t-notes" maxlength="2000"></div>
+        </div>
+        <div class="goat-form-actions" style="margin-top:12px">
+            <button type="button" class="btn btn-green" id="saveTask">+ Add task</button>
+            <button type="button" class="btn btn-ghost perm-hidden" id="cancelTask">Cancel</button>
+            <button type="button" class="btn btn-ghost perm-hidden" id="deleteTask" style="color:var(--red)">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div class="filterbar task-filterbar">
+    <div class="field task-filter-field">
+        <label for="taskFilter">Show</label>
+        <select id="taskFilter">
+            <option value="all" @(Model.Filter == "all" ? "selected" : null)>All tasks</option>
+            <option value="mine" @(Model.Filter == "mine" ? "selected" : null)>Assigned to me</option>
+            <option value="urgent" @(Model.Filter == "urgent" ? "selected" : null)>Urgent</option>
+            <option value="overdue" @(Model.Filter == "overdue" ? "selected" : null)>Overdue</option>
+            <option value="reminders" @(Model.Filter == "reminders" ? "selected" : null)>Reminders</option>
+            @foreach (var u in Model.Users)
+            {
+                <option value="user:@u.Id" @(Model.Filter == "user:" + u.Id ? "selected" : null)>@u.Name</option>
+            }
+        </select>
+    </div>
+</div>
+
+<div class="task-layout">
+    <div class="task-board">
+            @foreach (var col in columns)
+            {
+                <section class="panel task-col" aria-label="@col.Title">
+                    <div class="panel-head"><h2>@col.Title</h2><span class="sub">@col.Items.Count</span></div>
+                    <div class="panel-body task-col-body">
+                        @if (!col.Items.Any())
+                        {
+                            <div class="empty">Nothing here.</div>
+                        }
+                        @foreach (var t in col.Items)
+                        {
+                            <article class="task-card @(t.IsOverdue ? "task-overdue" : "")"
+                                     data-task-id="@t.Id"
+                                     data-title="@t.Title" data-notes="@t.Notes" data-due="@t.DueDateDisplay"
+                                     data-priority="@t.Priority" data-type="@t.Type"
+                                     data-assignee="@t.AssigneeUserId" data-goat="@t.GoatTag">
+                                <div class="task-card-head">
+                                    <b>@t.Title</b>
+                                    <span class="chip @PriorityCss(t.Priority)">@t.Priority</span>
+                                </div>
+                                <div class="task-meta">
+                                    <span>👤 @t.AssigneeName</span>
+                                    <span class="@(t.IsOverdue ? "task-late" : "")">📅 @(t.Status == FarmTaskStatus.Completed ? "done " + t.CompletedDisplay : t.DueText)</span>
+                                    @if (t.Type == FarmTaskType.Reminder) { <span class="scopechip">Reminder</span> }
+                                    @if (!string.IsNullOrEmpty(t.GoatTag)) { <span class="tag">@t.GoatTag</span> }
+                                </div>
+                                @if (!string.IsNullOrEmpty(t.Notes)) { <div class="task-notes">@t.Notes</div> }
+                                <div class="task-actions">
+                                    @if (t.CanChangeStatus)
+                                    {
+                                        @if (t.Status == FarmTaskStatus.ToDo) { <button type="button" class="btn btn-ghost btn-sm" data-task-status="InProgress">Start</button> }
+                                        @if (t.Status != FarmTaskStatus.Completed) { <button type="button" class="btn btn-green btn-sm" data-task-status="Completed">Complete</button> }
+                                        else { <button type="button" class="btn btn-ghost btn-sm" data-task-status="ToDo">Reopen</button> }
+                                    }
+                                    <button type="button" class="btn btn-ghost btn-sm task-edit-btn" data-task-edit>Edit</button>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+
+    <aside class="panel task-reminders">
+        <div class="panel-head"><h2>Farm reminders</h2><a class="dash-link" asp-controller="Vaccine" asp-action="Index">Manage →</a></div>
+        <div class="panel-body">
+            @if (!Model.FarmReminders.Any())
+            {
+                <div class="empty">No upcoming reminders.</div>
+            }
+            @foreach (var r in Model.FarmReminders)
+            {
+                <div class="task-reminder-row"><b>@r.Title</b><span class="breed">@r.DateDisplay</span>
+                    @if (!string.IsNullOrEmpty(r.ScopeDisplay)) { <span class="scopechip">@r.ScopeDisplay</span> }</div>
+            }
+        </div>
+    </aside>
+</div>
+
+@section Scripts {
+<script>GoatRecords.initTasks();</script>
+}

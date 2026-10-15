@@ -24,7 +24,11 @@
                     <div class="search-meta-item">Group<b>@(g.GroupName ?? "—")</b></div>
                     <div class="search-meta-item">Source<b>@source</b></div>
                     <div class="search-meta-item">Price<b>@g.PriceDisplay</b></div>
-                    <div class="search-meta-item">Date<b>@g.EventDateDisplay</b></div>
+                    <div class="search-meta-item">@(g.Source == GoatSource.Born ? "Born" : "Bought on")<b>@g.EventDateDisplay</b></div>
+                    @if (g.DateOfBirth.HasValue)
+                    {
+                        <div class="search-meta-item">Date of birth<b>@g.DateOfBirthDisplay@(g.DateOfBirthIsEstimated ? " (estimated)" : "")</b></div>
+                    }
                 </div>
             </div>
             <a class="btn btn-ghost" asp-controller="Goat" asp-action="Index" asp-route-editId="@g.Id">Edit in Herd</a>

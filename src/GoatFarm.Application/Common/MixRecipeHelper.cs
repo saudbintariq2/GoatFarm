@@ -48,6 +48,11 @@ public static class MixRecipeHelper
             {
                 [FeedTypes.Wanda] = 30, [FeedTypes.Binola] = 35, [FeedTypes.Sarson] = 0,
                 [FeedTypes.Bran] = 20, [FeedTypes.Maize] = 12, [FeedTypes.Sheera] = 3
+            },
+            [GoatStatus.Meat] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                [FeedTypes.Wanda] = 30, [FeedTypes.Binola] = 35, [FeedTypes.Sarson] = 0,
+                [FeedTypes.Bran] = 20, [FeedTypes.Maize] = 12, [FeedTypes.Sheera] = 3
             }
         };
 
@@ -59,7 +64,8 @@ public static class MixRecipeHelper
             [GoatStatus.Pregnant] = (0.8m, 1.5m, 0.5m, 150),
             [GoatStatus.Dry] = (0.3m, 1.5m, 0.5m, 40),
             [GoatStatus.Buck] = (0.7m, 1.5m, 0.5m, 60),
-            [GoatStatus.Sale] = (0.35m, 1.5m, 0.4m, 30)
+            [GoatStatus.Sale] = (0.35m, 1.5m, 0.4m, 30),
+            [GoatStatus.Meat] = (0.35m, 1.5m, 0.4m, 30)
         };
 
     public static IEnumerable<string> MixFeedKeys(IEnumerable<string> allFeedTypes) =>

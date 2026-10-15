@@ -21,6 +21,8 @@ public class BreedingService : IBreedingService
         _feedService = feedService;
     }
 
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
     public async Task<BreedingPageViewModel> GetBreedingPageAsync(CancellationToken cancellationToken = default)
     {
         var goats = await _context.Goats.AsNoTracking()
@@ -29,9 +31,11 @@ public class BreedingService : IBreedingService
             .ToListAsync(cancellationToken);
         var prep = goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue).ToList();
         var exp = goats.Where(g => g.MatedDate.HasValue).ToList();
+        var waiting = exp.Where(g => !g.KidsCount.HasValue).ToList();
+        var confirmed = exp.Where(g => g.KidsCount > 0).ToList();
 
-        int? soonest = exp.Count > 0
-            ? exp.Min(g => BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate!.Value)))
+        int? soonest = confirmed.Count > 0
+            ? confirmed.Min(g => BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate!.Value)))
             : null;
 
         var emptyLogs = await _context.BreedingEmptyLogs.AsNoTracking()
@@ -63,8 +67,6 @@ public class BreedingService : IBreedingService
             };
         }).ToList();
 
-        var waiting = exp.Where(g => !g.KidsCount.HasValue).ToList();
-        var confirmed = exp.Where(g => g.KidsCount.HasValue && g.KidsCount > 0).ToList();
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
         var mixCostPerKg = _feedService.GetMixCostPerKg();
         var rationRows = BuildRationRows(prep, waiting, confirmed, plans, mixCostPerKg);
@@ -72,6 +74,7 @@ public class BreedingService : IBreedingService
         return new BreedingPageViewModel
         {
             PrepCount = prep.Count,
+            WaitingCount = waiting.Count,
             ExpectingCount = confirmed.Count,
             NextDueText = soonest switch
             {
@@ -81,6 +84,10 @@ public class BreedingService : IBreedingService
             },
             EmptyRateText = emptyRateText,
             PrepRows = prep.Select(MapPrep).ToList(),
+            WaitingRows = waiting
+                .OrderBy(g => g.MatedDate)
+                .Select(MapWaiting)
+                .ToList(),
             ExpectingRows = confirmed
                 .OrderBy(g => BreedingHelper.ExpectedKidding(g.MatedDate!.Value))
                 .Select(MapExpecting)
@@ -94,20 +101,66 @@ public class BreedingService : IBreedingService
     {
         var goat = await FindGoatAsync(model.Tag, cancellationToken)
             ?? throw new InvalidOperationException("Scan or type a valid doe tag");
+        var error = BreedingRules.EligibilityError(goat, Today);
+        if (error is not null) throw new InvalidOperationException(error);
+
         goat.PrepCrossDate = model.Date;
+        goat.BreedingStage = BreedingStage.Ready;
         goat.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<CrossCheckViewModel> CheckCrossAsync(
+        string doeTag, string? buckTag, DateOnly? date, CancellationToken cancellationToken = default)
+    {
+        var doe = await FindGoatAsync(doeTag, cancellationToken);
+        if (doe is null)
+            return new CrossCheckViewModel { Errors = ["No goat with that tag."] };
+
+        var buck = await BreedingCycleWriter.FindBuckAsync(_context, buckTag, cancellationToken);
+        var pedigree = await BreedingCycleWriter.LoadPedigreeAsync(_context, cancellationToken);
+        var plan = BreedingCycleWriter.PlanCross(doe, buck, buckTag, date ?? Today, Today, pedigree);
+        return new CrossCheckViewModel
+        {
+            CanCross = plan.Check.Errors.Count == 0,
+            DoeTag = doe.Tag,
+            DoeName = doe.Name,
+            BuckTag = plan.BuckTag,
+            BuckInHerd = buck is not null,
+            Errors = plan.Check.Errors,
+            Warnings = plan.Check.Warnings,
+            Notes = plan.Check.Notes
+        };
     }
 
     public async Task RecordCrossAsync(RecordCrossViewModel model, CancellationToken cancellationToken = default)
     {
         var goat = await FindGoatAsync(model.Tag, cancellationToken)
             ?? throw new InvalidOperationException("Scan or type a valid doe tag");
-        goat.MatedDate = model.Date;
-        goat.BuckTag = string.IsNullOrWhiteSpace(model.BuckTag) ? null : model.BuckTag.Trim();
-        goat.PrepCrossDate = null;
-        goat.Status = GoatStatus.Pregnant;
-        goat.UpdatedDate = DateTime.UtcNow;
+        await CrossAsync(goat, model.Date, model.BuckTag, model.ConfirmWarnings, cancellationToken);
+    }
+
+    public async Task RecordCrossFromPrepAsync(
+        int goatId, DateOnly date, string? buckTag, bool confirmWarnings, CancellationToken cancellationToken = default)
+    {
+        var goat = await _context.Goats.FindAsync([goatId], cancellationToken)
+            ?? throw new InvalidOperationException("Goat not found");
+        await CrossAsync(goat, date, buckTag, confirmWarnings, cancellationToken);
+    }
+
+    private async Task CrossAsync(Goat doe, DateOnly date, string? buckTag, bool confirmWarnings, CancellationToken cancellationToken)
+    {
+        var buck = await BreedingCycleWriter.FindBuckAsync(_context, buckTag, cancellationToken);
+        var pedigree = await BreedingCycleWriter.LoadPedigreeAsync(_context, cancellationToken);
+        var plan = BreedingCycleWriter.PlanCross(doe, buck, buckTag, date, Today, pedigree);
+
+        if (plan.Check.Errors.Count > 0)
+            throw new InvalidOperationException(string.Join(" ", plan.Check.Errors));
+        if (plan.Check.Warnings.Count > 0 && !confirmWarnings)
+            throw new ConfirmationRequiredException(plan.Check.Warnings);
+
+        var open = await BreedingCycleWriter.OpenEventsAsync(_context, doe.Id, cancellationToken);
+        BreedingCycleWriter.ApplyCross(_context, doe, date, plan, open);
         await _context.SaveChangesAsync(cancellationToken);
     }
 
@@ -115,10 +168,19 @@ public class BreedingService : IBreedingService
     {
         var goat = await FindGoatAsync(model.Tag, cancellationToken)
             ?? throw new InvalidOperationException("Scan or type a valid doe tag");
+        var scanDate = model.Date ?? Today;
+
+        if (scanDate > Today)
+            throw new InvalidOperationException("The scan date cannot be in the future.");
+        if (model.KidsCount < 0 || model.KidsCount > BreedingHelper.MaxKidsPerBirth)
+            throw new InvalidOperationException($"Kids on scan must be between 0 and {BreedingHelper.MaxKidsPerBirth}.");
+        if (goat.MatedDate.HasValue && scanDate < goat.MatedDate.Value)
+            throw new InvalidOperationException($"The scan date is before her cross on {goat.MatedDate:yyyy-MM-dd}.");
+
+        var open = await BreedingCycleWriter.OpenEventsAsync(_context, goat.Id, cancellationToken);
 
         if (model.KidsCount == 0)
         {
-            var scanDate = model.Date ?? DateOnly.FromDateTime(DateTime.Today);
             _context.BreedingEmptyLogs.Add(new BreedingEmptyLog
             {
                 GoatId = goat.Id,
@@ -126,23 +188,156 @@ public class BreedingService : IBreedingService
                 MatedDate = goat.MatedDate,
                 BuckTag = goat.BuckTag
             });
-            goat.MatedDate = null;
-            goat.BuckTag = null;
-            goat.KidsCount = null;
-            goat.UltrasoundDate = null;
-            goat.PrepCrossDate = null;
-            goat.Status = GoatStatus.Dry;
+            foreach (var e in open)
+            {
+                e.ScanDate = scanDate;
+                e.ScanKids = 0;
+            }
+            BreedingCycleWriter.CloseCycle(goat, open, BreedingOutcome.Empty, scanDate);
+            if (goat.Status == GoatStatus.Pregnant)
+                goat.Status = GoatStatus.Dry;
         }
         else
         {
             if (!goat.MatedDate.HasValue)
-                throw new InvalidOperationException("Record her cross first (she must be in the Expecting list).");
+                throw new InvalidOperationException("Record her cross first (she must be in the Waiting for scan list).");
             goat.KidsCount = model.KidsCount;
-            goat.UltrasoundDate = model.Date ?? DateOnly.FromDateTime(DateTime.Today);
+            goat.UltrasoundDate = scanDate;
             goat.Status = GoatStatus.Pregnant;
+            goat.BreedingStage = BreedingStage.ConfirmedPregnant;
+            foreach (var e in open)
+            {
+                e.ScanDate = scanDate;
+                e.ScanKids = model.KidsCount;
+                e.Outcome = BreedingOutcome.ConfirmedPregnant;
+                e.UpdatedDate = DateTime.UtcNow;
+            }
         }
 
         goat.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<RecordBirthResultViewModel> RecordBirthAsync(RecordBirthViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (model.ClientRequestId == Guid.Empty)
+            throw new InvalidOperationException("Missing request id — reload the page and try again.");
+
+        var existing = await _context.KiddingRecords.AsNoTracking()
+            .Include(k => k.Kids)
+            .FirstOrDefaultAsync(k => k.ClientRequestId == model.ClientRequestId, cancellationToken);
+        if (existing is not null)
+            return MapBirthResult(existing, alreadyRecorded: true);
+
+        var doe = await FindGoatAsync(model.DoeTag, cancellationToken)
+            ?? throw new InvalidOperationException("Scan or type a valid doe tag");
+        if (doe.Gender != GoatGender.Female)
+            throw new InvalidOperationException($"{doe.Tag} is not a doe.");
+
+        var today = Today;
+        if (model.KiddingDate > today)
+            throw new InvalidOperationException("The birth date cannot be in the future.");
+        if (model.Stillborn < 0 || model.Kids.Count + model.Stillborn == 0)
+            throw new InvalidOperationException("Add at least one kid (live or stillborn).");
+        if (model.Kids.Count + model.Stillborn > BreedingHelper.MaxKidsPerBirth)
+            throw new InvalidOperationException($"A birth can have at most {BreedingHelper.MaxKidsPerBirth} kids.");
+        if (model.Kids.Any(k => k.WeightKg is < 0 or > 20))
+            throw new InvalidOperationException("Kid birth weight must be between 0 and 20 kg.");
+        if (!Enum.IsDefined(model.Ease) || model.Kids.Any(k => !Enum.IsDefined(k.Gender)))
+            throw new InvalidOperationException("Invalid birth details.");
+
+        var warnings = new List<string>();
+        if (!doe.MatedDate.HasValue)
+            warnings.Add($"No cross is recorded for {doe.Tag}; the sire will be unknown.");
+        else
+        {
+            if (model.KiddingDate < doe.MatedDate.Value)
+                throw new InvalidOperationException($"The birth date is before her cross on {doe.MatedDate:yyyy-MM-dd}.");
+            var gestation = model.KiddingDate.DayNumber - doe.MatedDate.Value.DayNumber;
+            if (gestation < BreedingHelper.MinPlausibleGestationDays)
+                warnings.Add($"Only {gestation} days since the cross (normal is about {BreedingHelper.GestationDays}).");
+        }
+        if (warnings.Count > 0 && !model.ConfirmWarnings)
+            throw new ConfirmationRequiredException(warnings);
+
+        var open = await BreedingCycleWriter.OpenEventsAsync(_context, doe.Id, cancellationToken);
+        var currentEvent = open.FirstOrDefault();
+        var tags = await AssignKidTagsAsync(doe.Tag, model.KiddingDate, model.Kids, cancellationToken);
+
+        var record = new KiddingRecord
+        {
+            DoeId = doe.Id,
+            BreedingEvent = currentEvent,
+            KiddingDate = model.KiddingDate,
+            LiveKids = model.Kids.Count,
+            Stillborn = model.Stillborn,
+            Ease = model.Ease,
+            Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim(),
+            ClientRequestId = model.ClientRequestId
+        };
+        _context.KiddingRecords.Add(record);
+
+        for (var i = 0; i < model.Kids.Count; i++)
+        {
+            var input = model.Kids[i];
+            var kid = new Goat
+            {
+                Tag = tags[i].Tag,
+                IsTemporaryTag = tags[i].Temporary,
+                Name = string.IsNullOrWhiteSpace(input.Name) ? null : input.Name.Trim(),
+                Breed = doe.Breed,
+                Gender = input.Gender,
+                Status = GoatStatus.Kid,
+                Source = GoatSource.Born,
+                PurchasePrice = 0,
+                EventDate = model.KiddingDate,
+                GroupId = doe.GroupId,
+                Owner = doe.Owner,
+                DamId = doe.Id,
+                SireId = currentEvent?.BuckId,
+                SireTagText = currentEvent?.BuckId is null ? currentEvent?.BuckTagText ?? doe.BuckTag : null,
+                KiddingRecord = record
+            };
+            if (input.WeightKg > 0)
+                kid.WeightRecords.Add(new GoatWeightRecord { Date = model.KiddingDate, Kg = input.WeightKg.Value });
+            record.Kids.Add(kid);
+            _context.Goats.Add(kid);
+        }
+
+        BreedingCycleWriter.CloseCycle(doe, open, BreedingOutcome.Kidded, model.KiddingDate);
+        doe.Status = GoatStatus.Milking;
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // A concurrent submit of the same birth won the unique ClientRequestId race; this save was rolled back whole.
+            _context.ChangeTracker.Clear();
+            var winner = await _context.KiddingRecords.AsNoTracking()
+                .Include(k => k.Kids)
+                .FirstOrDefaultAsync(k => k.ClientRequestId == model.ClientRequestId, cancellationToken);
+            if (winner is null) throw;
+            return MapBirthResult(winner, alreadyRecorded: true);
+        }
+        return MapBirthResult(record, alreadyRecorded: false);
+    }
+
+    public async Task RecordAbortionAsync(RecordAbortionViewModel model, CancellationToken cancellationToken = default)
+    {
+        var goat = await FindGoatAsync(model.Tag, cancellationToken)
+            ?? throw new InvalidOperationException("Scan or type a valid doe tag");
+        if (!goat.MatedDate.HasValue)
+            throw new InvalidOperationException($"{goat.Tag} has no open cross or pregnancy.");
+        if (model.Date > Today || model.Date < goat.MatedDate.Value)
+            throw new InvalidOperationException("The date must be between her cross date and today.");
+
+        var open = await BreedingCycleWriter.OpenEventsAsync(_context, goat.Id, cancellationToken);
+        BreedingCycleWriter.CloseCycle(goat, open, BreedingOutcome.Aborted, model.Date,
+            string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim());
+        if (goat.Status == GoatStatus.Pregnant)
+            goat.Status = GoatStatus.Dry;
         await _context.SaveChangesAsync(cancellationToken);
     }
 
@@ -150,13 +345,9 @@ public class BreedingService : IBreedingService
     {
         var goat = await _context.Goats.FindAsync([goatId], cancellationToken)
             ?? throw new InvalidOperationException("Goat not found");
-        goat.MatedDate = null;
-        goat.BuckTag = null;
-        goat.KidsCount = null;
-        goat.UltrasoundDate = null;
-        goat.PrepCrossDate = null;
+        var open = await BreedingCycleWriter.OpenEventsAsync(_context, goat.Id, cancellationToken);
+        BreedingCycleWriter.CloseCycle(goat, open, BreedingOutcome.Kidded, Today, "marked kidded without birth details");
         goat.Status = GoatStatus.Milking;
-        goat.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
     }
 
@@ -165,6 +356,8 @@ public class BreedingService : IBreedingService
         var goat = await _context.Goats.FindAsync([goatId], cancellationToken);
         if (goat is null) return;
         goat.PrepCrossDate = null;
+        if (goat.BreedingStage == BreedingStage.Ready)
+            goat.BreedingStage = BreedingStage.None;
         goat.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -173,25 +366,68 @@ public class BreedingService : IBreedingService
     {
         var goat = await _context.Goats.FindAsync([goatId], cancellationToken);
         if (goat is null) return;
-        goat.MatedDate = null;
-        goat.BuckTag = null;
-        goat.KidsCount = null;
-        goat.UltrasoundDate = null;
-        goat.UpdatedDate = DateTime.UtcNow;
+        var open = await BreedingCycleWriter.OpenEventsAsync(_context, goat.Id, cancellationToken);
+        BreedingCycleWriter.CloseCycle(goat, open, BreedingOutcome.Cancelled, Today, "cross removed");
+        if (goat.Status == GoatStatus.Pregnant)
+            goat.Status = GoatStatus.Dry;
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task RecordCrossFromPrepAsync(int goatId, DateOnly date, string? buckTag, CancellationToken cancellationToken = default)
+    private async Task<List<(string Tag, bool Temporary)>> AssignKidTagsAsync(
+        string damTag, DateOnly date, IReadOnlyList<BirthKidViewModel> kids, CancellationToken cancellationToken)
     {
-        var goat = await _context.Goats.FindAsync([goatId], cancellationToken)
-            ?? throw new InvalidOperationException("Goat not found");
-        goat.MatedDate = date;
-        goat.BuckTag = string.IsNullOrWhiteSpace(buckTag) ? null : buckTag.Trim();
-        goat.PrepCrossDate = null;
-        goat.Status = GoatStatus.Pregnant;
-        goat.UpdatedDate = DateTime.UtcNow;
-        await _context.SaveChangesAsync(cancellationToken);
+        var requested = kids
+            .Select(k => string.IsNullOrWhiteSpace(k.Tag) ? null : k.Tag.Trim())
+            .ToList();
+
+        var explicitTags = requested.OfType<string>().ToList();
+        if (explicitTags.Any(t => t.Length > 50))
+            throw new InvalidOperationException("Kid tags can be at most 50 characters.");
+        var dup = explicitTags.GroupBy(t => t, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (dup is not null)
+            throw new InvalidOperationException($"Tag {dup.Key} is used for more than one kid.");
+
+        var prefix = $"T-{damTag}-{date:yyMMdd}-";
+        var lowered = explicitTags.Select(t => t.ToLower()).ToList();
+        var lowerPrefix = prefix.ToLower();
+        var taken = (await _context.Goats.AsNoTracking()
+                .Where(g => lowered.Contains(g.Tag.ToLower()) || g.Tag.ToLower().StartsWith(lowerPrefix))
+                .Select(g => g.Tag)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var clash = explicitTags.FirstOrDefault(taken.Contains);
+        if (clash is not null)
+            throw new InvalidOperationException($"Tag {clash} is already used by another goat.");
+
+        var result = new List<(string, bool)>();
+        var n = 1;
+        foreach (var tag in requested)
+        {
+            if (tag is not null)
+            {
+                result.Add((tag, false));
+                continue;
+            }
+            string temp;
+            do temp = prefix + n++; while (taken.Contains(temp) || explicitTags.Contains(temp, StringComparer.OrdinalIgnoreCase));
+            if (temp.Length > 50)
+                throw new InvalidOperationException("The dam tag is too long to build a temporary kid tag — enter kid tags manually.");
+            taken.Add(temp);
+            result.Add((temp, true));
+        }
+        return result;
     }
+
+    private static RecordBirthResultViewModel MapBirthResult(KiddingRecord record, bool alreadyRecorded) => new()
+    {
+        KiddingRecordId = record.Id,
+        AlreadyRecorded = alreadyRecorded,
+        Kids = record.Kids
+            .OrderBy(k => k.Id)
+            .Select(k => new RecordedKidViewModel { Id = k.Id, Tag = k.Tag, IsTemporaryTag = k.IsTemporaryTag, Gender = k.Gender })
+            .ToList()
+    };
 
     private async Task<Goat?> FindGoatAsync(string tag, CancellationToken cancellationToken)
     {
@@ -218,6 +454,26 @@ public class BreedingService : IBreedingService
             DietStartDate = start.ToString("yyyy-MM-dd") + (dStart <= 0 ? " · start now" : ""),
             DietStartNow = dStart <= 0,
             CrossInText = dCross < 0 ? "now" : $"in {dCross}d"
+        };
+    }
+
+    private static BreedingWaitingRowViewModel MapWaiting(Goat g)
+    {
+        var mated = g.MatedDate!.Value;
+        var scanDue = mated.AddDays(BreedingHelper.ScanAfterDays);
+        var (text, css) = DisplayHelper.GetStatusDisplay(g.Status);
+        return new BreedingWaitingRowViewModel
+        {
+            Id = g.Id,
+            Tag = g.Tag,
+            Name = g.Name,
+            MatedDate = mated.ToString("yyyy-MM-dd"),
+            BuckTag = g.BuckTag,
+            DaysSinceCross = -BreedingHelper.DaysUntil(mated),
+            ScanDueDate = scanDue.ToString("yyyy-MM-dd"),
+            ScanDueNow = BreedingHelper.DaysUntil(scanDue) <= 0,
+            StatusDisplay = text,
+            StatusCssClass = css
         };
     }
 
@@ -288,19 +544,6 @@ public class BreedingService : IBreedingService
         var du = BreedingHelper.DaysUntil(kd);
         var dueColor = du < 0 ? "color:#8a261c" : du <= 10 ? "color:var(--amber)" : "color:var(--green-dark)";
 
-        string kidsDisplay;
-        bool extraFeed;
-        if (!g.KidsCount.HasValue)
-        {
-            kidsDisplay = "not checked";
-            extraFeed = false;
-        }
-        else
-        {
-            kidsDisplay = BreedingHelper.KidsLabel(g.KidsCount.Value);
-            extraFeed = g.KidsCount >= 2;
-        }
-
         return new BreedingExpectingRowViewModel
         {
             Id = g.Id,
@@ -310,8 +553,8 @@ public class BreedingService : IBreedingService
             BuckTag = g.BuckTag,
             KidsCount = g.KidsCount,
             UltrasoundDate = g.UltrasoundDate?.ToString("yyyy-MM-dd"),
-            KidsDisplay = kidsDisplay,
-            ExtraFeed = extraFeed,
+            KidsDisplay = g.KidsCount.HasValue ? BreedingHelper.KidsLabel(g.KidsCount.Value) : "not checked",
+            ExtraFeed = g.KidsCount >= 2,
             ExpectedKidding = kd.ToString("yyyy-MM-dd"),
             KiddingWindow = $"{w1:yyyy-MM-dd} → {w2:yyyy-MM-dd}",
             DueText = BreedingHelper.DueText(du),

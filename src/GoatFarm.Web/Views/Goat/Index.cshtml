@@ -5,6 +5,8 @@
     var herdFilter = Model.Filter ?? "all";
     var editGoatJson = ViewBag.EditGoatJson as string ?? "null";
     ViewBag.HerdFilter = herdFilter;
+    ViewBag.HerdSearch = Model.Search;
+    var herdInitJson = System.Text.Json.JsonSerializer.Serialize(new { filter = herdFilter, search = Model.Search ?? "", page = Model.Pagination.Page });
 }
 
 <div class="note"><b>Herd:</b> add a goat with its date and price. If you <b>bought</b> it, the price
@@ -17,18 +19,19 @@
     <div class="stat" data-filter="st:pregnant"><div class="num">@Model.Stats.Pregnant</div><div class="lbl"><span class="dot" style="background:var(--pink)"></span>Pregnant</div></div>
     <div class="stat" data-filter="st:dry"><div class="num">@Model.Stats.Dry</div><div class="lbl"><span class="dot" style="background:var(--ink-soft)"></span>Dry</div></div>
     <div class="stat" data-filter="st:buck"><div class="num">@Model.Stats.Bucks</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Bucks</div></div>
+    <div class="stat" data-filter="st:meat"><div class="num">@Model.Stats.Meat</div><div class="lbl"><span class="dot" style="background:#7a4320"></span>Meat</div></div>
 </div>
 
 <div class="panel">
     <div class="panel-head"><h2>Record weight or death</h2><span class="sub">scan the tag, enter the detail</span></div>
     <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:1.4fr 1fr 1fr auto auto">
+        <div class="add-grid wd-grid">
             <div class="field"><label>Goat — scan or type tag</label>
                 <input id="wd-tag" placeholder="scan or type tag" autocomplete="off"></div>
             <div class="field"><label>Weight (kg)</label><input type="number" id="wd-kg" min="0" step="0.1"></div>
             <div class="field"><label>Date</label><input type="date" id="wd-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
             <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addWeight">Save weight</button></div>
-            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost" id="addDeath">Record death</button></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-danger btn-death" id="addDeath">Record death</button></div>
         </div>
         <div class="rule" id="wd-found" style="margin-top:8px"></div>
     </div>
@@ -49,8 +52,20 @@
             <div class="field"><label>Price (Rs)</label><input type="number" id="f-price" min="0" placeholder="0"></div>
             <div class="field"><label>Status</label><select id="f-status">
                 <option value="Kid">Kid</option><option value="Milking">Milking</option><option value="Pregnant">Pregnant</option>
-                <option value="Dry">Dry</option><option value="Buck">Buck</option><option value="Sale">For sale</option></select></div>
+                <option value="Dry">Dry</option><option value="Buck">Buck</option><option value="Sale">For sale</option><option value="Meat">Meat / finishing</option></select></div>
             <div class="field"><label>Date (born / bought)</label><input type="date" id="f-date"></div>
+            <div class="field field-dob">
+                <label for="f-dob">Date of birth</label>
+                <input type="date" id="f-dob" max="@DateTime.Today.ToString("yyyy-MM-dd")">
+                <label class="inline-check field-dob-est" for="f-dob-est"><input type="checkbox" id="f-dob-est"> Estimated</label>
+            </div>
+            <div class="field"><label for="f-health">Health</label><select id="f-health">
+                <option value="Healthy">Healthy</option><option value="Sick">Sick</option>
+                <option value="UnderTreatment">Under treatment</option><option value="Recovering">Recovering</option></select></div>
+            <div class="field"><label for="f-owner">Owner (optional)</label><input id="f-owner" maxlength="100" placeholder="farm / partner"></div>
+            <div class="field"><label for="f-sire">Sire tag (optional)</label><input id="f-sire" maxlength="50" list="sireOptions" autocomplete="off" placeholder="father"></div>
+            <div class="field"><label for="f-dam">Dam tag (optional)</label><input id="f-dam" maxlength="50" list="damOptions" autocomplete="off" placeholder="mother"></div>
+            <datalist id="sireOptions"></datalist><datalist id="damOptions"></datalist>
             <div class="field field-comment-goat"><label>Comment</label><input id="f-note" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
@@ -65,10 +80,13 @@
 
 <div class="panel">
     <div class="panel-head"><h2>The herd</h2>
-        <div class="filterbar"><div class="field"><label class="hide-sm">Show</label>
+        <div class="filterbar"><form class="field" id="herdSearchForm" role="search">
+            <label class="hide-sm" for="herdSearch">Search</label>
+            <input type="search" id="herdSearch" name="q" value="@Model.Search" maxlength="100" placeholder="Tag, name, owner, sire/dam" autocomplete="off">
+        </form><div class="field"><label class="hide-sm">Show</label>
             <select id="filter">
                 <optgroup label="By age">
-                    <option value="all" selected="@(Model.Filter == "all")">All goats</option>
+                    <option value="all" @(Model.Filter == "all" ? "selected" : null)>All goats</option>
                     <option value="age:0:70">Kids 0–70 days</option>
                     <option value="age:70:90">Kids 70–90 days</option>
                     <option value="age:90:180">3–6 months</option>
@@ -78,11 +96,18 @@
                 <optgroup label="By status">
                     <option value="st:kid">Kids</option><option value="st:pregnant">Pregnant</option>
                     <option value="st:milking">Milking</option><option value="st:dry">Dry</option>
-                    <option value="st:buck">Bucks</option><option value="st:sale">For sale</option>
+                    <option value="st:buck">Bucks</option><option value="st:sale">For sale</option><option value="st:meat">Meat / finishing</option>
                 </optgroup>
                 <optgroup label="By breeding">
-                    <option value="br:prep" selected="@(Model.Filter == "br:prep")">Ready for cross</option>
-                    <option value="br:expecting" selected="@(Model.Filter == "br:expecting")">Expecting / in-kid</option>
+                    <option value="br:prep" @(Model.Filter == "br:prep" ? "selected" : null)>Ready for cross</option>
+                    <option value="br:waiting" @(Model.Filter == "br:waiting" ? "selected" : null)>Crossed — awaiting scan</option>
+                    <option value="br:expecting" @(Model.Filter == "br:expecting" ? "selected" : null)>Confirmed pregnant</option>
+                    <option value="br:due30" @(Model.Filter == "br:due30" ? "selected" : null)>Due within 30 days</option>
+                </optgroup>
+                <optgroup label="By health">
+                    <option value="health:sick">Sick</option>
+                    <option value="health:undertreatment">Under treatment</option>
+                    <option value="health:recovering">Recovering</option>
                 </optgroup>
                 <optgroup label="By group" id="groupOpts">
                     @foreach (var g in Model.Groups){<option value="grp:@g">@g</option>}
@@ -97,10 +122,10 @@
                 <optgroup label="Set status">
                     <option value="st:kid">Kid</option><option value="st:milking">Milking</option>
                     <option value="st:pregnant">Pregnant</option><option value="st:dry">Dry</option>
-                    <option value="st:buck">Buck</option><option value="st:sale">For sale</option></optgroup>
+                    <option value="st:buck">Buck</option><option value="st:sale">For sale</option><option value="st:meat">Meat / finishing</option></optgroup>
                 <optgroup label="Breeding">
                     <option value="br:prep">Ready for cross</option>
-                    <option value="br:cross">Crossed / expecting</option>
+                    <option value="br:cross">Crossed (awaiting scan)</option>
                     <option value="br:kidded">Kidded → Milking</option></optgroup>
                 <optgroup label="Group" id="moveGroupOpts">
                     @foreach (var g in Model.Groups){<option value="grp:@g">@g</option>}
@@ -125,12 +150,23 @@
                     data-source="@g.Source"
                     data-price="@g.PurchasePrice"
                     data-status="@g.Status"
-                    data-date="@g.EventDateDisplay">
+                    data-date="@g.EventDateDisplay"
+                    data-dob="@g.DateOfBirthDisplay"
+                    data-dob-est="@(g.DateOfBirthIsEstimated ? "1" : "")"
+                    data-health="@g.HealthState"
+                    data-owner="@g.Owner"
+                    data-sire="@g.SireTag"
+                    data-dam="@g.DamTag">
                     <td><input type="checkbox" data-id="@g.Id"></td>
-                    <td><a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(g.Tag)">@g.Tag</a>@if(!string.IsNullOrEmpty(g.Name)){<div class="name">@g.Name</div>}@if(!string.IsNullOrEmpty(g.Comment)){<div class="name" style="opacity:.75">@g.Comment</div>}</td>
+                    <td><a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(g.Tag)">@g.Tag</a>@if(g.IsTemporaryTag){<span class="scopechip" title="Temporary tag from the birth wizard — replace it when the kid is tagged">temp</span>}@if(!string.IsNullOrEmpty(g.Name)){<div class="name">@g.Name</div>}@if(!string.IsNullOrEmpty(g.Owner)){<div class="name">Owner: @g.Owner</div>}@if(!string.IsNullOrEmpty(g.Comment)){<div class="name" style="opacity:.75">@g.Comment</div>}</td>
                     <td class="hide-sm"><span class="breed">@g.Breed</span></td>
-                    <td><span class="age-d">@g.AgeDays</span> <span class="age-m">days · @g.AgeLabel</span></td>
+                    <td>@if (g.AgeDays is { } days)
+                        {<span class="age-d">@(g.AgeIsEstimated ? "~" : "")@days</span> <span class="age-m">days · @g.AgeLabel@(g.AgeIsEstimated ? " · estimated" : "")</span>}
+                        else
+                        {<span class="age-m" title="Bought goat without a date of birth">age unknown</span>}</td>
                     <td><span class="chip @g.StatusCssClass">@g.StatusDisplay</span>
+                        @if (g.HealthState != GoatHealthState.Healthy)
+                        {<span class="chip chip-urgent">@g.HealthDisplay</span>}
                         @if (!string.IsNullOrEmpty(g.BreedingHint))
                         {<div class="name" style="color:@g.BreedingHintColor;font-weight:700">@g.BreedingHint</div>}</td>
                     <td class="hide-sm num-cell">@if(g.Source == GoatSource.Born){<span class="breed">home-bred</span>}else{<span class="breed">@DisplayHelper.FormatRs(g.PurchasePrice)</span>}</td>
@@ -138,11 +174,11 @@
                 </tr>
             }
         </tbody></table>
-        <div class="empty" id="empty" style="display:@(Model.Pagination.TotalItems > 0 ? "none" : "block")">No goats match this filter.</div>
+        <div class="empty" id="empty" style="display:@(Model.Pagination.TotalItems > 0 ? "none" : "block")">@(string.IsNullOrEmpty(Model.Search) ? "No goats match this filter." : "No goats match this search and filter.")</div>
         @await Html.PartialAsync("_HerdPagination", Model.Pagination)
     </div>
 </div>
 
 @section Scripts {
-<script>GoatRecords.initHerd({ filter: '@herdFilter', page: @Model.Pagination.Page, editGoat: @Html.Raw(editGoatJson) });</script>
+<script>GoatRecords.initHerd(Object.assign(@Html.Raw(herdInitJson), { editGoat: @Html.Raw(editGoatJson) }));</script>
 }

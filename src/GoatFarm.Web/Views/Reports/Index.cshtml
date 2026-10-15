@@ -3,15 +3,15 @@
 <div class="filterbar" style="margin-bottom:14px">
     <div class="field"><label class="hide-sm">Period</label>
         <select id="rep-period">
-            <option value="today" selected="@(Model.Period == "today")">Today</option>
-            <option value="week" selected="@(Model.Period == "week")">This week</option>
-            <option value="month" selected="@(Model.Period == "month")">This month</option>
-            <option value="lastmonth" selected="@(Model.Period == "lastmonth")">Last month</option>
-            <option value="3m" selected="@(Model.Period == "3m")">3 months</option>
-            <option value="6m" selected="@(Model.Period == "6m")">6 months</option>
-            <option value="year" selected="@(Model.Period == "year")">This year</option>
-            <option value="all" selected="@(Model.Period == "all")">All time</option>
-            <option value="custom" selected="@(Model.Period == "custom")">Custom…</option>
+            <option value="today" @(Model.Period == "today" ? "selected" : null)>Today</option>
+            <option value="week" @(Model.Period == "week" ? "selected" : null)>This week</option>
+            <option value="month" @(Model.Period == "month" ? "selected" : null)>This month</option>
+            <option value="lastmonth" @(Model.Period == "lastmonth" ? "selected" : null)>Last month</option>
+            <option value="3m" @(Model.Period == "3m" ? "selected" : null)>3 months</option>
+            <option value="6m" @(Model.Period == "6m" ? "selected" : null)>6 months</option>
+            <option value="year" @(Model.Period == "year" ? "selected" : null)>This year</option>
+            <option value="all" @(Model.Period == "all" ? "selected" : null)>All time</option>
+            <option value="custom" @(Model.Period == "custom" ? "selected" : null)>Custom…</option>
         </select></div>
     <div class="field" id="rep-custom" style="display:@(Model.Period == "custom" ? "flex" : "none")">
         <label class="hide-sm">From</label><input type="date" id="rep-from" value="@Model.CustomFrom">
@@ -19,9 +19,9 @@
     </div>
     <div class="field"><label class="hide-sm">View by</label>
         <select id="rep-group">
-            <option value="day" selected="@(Model.GroupBy == "day")">Day</option>
-            <option value="week" selected="@(Model.GroupBy == "week")">Week</option>
-            <option value="month" selected="@(Model.GroupBy == "month")">Month</option>
+            <option value="day" @(Model.GroupBy == "day" ? "selected" : null)>Day</option>
+            <option value="week" @(Model.GroupBy == "week" ? "selected" : null)>Week</option>
+            <option value="month" @(Model.GroupBy == "month" ? "selected" : null)>Month</option>
         </select></div>
     <button type="button" class="btn btn-ghost btn-sm" id="repCsv">⬇ Download CSV</button>
     <button type="button" class="btn btn-ghost btn-sm" id="repPrint">🖨 Print / PDF</button>
@@ -35,8 +35,11 @@
     <button type="button" class="tab rep-subtab" data-reptab="growth">Growth</button>
     <button type="button" class="tab rep-subtab" data-reptab="feed">Feed</button>
     <button type="button" class="tab rep-subtab" data-reptab="health">Health</button>
-    <button type="button" class="tab rep-subtab" data-reptab="finance">Finance</button>
-    <button type="button" class="tab rep-subtab" data-reptab="profit">Profitability</button>
+    @if (!Model.FinanceHidden)
+    {
+        <button type="button" class="tab rep-subtab" data-reptab="finance">Finance</button>
+        <button type="button" class="tab rep-subtab" data-reptab="profit">Profitability</button>
+    }
     <button type="button" class="tab rep-subtab" data-reptab="inventory">Inventory</button>
     <button type="button" class="tab rep-subtab" data-reptab="alerts">Alerts</button>
     <button type="button" class="tab rep-subtab" data-reptab="compare">Comparison</button>
@@ -49,6 +52,8 @@
         <div class="panel-head"><h2>Farm performance ratios</h2><span class="sub">the health of the operation</span></div>
         <div class="panel-body"><div class="price-grid" id="dashRatios"></div></div>
     </div>
+    @if (!Model.FinanceHidden)
+    {
     <div class="panel">
         <div class="panel-head"><h2>Income vs expenses</h2><span class="sub" id="trendSub">by month</span></div>
         <div class="panel-body"><table class="tbl"><thead><tr><th id="trendHead">Month</th>
@@ -56,6 +61,7 @@
             <th class="num-cell" id="repMonthHead">Net</th></tr></thead>
             <tbody id="repMonthRows"></tbody></table></div>
     </div>
+    }
     <div class="panel">
         <div class="panel-head"><h2>Needs attention</h2><span class="sub">act on these</span></div>
         <div class="panel-body"><div id="alertList"></div></div>
@@ -172,6 +178,8 @@
     </div>
 </div>
 
+@if (!Model.FinanceHidden)
+{
 <div class="repview" id="rep-finance" style="display:none">
     <div class="rep3">
         <div class="fincard"><div class="v" id="rep-expense">Rs 0</div>
@@ -180,7 +188,7 @@
             <div class="k"><span class="dot" style="background:var(--amber)"></span>Money you put in</div></div>
         <div class="fincard"><div class="v" id="rep-income">Rs 0</div>
             <div class="k"><span class="dot" style="background:var(--green)"></span>Total revenue</div></div>
-        <div class="fincard"><div class="v" id="rep-profit">Rs 0</div>
+        <div class="fincard"><div class="v" id="rep-profit-val">Rs 0</div>
             <div class="k"><span class="dot" style="background:var(--blue)"></span><span id="rep-profit-lbl">Net profit</span></div></div>
     </div>
     <div class="panel">
@@ -233,6 +241,7 @@
             <tbody id="repMilkRows"></tbody></table></div>
     </div>
 </div>
+}
 
 <div class="repview" id="rep-inventory" style="display:none">
     <div class="panel">
@@ -246,11 +255,14 @@
             <th class="num-cell">Value</th><th class="num-cell">Status</th></tr></thead>
             <tbody id="repInvFeed"></tbody></table></div>
     </div>
+    @if (!Model.FinanceHidden)
+    {
     <div class="panel">
         <div class="panel-head"><h2>Assets &amp; equipment</h2><span class="sub">capital items</span></div>
         <div class="panel-body"><table class="tbl"><thead><tr><th>Asset</th><th class="hide-sm">Type</th>
             <th class="num-cell">Value</th></tr></thead><tbody id="repInvAssets"></tbody></table></div>
     </div>
+    }
 </div>
 
 <div class="repview" id="rep-alerts" style="display:none">

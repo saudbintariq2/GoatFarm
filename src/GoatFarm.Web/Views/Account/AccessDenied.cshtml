@@ -6,6 +6,11 @@
     <div class="panel-head"><h2>Access denied</h2></div>
     <div class="panel-body">
         <p class="note">You do not have permission to access this resource.</p>
-        <p><a asp-controller="Dashboard" asp-action="Index" class="btn btn-green">Back to dashboard</a></p>
+        <p class="note" style="margin-top:10px;font-size:13px">If you just signed in locally, use <b>admin@goatfarm.local</b> with the seeded password, or ask an administrator to grant your role access to this module in Settings.</p>
+        <form asp-action="Logout" method="post" style="margin-top:16px">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-green">Sign out and try again</button>
+        </form>
+        <p style="margin-top:10px"><a asp-controller="Account" asp-action="Login" class="btn btn-ghost btn-sm">Back to sign in</a></p>
     </div>
 </div>

@@ -9,7 +9,7 @@ public static class LookupConstants
 
     public static readonly string[] ExpenseTypes =
     [
-        "Salary advance", "Seeding", "Fodder cutting", "Irrigation / water",
+        "Seeding", "Fodder cutting", "Irrigation / water",
         "Cultivation (fodder)", "Vaccines", "Doctor / vet visit", "Vet / extra medicine",
         "Utilities", "Transport", "Repairs", "Land rent", "Other"
     ];

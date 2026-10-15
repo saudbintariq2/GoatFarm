@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
-[IgnoreAntiforgeryToken]
 public class LookupController : Controller
 {
     private readonly ILookupService _lookupService;

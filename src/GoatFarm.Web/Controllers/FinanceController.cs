@@ -1,3 +1,4 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Finance;
 using GoatFarm.Domain.Constants;
@@ -5,16 +6,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
-[IgnoreAntiforgeryToken]
 public class FinanceController : Controller
 {
     private readonly IFinanceService _financeService;
     private readonly ILookupService _lookupService;
+    private readonly IDoubleEntryGuardService _doubleEntryGuard;
 
-    public FinanceController(IFinanceService financeService, ILookupService lookupService)
+    public FinanceController(
+        IFinanceService financeService,
+        ILookupService lookupService,
+        IDoubleEntryGuardService doubleEntryGuard)
     {
         _financeService = financeService;
         _lookupService = lookupService;
+        _doubleEntryGuard = doubleEntryGuard;
     }
 
     [HttpGet]
@@ -24,12 +29,17 @@ public class FinanceController : Controller
         ViewBag.IncomeTypes = await _lookupService.GetListAsync(LookupSettingKeys.IncomeTypes, cancellationToken);
         ViewBag.ExpenseTypes = await _lookupService.GetListAsync(LookupSettingKeys.ExpenseTypes, cancellationToken);
         ViewBag.AssetTypes = await _lookupService.GetListAsync(LookupSettingKeys.AssetTypes, cancellationToken);
+        ViewBag.SalaryReconciliation = await _financeService.GetSalaryReconciliationAsync(cancellationToken);
         return View(await _financeService.GetFinancePageAsync(month, cancellationToken));
     }
 
     [HttpGet]
     public async Task<IActionResult> GetData(string? month, CancellationToken cancellationToken) =>
         Json(await _financeService.GetFinancePageAsync(month, cancellationToken));
+
+    [HttpGet]
+    public async Task<IActionResult> SalaryReconciliation(CancellationToken cancellationToken) =>
+        Json(await _financeService.GetSalaryReconciliationAsync(cancellationToken));
 
     [HttpPost]
     public async Task<IActionResult> AddAsset([FromBody] CreateAssetViewModel model, CancellationToken cancellationToken)
@@ -49,8 +59,24 @@ public class FinanceController : Controller
     public async Task<IActionResult> AddExpense([FromBody] CreateExpenseViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _doubleEntryGuard.ValidateExpenseAsync(model, null, cancellationToken);
+        }
+        catch (DoubleEntryValidationException ex)
+        {
+            return DoubleEntryResult(ex);
+        }
         return Json(await _financeService.AddExpenseAsync(model, cancellationToken));
     }
+
+    private ObjectResult DoubleEntryResult(DoubleEntryValidationException ex) =>
+        StatusCode(StatusCodes.Status409Conflict, new
+        {
+            error = ex.Message,
+            severity = ex.Severity.ToString().ToLowerInvariant(),
+            requiresConfirmation = ex.Severity == DoubleEntrySeverity.Warn
+        });
 
     [HttpPost]
     public async Task<IActionResult> AddOwnerInvestment([FromBody] CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken)
@@ -79,6 +105,14 @@ public class FinanceController : Controller
     public async Task<IActionResult> UpdateExpense(int id, [FromBody] CreateExpenseViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _doubleEntryGuard.ValidateExpenseAsync(model, id, cancellationToken);
+        }
+        catch (DoubleEntryValidationException ex)
+        {
+            return DoubleEntryResult(ex);
+        }
         var result = await _financeService.UpdateExpenseAsync(id, model, cancellationToken);
         return result is null ? NotFound() : Json(result);
     }
@@ -123,6 +157,8 @@ public class FinanceController : Controller
     public async Task<IActionResult> AddRecurringCost([FromBody] CreateRecurringCostViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        try { _doubleEntryGuard.ValidateRecurringCost(model); }
+        catch (DoubleEntryValidationException ex) { return DoubleEntryResult(ex); }
         return Json(await _financeService.AddRecurringCostAsync(model, cancellationToken));
     }
 
@@ -130,6 +166,8 @@ public class FinanceController : Controller
     public async Task<IActionResult> UpdateRecurringCost(int id, [FromBody] CreateRecurringCostViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        try { _doubleEntryGuard.ValidateRecurringCost(model); }
+        catch (DoubleEntryValidationException ex) { return DoubleEntryResult(ex); }
         var result = await _financeService.UpdateRecurringCostAsync(id, model, cancellationToken);
         return result is null ? NotFound() : Json(result);
     }

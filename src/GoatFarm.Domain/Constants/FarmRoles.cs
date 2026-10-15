@@ -21,10 +21,12 @@ public static class FarmTabs
     public const string Reports = "reports";
     public const string Vaccines = "vaccines";
     public const string Settings = "settings";
+    public const string Tasks = "tasks";
 
     public static readonly (string Key, string Label)[] All =
     [
         (Dashboard, "Dashboard"),
+        (Tasks, "Tasks"),
         (Herd, "Herd"),
         (Breeding, "Breeding"),
         (Feed, "Feed & Cost"),

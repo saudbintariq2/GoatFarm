@@ -1,10 +1,10 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Breeding;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
-[IgnoreAntiforgeryToken]
 public class BreedingController : Controller
 {
     private readonly IBreedingService _breedingService;
@@ -38,7 +38,8 @@ public class BreedingController : Controller
             return NotFound(new { error = "No goat with that tag" });
 
         var extra = goat.Gender != Domain.Enums.GoatGender.Female ? " — note: not marked female" : "";
-        if (goat.MatedDate.HasValue) extra = " — already expecting";
+        if (goat.MatedDate.HasValue)
+            extra = goat.KidsCount > 0 ? " — confirmed pregnant" : " — crossed, waiting for scan";
 
         return Json(new
         {
@@ -49,13 +50,36 @@ public class BreedingController : Controller
         });
     }
 
+    [HttpGet]
+    public async Task<IActionResult> CheckCross(string tag, string? buckTag, DateOnly? date, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return BadRequest(new { error = "Enter a doe tag." });
+        return Json(await _breedingService.CheckCrossAsync(tag, buckTag, date, cancellationToken));
+    }
+
     [HttpPost]
-    public async Task<IActionResult> RecordPrep([FromBody] RecordPrepViewModel model, CancellationToken cancellationToken)
+    public Task<IActionResult> RecordPrep([FromBody] RecordPrepViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordPrepAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> RecordCross([FromBody] RecordCrossViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordCrossAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> RecordUltrasound([FromBody] RecordUltrasoundViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordUltrasoundAsync(model, cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> RecordBirth([FromBody] RecordBirthViewModel model, CancellationToken cancellationToken)
     {
         try
         {
-            await _breedingService.RecordPrepAsync(model, cancellationToken);
-            return Ok(new { success = true });
+            return Json(await _breedingService.RecordBirthAsync(model, cancellationToken));
+        }
+        catch (ConfirmationRequiredException ex)
+        {
+            return ConfirmationRequired(ex);
         }
         catch (InvalidOperationException ex)
         {
@@ -64,60 +88,16 @@ public class BreedingController : Controller
     }
 
     [HttpPost]
-    public async Task<IActionResult> RecordCross([FromBody] RecordCrossViewModel model, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _breedingService.RecordCrossAsync(model, cancellationToken);
-            return Ok(new { success = true });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-    }
+    public Task<IActionResult> RecordAbortion([FromBody] RecordAbortionViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordAbortionAsync(model, cancellationToken));
 
     [HttpPost]
-    public async Task<IActionResult> RecordUltrasound([FromBody] RecordUltrasoundViewModel model, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _breedingService.RecordUltrasoundAsync(model, cancellationToken);
-            return Ok(new { success = true });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-    }
+    public Task<IActionResult> MarkKidded(int id, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.MarkKiddedAsync(id, cancellationToken));
 
     [HttpPost]
-    public async Task<IActionResult> MarkKidded(int id, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _breedingService.MarkKiddedAsync(id, cancellationToken);
-            return Ok(new { success = true });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> CrossFromPrep(int id, [FromBody] RecordCrossViewModel model, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _breedingService.RecordCrossFromPrepAsync(id, model.Date, model.BuckTag, cancellationToken);
-            return Ok(new { success = true });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-    }
+    public Task<IActionResult> CrossFromPrep(int id, [FromBody] RecordCrossViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordCrossFromPrepAsync(id, model.Date, model.BuckTag, model.ConfirmWarnings, cancellationToken));
 
     [HttpDelete]
     public async Task<IActionResult> RemovePrep(int id, CancellationToken cancellationToken)
@@ -132,4 +112,24 @@ public class BreedingController : Controller
         await _breedingService.RemoveCrossAsync(id, cancellationToken);
         return Ok(new { success = true });
     }
+
+    private async Task<IActionResult> Run(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            return Ok(new { success = true });
+        }
+        catch (ConfirmationRequiredException ex)
+        {
+            return ConfirmationRequired(ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private IActionResult ConfirmationRequired(ConfirmationRequiredException ex) =>
+        Conflict(new { error = ex.Message, warnings = ex.Warnings, requiresConfirmation = true });
 }

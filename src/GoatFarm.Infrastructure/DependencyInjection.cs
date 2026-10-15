@@ -1,6 +1,7 @@
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Domain.Common;
 using GoatFarm.Infrastructure.Configuration;
+using GoatFarm.Infrastructure.Diagnostics;
 using GoatFarm.Infrastructure.Persistence;
 using GoatFarm.Infrastructure.Repositories;
 using GoatFarm.Infrastructure.Services;
@@ -28,12 +29,13 @@ public static class DependencyInjection
 
         services.AddMemoryCache();
 
-        services.AddDbContext<GoatFarmDbContext>(options =>
+        services.AddSingleton<QueryMetricsInterceptor>();
+        services.AddDbContext<GoatFarmDbContext>((sp, options) =>
             options.UseNpgsql(connectionString, npgsql =>
             {
                 npgsql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null);
                 npgsql.CommandTimeout(60);
-            }));
+            }).AddInterceptors(sp.GetRequiredService<QueryMetricsInterceptor>()));
 
         services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IGoatService, GoatService>();
@@ -49,6 +51,8 @@ public static class DependencyInjection
         services.AddScoped<IReportsService, ReportsService>();
         services.AddScoped<IUserSettingsService, UserSettingsService>();
         services.AddScoped<ILookupService, LookupService>();
+        services.AddScoped<IDoubleEntryGuardService, DoubleEntryGuardService>();
+        services.AddScoped<ITaskService, TaskService>();
 
         return services;
     }

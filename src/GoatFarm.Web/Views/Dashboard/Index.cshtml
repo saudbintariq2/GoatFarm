@@ -1,170 +1,386 @@
 @model GoatFarm.Application.ViewModels.Dashboard.DashboardViewModel
 @using GoatFarm.Application.Common
+@using GoatFarm.Application.ViewModels.Tasks
+@using GoatFarm.Domain.Constants
+@{
+    var visibleTabs = ViewData["VisibleTabKeys"] as IList<string> ?? Array.Empty<string>();
+    var myTasks = ViewData["MyTasks"] as IReadOnlyList<TaskViewModel> ?? [];
+    var upcomingReminders = Model.Reminders
+        .Where(r => r.ReminderDate >= DateOnly.FromDateTime(DateTime.Today))
+        .OrderBy(r => r.ReminderDate)
+        .Take(6)
+        .ToList();
 
-<div class="note"><b>Dashboard</b> — a quick read across the farm. Open any section for full details and editing.</div>
+    var breedTotal = Model.BreedDistribution.Sum(b => b.Count);
+    var breedColors = new[] { "#40916c", "#4895ef", "#f4a261", "#e63946", "#9b5de5", "#06d6a0" };
+    double breedAcc = 0;
+    var breedStops = new List<string>();
+    for (var i = 0; i < Model.BreedDistribution.Count; i++)
+    {
+        var prev = breedAcc;
+        breedAcc += breedTotal > 0 ? Model.BreedDistribution[i].Count * 100.0 / breedTotal : 0;
+        breedStops.Add($"{breedColors[i % breedColors.Length]} {prev.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}% {breedAcc.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%");
+    }
+    var breedGradient = breedStops.Count > 0 ? string.Join(", ", breedStops) : "#dde4ec 0 100%";
 
-<div class="panel dash-panel">
-    <div class="panel-head dash-head">
-        <h2>Herd</h2>
-        <a class="dash-link" asp-controller="Goat" asp-action="Index">Open Herd →</a>
-    </div>
-    <div class="panel-body">
-        <div class="stats dash-stats">
-            <div class="stat"><div class="num">@Model.HerdStats.Total</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Total goats</div></div>
-            <div class="stat"><div class="num">@Model.HerdStats.Kids</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Kids</div></div>
-            <div class="stat"><div class="num">@Model.HerdStats.Milking</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Milking</div></div>
-            <div class="stat"><div class="num">@Model.HerdStats.Pregnant</div><div class="lbl"><span class="dot" style="background:var(--pink)"></span>Pregnant</div></div>
-            <div class="stat"><div class="num">@Model.HerdStats.Dry</div><div class="lbl"><span class="dot" style="background:var(--ink-soft)"></span>Dry</div></div>
-            <div class="stat"><div class="num">@Model.HerdStats.Bucks</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Bucks</div></div>
-        </div>
-    </div>
-</div>
+    var healthTotal = Model.HealthHealthy + Model.HealthUnderObservation + Model.HealthSick;
+    var healthPct = healthTotal > 0 ? (int)Math.Round(Model.HealthHealthy * 100.0 / healthTotal) : 100;
+    var p1Health = healthTotal > 0 ? Model.HealthHealthy * 100.0 / healthTotal : 100;
+    var p2Health = healthTotal > 0 ? (Model.HealthHealthy + Model.HealthUnderObservation) * 100.0 / healthTotal : 100;
 
-<div class="panel dash-panel">
-    <div class="panel-head dash-head">
-        <h2>Breeding</h2>
-        <a class="dash-link" asp-controller="Breeding" asp-action="Index">Open Breeding →</a>
-    </div>
-    <div class="panel-body">
-        <div class="breed3 dash-breed3">
-            <div class="fincard"><div class="v">@Model.BreedingExpectingCount</div>
-                <div class="k"><span class="dot" style="background:var(--pink)"></span>Expecting (in-kid)</div></div>
-            <div class="fincard"><div class="v">@Model.BreedingPrepCount</div>
-                <div class="k"><span class="dot" style="background:var(--amber)"></span>Getting ready for cross</div></div>
-            <div class="fincard"><div class="v dash-breed-due">@Model.BreedingNextDueText</div>
-                <div class="k"><span class="dot" style="background:var(--green)"></span>Next kidding</div></div>
-        </div>
-        @if (Model.BreedingUpcoming.Any())
+    var maxMilkBar = Model.MilkLast7Days.Count > 0 ? Model.MilkLast7Days.Max(d => d.Liters) : 0;
+    if (maxMilkBar <= 0) maxMilkBar = 1;
+
+    var monthlyCost = Model.FinanceHidden ? Model.FeedCostMonthly : Model.TotalExpense;
+    var monthlyCostLabel = Model.FinanceHidden ? "Feed bill (monthly)" : "Monthly cost";
+    var feedTop = Model.FeedStock.OrderByDescending(s => s.StockKg).Take(4).ToList();
+}
+
+<div class="dash-sandeel">
+    <div class="dash-kpi-row">
+        <a class="dash-kpi" asp-controller="Goat" asp-action="Index">
+            <span class="dash-kpi-icon dash-kpi-icon--goat" aria-hidden="true">🐐</span>
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">Total Goats</span>
+                <span class="dash-kpi-value">@Model.HerdStats.Total</span>
+            </div>
+        </a>
+        @if (visibleTabs.Contains(FarmTabs.Milk))
         {
-            <div class="dash-subhead">Upcoming kidding</div>
-            <table class="tbl dash-tbl"><thead><tr><th>Doe</th><th>Expected</th><th class="num-cell">Due in</th></tr></thead>
-                <tbody>
-                @foreach (var row in Model.BreedingUpcoming)
-                {
-                    <tr>
-                        <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
-                        <td><b>@row.ExpectedKidding</b></td>
-                        <td class="num-cell" style="font-weight:700;@row.DueColor">@row.DueText</td>
-                    </tr>
-                }
-                </tbody></table>
+            <a class="dash-kpi" asp-controller="Milk" asp-action="Index">
+                <span class="dash-kpi-icon dash-kpi-icon--milk" aria-hidden="true">🥛</span>
+                <div class="dash-kpi-body">
+                    <span class="dash-kpi-label">Milk Today</span>
+                    <span class="dash-kpi-value">@Model.MilkTodayLiters.ToString("N0") L</span>
+                </div>
+            </a>
         }
-    </div>
-</div>
-
-<div class="panel dash-panel">
-    <div class="panel-head dash-head">
-        <h2>Feed &amp; Cost</h2>
-        <a class="dash-link" asp-controller="Feed" asp-action="Index">Open Feed →</a>
-    </div>
-    <div class="panel-body">
-        <div class="dash-feed-top">
-            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.FeedCostMonthly)</div>
-                <div class="k"><span class="dot" style="background:var(--red)"></span>Total feed + medicine bill (monthly)</div></div>
-            @if (Model.FeedStockLowCount > 0)
-            {
-                <div class="fincard dash-stock-alert"><div class="v">@Model.FeedStockLowCount</div>
-                    <div class="k"><span class="dot" style="background:var(--amber)"></span>Feed type@(Model.FeedStockLowCount == 1 ? "" : "s") low on stock (&lt; 7 days)</div></div>
-            }
-        </div>
-        @if (Model.FeedStock.Any())
+        @if (visibleTabs.Contains(FarmTabs.Breeding))
         {
-            <div class="dash-subhead">Feed stock</div>
-            <table class="tbl dash-tbl"><thead><tr><th>Feed</th><th class="num-cell">In store</th><th class="num-cell">Days left</th></tr></thead>
-                <tbody>
-                @foreach (var s in Model.FeedStock)
-                {
-                    <tr>
-                        <td><b>@s.DisplayName</b></td>
-                        <td class="num-cell">@s.StockKg.ToString("N1") kg</td>
-                        <td class="num-cell" style="font-weight:700;@s.DaysLeftColor">@s.DaysLeftText</td>
-                    </tr>
-                }
-                </tbody></table>
+            <a class="dash-kpi" asp-controller="Breeding" asp-action="Index">
+                <span class="dash-kpi-icon dash-kpi-icon--heat" aria-hidden="true">💞</span>
+                <div class="dash-kpi-body">
+                    <span class="dash-kpi-label">Ready for breeding</span>
+                    <span class="dash-kpi-value">@Model.BreedingPrepCount</span>
+                    <span class="dash-kpi-sub">For cross / heat prep</span>
+                </div>
+            </a>
         }
+        @if (visibleTabs.Contains(FarmTabs.Vaccines))
+        {
+            <a class="dash-kpi" asp-controller="Vaccine" asp-action="Index">
+                <span class="dash-kpi-icon dash-kpi-icon--vax" aria-hidden="true">💉</span>
+                <div class="dash-kpi-body">
+                    <span class="dash-kpi-label">Pending vaccinations</span>
+                    <span class="dash-kpi-value">@Model.PendingVaccinations</span>
+                    <span class="dash-kpi-sub">Due &amp; next 7 days</span>
+                </div>
+            </a>
+        }
+        <a class="dash-kpi" asp-controller="@(Model.FinanceHidden ? "Feed" : "Finance")" asp-action="Index">
+            <span class="dash-kpi-icon dash-kpi-icon--cost" aria-hidden="true">💰</span>
+            <div class="dash-kpi-body">
+                <span class="dash-kpi-label">@monthlyCostLabel</span>
+                <span class="dash-kpi-value">@DisplayHelper.FormatRs(monthlyCost)</span>
+            </div>
+        </a>
     </div>
-</div>
 
-<div class="panel dash-panel">
-    <div class="panel-head dash-head">
-        <div class="dash-title"><h2>Milk</h2><span class="sub">this month</span></div>
-        <a class="dash-link" asp-controller="Milk" asp-action="Index">Open Milk →</a>
-    </div>
-    <div class="panel-body">
-        <div class="milk4 dash-milk4">
-            <div class="fincard"><div class="v">@Model.LitersProduced.ToString("N0") L</div>
-                <div class="k"><span class="dot" style="background:var(--green)"></span>Collected</div></div>
-            <div class="fincard"><div class="v">@Model.LitersSold.ToString("N0") L</div>
-                <div class="k"><span class="dot" style="background:var(--blue)"></span>Sold</div></div>
-            <div class="fincard"><div class="v">@Model.LitersWasted.ToString("N0") L</div>
-                <div class="k"><span class="dot" style="background:var(--red)"></span>Wasted</div></div>
-            <div class="fincard"><div class="v">@Model.LitersLeft.ToString("N0") L</div>
-                <div class="k"><span class="dot" style="background:var(--green-dark)"></span>Milk left</div></div>
-        </div>
-    </div>
-</div>
-
-<div class="panel dash-panel">
-    <div class="panel-head dash-head">
-        <div class="dash-title"><h2>Finance</h2><span class="sub">@Model.Month</span></div>
-        <a class="dash-link" asp-controller="Finance" asp-action="Index" asp-route-month="@Model.Month">Open Finance →</a>
-    </div>
-    <div class="panel-body">
-        <div class="fin3 dash-fin4">
-            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.TotalIncome)</div>
-                <div class="k"><span class="dot" style="background:var(--green)"></span>Cash received this month</div></div>
-            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.TotalExpense)</div>
-                <div class="k"><span class="dot" style="background:var(--red)"></span>Running costs this month</div></div>
-            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.Capital)</div>
-                <div class="k"><span class="dot" style="background:var(--blue)"></span>Total capital (assets owned)</div></div>
-        </div>
-        <div class="bignum dash-profit @(Model.IsLoss ? "loss" : "")" style="margin-top:12px;margin-bottom:0">
-            <div><div class="lbl">Profit this month (income − running costs)</div>
-                <div class="big">@(Model.IsLoss ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(Model.Profit))</div></div>
-        </div>
-    </div>
-</div>
-
-<div class="panel dash-panel">
-    <div class="panel-head dash-head">
-        <h2>Vaccines</h2>
-        <a class="dash-link" asp-controller="Vaccine" asp-action="Index">Open Vaccines →</a>
-    </div>
-    <div class="panel-body">
-        <div class="dash-vacc-top">
-            <div class="fincard dash-due-card">
-                <div class="v">@Model.DueNowCount</div>
-                <div class="k"><span class="dot" style="background:var(--red)"></span>Due now · @Model.DueNowNote</div>
+    <div class="dash-charts-row">
+        <div class="panel dash-card">
+            <div class="panel-head dash-card-head">
+                <h2>Herd distribution</h2>
+                @if (visibleTabs.Contains(FarmTabs.Herd))
+                {
+                    <a class="dash-card-link" asp-controller="Goat" asp-action="Index">View all</a>
+                }
+            </div>
+            <div class="panel-body dash-card-body dash-card-body--chart">
+                @if (breedTotal <= 0)
+                {
+                    <p class="dash-empty">Add goats with breeds to see distribution.</p>
+                }
+                else
+                {
+                    <div class="dash-donut-block">
+                        <div class="dash-donut" style="background: conic-gradient(@breedGradient)" aria-hidden="true">
+                            <div class="dash-donut-hole">
+                                <strong>@breedTotal</strong>
+                                <span>Total</span>
+                            </div>
+                        </div>
+                        <ul class="dash-legend">
+                            @for (var i = 0; i < Model.BreedDistribution.Count; i++)
+                            {
+                                var b = Model.BreedDistribution[i];
+                                <li><span class="dot" style="background:@breedColors[i % breedColors.Length]"></span>@b.Name <b>@b.Count</b></li>
+                            }
+                        </ul>
+                    </div>
+                }
             </div>
         </div>
-        @if (Model.DueNow.Any())
+
+        @if (visibleTabs.Contains(FarmTabs.Milk))
         {
-            <div class="dash-subhead">Due now</div>
-            <table class="tbl dash-tbl"><thead><tr><th>Vaccine</th><th>Scope</th><th class="num-cell">Goats</th></tr></thead>
-                <tbody>
-                @foreach (var d in Model.DueNow)
-                {
-                    <tr><td><b>@d.VaccineName</b></td><td><span class="scopechip">@d.ScopeDisplay</span></td>
-                        <td class="num-cell">@d.DueCount</td></tr>
-                }
-                </tbody></table>
+            <div class="panel dash-card">
+                <div class="panel-head dash-card-head">
+                    <h2>Daily milk production</h2>
+                    <a class="dash-card-link" asp-controller="Milk" asp-action="Index">View all</a>
+                </div>
+                <div class="panel-body dash-card-body dash-card-body--chart">
+                    <div class="dash-bars" role="img" aria-label="Milk production last 7 days">
+                        @foreach (var day in Model.MilkLast7Days)
+                        {
+                            var h = (int)Math.Round(day.Liters / maxMilkBar * 100);
+                            <div class="dash-bar-col">
+                                <div class="dash-bar-track">
+                                    <div class="dash-bar-fill @(day.IsToday ? "is-today" : "")" style="height:@(Math.Max(h, day.Liters > 0 ? 8 : 0))%"></div>
+                                </div>
+                                <span class="dash-bar-val">@(day.Liters > 0 ? day.Liters.ToString("N0") : "—")</span>
+                                <span class="dash-bar-lbl">@day.Label</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
         }
-        <div class="dash-subhead">My reminders</div>
-        <table class="tbl dash-tbl"><thead><tr><th>Reminder</th><th class="hide-sm">Date</th><th class="num-cell">When</th></tr></thead>
-            <tbody>
-            @if (Model.Reminders.Any())
-            {
-                @foreach (var r in Model.Reminders)
+
+        <div class="panel dash-card">
+            <div class="panel-head dash-card-head">
+                <h2>Herd health status</h2>
+                @if (visibleTabs.Contains(FarmTabs.Herd))
                 {
-                    <tr><td><b>@r.Title</b>@if(!string.IsNullOrEmpty(r.ScopeDisplay)){<span class="scopechip">@r.ScopeDisplay</span>}</td>
-                        <td class="hide-sm"><span class="breed">@r.DateDisplay</span></td>
-                        <td class="num-cell" style="color:@r.WhenColor">@r.WhenDisplay</td></tr>
+                    <a class="dash-card-link" asp-controller="Goat" asp-action="Index">View all</a>
                 }
-            }
-            else
-            {
-                <tr><td colspan="3" class="empty">No reminders set.</td></tr>
-            }
-            </tbody></table>
+            </div>
+            <div class="panel-body dash-card-body dash-card-body--chart">
+                <div class="dash-health-gauge">
+                    <div class="dash-health-ring" style="--p1:@(p1Health.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;--p2:@(p2Health.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%" aria-hidden="true">
+                        <div class="dash-health-ring-inner">
+                            <strong>@healthPct%</strong>
+                            <span>Healthy</span>
+                        </div>
+                    </div>
+                    <ul class="dash-legend dash-legend--health">
+                        <li><span class="dot" style="background:#40916c"></span>Healthy <b>@Model.HealthHealthy</b></li>
+                        <li><span class="dot" style="background:#f4a261"></span>Under observation <b>@Model.HealthUnderObservation</b></li>
+                        <li><span class="dot" style="background:#e63946"></span>Sick <b>@Model.HealthSick</b></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dash-mid-row">
+        <div class="panel dash-card">
+            <div class="panel-head dash-card-head">
+                <h2>Recent activities</h2>
+            </div>
+            <div class="panel-body dash-card-body">
+                @if (!Model.RecentActivities.Any())
+                {
+                    <p class="dash-empty">Activity will appear as you log milk, feed and breeding.</p>
+                }
+                else
+                {
+                    <ul class="dash-feed-list">
+                        @foreach (var a in Model.RecentActivities)
+                        {
+                            <li>
+                                @if (!string.IsNullOrEmpty(a.Href))
+                                {
+                                    <a href="@a.Href" class="dash-feed-item">
+                                        <span class="dash-feed-icon" aria-hidden="true">@a.Icon</span>
+                                        <span class="dash-feed-text">@a.Text</span>
+                                        <span class="dash-feed-when">@a.When</span>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <div class="dash-feed-item">
+                                        <span class="dash-feed-icon" aria-hidden="true">@a.Icon</span>
+                                        <span class="dash-feed-text">@a.Text</span>
+                                        <span class="dash-feed-when">@a.When</span>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="panel dash-card">
+            <div class="panel-head dash-card-head">
+                <h2>Upcoming tasks</h2>
+                @if (visibleTabs.Contains(FarmTabs.Tasks))
+                {
+                    <a class="dash-card-link" asp-controller="Tasks" asp-action="Index">View all</a>
+                }
+            </div>
+            <div class="panel-body dash-card-body">
+                @{
+                    var hasUpcoming = myTasks.Any() || upcomingReminders.Any();
+                }
+                @if (!hasUpcoming)
+                {
+                    <p class="dash-empty">No open tasks or reminders coming up.</p>
+                }
+                else
+                {
+                    <ul class="dash-check-list">
+                        @foreach (var t in myTasks.Take(4))
+                        {
+                            <li class="@(t.IsOverdue ? "is-overdue" : "")">
+                                <a asp-controller="Tasks" asp-action="Index" asp-route-filter="mine">
+                                    <span class="dash-check-box" aria-hidden="true"></span>
+                                    <span>@t.Title</span>
+                                    <span class="dash-check-date">@t.DueText</span>
+                                </a>
+                            </li>
+                        }
+                        @foreach (var r in upcomingReminders.Take(Math.Max(0, 6 - myTasks.Count)))
+                        {
+                            <li>
+                                <a asp-controller="Vaccine" asp-action="Index">
+                                    <span class="dash-check-box" aria-hidden="true"></span>
+                                    <span>@r.Title</span>
+                                    <span class="dash-check-date">@r.WhenDisplay</span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        @if (visibleTabs.Contains(FarmTabs.Feed))
+        {
+            <div class="panel dash-card">
+                <div class="panel-head dash-card-head">
+                    <h2>Feed inventory</h2>
+                    <a class="dash-card-link" asp-controller="Feed" asp-action="Index">View all</a>
+                </div>
+                <div class="panel-body dash-card-body">
+                    @if (!feedTop.Any())
+                    {
+                        <p class="dash-empty">No feed stock recorded yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="dash-stock-list">
+                            @foreach (var s in feedTop)
+                            {
+                                var pct = s.StockPercent ?? (s.StockKgFull > 0 ? (int)Math.Min(100, Math.Round(s.StockKg / s.StockKgFull * 100)) : 50);
+                                var barClass = pct >= 50 ? "ok" : pct >= 25 ? "warn" : "low";
+                                <li>
+                                    <div class="dash-stock-top">
+                                        <span>@s.DisplayName</span>
+                                        <span>@s.StockKg.ToString("N0") kg</span>
+                                    </div>
+                                    <div class="dash-stock-bar" role="presentation">
+                                        <div class="dash-stock-fill @barClass" style="width:@pct%"></div>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="dash-bottom-row">
+        @if (!Model.FinanceHidden && visibleTabs.Contains(FarmTabs.Finance))
+        {
+            <div class="panel dash-card">
+                <div class="panel-head dash-card-head">
+                    <h2>Recent sales</h2>
+                    <a class="dash-card-link" asp-controller="Finance" asp-action="Index">View all</a>
+                </div>
+                <div class="panel-body dash-card-body dash-card-body--table">
+                    @if (!Model.RecentSales.Any())
+                    {
+                        <p class="dash-empty">No income recorded this month.</p>
+                    }
+                    else
+                    {
+                        <table class="dash-mini-tbl">
+                            <thead><tr><th>Date</th><th>Item</th><th class="num">Amount</th></tr></thead>
+                            <tbody>
+                            @foreach (var row in Model.RecentSales)
+                            {
+                                <tr>
+                                    <td>@row.DateDisplay</td>
+                                    <td>@row.Title@if (!string.IsNullOrWhiteSpace(row.Detail)){<span class="breed"> — @row.Detail</span>}</td>
+                                    <td class="num">@row.AmountDisplay</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+
+            <div class="panel dash-card">
+                <div class="panel-head dash-card-head">
+                    <h2>Recent expenses</h2>
+                    <a class="dash-card-link" asp-controller="Finance" asp-action="Index">View all</a>
+                </div>
+                <div class="panel-body dash-card-body dash-card-body--table">
+                    @if (!Model.RecentExpenses.Any())
+                    {
+                        <p class="dash-empty">No expenses recorded this month.</p>
+                    }
+                    else
+                    {
+                        <table class="dash-mini-tbl">
+                            <thead><tr><th>Date</th><th>Item</th><th class="num">Amount</th></tr></thead>
+                            <tbody>
+                            @foreach (var row in Model.RecentExpenses)
+                            {
+                                <tr>
+                                    <td>@row.DateDisplay</td>
+                                    <td>@row.Title</td>
+                                    <td class="num">@row.AmountDisplay</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="panel dash-card dash-quick-panel">
+            <div class="panel-head dash-card-head">
+                <h2>Quick actions</h2>
+            </div>
+            <div class="panel-body dash-card-body">
+                <div class="dash-quick-grid">
+                    @if (visibleTabs.Contains(FarmTabs.Herd))
+                    {
+                        <a class="dash-quick" asp-controller="Goat" asp-action="Index"><span class="dash-quick-ico" style="background:#d8f3dc">🐐</span><span>Add Goat</span></a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Milk))
+                    {
+                        <a class="dash-quick" asp-controller="Milk" asp-action="Index"><span class="dash-quick-ico" style="background:#dbeafe">🥛</span><span>Add Milk</span></a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Vaccines))
+                    {
+                        <a class="dash-quick" asp-controller="Vaccine" asp-action="Index"><span class="dash-quick-ico" style="background:#ffe5e5">💉</span><span>Add Treatment</span></a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Finance))
+                    {
+                        <a class="dash-quick" asp-controller="Finance" asp-action="Index"><span class="dash-quick-ico" style="background:#fff3cd">💸</span><span>Add Expense</span></a>
+                    }
+                    @if (visibleTabs.Contains(FarmTabs.Feed))
+                    {
+                        <a class="dash-quick" asp-controller="Feed" asp-action="Index"><span class="dash-quick-ico" style="background:#ede9fe">🌾</span><span>Stock Update</span></a>
+                    }
+                </div>
+            </div>
+        </div>
     </div>
 </div>

@@ -19,7 +19,12 @@ public class GoatViewModel
     public string EventDateDisplay => EventDate.ToString("yyyy-MM-dd");
     public int? GroupId { get; set; }
     public string? GroupName { get; set; }
-    public int AgeDays { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? DateOfBirthDisplay => DateOfBirth?.ToString("yyyy-MM-dd");
+    public bool DateOfBirthIsEstimated { get; set; }
+    /// <summary>Null when the age is unknown (bought goat without a date of birth).</summary>
+    public int? AgeDays { get; set; }
+    public bool AgeIsEstimated { get; set; }
     public string AgeLabel { get; set; } = string.Empty;
     public string StatusDisplay { get; set; } = string.Empty;
     public string StatusCssClass { get; set; } = string.Empty;
@@ -34,6 +39,20 @@ public class GoatViewModel
     public string? UltrasoundDateDisplay => UltrasoundDate?.ToString("yyyy-MM-dd");
     public string? BreedingHint { get; set; }
     public string? BreedingHintColor { get; set; }
+    public string? Owner { get; set; }
+    public GoatHealthState HealthState { get; set; }
+    public string HealthDisplay { get; set; } = string.Empty;
+    public BreedingStage BreedingStage { get; set; }
+    public string BreedingStageDisplay { get; set; } = string.Empty;
+    public string? SireTag { get; set; }
+    public string? DamTag { get; set; }
+    public bool IsTemporaryTag { get; set; }
+}
+
+public class ParentOptionsViewModel
+{
+    public IReadOnlyList<string> Sires { get; set; } = [];
+    public IReadOnlyList<string> Dams { get; set; } = [];
 }
 
 public class CreateGoatViewModel
@@ -63,8 +82,25 @@ public class CreateGoatViewModel
     [Required(ErrorMessage = "Please pick the date")]
     public DateOnly EventDate { get; set; }
 
+    /// <summary>Optional for bought goats; ignored for home-born goats (EventDate is their birth date).</summary>
+    public DateOnly? DateOfBirth { get; set; }
+
+    public bool DateOfBirthIsEstimated { get; set; }
+
     [Required]
     public GoatStatus Status { get; set; } = GoatStatus.Kid;
+
+    [StringLength(100)]
+    public string? Owner { get; set; }
+
+    public GoatHealthState HealthState { get; set; } = GoatHealthState.Healthy;
+
+    /// <summary>Linked to a herd goat when the tag matches; otherwise stored as text.</summary>
+    [StringLength(50)]
+    public string? SireTag { get; set; }
+
+    [StringLength(50)]
+    public string? DamTag { get; set; }
 }
 
 public class BulkMoveViewModel
@@ -74,6 +110,7 @@ public class BulkMoveViewModel
     public DateOnly? PrepCrossDate { get; set; }
     public DateOnly? MatedDate { get; set; }
     public string? BuckTag { get; set; }
+    public bool ConfirmWarnings { get; set; }
 }
 
 public class HerdStatsViewModel
@@ -84,6 +121,7 @@ public class HerdStatsViewModel
     public int Pregnant { get; set; }
     public int Dry { get; set; }
     public int Bucks { get; set; }
+    public int Meat { get; set; }
 }
 
 public class HerdPageViewModel
@@ -92,6 +130,7 @@ public class HerdPageViewModel
     public IReadOnlyList<GoatViewModel> Goats { get; set; } = [];
     public IReadOnlyList<string> Groups { get; set; } = [];
     public string? Filter { get; set; }
+    public string? Search { get; set; }
     public PaginationViewModel Pagination { get; set; } = new();
     public CreateGoatViewModel NewGoat { get; set; } = new() { EventDate = DateOnly.FromDateTime(DateTime.Today) };
 }

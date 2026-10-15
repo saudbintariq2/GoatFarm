@@ -30,5 +30,5 @@
 </div>
 
 @section Scripts {
-<script>GoatRecords.initSearch({ initialTag: @System.Text.Json.JsonSerializer.Serialize(initialTag), hasServerProfile: @(Model.Profile is not null ? "true" : "false") });</script>
+<script>GoatRecords.initSearch({ initialTag: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(initialTag)), hasServerProfile: @(Model.Profile is not null ? "true" : "false") });</script>
 }

@@ -18,9 +18,8 @@
 
 
 
-<div class="note"><b>Settings</b> — manage users, role permissions, and password rules. Default admin:
-
-    <b>@IdentitySeedHelper.DefaultAdminEmail</b> (seed password: @IdentitySeedHelper.DefaultAdminPassword — change after first login).</div>
+<div class="note"><b>Settings</b> — manage users, role permissions, and password rules.
+    Development seed admin: <b>@IdentitySeedHelper.DefaultAdminEmail</b>. Change that account's password after first login.</div>
 
 
 
@@ -57,25 +56,29 @@
 
             </tbody></table>
 
-        <div class="add-grid" id="userFormGrid" style="margin-top:14px;grid-template-columns:1.2fr 1.2fr 1fr 1fr">
+        <div class="add-grid user-form-grid" id="userFormGrid">
 
-            <div class="field"><label>Full name</label><input id="u-name" placeholder="e.g. Ali Khan"></div>
+            <div class="field"><label for="u-name">Full name</label><input id="u-name" placeholder="e.g. Ali Khan"></div>
 
-            <div class="field"><label>Email</label><input type="email" id="u-email" placeholder="user@farm.com"></div>
+            <div class="field"><label for="u-email">Email</label><input type="email" id="u-email" placeholder="user@farm.com"></div>
 
-            <div class="field" id="u-password-wrap"><label>Password</label><input type="password" id="u-password" autocomplete="new-password"></div>
+            <div class="field" id="u-password-wrap"><label for="u-password">Password</label><input type="password" id="u-password" autocomplete="new-password"></div>
 
-            <div class="field"><label>Role</label><select id="u-role">@foreach(var r in Model.Roles){<option>@r</option>}</select></div>
+            <div class="field"><label for="u-role">Role</label><select id="u-role">@foreach(var r in Model.Roles){<option>@r</option>}</select></div>
 
         </div>
 
-        <div class="add-grid" id="u-edit-extra" style="display:none;margin-top:10px;grid-template-columns:1fr 1fr 1fr">
+        <div class="add-grid user-edit-extra" id="u-edit-extra" hidden>
 
-            <div class="field"><label><input type="checkbox" id="u-locked"> Lock account</label></div>
+            <div class="field field-check field-lock">
+                <label for="u-locked"><input type="checkbox" id="u-locked"> Lock account</label>
+            </div>
 
-            <div class="field"><label>New password (reset)</label><input type="password" id="u-reset-password" autocomplete="new-password"></div>
+            <div class="field"><label for="u-reset-password">New password (reset)</label><input type="password" id="u-reset-password" autocomplete="new-password" placeholder="Enter new password"></div>
 
-            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost" id="resetPasswordBtn">Reset password</button></div>
+            <div class="field field-action">
+                <button type="button" class="btn btn-ghost" id="resetPasswordBtn">Reset password</button>
+            </div>
 
         </div>
 

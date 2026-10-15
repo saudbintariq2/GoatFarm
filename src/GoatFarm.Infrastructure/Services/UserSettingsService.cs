@@ -97,6 +97,11 @@ public class UserSettingsService : IUserSettingsService
         var user = await _userManager.FindByIdAsync(id);
         if (user is null) return null;
 
+        if ((model.Role != FarmRoles.Admin || model.IsLocked) &&
+            (await _userManager.GetRolesAsync(user)).Contains(FarmRoles.Admin) &&
+            !await HasOtherActiveAdminAsync(user.Id))
+            throw new InvalidOperationException("At least one unlocked administrator must remain. Make another user an administrator first.");
+
         user.FullName = model.FullName.Trim();
 
         if (model.IsLocked)
@@ -122,14 +127,8 @@ public class UserSettingsService : IUserSettingsService
         if (user is null) return false;
 
         var roles = await _userManager.GetRolesAsync(user);
-        if (roles.Contains(FarmRoles.Admin))
-        {
-            var adminCount = 0;
-            foreach (var admin in await _userManager.GetUsersInRoleAsync(FarmRoles.Admin))
-                adminCount++;
-            if (adminCount <= 1)
-                throw new InvalidOperationException("Cannot delete the last administrator.");
-        }
+        if (roles.Contains(FarmRoles.Admin) && !await HasOtherActiveAdminAsync(user.Id))
+            throw new InvalidOperationException("Cannot delete the last administrator.");
 
         var result = await _userManager.DeleteAsync(user);
         if (!result.Succeeded)
@@ -421,6 +420,13 @@ public class UserSettingsService : IUserSettingsService
         return roles.FirstOrDefault(r => FarmRoles.All.Contains(r)) ?? FarmRoles.Staff;
     }
 
+    private async Task<bool> HasOtherActiveAdminAsync(string excludingUserId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return (await _userManager.GetUsersInRoleAsync(FarmRoles.Admin))
+            .Any(a => a.Id != excludingUserId && (a.LockoutEnd is null || a.LockoutEnd <= now));
+    }
+
     private async Task<IReadOnlyDictionary<string, TabPermissionViewModel>> GetPermissionsForRoleAsync(
         string role, CancellationToken cancellationToken)
     {
@@ -443,8 +449,9 @@ public class UserSettingsService : IUserSettingsService
         if (role != FarmRoles.Admin)
             return permissions;
 
-        var copy = permissions.ToDictionary(p => p.Key, p => p.Value);
-        copy[FarmTabs.Settings] = TabPermissionViewModel.FullAccess;
+        var copy = new Dictionary<string, TabPermissionViewModel>();
+        foreach (var tab in FarmTabs.All.Select(t => t.Key))
+            copy[tab] = TabPermissionViewModel.FullAccess;
         return copy;
     }
 
@@ -495,11 +502,13 @@ public class UserSettingsService : IUserSettingsService
                 {
                     FarmRoles.Admin => true,
                     FarmRoles.Manager => tab != FarmTabs.Settings,
-                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Herd or FarmTabs.Breeding or FarmTabs.Search or FarmTabs.Feed or FarmTabs.Milk or FarmTabs.Vaccines or FarmTabs.Reports,
+                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Tasks or FarmTabs.Herd or FarmTabs.Breeding or FarmTabs.Search or FarmTabs.Feed or FarmTabs.Milk or FarmTabs.Vaccines or FarmTabs.Reports,
                     _ => false
                 };
                 tabs[tab] = hasTab ? TabPermissionViewModel.FullAccess : TabPermissionViewModel.NoAccess;
             }
+            if (role == FarmRoles.Staff)
+                tabs[FarmTabs.Tasks] = new TabPermissionViewModel { View = true, Add = true, Edit = false, Delete = false };
             result[role] = tabs;
         }
 

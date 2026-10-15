@@ -4,6 +4,10 @@ namespace GoatFarm.Web.Authorization;
 
 public static class FarmPermissionMap
 {
+    /// <summary>Controllers whose actions need only an authenticated user. Every other action must be mapped below.</summary>
+    public static readonly IReadOnlySet<string> OpenControllers =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Home" };
+
     public static readonly IReadOnlyDictionary<string, string> IndexTabs =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -16,17 +20,21 @@ public static class FarmPermissionMap
             ["Finance"] = FarmTabs.Finance,
             ["Reports"] = FarmTabs.Reports,
             ["Vaccine"] = FarmTabs.Vaccines,
-            ["Settings"] = FarmTabs.Settings
+            ["Settings"] = FarmTabs.Settings,
+            ["Tasks"] = FarmTabs.Tasks
         };
 
     public static readonly IReadOnlyDictionary<string, (string Tab, string Action)> ActionPermissions =
         new Dictionary<string, (string Tab, string Action)>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Dashboard.Export"] = (FarmTabs.Dashboard, FarmActions.View),
-            ["Dashboard.Import"] = (FarmTabs.Dashboard, FarmActions.View),
+            // Full backup contains finance/payroll data; import wipes and replaces the whole farm.
+            ["Dashboard.Export"] = (FarmTabs.Settings, FarmActions.View),
+            ["Dashboard.Import"] = (FarmTabs.Settings, FarmActions.Edit),
             ["Dashboard.Stats"] = (FarmTabs.Dashboard, FarmActions.View),
 
             ["Goat.GetAll"] = (FarmTabs.Herd, FarmActions.View),
+            ["Goat.GetByTag"] = (FarmTabs.Herd, FarmActions.View),
+            ["Goat.ParentOptions"] = (FarmTabs.Herd, FarmActions.View),
             ["Goat.Create"] = (FarmTabs.Herd, FarmActions.Add),
             ["Goat.Update"] = (FarmTabs.Herd, FarmActions.Edit),
             ["Goat.Delete"] = (FarmTabs.Herd, FarmActions.Delete),
@@ -44,6 +52,11 @@ public static class FarmPermissionMap
             ["Breeding.CrossFromPrep"] = (FarmTabs.Breeding, FarmActions.Add),
             ["Breeding.RemovePrep"] = (FarmTabs.Breeding, FarmActions.Delete),
             ["Breeding.RemoveCross"] = (FarmTabs.Breeding, FarmActions.Delete),
+            ["Breeding.CheckCross"] = (FarmTabs.Breeding, FarmActions.View),
+            ["Breeding.RecordBirth"] = (FarmTabs.Breeding, FarmActions.Add),
+            ["Breeding.RecordAbortion"] = (FarmTabs.Breeding, FarmActions.Edit),
+
+            ["Search.Lookup"] = (FarmTabs.Search, FarmActions.View),
 
             ["Feed.GetData"] = (FarmTabs.Feed, FarmActions.View),
             ["Feed.UpdatePrice"] = (FarmTabs.Feed, FarmActions.Edit),
@@ -55,6 +68,7 @@ public static class FarmPermissionMap
             ["Feed.DeleteFeedType"] = (FarmTabs.Feed, FarmActions.Delete),
             ["Feed.UpdateStock"] = (FarmTabs.Feed, FarmActions.Edit),
             ["Feed.GetMixRecipe"] = (FarmTabs.Feed, FarmActions.View),
+            ["Feed.UpdateMixRecipe"] = (FarmTabs.Feed, FarmActions.Edit),
             ["Feed.UpdateMixRecipeForStatus"] = (FarmTabs.Feed, FarmActions.Edit),
             ["Feed.GetFodderPool"] = (FarmTabs.Feed, FarmActions.View),
             ["Feed.UpdateFodderPool"] = (FarmTabs.Feed, FarmActions.Edit),
@@ -80,6 +94,7 @@ public static class FarmPermissionMap
             ["Milk.DeleteWaste"] = (FarmTabs.Milk, FarmActions.Delete),
 
             ["Finance.GetData"] = (FarmTabs.Finance, FarmActions.View),
+            ["Finance.SalaryReconciliation"] = (FarmTabs.Finance, FarmActions.View),
             ["Finance.AddAsset"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.UpdateAsset"] = (FarmTabs.Finance, FarmActions.Edit),
             ["Finance.DeleteAsset"] = (FarmTabs.Finance, FarmActions.Delete),
@@ -126,6 +141,12 @@ public static class FarmPermissionMap
             ["Settings.SavePasswordPolicy"] = (FarmTabs.Settings, FarmActions.Edit),
             ["Settings.SaveRolePermissions"] = (FarmTabs.Settings, FarmActions.Edit),
             ["Settings.GetUserPermissions"] = (FarmTabs.Settings, FarmActions.View),
-            ["Settings.SaveUserPermissions"] = (FarmTabs.Settings, FarmActions.Edit)
+            ["Settings.SaveUserPermissions"] = (FarmTabs.Settings, FarmActions.Edit),
+
+            ["Tasks.GetData"] = (FarmTabs.Tasks, FarmActions.View),
+            ["Tasks.Create"] = (FarmTabs.Tasks, FarmActions.Add),
+            ["Tasks.Update"] = (FarmTabs.Tasks, FarmActions.Edit),
+            ["Tasks.SetStatus"] = (FarmTabs.Tasks, FarmActions.View),
+            ["Tasks.Delete"] = (FarmTabs.Tasks, FarmActions.Delete)
         };
 }

@@ -11,7 +11,8 @@ namespace GoatFarm.Infrastructure.Persistence;
 
 public static class DatabaseBootstrap
 {
-    public static async Task InitializeAsync(IServiceProvider services, CancellationToken cancellationToken = default)
+    /// <param name="isDevelopment">Destructive seed options are honoured only in Development.</param>
+    public static async Task InitializeAsync(IServiceProvider services, bool isDevelopment = false, CancellationToken cancellationToken = default)
     {
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseBootstrap");
 
@@ -26,7 +27,11 @@ public static class DatabaseBootstrap
 
             var configuration = provider.GetRequiredService<IConfiguration>();
             var clearFarmData = string.Equals(configuration["Seed:ClearFarmData"], "true", StringComparison.OrdinalIgnoreCase);
-            if (clearFarmData)
+            if (clearFarmData && !isDevelopment)
+            {
+                logger.LogError("Seed:ClearFarmData=true was ignored: wiping farm data is only allowed in the Development environment. Remove the setting.");
+            }
+            else if (clearFarmData)
             {
                 logger.LogWarning("Clearing all farm data (Seed:ClearFarmData=true)...");
                 await DbDataCleaner.ClearAllFarmDataAsync(context, cancellationToken);
@@ -43,13 +48,23 @@ public static class DatabaseBootstrap
                     await roleManager.CreateAsync(new IdentityRole(role));
             }
 
-            var resetAdminPassword = !string.Equals(configuration["Seed:ResetAdminPassword"], "false", StringComparison.OrdinalIgnoreCase);
+            var resetAdminPassword = string.Equals(configuration["Seed:ResetAdminPassword"], "true", StringComparison.OrdinalIgnoreCase);
+            if (resetAdminPassword)
+                logger.LogWarning("Seed:ResetAdminPassword=true — the seeded admin password will be reset. Turn this off after recovery.");
 
+            var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
             await IdentitySeedHelper.SeedAdminUserAsync(
-                provider.GetRequiredService<UserManager<ApplicationUser>>(),
+                userManager,
                 resetAdminPassword: resetAdminPassword,
                 logger: logger,
                 cancellationToken: cancellationToken);
+
+            if (isDevelopment &&
+                string.Equals(configuration["Seed:EnsureDevUser"], "true", StringComparison.OrdinalIgnoreCase))
+            {
+                await IdentitySeedHelper.SeedDevUserAsync(userManager, resetPassword: true, logger: logger, cancellationToken: cancellationToken);
+            }
+
             await SettingsSeedHelper.SeedDefaultsAsync(context, cancellationToken);
             await provider.GetRequiredService<ILookupService>().EnsureDefaultsAsync(cancellationToken);
 

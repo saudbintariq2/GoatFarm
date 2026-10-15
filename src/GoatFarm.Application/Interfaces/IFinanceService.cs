@@ -28,4 +28,5 @@ public interface IFinanceService
     decimal GetAssetsValue();
     decimal GetCapital();
     decimal GetRecurringMonthlyTotal();
+    Task<SalaryReconciliationViewModel> GetSalaryReconciliationAsync(CancellationToken cancellationToken = default);
 }

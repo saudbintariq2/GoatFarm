@@ -6,10 +6,13 @@ public interface IBreedingService
 {
     Task<BreedingPageViewModel> GetBreedingPageAsync(CancellationToken cancellationToken = default);
     Task RecordPrepAsync(RecordPrepViewModel model, CancellationToken cancellationToken = default);
+    Task<CrossCheckViewModel> CheckCrossAsync(string doeTag, string? buckTag, DateOnly? date, CancellationToken cancellationToken = default);
     Task RecordCrossAsync(RecordCrossViewModel model, CancellationToken cancellationToken = default);
     Task RecordUltrasoundAsync(RecordUltrasoundViewModel model, CancellationToken cancellationToken = default);
+    Task<RecordBirthResultViewModel> RecordBirthAsync(RecordBirthViewModel model, CancellationToken cancellationToken = default);
+    Task RecordAbortionAsync(RecordAbortionViewModel model, CancellationToken cancellationToken = default);
     Task MarkKiddedAsync(int goatId, CancellationToken cancellationToken = default);
     Task RemovePrepAsync(int goatId, CancellationToken cancellationToken = default);
     Task RemoveCrossAsync(int goatId, CancellationToken cancellationToken = default);
-    Task RecordCrossFromPrepAsync(int goatId, DateOnly date, string? buckTag, CancellationToken cancellationToken = default);
+    Task RecordCrossFromPrepAsync(int goatId, DateOnly date, string? buckTag, bool confirmWarnings, CancellationToken cancellationToken = default);
 }

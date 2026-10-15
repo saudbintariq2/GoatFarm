@@ -6,6 +6,7 @@ public static class DbDataCleaner
 {
     public static async Task ClearAllFarmDataAsync(GoatFarmDbContext context, CancellationToken cancellationToken = default)
     {
+        await GoatGraphCleaner.DetachBreedingGraphAsync(context, cancellationToken);
         context.VaccinationHistories.RemoveRange(await context.VaccinationHistories.ToListAsync(cancellationToken));
         context.Goats.RemoveRange(await context.Goats.ToListAsync(cancellationToken));
         context.MilkProductions.RemoveRange(await context.MilkProductions.ToListAsync(cancellationToken));

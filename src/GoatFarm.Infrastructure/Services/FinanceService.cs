@@ -357,6 +357,80 @@ public class FinanceService : IFinanceService
         return true;
     }
 
+    /// <summary>
+    /// Read-only: finds expenses and recurring costs that look like salary, wage or salary-advance payments, which the
+    /// totals count on top of the automatic salary from the Employees list. Changes nothing.
+    /// </summary>
+    public async Task<SalaryReconciliationViewModel> GetSalaryReconciliationAsync(CancellationToken cancellationToken = default)
+    {
+        var employees = await _context.Employees.AsNoTracking().Select(e => new { e.Name, e.MonthlySalary }).ToListAsync(cancellationToken);
+        var autoSalary = employees.Sum(e => e.MonthlySalary);
+        var names = employees.Select(e => e.Name.Trim()).Where(n => n.Length >= 3).ToList();
+
+        string? MatchEmployee(params string?[] texts) => names.FirstOrDefault(n =>
+            texts.Any(t => t is not null && t.Contains(n, StringComparison.OrdinalIgnoreCase)));
+
+        SalaryReconciliationRowViewModel? Assess(string source, int id, DateOnly? date, string type, string? comment, decimal amount)
+        {
+            var kind = SalaryExpenseRules.Classify(type);
+            var commentOnly = kind == SalaryExpenseKind.None && SalaryExpenseRules.MentionsSalary(comment);
+            if (kind == SalaryExpenseKind.None && !commentOnly) return null;
+
+            var employee = MatchEmployee(type, comment);
+            var row = new SalaryReconciliationRowViewModel
+            {
+                Source = source, Id = id, Date = date, Type = type, Comment = comment, Amount = amount, MatchedEmployee = employee
+            };
+            if (autoSalary <= 0)
+            {
+                row.Outcome = SalaryReconciliationOutcome.NotDoubleCounted;
+                row.Reason = "No employee salaries are on the Employees list, so this is the only record of this payment. Keep it.";
+            }
+            else if (employee is not null && !commentOnly)
+            {
+                row.Outcome = SalaryReconciliationOutcome.ConfirmedDoubleCount;
+                row.Reason = kind == SalaryExpenseKind.SalaryAdvance
+                    ? $"{employee}'s full monthly salary is already counted from the Employees list; this advance is part of it and is counted again."
+                    : $"{employee}'s salary is already counted from the Employees list and is counted again here.";
+            }
+            else
+            {
+                row.Outcome = SalaryReconciliationOutcome.NeedsReview;
+                row.Reason = commentOnly
+                    ? "The comment mentions a salary or advance but the type does not. Check whether this was a salary payment."
+                    : "Looks like a salary payment but does not name anyone on the Employees list. If it was for a listed employee, it is counted twice; if it was for someone else (for example casual labour), it is not.";
+            }
+            return row;
+        }
+
+        var expenses = await _context.Expenses.AsNoTracking().OrderBy(e => e.Date).ThenBy(e => e.Id)
+            .Select(e => new { e.Id, e.Date, e.Type, e.Comment, e.Amount }).ToListAsync(cancellationToken);
+        var recurring = await _context.RecurringCosts.AsNoTracking().OrderBy(r => r.Id).ToListAsync(cancellationToken);
+
+        var expenseRows = expenses.Select(e => Assess("Expense", e.Id, e.Date, e.Type, e.Comment, e.Amount)).OfType<SalaryReconciliationRowViewModel>().ToList();
+        var recurringRows = recurring.Select(r => Assess("Recurring cost", r.Id, null, r.Name, null, MapRecurring(r).MonthlyAmount))
+            .OfType<SalaryReconciliationRowViewModel>().ToList();
+
+        decimal Sum(SalaryReconciliationOutcome o) => expenseRows.Where(r => r.Outcome == o).Sum(r => r.Amount);
+        return new SalaryReconciliationViewModel
+        {
+            AutoSalaryMonthly = autoSalary,
+            EmployeeCount = employees.Count,
+            Rows = [.. expenseRows, .. recurringRows],
+            ConfirmedTotal = Sum(SalaryReconciliationOutcome.ConfirmedDoubleCount),
+            NeedsReviewTotal = Sum(SalaryReconciliationOutcome.NeedsReview),
+            NotDoubleCountedTotal = Sum(SalaryReconciliationOutcome.NotDoubleCounted),
+            RecurringFlaggedMonthly = recurringRows.Where(r => r.Outcome != SalaryReconciliationOutcome.NotDoubleCounted).Sum(r => r.Amount),
+            Months = expenseRows.GroupBy(r => r.Date!.Value.ToString("yyyy-MM")).OrderBy(g => g.Key).Select(g => new SalaryReconciliationMonthViewModel
+            {
+                Month = g.Key,
+                AutoSalary = autoSalary,
+                ConfirmedAmount = g.Where(r => r.Outcome == SalaryReconciliationOutcome.ConfirmedDoubleCount).Sum(r => r.Amount),
+                NeedsReviewAmount = g.Where(r => r.Outcome == SalaryReconciliationOutcome.NeedsReview).Sum(r => r.Amount)
+            }).ToList()
+        };
+    }
+
     private static RecurringCostViewModel MapRecurring(RecurringCost entity) => new()
     {
         Id = entity.Id,

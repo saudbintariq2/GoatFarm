@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
-[IgnoreAntiforgeryToken]
 public class SearchController : Controller
 {
     private readonly ISearchService _searchService;

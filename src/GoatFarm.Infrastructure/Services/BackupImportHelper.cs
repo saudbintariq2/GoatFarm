@@ -16,6 +16,7 @@ internal static class BackupImportHelper
 
     public static bool IsV19Format(JsonElement root)
     {
+        if (BackupValidator.ReadVersion(root) is not null) return false;
         if (!root.TryGetProperty("goats", out var goats) || goats.ValueKind != JsonValueKind.Array || goats.GetArrayLength() == 0)
             return false;
 
@@ -25,6 +26,7 @@ internal static class BackupImportHelper
 
     public static async Task ClearFarmDataAsync(GoatFarmDbContext context, CancellationToken cancellationToken)
     {
+        await GoatGraphCleaner.DetachBreedingGraphAsync(context, cancellationToken);
         context.VaccinationHistories.RemoveRange(await context.VaccinationHistories.ToListAsync(cancellationToken));
         context.Goats.RemoveRange(await context.Goats.ToListAsync(cancellationToken));
         context.FeedPlanItems.RemoveRange(await context.FeedPlanItems.ToListAsync(cancellationToken));
@@ -86,13 +88,7 @@ internal static class BackupImportHelper
         ImportSimpleList(root, "employees", ImportEmployee);
 
         if (root.TryGetProperty("mixRecipe", out var mixRecipe))
-        {
-            context.AppSettings.Add(new AppSetting
-            {
-                Key = AppSettingKeys.MixRecipe,
-                Value = mixRecipe.GetRawText()
-            });
-        }
+            await UpsertSettingAsync(context, AppSettingKeys.MixRecipe, mixRecipe, cancellationToken);
 
         await ImportV41ExtrasAsync(context, root, goatIdMap, null, cancellationToken);
 
@@ -168,16 +164,27 @@ internal static class BackupImportHelper
         await context.SaveChangesAsync(cancellationToken);
 
         var goatTagMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var goatIdMap = new Dictionary<string, int>(StringComparer.Ordinal);
         if (root.TryGetProperty("goats", out var goats) && goats.ValueKind == JsonValueKind.Array)
         {
+            var added = new List<(string? OldId, Goat Goat)>();
             foreach (var g in goats.EnumerateArray())
             {
                 var goat = MapGoatFromJson(g, groupMap);
                 context.Goats.Add(goat);
-                await context.SaveChangesAsync(cancellationToken);
-                goatTagMap[goat.Tag] = goat.Id;
+                added.Add((GetIdKey(g), goat));
             }
+            await context.SaveChangesAsync(cancellationToken);
+            foreach (var (oldId, goat) in added)
+            {
+                goatTagMap[goat.Tag] = goat.Id;
+                if (oldId is not null) goatIdMap[oldId] = goat.Id;
+            }
+            await RelinkParentsAsync(context, goats, goatIdMap, cancellationToken);
         }
+
+        await ImportBreedingHistoryAsync(context, root, goatIdMap, cancellationToken);
+        await ImportTasksAsync(context, root, goatIdMap, cancellationToken);
 
         var vaccineNameMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (root.TryGetProperty("vaccines", out var vaccines) && vaccines.ValueKind == JsonValueKind.Array)
@@ -231,15 +238,9 @@ internal static class BackupImportHelper
         }
 
         if (root.TryGetProperty("mixRecipe", out var mixRecipe))
-        {
-            context.AppSettings.Add(new AppSetting
-            {
-                Key = AppSettingKeys.MixRecipe,
-                Value = mixRecipe.GetRawText()
-            });
-        }
+            await UpsertSettingAsync(context, AppSettingKeys.MixRecipe, mixRecipe, cancellationToken);
 
-        await ImportV41ExtrasAsync(context, root, BuildGoatIdRemap(root, goatTagMap), goatTagMap, cancellationToken);
+        await ImportV41ExtrasAsync(context, root, goatIdMap.Count > 0 ? goatIdMap : BuildGoatIdRemap(root, goatTagMap), goatTagMap, cancellationToken);
 
         await ImportLookupSettingsAsync(context, root, cancellationToken);
         await ImportRemindDaysAsync(context, root, cancellationToken);
@@ -263,23 +264,22 @@ internal static class BackupImportHelper
         goatTagMap ??= await context.Goats.AsNoTracking()
             .ToDictionaryAsync(g => g.Tag, g => g.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
 
-        void ImportAppSettingJson(JsonElement doc, string key, string settingKey)
+        foreach (var (section, settingKey) in new[]
+                 {
+                     ("mixRecipes", AppSettingKeys.MixRecipes),
+                     ("fodderPool", AppSettingKeys.FodderPool),
+                     ("feedSettings", AppSettingKeys.FeedSettings)
+                 })
         {
-            if (!doc.TryGetProperty(key, out var el)) return;
-            context.AppSettings.Add(new AppSetting { Key = settingKey, Value = el.GetRawText() });
+            if (root.TryGetProperty(section, out var el))
+                await UpsertSettingAsync(context, settingKey, el, cancellationToken);
         }
-
-        ImportAppSettingJson(root, "mixRecipes", AppSettingKeys.MixRecipes);
-        ImportAppSettingJson(root, "fodderPool", AppSettingKeys.FodderPool);
-        ImportAppSettingJson(root, "feedSettings", AppSettingKeys.FeedSettings);
 
         if (root.TryGetProperty("deaths", out var deaths) && deaths.ValueKind == JsonValueKind.Array)
         {
             foreach (var d in deaths.EnumerateArray())
             {
-                var goatId = GetInt(d, "goatId", "GoatId");
-                if (goatId <= 0 && TryResolveGoatId(d, goatTagMap, goatIdByOld, out var mapped))
-                    goatId = mapped;
+                var goatId = TryResolveGoatId(d, goatTagMap, goatIdByOld, out var mapped) ? mapped : 0;
                 if (goatId <= 0)
                 {
                     var tag = GetString(d, "tag", "Tag");
@@ -310,10 +310,7 @@ internal static class BackupImportHelper
         {
             foreach (var w in goatWeights.EnumerateArray())
             {
-                var goatId = GetInt(w, "goatId", "GoatId");
-                if (goatId <= 0 && TryResolveGoatId(w, goatTagMap, goatIdByOld, out var mapped))
-                    goatId = mapped;
-                if (goatId <= 0) continue;
+                if (!TryResolveGoatId(w, goatTagMap, goatIdByOld, out var goatId)) continue;
                 context.GoatWeightRecords.Add(new GoatWeightRecord
                 {
                     GoatId = goatId,
@@ -469,6 +466,7 @@ internal static class BackupImportHelper
             var groupName = GetString(g, "group", "Group");
             if (!string.IsNullOrWhiteSpace(groupName) && groupMap.TryGetValue(groupName.Trim(), out var groupId))
                 goat.GroupId = groupId;
+            ApplyV240Fields(goat, g);
 
             context.Goats.Add(goat);
             await context.SaveChangesAsync(cancellationToken);
@@ -476,7 +474,181 @@ internal static class BackupImportHelper
                 idMap[oldId] = goat.Id;
         }
 
+        await RelinkParentsAsync(context, goats, idMap, cancellationToken);
         return idMap;
+    }
+
+    private static void ApplyV240Fields(Goat goat, JsonElement g)
+    {
+        goat.Owner = GetString(g, "owner", "Owner");
+        goat.HealthState = Enum.TryParse<GoatHealthState>(GetString(g, "healthState", "HealthState"), true, out var health) &&
+                           Enum.IsDefined(health) ? health : GoatHealthState.Healthy;
+        goat.SireTagText = GetString(g, "sireTagText", "SireTagText");
+        goat.DamTagText = GetString(g, "damTagText", "DamTagText");
+        goat.IsTemporaryTag = GetBool(g, "isTemporaryTag", "IsTemporaryTag");
+        var dob = goat.Source == GoatSource.Born ? null : ParseDate(g, "dateOfBirth", "DateOfBirth");
+        goat.DateOfBirth = dob <= DateOnly.FromDateTime(DateTime.Today) ? dob : null;
+        goat.DateOfBirthIsEstimated = goat.DateOfBirth.HasValue && GetBool(g, "dateOfBirthIsEstimated", "DateOfBirthIsEstimated");
+        goat.BreedingStage = ParseEnum<BreedingStage>(GetString(g, "breedingStage", "BreedingStage")) ?? (goat.MatedDate.HasValue
+            ? goat.KidsCount > 0 ? BreedingStage.ConfirmedPregnant : BreedingStage.ScanPending
+            : goat.PrepCrossDate.HasValue ? BreedingStage.Ready : BreedingStage.None);
+    }
+
+    private static async Task ImportBreedingHistoryAsync(
+        GoatFarmDbContext context, JsonElement root, Dictionary<string, int> goatIdMap, CancellationToken cancellationToken)
+    {
+        int? MapGoat(JsonElement el, string name) =>
+            GetIdKey(el, name) is { } old && goatIdMap.TryGetValue(old, out var id) ? id : null;
+
+        var eventMap = new Dictionary<string, BreedingEvent>(StringComparer.Ordinal);
+        if (root.TryGetProperty("breedingEvents", out var events) && events.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var e in events.EnumerateArray())
+            {
+                if (MapGoat(e, "doeId") is not { } doeId) continue;
+                var ev = new BreedingEvent
+                {
+                    DoeId = doeId,
+                    BuckId = MapGoat(e, "buckId"),
+                    BuckTagText = GetString(e, "buckTagText"),
+                    MatedDate = ParseDateRequired(e, "matedDate"),
+                    ScanDate = ParseDate(e, "scanDate"),
+                    ScanKids = GetNullableInt(e, "scanKids"),
+                    Outcome = ParseEnum<BreedingOutcome>(GetString(e, "outcome")) ?? BreedingOutcome.Open,
+                    OutcomeDate = ParseDate(e, "outcomeDate"),
+                    Notes = GetString(e, "notes")
+                };
+                context.BreedingEvents.Add(ev);
+                if (GetIdKey(e) is { } oldId) eventMap[oldId] = ev;
+            }
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        var kiddingMap = new Dictionary<string, KiddingRecord>(StringComparer.Ordinal);
+        if (root.TryGetProperty("kiddingRecords", out var kiddings) && kiddings.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var k in kiddings.EnumerateArray())
+            {
+                if (MapGoat(k, "doeId") is not { } doeId) continue;
+                var record = new KiddingRecord
+                {
+                    DoeId = doeId,
+                    BreedingEvent = GetIdKey(k, "breedingEventId") is { } oldEvent ? eventMap.GetValueOrDefault(oldEvent) : null,
+                    KiddingDate = ParseDateRequired(k, "kiddingDate"),
+                    LiveKids = GetInt(k, "liveKids"),
+                    Stillborn = GetInt(k, "stillborn"),
+                    Ease = ParseEnum<KiddingEase>(GetString(k, "ease")) ?? KiddingEase.Normal,
+                    Notes = GetString(k, "notes"),
+                    ClientRequestId = Guid.TryParse(GetString(k, "clientRequestId"), out var requestId) ? requestId : Guid.NewGuid()
+                };
+                context.KiddingRecords.Add(record);
+                if (GetIdKey(k) is { } oldId) kiddingMap[oldId] = record;
+            }
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (kiddingMap.Count > 0 && root.TryGetProperty("goats", out var goats) && goats.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var g in goats.EnumerateArray())
+            {
+                if (GetIdKey(g, "kiddingRecordId") is not { } oldKidding || !kiddingMap.TryGetValue(oldKidding, out var record)) continue;
+                if (MapGoat(g, "id") is not { } goatId) continue;
+                var goat = await context.Goats.FindAsync([goatId], cancellationToken);
+                if (goat is not null) goat.KiddingRecordId = record.Id;
+            }
+        }
+
+        if (root.TryGetProperty("breedingEmptyLogs", out var emptyLogs) && emptyLogs.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var l in emptyLogs.EnumerateArray())
+            {
+                if (MapGoat(l, "goatId") is not { } goatId) continue;
+                context.BreedingEmptyLogs.Add(new BreedingEmptyLog
+                {
+                    GoatId = goatId,
+                    ScanDate = ParseDateRequired(l, "scanDate", "ScanDate"),
+                    MatedDate = ParseDate(l, "matedDate", "MatedDate"),
+                    BuckTag = GetString(l, "buckTag", "BuckTag")
+                });
+            }
+        }
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Assignees are matched to existing accounts by email; restore never creates or changes users.</summary>
+    private static async Task ImportTasksAsync(
+        GoatFarmDbContext context, JsonElement root, Dictionary<string, int> goatIdMap, CancellationToken cancellationToken)
+    {
+        if (!root.TryGetProperty("farmTasks", out var tasks) || tasks.ValueKind != JsonValueKind.Array) return;
+
+        var usersByEmail = await context.Users.AsNoTracking().Where(u => u.NormalizedEmail != null)
+            .ToDictionaryAsync(u => u.NormalizedEmail!, u => u.Id, cancellationToken);
+        string? MapUser(JsonElement el, string name) =>
+            GetString(el, name) is { Length: > 0 } email ? usersByEmail.GetValueOrDefault(email.Trim().ToUpperInvariant()) : null;
+
+        foreach (var t in tasks.EnumerateArray())
+        {
+            context.FarmTasks.Add(new FarmTask
+            {
+                Title = GetString(t, "title") ?? "",
+                Notes = GetString(t, "notes"),
+                Type = ParseEnum<FarmTaskType>(GetString(t, "type")) ?? FarmTaskType.Task,
+                Priority = ParseEnum<FarmTaskPriority>(GetString(t, "priority")) ?? FarmTaskPriority.Normal,
+                Status = ParseEnum<FarmTaskStatus>(GetString(t, "status")) ?? FarmTaskStatus.ToDo,
+                DueDate = ParseDate(t, "dueDate"),
+                AssigneeUserId = MapUser(t, "assigneeEmail"),
+                CreatedByUserId = MapUser(t, "createdByEmail"),
+                GoatId = GetIdKey(t, "goatId") is { } oldGoat && goatIdMap.TryGetValue(oldGoat, out var goatId) ? goatId : null,
+                StartedAtUtc = ParseUtc(t, "startedAtUtc"),
+                CompletedAtUtc = ParseUtc(t, "completedAtUtc")
+            });
+        }
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Settings keys are unique, so restore overwrites instead of inserting a second row.</summary>
+    private static async Task UpsertSettingAsync(
+        GoatFarmDbContext context, string key, JsonElement value, CancellationToken cancellationToken)
+    {
+        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return;
+        var text = value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : JsonSerializer.Serialize(value);
+        var setting = context.AppSettings.Local.FirstOrDefault(s => s.Key == key)
+                      ?? await context.AppSettings.FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+        if (setting is null)
+            context.AppSettings.Add(new AppSetting { Key = key, Value = text });
+        else
+            setting.Value = text;
+    }
+
+    private static TEnum? ParseEnum<TEnum>(string? value) where TEnum : struct, Enum =>
+        Enum.TryParse<TEnum>(value, true, out var parsed) && Enum.IsDefined(parsed) ? parsed : null;
+
+    private static DateTime? ParseUtc(JsonElement el, string name) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String && v.TryGetDateTime(out var dt)
+            ? DateTime.SpecifyKind(dt.ToUniversalTime(), DateTimeKind.Utc)
+            : null;
+
+    /// <summary>Sire/dam ids in a backup refer to the old database; map them to the newly created goats.</summary>
+    private static async Task RelinkParentsAsync(
+        GoatFarmDbContext context, JsonElement goats, Dictionary<string, int> idMap, CancellationToken cancellationToken)
+    {
+        var changed = false;
+        foreach (var g in goats.EnumerateArray())
+        {
+            var oldId = GetIdKey(g);
+            if (oldId is null || !idMap.TryGetValue(oldId, out var newId)) continue;
+            var oldSire = GetIdKey(g, "sireId") ?? GetIdKey(g, "SireId");
+            var oldDam = GetIdKey(g, "damId") ?? GetIdKey(g, "DamId");
+            if (oldSire is null && oldDam is null) continue;
+
+            var goat = await context.Goats.FindAsync([newId], cancellationToken);
+            if (goat is null) continue;
+            if (oldSire is not null && idMap.TryGetValue(oldSire, out var sireId)) goat.SireId = sireId;
+            if (oldDam is not null && idMap.TryGetValue(oldDam, out var damId)) goat.DamId = damId;
+            changed = true;
+        }
+        if (changed)
+            await context.SaveChangesAsync(cancellationToken);
     }
 
     private static Goat MapGoatFromJson(JsonElement g, Dictionary<string, int> groupMap)
@@ -505,6 +677,7 @@ internal static class BackupImportHelper
         var groupName = ResolveGroupName(g);
         if (!string.IsNullOrWhiteSpace(groupName) && groupMap.TryGetValue(groupName.Trim(), out var groupId))
             goat.GroupId = groupId;
+        ApplyV240Fields(goat, g);
 
         return goat;
     }
@@ -825,13 +998,7 @@ internal static class BackupImportHelper
         JsonElement entry, Dictionary<string, int> tagMap, Dictionary<string, int> oldIdMap, out int goatId)
     {
         goatId = 0;
-        if (entry.TryGetProperty("goatId", out var idEl) || entry.TryGetProperty("GoatId", out idEl))
-        {
-            var key = idEl.ValueKind == JsonValueKind.Number ? idEl.GetInt32().ToString() : (idEl.GetString() ?? "");
-            if (oldIdMap.TryGetValue(key, out goatId)) return true;
-        }
-
-        return false;
+        return (GetIdKey(entry, "goatId") ?? GetIdKey(entry, "GoatId")) is { } key && oldIdMap.TryGetValue(key, out goatId);
     }
 
     private static bool TryResolveVaccineId(
@@ -847,11 +1014,18 @@ internal static class BackupImportHelper
         return false;
     }
 
-    private static string? GetIdKey(JsonElement el)
+    private static string? GetIdKey(JsonElement el) => GetIdKey(el, "id") ?? GetIdKey(el, "Id");
+
+    /// <summary>Id as a lookup key; V19 ids can be millisecond timestamps that do not fit in an int.</summary>
+    private static string? GetIdKey(JsonElement el, string name)
     {
-        if (el.TryGetProperty("id", out var id) || el.TryGetProperty("Id", out id))
-            return id.ValueKind == JsonValueKind.Number ? id.GetInt32().ToString() : id.GetString();
-        return null;
+        if (el.ValueKind != JsonValueKind.Object || !el.TryGetProperty(name, out var id)) return null;
+        return id.ValueKind switch
+        {
+            JsonValueKind.Number => id.GetRawText(),
+            JsonValueKind.String => id.GetString(),
+            _ => null
+        };
     }
 
     private static IReadOnlyList<string> ReadStringArray(JsonElement root, string key)
@@ -914,9 +1088,9 @@ internal static class BackupImportHelper
     {
         foreach (var name in names)
         {
-            if (!el.TryGetProperty(name, out var val) || val.ValueKind != JsonValueKind.Number)
+            if (!el.TryGetProperty(name, out var val) || val.ValueKind != JsonValueKind.Number || !val.TryGetInt32(out var n))
                 continue;
-            return val.GetInt32();
+            return n;
         }
 
         return 0;
@@ -926,9 +1100,9 @@ internal static class BackupImportHelper
     {
         foreach (var name in names)
         {
-            if (!el.TryGetProperty(name, out var val) || val.ValueKind != JsonValueKind.Number)
+            if (!el.TryGetProperty(name, out var val) || val.ValueKind != JsonValueKind.Number || !val.TryGetInt32(out var n))
                 continue;
-            return val.GetInt32();
+            return n;
         }
 
         return null;

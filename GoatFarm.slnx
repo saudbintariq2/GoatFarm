@@ -5,4 +5,7 @@
     <Project Path="src/GoatFarm.Infrastructure/GoatFarm.Infrastructure.csproj" />
     <Project Path="src/GoatFarm.Web/GoatFarm.Web.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GoatFarm.Tests/GoatFarm.Tests.csproj" />
+  </Folder>
 </Solution>

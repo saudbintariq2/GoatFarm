@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
-[IgnoreAntiforgeryToken]
 public class MilkController : Controller
 {
     private readonly IMilkService _milkService;

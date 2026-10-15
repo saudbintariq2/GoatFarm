@@ -24,17 +24,23 @@ builder.Services.AddDataProtection()
     .SetApplicationName("GoatFarm")
     .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 
+var cookieSecurePolicy = builder.Environment.IsDevelopment()
+    ? CookieSecurePolicy.SameAsRequest
+    : CookieSecurePolicy.Always;
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = "__GoatFarm.Antiforgery";
     options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SecurePolicy = cookieSecurePolicy;
+    options.HeaderName = "X-CSRF-TOKEN";
 });
 
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add<FarmPermissionFilter>();
+    options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
 })
     .AddJsonOptions(options =>
     {
@@ -61,23 +67,33 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequiredLength = 8;
     options.User.RequireUniqueEmail = true;
+    options.Lockout.AllowedForNewUsers = true;
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 })
 .AddEntityFrameworkStores<GoatFarmDbContext>()
 .AddDefaultTokenProviders();
+
+builder.Services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, FarmUserClaimsPrincipalFactory>();
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
     options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SecurePolicy = cookieSecurePolicy;
+    options.Cookie.HttpOnly = true;
+    options.ExpireTimeSpan = TimeSpan.FromDays(14);
+    options.SlidingExpiration = true;
 });
 
 var app = builder.Build();
 
-await DatabaseBootstrap.InitializeAsync(app.Services);
+await DatabaseBootstrap.InitializeAsync(app.Services, app.Environment.IsDevelopment());
 
 app.UseGlobalExceptionMiddleware();
+if (app.Configuration.GetValue<bool>("Diagnostics:ServerTiming"))
+    app.UseMiddleware<ServerTimingMiddleware>();
 
 if (!app.Environment.IsDevelopment())
 {

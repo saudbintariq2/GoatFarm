@@ -1,6 +1,26 @@
 /* Goat Records — client-side AJAX layer (replaces local JS arrays) */
+(() => {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const method = (init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const url = new URL(input instanceof Request ? input.url : input, location.href);
+    if (method !== 'GET' && method !== 'HEAD' && url.origin === location.origin) {
+      const token = document.querySelector('meta[name="csrf-token"]')?.content;
+      if (token) {
+        const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+        headers.set('X-CSRF-TOKEN', token);
+        init = { ...init, headers };
+      }
+    }
+    return nativeFetch(input, init);
+  };
+})();
+
 const GoatRecords = (() => {
   const rs = n => 'Rs ' + Math.round(n).toLocaleString('en-US');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Spreadsheet apps execute cells starting with = + - @ TAB CR; plain numbers like -1,250.5 stay numeric.
+  const csvCell = v => { v = String(v ?? ''); if (/^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d,]*(\.\d+)?$/.test(v)) v = "'" + v; return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 
   let modalDone = null;
 
@@ -124,7 +144,18 @@ const GoatRecords = (() => {
       const addBtn = addBtnId ? document.getElementById(addBtnId) : null;
       const panel = addBtn?.closest('.panel');
       if (!p.add && !p.edit) {
-        if (panel) panel.classList.add('perm-hidden');
+        if (!panel) return;
+        if (!panel.querySelector('table.tbl')) { panel.classList.add('perm-hidden'); return; }
+        // View-only: keep the records visible, hide only the entry form.
+        panel.querySelectorAll('.add-grid, .goat-form-actions, .field-comment').forEach(el => el.classList.add('perm-hidden'));
+        addBtn?.classList.add('perm-hidden');
+        if (deleteBtnId) this.hide(deleteBtnId);
+        if (rowSelector) {
+          document.querySelectorAll(rowSelector).forEach(row => {
+            row.style.cursor = 'default';
+            row.classList.remove('health-row', 'milk-row', 'fin-row', 'goat-row');
+          });
+        }
         return;
       }
       if (!p.add) {
@@ -165,6 +196,13 @@ const GoatRecords = (() => {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (res.status === 409 && err.requiresConfirmation && typeof options.body === 'string') {
+        if (await showConfirm(err.error + '\n\nSave anyway?')) {
+          const body = { ...JSON.parse(options.body), confirmPossibleDuplicate: true, confirmWarnings: true };
+          return api(url, { ...options, body: JSON.stringify(body) });
+        }
+        throw new Error(err.error);
+      }
       const message = err.error || err.title || Object.values(err.errors || {}).flat?.()[0] ||
         (res.status === 403 ? 'You do not have permission for this action.' : 'Something went wrong. Please try again.');
       await showModal(message);
@@ -184,7 +222,7 @@ const GoatRecords = (() => {
       const list = await api('/Lookup/Get?key=' + encodeURIComponent(listKey));
       const opts = [...prefixItems, ...list.filter(x => !prefixItems.includes(x))];
       const cur = sel.value;
-      sel.innerHTML = opts.map(t => `<option>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('') +
+      sel.innerHTML = opts.map(t => `<option>${esc(t)}</option>`).join('') +
         '<option value="__add">➕ Add new…</option>';
       if (opts.includes(cur)) sel.value = cur;
     };
@@ -193,7 +231,7 @@ const GoatRecords = (() => {
       const name = await showModal('Add a new option to this list:', { prompt: true });
       if (name?.trim()) {
         const updated = await api('/Lookup/AddOption', { method: 'POST', body: JSON.stringify({ key: listKey, value: name.trim() }) });
-        sel.innerHTML = updated.map(t => `<option>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('') +
+        sel.innerHTML = updated.map(t => `<option>${esc(t)}</option>`).join('') +
           '<option value="__add">➕ Add new…</option>';
         sel.value = name.trim();
       } else {
@@ -223,6 +261,12 @@ const GoatRecords = (() => {
       if (!p) return;
       p.disabled = source === 'Born';
       if (source === 'Born') p.value = '';
+      const dob = document.getElementById('f-dob');
+      const est = document.getElementById('f-dob-est');
+      if (dob && est) {
+        dob.disabled = est.disabled = source === 'Born';
+        if (source === 'Born') { dob.value = ''; est.checked = false; }
+      }
     }
 
     function setEditMode(editing) {
@@ -246,6 +290,7 @@ const GoatRecords = (() => {
       document.getElementById('f-status').value = 'Kid';
       document.getElementById('f-date').value = '';
       document.getElementById('f-note').value = '';
+      setHerdExtras({});
       applySourcePriceState();
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       setEditMode(false);
@@ -253,6 +298,31 @@ const GoatRecords = (() => {
 
     function enumValue(value, fallback) {
       return typeof value === 'string' ? value : fallback;
+    }
+
+    function setHerdExtras(goat) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+      set('f-health', enumValue(goat.healthState, 'Healthy'));
+      set('f-dob', goat.dateOfBirthDisplay || goat.dateOfBirth);
+      const est = document.getElementById('f-dob-est');
+      if (est) est.checked = !!goat.dateOfBirthIsEstimated;
+      set('f-owner', goat.owner);
+      set('f-sire', goat.sireTag);
+      set('f-dam', goat.damTag);
+    }
+
+    async function loadParentOptions() {
+      const sires = document.getElementById('sireOptions');
+      const dams = document.getElementById('damOptions');
+      if (!sires || !dams) return;
+      try {
+        const opts = await api('/Goat/ParentOptions');
+        const fill = (el, tags) => {
+          el.replaceChildren(...tags.map(t => { const o = document.createElement('option'); o.value = t; return o; }));
+        };
+        fill(sires, opts.sires || []);
+        fill(dams, opts.dams || []);
+      } catch { /* datalist is optional */ }
     }
 
     function fillGoatForm(goat) {
@@ -269,6 +339,7 @@ const GoatRecords = (() => {
       document.getElementById('f-status').value = enumValue(goat.status, 'Kid');
       document.getElementById('f-date').value = goat.eventDateDisplay || goat.eventDate || '';
       document.getElementById('f-note').value = goat.comment || '';
+      setHerdExtras(goat);
       applySourcePriceState();
       setEditMode(true);
       if (!FarmPerms.can('herd', 'add')) FarmPerms.revealEditForm('addBtn');
@@ -299,7 +370,13 @@ const GoatRecords = (() => {
         purchasePrice: row.dataset.price,
         status: row.dataset.status,
         eventDateDisplay: row.dataset.date,
-        comment: row.dataset.comment
+        dateOfBirthDisplay: row.dataset.dob,
+        dateOfBirthIsEstimated: row.dataset.dobEst === '1',
+        comment: row.dataset.comment,
+        healthState: row.dataset.health,
+        owner: row.dataset.owner,
+        sireTag: row.dataset.sire,
+        damTag: row.dataset.dam
       });
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
@@ -373,9 +450,10 @@ const GoatRecords = (() => {
       }
     }
 
-    function herdUrl(filter, page) {
+    function herdUrl(filter, page, search = opts.search) {
       const params = new URLSearchParams();
       if (filter && filter !== 'all') params.set('filter', filter);
+      if (search) params.set('q', search);
       if (page && page > 1) params.set('page', page);
       const q = params.toString();
       return '/Goat' + (q ? '?' + q : '');
@@ -392,7 +470,13 @@ const GoatRecords = (() => {
         status: document.getElementById('f-status').value,
         source,
         purchasePrice: source === 'Born' ? 0 : (+document.getElementById('f-price').value || 0),
-        eventDate: document.getElementById('f-date').value
+        eventDate: document.getElementById('f-date').value,
+        dateOfBirth: source === 'Born' ? null : (document.getElementById('f-dob')?.value || null),
+        dateOfBirthIsEstimated: source !== 'Born' && !!document.getElementById('f-dob')?.value && !!document.getElementById('f-dob-est')?.checked,
+        healthState: document.getElementById('f-health')?.value || 'Healthy',
+        owner: document.getElementById('f-owner')?.value.trim() || null,
+        sireTag: document.getElementById('f-sire')?.value.trim() || null,
+        damTag: document.getElementById('f-dam')?.value.trim() || null
       };
     }
 
@@ -422,13 +506,15 @@ const GoatRecords = (() => {
       if (!tag) { await showModal('Please enter a Tag / RFID ID'); return; }
       if (!date) { await showModal('Please pick the date'); return; }
       const payload = goatPayload();
-      if (editingId) {
-        await api('/Goat/Update?id=' + editingId, { method: 'PUT', body: JSON.stringify(payload) });
-        reloadWithToast('Goat updated successfully');
-      } else {
-        await api('/Goat/Create', { method: 'POST', body: JSON.stringify(payload) });
-        reloadWithToast('Goat added successfully');
-      }
+      try {
+        if (editingId) {
+          await api('/Goat/Update?id=' + editingId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadWithToast('Goat updated successfully');
+        } else {
+          await api('/Goat/Create', { method: 'POST', body: JSON.stringify(payload) });
+          reloadWithToast('Goat added successfully');
+        }
+      } catch { /* api() already showed the error */ }
     });
 
     document.querySelectorAll('#rows tr.goat-row').forEach(row => {
@@ -441,6 +527,12 @@ const GoatRecords = (() => {
 
     filter?.addEventListener('change', () => {
       location.href = herdUrl(filter.value, 1);
+    });
+
+    document.getElementById('herdSearchForm')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const term = document.getElementById('herdSearch')?.value.trim() || '';
+      location.href = herdUrl(filter?.value || 'all', 1, term);
     });
 
     document.querySelectorAll('#stats .stat').forEach(card => {
@@ -488,8 +580,10 @@ const GoatRecords = (() => {
         const confirmed = await showConfirm('Mark ' + selected.size + ' doe(s) as kidded? They move to Milking.');
         if (!confirmed) return;
       }
-      await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify(payload) });
-      location.reload();
+      try {
+        await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify(payload) });
+        location.reload();
+      } catch { /* api() already showed the error */ }
     });
 
     document.getElementById('newGroupBtn')?.addEventListener('click', async () => {
@@ -576,6 +670,7 @@ const GoatRecords = (() => {
       document.getElementById('f-tag')?.focus();
     }
     initEditableDropdown('f-breed', 'Lookup.Breeds');
+    if (FarmPerms.can('herd', 'add') || FarmPerms.can('herd', 'edit')) loadParentOptions();
   }
 
   function renderBulk() {
@@ -634,7 +729,7 @@ const GoatRecords = (() => {
     document.getElementById('fb-rate')?.addEventListener('input', updateFbTotal);
     document.getElementById('fb-feed')?.addEventListener('change', () => {
       const feedType = document.getElementById('fb-feed')?.value;
-      const priceInput = document.querySelector(`[data-price="${feedType}"]`);
+      const priceInput = feedType ? document.querySelector(`[data-price="${CSS.escape(feedType)}"]`) : null;
       const rateInput = document.getElementById('fb-rate');
       if (priceInput && rateInput) rateInput.value = priceInput.value;
       updateFbTotal();
@@ -671,7 +766,7 @@ const GoatRecords = (() => {
       const items = [...document.querySelectorAll('[data-foditem]')].map(el => ({
         id: el.dataset.foditem,
         label: el.dataset.fodlabel,
-        amount: +document.querySelector(`[data-fodamt="${el.dataset.foditem}"]`)?.value || 0
+        amount: +document.querySelector(`[data-fodamt="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0
       }));
       await api('/Feed/UpdateFodderPool', {
         method: 'POST',
@@ -722,8 +817,8 @@ const GoatRecords = (() => {
       const mixList = document.getElementById('mixList');
       if (!mixList) return;
       mixList.innerHTML = (recipe.items || []).map(m =>
-        `<div class="ration-row"><div class="rn">${m.displayName}${m.percent ? ` <span class="breed"> · ${m.percent}%</span>` : ''}</div>
-          <div class="rin"><input type="number" min="0" step="0.5" data-mix="${m.feedType}" value="${m.kgInBatch}"><span class="u">kg</span></div>
+        `<div class="ration-row"><div class="rn">${esc(m.displayName)}${m.percent ? ` <span class="breed"> · ${esc(m.percent)}%</span>` : ''}</div>
+          <div class="rin"><input type="number" min="0" step="0.5" data-mix="${esc(m.feedType)}" value="${esc(m.kgInBatch)}"><span class="u">kg</span></div>
           <div class="rcost">${rs(m.batchCost)}</div></div>`).join('');
       const res = document.getElementById('mixResult');
       if (res) {
@@ -735,7 +830,7 @@ const GoatRecords = (() => {
       const cmp = document.getElementById('mixCompare');
       if (cmp && recipe.allStatusCosts) {
         cmp.innerHTML = '<b>All recipes:</b> ' + recipe.allStatusCosts.map(c =>
-          `<span style="${c.isActive ? 'color:var(--green-dark);font-weight:700' : 'color:var(--ink-soft)'}">${c.statusDisplay} ${rs(c.costPerKg)}/kg</span>`).join(' · ');
+          `<span style="${c.isActive ? 'color:var(--green-dark);font-weight:700' : 'color:var(--ink-soft)'}">${esc(c.statusDisplay)} ${rs(c.costPerKg)}/kg</span>`).join(' · ');
       }
       const bs = document.getElementById('mixBatch');
       if (bs) {
@@ -750,10 +845,10 @@ const GoatRecords = (() => {
       const box = document.getElementById('fodderInputs');
       if (!box || !pool) return;
       box.innerHTML = (pool.items || []).map(it =>
-        `<div class="price-row" data-foditem="${it.id}" data-fodlabel="${it.label}">
-          <label>${it.label} <span class="del feed-foddel" data-delfod="${it.id}" title="remove" style="font-size:13px">×</span></label>
+        `<div class="price-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}">
+          <label>${esc(it.label)} <span class="del feed-foddel" data-delfod="${esc(it.id)}" title="remove" style="font-size:13px">×</span></label>
           <div class="price-in"><span class="pre">Rs</span>
-          <input type="number" min="0" data-fodamt="${it.id}" value="${+it.amount || 0}" style="width:110px">
+          <input type="number" min="0" data-fodamt="${esc(it.id)}" value="${+it.amount || 0}" style="width:110px">
           <span class="suf">/ year</span></div></div>`).join('') ||
         '<div class="rule" style="grid-column:1/-1">No cost lines yet — add one below.</div>';
       const mode = document.getElementById('fodderMode');
@@ -791,9 +886,9 @@ const GoatRecords = (() => {
         const diff = (v === undefined || v === '') ? null : (+v - book);
         const dTxt = diff === null ? '' : (diff === 0 ? 'matches' : (diff > 0 ? '+' : '') + diff.toFixed(1) + ' kg');
         const dCol = diff === null ? '' : (Math.abs(diff) < 0.05 ? 'color:var(--green-dark)' : diff < 0 ? 'color:#8a261c;font-weight:700' : 'color:var(--amber);font-weight:700');
-        return `<div class="ration-row"><div class="rn">${f.displayName}
+        return `<div class="ration-row"><div class="rn">${esc(f.displayName)}
             <span class="breed">· books say ${book} kg</span></div>
-          <div class="rin"><input type="number" min="0" step="0.5" data-check="${f.feedType}" value="${v === undefined ? '' : v}" placeholder="actual"><span class="u">kg</span></div>
+          <div class="rin"><input type="number" min="0" step="0.5" data-check="${esc(f.feedType)}" value="${v === undefined ? '' : esc(v)}" placeholder="actual"><span class="u">kg</span></div>
           <div class="rcost" style="${dCol}">${dTxt}</div></div>`;
       }).join('');
       box.querySelectorAll('[data-check]').forEach(inp => {
@@ -824,8 +919,8 @@ const GoatRecords = (() => {
         const note = data.reorderNote;
         if (note && note.daysToMinimum <= 21) {
           const txt = note.daysToMinimum <= 0
-            ? `<b>${note.displayName}</b> is already at minimum stock — runs out in ${note.daysUntilEmpty} days`
-            : `<b>${note.displayName}</b> reaches minimum stock in ${note.daysToMinimum} days (runs out in ${note.daysUntilEmpty})`;
+            ? `<b>${esc(note.displayName)}</b> is already at minimum stock — runs out in ${esc(note.daysUntilEmpty)} days`
+            : `<b>${esc(note.displayName)}</b> reaches minimum stock in ${esc(note.daysToMinimum)} days (runs out in ${esc(note.daysUntilEmpty)})`;
           reorder.innerHTML = `<div class="note" style="background:${note.isCritical ? 'var(--red-tint)' : 'var(--amber-tint)'};
             border-color:${note.isCritical ? '#e6b5ad' : '#e9d4a8'};margin:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <span style="flex:1">⚠ ${txt}</span>
@@ -833,7 +928,7 @@ const GoatRecords = (() => {
           document.getElementById('reorderBtn')?.addEventListener('click', () => {
             const sel = document.getElementById('fb-feed');
             if (sel) sel.value = note.feedType;
-            const priceInput = document.querySelector(`[data-price="${note.feedType}"]`);
+            const priceInput = document.querySelector(`[data-price="${CSS.escape(note.feedType)}"]`);
             if (priceInput) document.getElementById('fb-rate').value = priceInput.value;
             showFeedTab('store');
             document.getElementById('fb-kg')?.focus();
@@ -859,8 +954,8 @@ const GoatRecords = (() => {
 
       const purchPrices = (data.allPrices || []).filter(p => p.feedType !== 'fodder');
       document.getElementById('priceGrid').innerHTML = purchPrices.map(p =>
-        `<div class="price-row"><label>${p.displayName} <span class="del feed-del" data-delfeed="${p.feedType}" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
-          <input type="number" min="0" data-price="${p.feedType}" value="${p.pricePerKg}"><span class="suf">/ kg</span></div></div>`).join('');
+        `<div class="price-row"><label>${esc(p.displayName)} <span class="del feed-del" data-delfeed="${esc(p.feedType)}" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
+          <input type="number" min="0" data-price="${esc(p.feedType)}" value="${esc(p.pricePerKg)}"><span class="suf">/ kg</span></div></div>`).join('');
 
       const gp = document.getElementById('groupPlanRows');
       if (gp) {
@@ -869,9 +964,9 @@ const GoatRecords = (() => {
           tG += row.goatCount; tMix += (+row.mixKgPerDay || 0) * row.goatCount;
           tD += (+row.dailyCostPerGoat || 0) * row.goatCount;
           tF += (+row.monthlyTotal || 0); tM += (+row.fodderCostPerGoatPerDay || 0) * row.goatCount;
-          return `<tr><td><span class="chip ${row.statusCssClass}">${row.statusDisplay}</span></td>
+          return `<tr><td><span class="chip ${esc(row.statusCssClass)}">${esc(row.statusDisplay)}</span></td>
             <td class="num-cell">${row.goatCount}</td>
-            <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="${row.statusKey}" data-fld="mix" value="${row.mixKgPerDay}"
+            <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="${esc(row.statusKey)}" data-fld="mix" value="${esc(row.mixKgPerDay)}"
               style="width:70px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
             <td class="num-cell hide-sm"><input type="number" min="0" step="0.5" data-plan="${row.statusKey}" data-fld="fodder" value="${row.fodderKgPerDay}"
               style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
@@ -903,7 +998,7 @@ const GoatRecords = (() => {
       if (pfm) pfm.innerHTML = data.planFodderModeHtml || '';
 
       let buyHtml = (data.buyingList || []).map(b =>
-        `<tr><td>${b.displayName}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : ''}</td>
+        `<tr><td>${esc(b.displayName)}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : ''}</td>
           <td class="num-cell hide-sm">${b.kgPerDay.toFixed(1)}</td>
           <td class="num-cell">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
           <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>' : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
@@ -916,7 +1011,7 @@ const GoatRecords = (() => {
       document.getElementById('buyRows').innerHTML = buyHtml ||
         '<tr><td colspan="4" class="empty">Set your mix recipe and group amounts first.</td></tr>';
 
-      const feedOpts = purchPrices.map(p => `<option value="${p.feedType}">${p.displayName}</option>`).join('');
+      const feedOpts = purchPrices.map(p => `<option value="${esc(p.feedType)}">${esc(p.displayName)}</option>`).join('');
       const fbFeed = document.getElementById('fb-feed');
       const curFeed = fbFeed?.value;
       if (fbFeed) {
@@ -925,12 +1020,12 @@ const GoatRecords = (() => {
       }
 
       document.getElementById('buyLogRows').innerHTML = (data.feedPurchases?.length ? data.feedPurchases.map(b =>
-        `<tr class="feed-buy-row" data-id="${b.id}" data-date="${b.dateDisplay}" data-feed="${b.feedType}"
-          data-kg="${b.kg}" data-rate="${b.ratePerKg}" data-comment="${b.comment || ''}">
-          <td><span class="breed">${b.dateDisplay}</span></td><td>${b.feedDisplayName}</td>
-          <td class="num-cell">${(+b.kg).toFixed(1)} kg</td><td class="num-cell hide-sm">Rs ${b.ratePerKg}</td>
+        `<tr class="feed-buy-row" data-id="${esc(b.id)}" data-date="${esc(b.dateDisplay)}" data-feed="${esc(b.feedType)}"
+          data-kg="${esc(b.kg)}" data-rate="${esc(b.ratePerKg)}" data-comment="${esc(b.comment)}">
+          <td><span class="breed">${esc(b.dateDisplay)}</span></td><td>${esc(b.feedDisplayName)}</td>
+          <td class="num-cell">${(+b.kg).toFixed(1)} kg</td><td class="num-cell hide-sm">Rs ${esc(b.ratePerKg)}</td>
           <td class="num-cell">${rs(b.amount)}</td>
-          <td class="hide-sm">${b.comment ? `<span class="name">${b.comment}</span>` : ''}</td></tr>`).join('') :
+          <td class="hide-sm">${b.comment ? `<span class="name">${esc(b.comment)}</span>` : ''}</td></tr>`).join('') :
         '<tr class="feed-buy-empty"><td colspan="6" class="empty">No feed purchases logged this month.</td></tr>');
 
       document.querySelectorAll('#buyLogRows tr.feed-buy-row').forEach(row => {
@@ -957,13 +1052,13 @@ const GoatRecords = (() => {
       const stockEl = document.getElementById('stockRows');
       if (!stockEl || !stock) return;
       stockEl.innerHTML = stock.map(s =>
-        `<tr><td>${s.displayName}${s.isLowStock ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
+        `<tr><td>${esc(s.displayName)}${s.isLowStock ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
           <td class="num-cell hide-sm"><span class="breed">${Math.round(s.purchasedKg || 0).toLocaleString('en-US')} kg</span></td>
           <td class="num-cell hide-sm"><span class="breed">${Math.round(s.usedKg || 0).toLocaleString('en-US')} kg</span></td>
-          <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${s.feedType}" value="${s.stockKg}"
+          <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${esc(s.feedType)}" value="${esc(s.stockKg)}"
             style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
           <td class="num-cell">${(+s.kgPerDay).toFixed(1)} kg</td>
-          <td class="num-cell" style="${s.daysLeftColor || ''}">${s.daysLeftText}</td></tr>`).join('');
+          <td class="num-cell" style="${esc(s.daysLeftColor)}">${esc(s.daysLeftText)}</td></tr>`).join('');
       bindStockInputs();
     }
 
@@ -1108,7 +1203,7 @@ const GoatRecords = (() => {
       checkDraft = {};
       const msg = document.getElementById('checkMsg');
       if (msg) {
-        msg.innerHTML = `<span style="color:var(--green-dark);font-weight:700">${result.message}</span>` +
+        msg.innerHTML = `<span style="color:var(--green-dark);font-weight:700">${esc(result.message)}</span>` +
           (result.detailHtml ? ` ${result.detailHtml}` : '');
       }
       await reloadFeed();
@@ -1129,12 +1224,17 @@ const GoatRecords = (() => {
   }
 
   function initBreeding() {
+    const $ = id => document.getElementById(id);
     const normalizeTag = v => String(v ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+    const today = () => new Date().toISOString().slice(0, 10);
+    const newRequestId = () => (crypto.randomUUID ? crypto.randomUUID() :
+      ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)));
 
     async function lookupTag(inId, outId) {
-      const val = normalizeTag(document.getElementById(inId)?.value);
-      const out = document.getElementById(outId);
-      if (!val) { if (out) out.innerHTML = ''; return; }
+      const val = normalizeTag($(inId)?.value);
+      const out = $(outId);
+      if (!out) return;
+      if (!val) { out.textContent = ''; return; }
       try {
         const res = await fetch('/Breeding/LookupTag?tag=' + encodeURIComponent(val), {
           headers: { Accept: 'application/json' },
@@ -1145,158 +1245,256 @@ const GoatRecords = (() => {
           return;
         }
         const g = await res.json();
-        out.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${g.tag}${g.name ? ' · ' + g.name : ''} · ${g.status}${g.extra || ''}</span>`;
+        out.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${esc(g.tag)}${g.name ? ' · ' + esc(g.name) : ''} · ${esc(g.status)}${esc(g.extra || '')}</span>`;
       } catch {
-        out.innerHTML = '';
+        out.textContent = '';
       }
     }
 
     ['bp-tag', 'bc-tag', 'us-tag'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', () => lookupTag(id, id.replace('-tag', '-found')));
+      $(id)?.addEventListener('input', () => lookupTag(id, id.replace('-tag', '-found')));
     });
-    document.getElementById('bp-tag')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('bp-date')?.focus(); }
+    $('bp-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('bp-date')?.focus(); }
     });
-    document.getElementById('bc-tag')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addCross')?.focus(); }
+    $('bc-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('bc-buck')?.focus(); }
     });
-    document.getElementById('us-tag')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addUs')?.focus(); }
+    $('us-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('addUs')?.focus(); }
     });
 
-    async function reloadBreeding() {
-      const data = await api('/Breeding/GetData');
-      document.getElementById('breedPrep').textContent = data.prepCount;
-      document.getElementById('breedExp').textContent = data.expectingCount;
-      document.getElementById('breedNext').textContent = data.nextDueText;
-
-      document.getElementById('prepRows').innerHTML = data.prepRows?.length ? data.prepRows.map(g =>
-        `<tr><td><span class="tag">${g.tag}</span>${g.name ? `<div class="name">${g.name}</div>` : ''}</td>
-          <td class="hide-sm"><span class="chip ${g.statusCssClass}">${g.statusDisplay}</span></td>
-          <td><span class="breed">${g.prepCrossDate}</span></td>
-          <td style="${g.dietStartNow ? 'color:var(--amber);font-weight:700' : ''}">${g.dietStartDate}</td>
-          <td class="num-cell">${g.crossInText}</td>
-          <td><button type="button" class="btn btn-green btn-sm" data-cross="${g.id}">Crossed</button>
-              <span class="del" data-unprep="${g.id}">×</span></td></tr>`).join('') :
-        '<tr><td colspan="6" class="empty">No does being prepared. Add one below.</td></tr>';
-
-      document.getElementById('expRows').innerHTML = data.expectingRows?.length ? data.expectingRows.map(g => {
-        let kids = g.kidsCount != null
-          ? `<b>${g.kidsDisplay}</b>${g.ultrasoundDate ? `<div class="name">${g.ultrasoundDate}</div>` : ''}${g.extraFeed ? '<div class="name" style="color:var(--amber);font-weight:700">↑ extra feed (multiples)</div>' : ''}`
-          : '<span class="breed" style="color:#bbb">not checked</span>';
-        return `<tr><td><span class="tag">${g.tag}</span>${g.name ? `<div class="name">${g.name}</div>` : ''}</td>
-          <td class="hide-sm"><span class="breed">${g.matedDate}</span></td>
-          <td class="hide-sm"><span class="breed">${g.buckTag || '—'}</span></td>
-          <td>${kids}</td>
-          <td><b>${g.expectedKidding}</b></td>
-          <td class="hide-sm"><span class="breed">${g.kiddingWindow}</span></td>
-          <td class="num-cell" style="font-weight:700;${g.dueColor}">${g.dueText}</td>
-          <td><button type="button" class="btn btn-green btn-sm" data-kidded="${g.id}">Kidded</button>
-              <span class="del" data-uncross="${g.id}">×</span></td></tr>`;
-      }).join('') :
-        '<tr><td colspan="8" class="empty">No does expecting yet.</td></tr>';
-
-      bindBreedingActions(reloadBreeding);
+    function renderCrossCheck(result) {
+      const box = $('bc-check');
+      if (!box) return;
+      const list = (items, cls) => items?.length
+        ? `<ul class="${cls}">${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : '';
+      box.innerHTML = result.canCross && !result.warnings?.length
+        ? `<div class="cross-ok">✓ ${esc(result.doeTag)} can be crossed${result.buckTag ? ' with ' + esc(result.buckTag) : ''}.</div>${list(result.notes, 'cross-notes')}`
+        : list(result.errors, 'cross-errors') + list(result.warnings, 'cross-warnings') + list(result.notes, 'cross-notes');
     }
 
-    function bindBreedingActions(reload) {
-      document.querySelectorAll('[data-cross]').forEach(b => {
-        b.onclick = async () => {
-          if (!FarmPerms.can('breeding', 'add')) return;
-          const dt = await showModal('Mating date (YYYY-MM-DD)', { prompt: true, defaultValue: new Date().toISOString().slice(0, 10) });
-          if (!dt) return;
-          const bk = await showModal('Buck tag (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+    async function checkCross() {
+      const tag = normalizeTag($('bc-tag')?.value);
+      if (!tag) { $('bc-check').textContent = ''; return null; }
+      const params = new URLSearchParams({ tag });
+      const buck = $('bc-buck')?.value.trim();
+      if (buck) params.set('buckTag', buck);
+      const date = $('bc-date')?.value;
+      if (date) params.set('date', date);
+      const result = await api('/Breeding/CheckCross?' + params.toString());
+      renderCrossCheck(result);
+      return result;
+    }
+
+    $('checkCross')?.addEventListener('click', () => checkCross().catch(() => {}));
+    $('bc-buck')?.addEventListener('change', () => checkCross().catch(() => {}));
+
+    document.querySelectorAll('[data-cross]').forEach(b => {
+      b.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'add')) return;
+        const dt = await showModal(`Mating date for ${b.dataset.tag} (YYYY-MM-DD)`, { prompt: true, defaultValue: today() });
+        if (!dt) return;
+        const bk = await showModal('Buck tag (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+        try {
           await api('/Breeding/CrossFromPrep?id=' + b.dataset.cross, {
             method: 'POST',
             body: JSON.stringify({ date: dt, buckTag: bk || null, tag: '' })
           });
-          reloadWithToast('Cross recorded');
-        };
+          reloadWithToast('Cross recorded — waiting for scan');
+        } catch { /* shown */ }
       });
-      document.querySelectorAll('[data-unprep]').forEach(x => {
-        x.onclick = async () => {
-          if (!FarmPerms.can('breeding', 'delete')) return;
-          await api('/Breeding/RemovePrep?id=' + x.dataset.unprep, { method: 'DELETE' });
-          await reload();
-        };
-      });
-      document.querySelectorAll('[data-kidded]').forEach(b => {
-        b.onclick = async () => {
-          if (!FarmPerms.can('breeding', 'edit')) return;
-          const confirmed = await showConfirm('Mark this doe as kidded? She moves to Milking.');
-          if (!confirmed) return;
-          await api('/Breeding/MarkKidded?id=' + b.dataset.kidded, { method: 'POST' });
-          reloadWithToast('Marked as kidded');
-        };
-      });
-      document.querySelectorAll('[data-uncross]').forEach(x => {
-        x.onclick = async () => {
-          if (!FarmPerms.can('breeding', 'delete')) return;
-          const confirmed = await showConfirm('Remove from expecting? The mating record is cleared.');
-          if (!confirmed) return;
-          await api('/Breeding/RemoveCross?id=' + x.dataset.uncross, { method: 'DELETE' });
-          await reload();
-        };
-      });
-    }
+    });
 
-    document.getElementById('addPrep')?.addEventListener('click', async () => {
+    document.querySelectorAll('[data-unprep]').forEach(x => {
+      x.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'delete')) return;
+        try {
+          await api('/Breeding/RemovePrep?id=' + x.dataset.unprep, { method: 'DELETE' });
+          reloadWithToast('Removed from cross prep');
+        } catch { /* shown */ }
+      });
+    });
+
+    document.querySelectorAll('[data-uncross]').forEach(x => {
+      x.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'delete')) return;
+        if (!await showConfirm('Remove this cross? It is kept in her breeding history as cancelled.')) return;
+        try {
+          await api('/Breeding/RemoveCross?id=' + x.dataset.uncross, { method: 'DELETE' });
+          reloadWithToast('Cross removed');
+        } catch { /* shown */ }
+      });
+    });
+
+    document.querySelectorAll('[data-scan]').forEach(b => {
+      b.addEventListener('click', () => {
+        const input = $('us-tag');
+        if (!input) return;
+        input.value = b.dataset.scan;
+        lookupTag('us-tag', 'us-found');
+        $('scanSection')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        $('us-result')?.focus();
+      });
+    });
+
+    document.querySelectorAll('[data-abort]').forEach(b => {
+      b.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'edit')) return;
+        const tag = b.dataset.abort;
+        const dt = await showModal(`Date ${tag} lost the pregnancy (YYYY-MM-DD)`, { prompt: true, defaultValue: today() });
+        if (!dt) return;
+        const notes = await showModal('Notes (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+        try {
+          await api('/Breeding/RecordAbortion', { method: 'POST', body: JSON.stringify({ tag, date: dt, notes: notes || null }) });
+          reloadWithToast('Pregnancy loss recorded');
+        } catch { /* shown */ }
+      });
+    });
+
+    $('addPrep')?.addEventListener('click', async () => {
       if (!FarmPerms.can('breeding', 'add')) return;
-      const tag = normalizeTag(document.getElementById('bp-tag')?.value);
-      const date = document.getElementById('bp-date')?.value;
+      const tag = normalizeTag($('bp-tag')?.value);
+      const date = $('bp-date')?.value;
       if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
       if (!date) { await showModal('Pick a target cross date'); return; }
-      await api('/Breeding/RecordPrep', { method: 'POST', body: JSON.stringify({ tag, date }) });
-      document.getElementById('bp-tag').value = '';
-      document.getElementById('bp-found').innerHTML = '';
-      reloadWithToast('Doe added for cross prep');
+      try {
+        await api('/Breeding/RecordPrep', { method: 'POST', body: JSON.stringify({ tag, date }) });
+        reloadWithToast('Doe added for cross prep');
+      } catch { /* shown */ }
     });
 
-    document.getElementById('addCross')?.addEventListener('click', async () => {
+    $('addCross')?.addEventListener('click', async () => {
       if (!FarmPerms.can('breeding', 'add')) return;
-      const tag = normalizeTag(document.getElementById('bc-tag')?.value);
-      const date = document.getElementById('bc-date')?.value;
+      const tag = normalizeTag($('bc-tag')?.value);
+      const date = $('bc-date')?.value;
       if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
       if (!date) { await showModal('Pick the mating date'); return; }
-      await api('/Breeding/RecordCross', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag,
-          date,
-          buckTag: document.getElementById('bc-buck')?.value.trim() || null
-        })
-      });
-      document.getElementById('bc-tag').value = '';
-      document.getElementById('bc-buck').value = '';
-      document.getElementById('bc-found').innerHTML = '';
-      reloadWithToast('Cross recorded');
+      try {
+        await api('/Breeding/RecordCross', {
+          method: 'POST',
+          body: JSON.stringify({ tag, date, buckTag: $('bc-buck')?.value.trim() || null })
+        });
+        reloadWithToast('Cross recorded — waiting for scan');
+      } catch { /* shown */ }
     });
 
-    document.getElementById('addUs')?.addEventListener('click', async () => {
+    $('addUs')?.addEventListener('click', async () => {
       if (!FarmPerms.can('breeding', 'edit')) return;
-      const tag = normalizeTag(document.getElementById('us-tag')?.value);
-      const kidsCount = +document.getElementById('us-result')?.value;
-      const date = document.getElementById('us-date')?.value || null;
+      const tag = normalizeTag($('us-tag')?.value);
+      const kidsCount = +$('us-result')?.value;
+      const date = $('us-date')?.value || null;
       if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
-      if (kidsCount === 0) {
-        const confirmed = await showConfirm('This doe is NOT pregnant — clear her mating record and move to Dry?');
-        if (!confirmed) return;
-      }
-      await api('/Breeding/RecordUltrasound', { method: 'POST', body: JSON.stringify({ tag, kidsCount, date }) });
-      document.getElementById('us-tag').value = '';
-      document.getElementById('us-found').innerHTML = '';
-      reloadWithToast(kidsCount === 0 ? 'Mating record cleared' : 'Ultrasound saved');
+      if (kidsCount === 0 && !await showConfirm('This doe is NOT pregnant — close this cross as empty?')) return;
+      try {
+        await api('/Breeding/RecordUltrasound', { method: 'POST', body: JSON.stringify({ tag, kidsCount, date }) });
+        reloadWithToast(kidsCount === 0 ? 'Recorded as empty' : 'Pregnancy confirmed');
+      } catch { /* shown */ }
     });
 
-    bindBreedingActions(reloadBreeding);
+    let birthRequestId = null;
+
+    function renderKidRows() {
+      const body = $('kb-kids');
+      if (!body) return;
+      const count = +$('kb-live').value || 0;
+      const existing = [...body.querySelectorAll('tr')].map(tr => ({
+        gender: tr.querySelector('[data-k=gender]').value,
+        tag: tr.querySelector('[data-k=tag]').value,
+        name: tr.querySelector('[data-k=name]').value,
+        weight: tr.querySelector('[data-k=weight]').value
+      }));
+      body.replaceChildren();
+      for (let i = 0; i < count; i++) {
+        const prev = existing[i] || { gender: 'Female', tag: '', name: '', weight: '' };
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i + 1}</td>
+          <td><select data-k="gender" aria-label="Kid ${i + 1} gender"><option value="Female">Female</option><option value="Male">Male</option></select></td>
+          <td><input data-k="tag" maxlength="50" autocomplete="off" aria-label="Kid ${i + 1} tag"></td>
+          <td><input data-k="name" maxlength="100" aria-label="Kid ${i + 1} name"></td>
+          <td class="num-cell"><input data-k="weight" type="number" min="0" max="20" step="0.1" aria-label="Kid ${i + 1} weight"></td>`;
+        tr.querySelector('[data-k=gender]').value = prev.gender;
+        tr.querySelector('[data-k=tag]').value = prev.tag;
+        tr.querySelector('[data-k=name]').value = prev.name;
+        tr.querySelector('[data-k=weight]').value = prev.weight;
+        body.appendChild(tr);
+      }
+    }
+
+    function openBirth(tag, kids) {
+      if (!FarmPerms.can('breeding', 'add')) return;
+      birthRequestId = newRequestId();
+      $('kb-doe').value = tag || '';
+      $('kb-date').value = today();
+      $('kb-live').value = String(Math.min(Math.max(+kids || 1, 0), 6));
+      $('kb-still').value = '0';
+      $('kb-ease').value = 'Normal';
+      $('kb-notes').value = '';
+      $('kb-kids').replaceChildren();
+      renderKidRows();
+      $('birthPanel').classList.remove('perm-hidden');
+      $('birthPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    document.querySelectorAll('[data-birth]').forEach(b => {
+      b.addEventListener('click', () => openBirth(b.dataset.birth, b.dataset.kids));
+    });
+    $('kb-live')?.addEventListener('change', renderKidRows);
+    $('kb-cancel')?.addEventListener('click', () => {
+      birthRequestId = null;
+      $('birthPanel').classList.add('perm-hidden');
+    });
+
+    $('kb-save')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'add') || !birthRequestId) return;
+      const doeTag = normalizeTag($('kb-doe').value);
+      if (!doeTag) { await showModal('Enter the doe tag'); return; }
+      const kids = [...$('kb-kids').querySelectorAll('tr')].map(tr => ({
+        gender: tr.querySelector('[data-k=gender]').value,
+        tag: tr.querySelector('[data-k=tag]').value.trim() || null,
+        name: tr.querySelector('[data-k=name]').value.trim() || null,
+        weightKg: tr.querySelector('[data-k=weight]').value ? +tr.querySelector('[data-k=weight]').value : null
+      }));
+      const stillborn = +$('kb-still').value || 0;
+      if (!kids.length && !stillborn) { await showModal('Add at least one kid (live or stillborn).'); return; }
+      const btn = $('kb-save');
+      btn.disabled = true;
+      try {
+        const result = await api('/Breeding/RecordBirth', {
+          method: 'POST',
+          body: JSON.stringify({
+            clientRequestId: birthRequestId,
+            doeTag,
+            kiddingDate: $('kb-date').value,
+            ease: $('kb-ease').value,
+            stillborn,
+            notes: $('kb-notes').value.trim() || null,
+            kids
+          })
+        });
+        const temp = (result.kids || []).filter(k => k.isTemporaryTag).map(k => k.tag);
+        reloadWithToast(result.alreadyRecorded
+          ? 'This birth was already saved'
+          : `Birth recorded — ${result.kids.length} kid(s) added${temp.length ? ' (temporary tags: ' + temp.join(', ') + ')' : ''}`);
+      } catch {
+        btn.disabled = false;
+      }
+    });
 
     FarmPerms.applyForm('breeding', {
       addBtnId: 'addPrep',
-      extraHideIds: ['addCross', 'addUs']
+      extraHideIds: ['addUs']
     });
     if (!FarmPerms.can('breeding', 'add')) {
-      FarmPerms.hide('addCross');
+      ['addCross', 'checkCross'].forEach(id => FarmPerms.hide(id));
+      document.querySelectorAll('[data-cross],[data-birth]').forEach(b => b.classList.add('perm-hidden'));
+    }
+    if (!FarmPerms.can('breeding', 'edit')) {
       FarmPerms.hide('addUs');
+      document.querySelectorAll('[data-abort],[data-scan]').forEach(b => b.classList.add('perm-hidden'));
+    }
+    if (!FarmPerms.can('breeding', 'delete')) {
+      document.querySelectorAll('[data-unprep],[data-uncross]').forEach(b => b.classList.add('perm-hidden'));
     }
   }
 
@@ -1595,6 +1793,7 @@ const GoatRecords = (() => {
       editingExpenseId = null;
       document.getElementById('expenseFormTitle').textContent = 'Running costs';
       document.getElementById('addExpense').textContent = '+ Add';
+      document.getElementById('e-type').querySelectorAll('option[data-retired]').forEach(o => o.remove());
       document.getElementById('e-type').selectedIndex = 0;
       document.getElementById('e-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('e-amt').value = '';
@@ -1667,7 +1866,16 @@ const GoatRecords = (() => {
       editingExpenseId = +row.dataset.id;
       document.getElementById('expenseFormTitle').textContent = 'Edit running cost';
       document.getElementById('addExpense').textContent = 'Save';
-      document.getElementById('e-type').value = row.dataset.type || '';
+      const typeSel = document.getElementById('e-type');
+      const rowType = row.dataset.type || '';
+      if (rowType && ![...typeSel.options].some(o => o.value === rowType)) {
+        // Retired type (e.g. salary advance): show it as-is so editing never silently changes it; saving it is rejected.
+        typeSel.querySelectorAll('option[data-retired]').forEach(o => o.remove());
+        const opt = new Option(rowType + ' (no longer accepted)', rowType);
+        opt.dataset.retired = '1';
+        typeSel.add(opt);
+      }
+      typeSel.value = rowType;
       document.getElementById('e-date').value = row.dataset.date || '';
       document.getElementById('e-amt').value = row.dataset.amount || '';
       document.getElementById('e-comment').value = row.dataset.comment || '';
@@ -1788,13 +1996,15 @@ const GoatRecords = (() => {
         date,
         comment: document.getElementById('i-comment').value.trim() || null
       };
-      if (editingIncomeId) {
-        await api('/Finance/UpdateIncome?id=' + editingIncomeId, { method: 'PUT', body: JSON.stringify(payload) });
-        reloadFinanceWithToast('Cash received updated successfully', date);
-      } else {
-        await api('/Finance/AddIncome', { method: 'POST', body: JSON.stringify(payload) });
-        reloadFinanceWithToast('Cash received added successfully', date);
-      }
+      try {
+        if (editingIncomeId) {
+          await api('/Finance/UpdateIncome?id=' + editingIncomeId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Cash received updated successfully', date);
+        } else {
+          await api('/Finance/AddIncome', { method: 'POST', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Cash received added successfully', date);
+        }
+      } catch { /* api() already showed the error */ }
     });
 
     document.getElementById('addExpense')?.addEventListener('click', async () => {
@@ -1808,13 +2018,15 @@ const GoatRecords = (() => {
         date,
         comment: document.getElementById('e-comment').value.trim() || null
       };
-      if (editingExpenseId) {
-        await api('/Finance/UpdateExpense?id=' + editingExpenseId, { method: 'PUT', body: JSON.stringify(payload) });
-        reloadFinanceWithToast('Running cost updated successfully', date);
-      } else {
-        await api('/Finance/AddExpense', { method: 'POST', body: JSON.stringify(payload) });
-        reloadFinanceWithToast('Running cost added successfully', date);
-      }
+      try {
+        if (editingExpenseId) {
+          await api('/Finance/UpdateExpense?id=' + editingExpenseId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Running cost updated successfully', date);
+        } else {
+          await api('/Finance/AddExpense', { method: 'POST', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Running cost added successfully', date);
+        }
+      } catch { /* api() already showed the error */ }
     });
 
     document.getElementById('addOwner')?.addEventListener('click', async () => {
@@ -1923,13 +2135,15 @@ const GoatRecords = (() => {
         amount,
         period: document.getElementById('rc-period').value
       };
-      if (editingRecurId) {
-        await api('/Finance/UpdateRecurringCost?id=' + editingRecurId, { method: 'PUT', body: JSON.stringify(payload) });
-        reloadFinanceWithToast('Recurring cost updated successfully');
-      } else {
-        await api('/Finance/AddRecurringCost', { method: 'POST', body: JSON.stringify(payload) });
-        reloadFinanceWithToast('Recurring cost added successfully');
-      }
+      try {
+        if (editingRecurId) {
+          await api('/Finance/UpdateRecurringCost?id=' + editingRecurId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Recurring cost updated successfully');
+        } else {
+          await api('/Finance/AddRecurringCost', { method: 'POST', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Recurring cost added successfully');
+        }
+      } catch { /* api() already showed the error */ }
     });
 
     document.querySelectorAll('#assetRows tr.fin-asset-row').forEach(row => {
@@ -2365,10 +2579,6 @@ const GoatRecords = (() => {
       return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
 
-    function esc(s) {
-      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-    }
-
     function renderProfile(data) {
       const g = data.goat || {};
       const nameLine = g.name ? `<div class="name">${esc(g.name)}</div>` : '';
@@ -2438,7 +2648,8 @@ const GoatRecords = (() => {
                   <div class="search-meta-item">Group<b>${groupLine}</b></div>
                   <div class="search-meta-item">Source<b>${esc(source)}</b></div>
                   <div class="search-meta-item">Price<b>${esc(g.priceDisplay)}</b></div>
-                  <div class="search-meta-item">Date<b>${esc(g.eventDateDisplay)}</b></div>
+                  <div class="search-meta-item">${g.source === 'Born' ? 'Born' : 'Bought on'}<b>${esc(g.eventDateDisplay)}</b></div>
+                  ${g.dateOfBirthDisplay ? `<div class="search-meta-item">Date of birth<b>${esc(g.dateOfBirthDisplay)}${g.dateOfBirthIsEstimated ? ' (estimated)' : ''}</b></div>` : ''}
                 </div>
               </div>
               ${herdLink}
@@ -2607,9 +2818,11 @@ const GoatRecords = (() => {
     function setUserEditMode(editing) {
       document.getElementById('cancelUserBtn').style.display = editing ? '' : 'none';
       document.getElementById('deleteUserBtn').style.display = editing ? '' : 'none';
-      document.getElementById('u-edit-extra').style.display = editing ? '' : 'none';
+      const editExtra = document.getElementById('u-edit-extra');
+      if (editExtra) editExtra.hidden = !editing;
       document.getElementById('u-password-wrap').style.display = editing ? 'none' : '';
       document.getElementById('userPermPanel').style.display = editing ? '' : 'none';
+      document.getElementById('userFormGrid')?.classList.toggle('is-editing', editing);
       document.getElementById('u-email').disabled = editing;
     }
 
@@ -2802,15 +3015,15 @@ const GoatRecords = (() => {
 
   function repKpiHtml(k) {
     return `<div class="price-row" style="background:#FCFDFB;border:1px solid var(--line);border-radius:12px;padding:12px 14px">
-      <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;${k.color ? 'color:' + k.color : ''}">${k.value}</div>
-      <div style="font-size:12px;font-weight:700;color:var(--ink-soft)">${k.label}</div>
-      ${k.sub ? `<div style="font-size:11px;color:var(--ink-soft);opacity:.8;margin-top:2px">${k.sub}</div>` : ''}</div>`;
+      <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;${k.color ? 'color:' + esc(k.color) : ''}">${esc(k.value)}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--ink-soft)">${esc(k.label)}</div>
+      ${k.sub ? `<div style="font-size:11px;color:var(--ink-soft);opacity:.8;margin-top:2px">${esc(k.sub)}</div>` : ''}</div>`;
   }
 
   function repDashKpiHtml(k) {
-    const dot = k.dotColor ? `<span class="dot" style="background:${k.dotColor}"></span>` : '';
-    return `<div class="stat" style="cursor:default"><div class="num" style="font-size:19px">${k.value}</div>
-      <div class="lbl">${dot}${k.label}</div></div>`;
+    const dot = k.dotColor ? `<span class="dot" style="background:${esc(k.dotColor)}"></span>` : '';
+    return `<div class="stat" style="cursor:default"><div class="num" style="font-size:19px">${esc(k.value)}</div>
+      <div class="lbl">${dot}${esc(k.label)}</div></div>`;
   }
 
   function showRepTab(tabKey) {
@@ -2837,6 +3050,8 @@ const GoatRecords = (() => {
     document.getElementById('dashKpi').innerHTML = (dash.kpis || []).map(repDashKpiHtml).join('');
     document.getElementById('dashRatios').innerHTML = (dash.ratios || []).map(repKpiHtml).join('');
 
+    window.__trend = null;
+    if (!d.financeHidden) {
     const th = document.getElementById('trendHead');
     const ts = document.getElementById('trendSub');
     const mh = document.getElementById('repMonthHead');
@@ -2849,7 +3064,7 @@ const GoatRecords = (() => {
       const last = pre
         ? `<td class="num-cell" style="color:#8a5b13">${rs(r.ownerInvestment)}</td>`
         : `<td class="num-cell" style="font-weight:700;color:${r.net < 0 ? '#8a261c' : 'var(--green-dark)'}">${(r.net < 0 ? '– ' : '') + rs(Math.abs(r.net))}</td>`;
-      return `<tr><td><b>${r.key}</b></td>
+      return `<tr><td><b>${esc(r.key)}</b></td>
         <td class="num-cell hide-sm" style="color:var(--green-dark)">${rs(r.income)}</td>
         <td class="num-cell" style="color:#8a261c">${rs(r.expense)}</td>${last}</tr>`;
     }).join('');
@@ -2864,9 +3079,11 @@ const GoatRecords = (() => {
         <td class="num-cell hide-sm" style="font-weight:800">${rs(dash.trendTotalIncome || 0)}</td>
         <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(dash.trendTotalExpense || 0)}</td>${totalLast}</tr>`;
     window.__trend = { keys: trendRows.map(r => r.key), bucket: Object.fromEntries(trendRows.map(r => [r.key, { inc: r.income, out: r.expense, put: r.ownerInvestment }])), gmode: d.groupBy, label: d.trendHeadLabel };
+    }
 
     const dashAlerts = dash.alerts || [];
-    const alertHtml = a => `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><span style="color:${a.color};font-weight:800">●</span> ${a.html}</div>`;
+    // a.html is built server-side with every user value HTML-encoded (ReportsService.Alert).
+    const alertHtml = a => `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><span style="color:${esc(a.color)};font-weight:800">●</span> ${a.html}</div>`;
     document.getElementById('alertList').innerHTML = dashAlerts.length
       ? dashAlerts.map(alertHtml).join('') + (d.alerts?.items?.length > dashAlerts.length ? `<div class="rule" style="padding-top:10px">+${d.alerts.items.length - dashAlerts.length} more in the Alerts tab</div>` : '')
       : `<div class="alldone">✓ Nothing needs attention right now.</div>`;
@@ -2874,56 +3091,56 @@ const GoatRecords = (() => {
 
     const herd = d.herd || {};
     document.getElementById('repHerdMove').innerHTML = (herd.movement || []).map((r, i, arr) =>
-      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td style="${r.isTotal ? 'font-weight:800' : ''}">${r.label}</td>
-        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : '700'}">${r.count}</td></tr>`).join('');
+      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td style="${r.isTotal ? 'font-weight:800' : ''}">${esc(r.label)}</td>
+        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : '700'}">${esc(r.count)}</td></tr>`).join('');
     document.getElementById('repHerdRows').innerHTML = (herd.composition || []).map(r =>
-      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${r.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${r.statusCssClass}">${r.statusDisplay}</span>`}</td>
+      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${r.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${esc(r.statusCssClass)}">${esc(r.statusDisplay)}</span>`}</td>
         <td class="num-cell" style="font-weight:${r.isTotal ? '800' : '700'}">${r.count}</td>
         <td class="hide-sm barcell">${r.isTotal ? '' : `<div class="bar" style="width:${Math.max(2, r.sharePercent)}%"></div>`}</td>
         <td class="num-cell hide-sm">${r.isTotal ? '' : `<span class="breed">${r.sharePercent}%</span>`}</td>
         <td class="num-cell" style="font-weight:${r.isTotal ? '800' : ''}">${rs(r.value)}</td></tr>`).join('');
     document.getElementById('repAgeGrid').innerHTML = (herd.ageSexBreed || []).map(repKpiHtml).join('');
     document.getElementById('repHerdChg').innerHTML = (herd.changes?.length ? herd.changes.map(c =>
-      `<tr><td><span class="breed">${c.date}</span></td><td><span class="tag">${c.tag}</span></td>
-        <td class="hide-sm"><span class="breed">${c.breed}</span></td><td>${c.eventHtml}</td>
-        <td class="num-cell">${c.valueDisplay}</td></tr>`).join('') : `<tr><td colspan="5" class="empty">No herd changes in this period.</td></tr>`);
+      `<tr><td><span class="breed">${esc(c.date)}</span></td><td><span class="tag">${esc(c.tag)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(c.breed)}</span></td><td>${c.eventHtml}</td>
+        <td class="num-cell">${esc(c.valueDisplay)}</td></tr>`).join('') : `<tr><td colspan="5" class="empty">No herd changes in this period.</td></tr>`);
 
     const br = d.breeding || {};
     document.getElementById('repBreedGrid').innerHTML = (br.kpis || []).map(repKpiHtml).join('');
     document.getElementById('repBreedNote').innerHTML = br.noteHtml || '';
     document.getElementById('repLitter').innerHTML = (br.litter || []).map(r =>
-      `<tr><td>${r.label}</td><td class="num-cell" style="font-weight:700">${r.does}</td>
+      `<tr><td>${esc(r.label)}</td><td class="num-cell" style="font-weight:700">${esc(r.does)}</td>
         <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(2, r.barPercent)}%"></div></td>
         <td class="num-cell">${r.kids}</td></tr>`).join('') +
       `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
         <td class="num-cell" style="font-weight:800">${br.litterTotalDoes || 0}</td><td class="hide-sm"></td>
         <td class="num-cell" style="font-weight:800">${br.litterTotalKids || 0}</td></tr>`;
     document.getElementById('repDueRows').innerHTML = (br.kiddingCalendar?.length ? br.kiddingCalendar.map(g =>
-      `<tr><td><span class="tag">${g.tag}</span></td><td class="hide-sm"><span class="breed">${g.matedDate}</span></td>
-        <td>${g.kidsDisplay}</td><td><b>${g.dueDate}</b></td>
-        <td class="num-cell" style="font-weight:700;color:${g.dueInColor}">${g.dueInText}</td></tr>`).join('') :
+      `<tr><td><span class="tag">${esc(g.tag)}</span></td><td class="hide-sm"><span class="breed">${esc(g.matedDate)}</span></td>
+        <td>${esc(g.kidsDisplay)}</td><td><b>${esc(g.dueDate)}</b></td>
+        <td class="num-cell" style="font-weight:700;color:${esc(g.dueInColor)}">${esc(g.dueInText)}</td></tr>`).join('') :
       `<tr><td colspan="5" class="empty">No confirmed pregnancies.</td></tr>`);
     document.getElementById('repEmptyRows').innerHTML = (br.emptyScans?.length ? br.emptyScans.map(e =>
-      `<tr><td><span class="tag">${e.tag}</span></td><td class="hide-sm"><span class="breed">${e.matedDate}</span></td>
-        <td class="hide-sm"><span class="breed">${e.buckTag}</span></td><td><span class="breed">${e.scanDate}</span></td>
-        <td class="num-cell" style="${e.highlight ? 'color:#8a261c;font-weight:700' : ''}">${e.times}</td></tr>`).join('') :
+      `<tr><td><span class="tag">${esc(e.tag)}</span></td><td class="hide-sm"><span class="breed">${esc(e.matedDate)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(e.buckTag)}</span></td><td><span class="breed">${esc(e.scanDate)}</span></td>
+        <td class="num-cell" style="${e.highlight ? 'color:#8a261c;font-weight:700' : ''}">${esc(e.times)}</td></tr>`).join('') :
       `<tr><td colspan="5" class="empty">No empty scans recorded.</td></tr>`);
 
     const gr = d.growth || {};
     document.getElementById('repGrowthKpi').innerHTML = (gr.kpis || []).map(repKpiHtml).join('');
     document.getElementById('repGrowthNote').innerHTML = gr.noteHtml || '';
     document.getElementById('repWeightRows').innerHTML = (gr.weights?.length ? gr.weights.map(w =>
-      `<tr><td><span class="tag">${w.tag}</span></td><td class="hide-sm"><span class="breed">${w.ageLabel}</span></td>
-        <td class="num-cell hide-sm"><span class="breed">${w.firstKg != null ? w.firstKg + ' kg' : '—'}</span></td>
-        <td class="num-cell" style="font-weight:700">${w.latestKg} kg</td>
-        <td class="num-cell" style="${w.underperforming ? 'color:#8a261c;font-weight:700' : ''}">${w.dailyGainDisplay}</td>
-        <td class="num-cell hide-sm"><span class="breed">${w.readings}</span></td></tr>`).join('') :
+      `<tr><td><span class="tag">${esc(w.tag)}</span></td><td class="hide-sm"><span class="breed">${esc(w.ageLabel)}</span></td>
+        <td class="num-cell hide-sm"><span class="breed">${w.firstKg != null ? esc(w.firstKg) + ' kg' : '—'}</span></td>
+        <td class="num-cell" style="font-weight:700">${esc(w.latestKg)} kg</td>
+        <td class="num-cell" style="${w.underperforming ? 'color:#8a261c;font-weight:700' : ''}">${esc(w.dailyGainDisplay)}</td>
+        <td class="num-cell hide-sm"><span class="breed">${esc(w.readings)}</span></td></tr>`).join('') :
       `<tr><td colspan="6" class="empty">No weights recorded yet.</td></tr>`);
 
     const fd = d.feed || {};
     document.getElementById('repFeedKpi').innerHTML = (fd.kpis || []).map(repKpiHtml).join('');
     document.getElementById('repFeedStock').innerHTML = (fd.stock || []).map(f =>
-      `<tr><td>${f.name}${f.isLow ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
+      `<tr><td>${esc(f.name)}${f.isLow ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
         <td class="num-cell hide-sm"><span class="breed">${Math.round(f.purchasedKg).toLocaleString('en-US')}</span></td>
         <td class="num-cell hide-sm"><span class="breed">${Math.round(f.consumedKg).toLocaleString('en-US')}</span></td>
         <td class="num-cell" style="font-weight:700">${(Math.round(f.stockKg * 10) / 10).toLocaleString('en-US')} kg</td>
@@ -2932,13 +3149,13 @@ const GoatRecords = (() => {
         <td class="num-cell hide-sm"><span class="breed">Rs ${Math.round(f.avgCostPerKg)}</span></td>
         <td class="num-cell">${rs(f.stockValue)}</td></tr>`).join('');
     document.getElementById('repFeedGrp').innerHTML = (fd.costByGroup || []).map(x =>
-      `<tr${x.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${x.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${x.statusCssClass}">${x.statusDisplay}</span>`}</td>
+      `<tr${x.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${x.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${esc(x.statusCssClass)}">${esc(x.statusDisplay)}</span>`}</td>
         <td class="num-cell" style="font-weight:${x.isTotal ? '800' : ''}">${x.goatCount}</td>
         <td class="num-cell">${x.isTotal ? '' : rs(x.costPerGoatDay)}</td>
         <td class="num-cell" style="color:var(--green-dark);font-weight:${x.isTotal ? '800' : '700'}">${rs(x.costPerMonth)}</td>
         <td class="num-cell hide-sm">${x.isTotal ? '' : `<span class="breed">${x.sharePercent}%</span>`}</td></tr>`).join('');
     document.getElementById('repFeedBuy').innerHTML = (fd.purchases?.length ? fd.purchases.map(b =>
-      `<tr><td>${b.feedName}</td><td class="num-cell">${Math.round(b.kg).toLocaleString('en-US')} kg</td>
+      `<tr><td>${esc(b.feedName)}</td><td class="num-cell">${Math.round(b.kg).toLocaleString('en-US')} kg</td>
         <td class="num-cell hide-sm"><span class="breed">Rs ${b.kg ? Math.round(b.avgRate) : 0}</span></td>
         <td class="num-cell" style="color:var(--green-dark)">${rs(b.amount)}</td></tr>`).join('') +
       `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
@@ -2949,26 +3166,27 @@ const GoatRecords = (() => {
     const hl = d.health || {};
     document.getElementById('repHealthKpi').innerHTML = (hl.kpis || []).map(repKpiHtml).join('');
     document.getElementById('repVaccRows').innerHTML = (hl.vaccination?.length ? hl.vaccination.map(v =>
-      `<tr><td><b>${v.name}</b><div class="name">${v.ruleLabel}</div></td>
-        <td class="hide-sm"><span class="scopechip">${v.scopeLabel}</span></td>
-        <td class="num-cell">${v.done}</td>
-        <td class="num-cell" style="${v.dueNow ? 'color:#8a261c;font-weight:700' : ''}">${v.dueNow}</td>
-        <td class="num-cell hide-sm">${v.comingUp}</td></tr>`).join('') :
+      `<tr><td><b>${esc(v.name)}</b><div class="name">${esc(v.ruleLabel)}</div></td>
+        <td class="hide-sm"><span class="scopechip">${esc(v.scopeLabel)}</span></td>
+        <td class="num-cell">${esc(v.done)}</td>
+        <td class="num-cell" style="${v.dueNow ? 'color:#8a261c;font-weight:700' : ''}">${esc(v.dueNow)}</td>
+        <td class="num-cell hide-sm">${esc(v.comingUp)}</td></tr>`).join('') :
       `<tr><td colspan="5" class="empty">No vaccines set up.</td></tr>`);
     document.getElementById('repDeathRows').innerHTML = (hl.deaths?.length ? hl.deaths.map(x =>
-      `<tr><td><span class="breed">${x.date}</span></td><td><span class="tag">${x.tag}</span></td>
-        <td class="hide-sm"><span class="breed">${x.ageLabel}</span></td><td>${x.reason}</td>
+      `<tr><td><span class="breed">${esc(x.date)}</span></td><td><span class="tag">${esc(x.tag)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(x.ageLabel)}</span></td><td>${esc(x.reason)}</td>
         <td class="num-cell" style="color:#8a261c">${x.valueLost != null ? rs(x.valueLost) : '—'}</td></tr>`).join('') +
       `<tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL</td>
         <td class="num-cell" style="font-weight:800">${hl.deaths.length}</td><td class="hide-sm"></td><td></td>
         <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(hl.deathsTotalValue || 0)}</td></tr>` :
       `<tr><td colspan="5" class="empty">No deaths recorded in this period. Good.</td></tr>`);
 
+    if (!d.financeHidden) {
     document.getElementById('rep-expense').textContent = rs(fin.totalExpense || 0);
     document.getElementById('rep-owner').textContent = rs(fin.totalOwnerInvestment || 0);
     document.getElementById('rep-income').textContent = rs(fin.totalIncome || 0);
     document.getElementById('rep-profit-lbl').textContent = fin.profitLabel || 'Net profit';
-    const pv = document.getElementById('rep-profit');
+    const pv = document.getElementById('rep-profit-val');
     pv.textContent = (pre && fin.profitLabel === 'Still to fund' ? '– ' : (fin.profitIsNegative ? '– ' : '')) + rs(fin.profit || 0);
     pv.style.color = pre ? (fin.profitLabel === 'Still to fund' ? 'var(--amber)' : 'var(--green-dark)') : (fin.profitIsNegative ? '#8a261c' : 'var(--green-dark)');
 
@@ -2978,7 +3196,7 @@ const GoatRecords = (() => {
     const eRows = fin.expenseCategories || [];
     const eMax = eRows.length ? Math.max(...eRows.map(x => x.amount)) : 1;
     document.getElementById('repExpRows').innerHTML = (eRows.length ? eRows.map(row =>
-      `<tr><td><b>${row.name}</b><div class="name">${row.percent}% of costs${row.extra || ''}</div></td>
+      `<tr><td><b>${esc(row.name)}</b><div class="name">${esc(row.percent)}% of costs${esc(row.extra)}</div></td>
         <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(4, Math.round(row.amount / eMax * 100))}%;background:var(--red)"></div></td>
         <td class="num-cell" style="color:#8a261c">${rs(row.amount)}</td></tr>`).join('') :
       `<tr><td colspan="3" class="empty">No costs in this period.</td></tr>`) +
@@ -2988,7 +3206,7 @@ const GoatRecords = (() => {
     const iRows = fin.incomeSources || [];
     const iMax = iRows.length ? Math.max(...iRows.map(x => x.amount)) : 1;
     document.getElementById('repIncRows').innerHTML = (iRows.length ? iRows.map(row =>
-      `<tr><td><b>${row.name}</b><div class="name">${row.percent}% of income${row.extra || ''}</div></td>
+      `<tr><td><b>${esc(row.name)}</b><div class="name">${esc(row.percent)}% of income${esc(row.extra)}</div></td>
         <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(4, Math.round(row.amount / iMax * 100))}%"></div></td>
         <td class="num-cell" style="color:var(--green-dark)">${rs(row.amount)}</td></tr>`).join('') :
       `<tr><td colspan="3" class="empty">No income in this period.</td></tr>`) +
@@ -2997,19 +3215,19 @@ const GoatRecords = (() => {
 
     const ownList = fin.ownerRows || [];
     document.getElementById('repOwnRows').innerHTML = (ownList.length ? ownList.map(o =>
-      `<tr><td><span class="breed">${o.date}</span></td><td><b>${o.note || 'Investment'}</b></td>
+      `<tr><td><span class="breed">${esc(o.date)}</span></td><td><b>${esc(o.note || 'Investment')}</b></td>
         <td class="num-cell" style="color:#8a5b13">${rs(o.amount)}</td></tr>`).join('') :
       `<tr><td colspan="3" class="empty">No money added in this period.</td></tr>`) +
       `<tr style="background:var(--amber-tint)"><td style="font-weight:800">TOTAL PUT IN</td><td></td>
         <td class="num-cell" style="font-weight:800;color:#8a5b13">${rs(ownTot)}</td></tr>`;
 
     document.getElementById('repExpList').innerHTML = (fin.expenseEntries?.length ? fin.expenseEntries.map(e =>
-      `<tr><td><span class="breed">${e.date}</span></td><td><span class="chip chip-exp">${e.type}</span></td>
-        <td class="hide-sm"><span class="breed">${e.comment || ''}</span></td><td class="num-cell">${rs(e.amount)}</td></tr>`).join('') :
+      `<tr><td><span class="breed">${esc(e.date)}</span></td><td><span class="chip chip-exp">${esc(e.type)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(e.comment)}</span></td><td class="num-cell">${rs(e.amount)}</td></tr>`).join('') :
       `<tr><td colspan="4" class="empty">You haven't added any cost entries in this period.</td></tr>`);
 
     document.getElementById('repDayRows').innerHTML = (fin.dayRows?.length ? fin.dayRows.map(r =>
-      `<tr><td><b>${r.date}</b></td><td class="hide-sm"><span class="breed">${r.summary}</span></td>
+      `<tr><td><b>${esc(r.date)}</b></td><td class="hide-sm"><span class="breed">${esc(r.summary)}</span></td>
         <td class="num-cell hide-sm" style="color:var(--green-dark)">${r.income > 0 ? rs(r.income) : '—'}</td>
         <td class="num-cell" style="color:#8a261c">${r.expense > 0 ? rs(r.expense) : '—'}</td>
         <td class="num-cell" style="color:#8a5b13">${r.ownerInvestment > 0 ? rs(r.ownerInvestment) : '—'}</td></tr>`).join('') :
@@ -3021,23 +3239,25 @@ const GoatRecords = (() => {
     document.getElementById('repProfitNote').innerHTML = pr.noteHtml || '';
     document.getElementById('repMilkKpi').innerHTML = (pr.milkEconomics || []).map(repKpiHtml).join('');
     document.getElementById('repMilkRows').innerHTML = (pr.milkByMonth?.length ? pr.milkByMonth.map(m =>
-      `<tr><td><b>${m.month}</b></td><td class="num-cell">${Math.round(m.collectedLiters).toLocaleString('en-US')} L</td>
+      `<tr><td><b>${esc(m.month)}</b></td><td class="num-cell">${Math.round(m.collectedLiters).toLocaleString('en-US')} L</td>
         <td class="num-cell">${Math.round(m.soldLiters).toLocaleString('en-US')} L</td>
         <td class="num-cell hide-sm"><span class="breed">${m.avgRate != null ? 'Rs ' + Math.round(m.avgRate) : '—'}</span></td>
         <td class="num-cell" style="color:var(--green-dark)">${rs(m.income)}</td></tr>`).join('') :
       `<tr><td colspan="5" class="empty">No milk recorded in this period.</td></tr>`);
+    }
 
     const inv = d.inventory || {};
     document.getElementById('repInvKpi').innerHTML = (inv.kpis || []).map(repKpiHtml).join('');
     document.getElementById('repInvFeed').innerHTML = (inv.feedStock || []).map(f =>
-      `<tr><td>${f.name}</td><td class="num-cell" style="font-weight:700">${(Math.round(f.quantityKg * 10) / 10).toLocaleString('en-US')} kg</td>
-        <td class="num-cell hide-sm"><span class="breed">Rs ${f.ratePerKg}</span></td>
+      `<tr><td>${esc(f.name)}</td><td class="num-cell" style="font-weight:700">${(Math.round(f.quantityKg * 10) / 10).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm"><span class="breed">Rs ${esc(f.ratePerKg)}</span></td>
         <td class="num-cell">${rs(f.value)}</td><td class="num-cell">${f.statusHtml}</td></tr>`).join('') +
       `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td><td class="num-cell"></td>
         <td class="num-cell hide-sm"></td><td class="num-cell" style="font-weight:800">${rs(inv.feedStockTotalValue || 0)}</td><td></td></tr>`;
-    document.getElementById('repInvAssets').innerHTML = (inv.assets?.length ? inv.assets.map(a =>
-      `<tr><td>${a.name}${a.note ? `<div class="name">${a.note}</div>` : ''}</td>
-        <td class="hide-sm"><span class="chip chip-cap">${a.type}</span></td>
+    const invAssets = document.getElementById('repInvAssets');
+    if (invAssets) invAssets.innerHTML = (inv.assets?.length ? inv.assets.map(a =>
+      `<tr><td>${esc(a.name)}${a.note ? `<div class="name">${esc(a.note)}</div>` : ''}</td>
+        <td class="hide-sm"><span class="chip chip-cap">${esc(a.type)}</span></td>
         <td class="num-cell">${rs(a.value)}</td></tr>`).join('') +
       `<tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
         <td class="num-cell" style="font-weight:800">${rs(inv.assetsTotalValue || 0)}</td></tr>` :
@@ -3046,12 +3266,12 @@ const GoatRecords = (() => {
     const repCompareRows = document.getElementById('repCompareRows');
     if (repCompareRows) {
       repCompareRows.innerHTML = (d.comparison?.rows || []).map(r =>
-        `<tr><td><b>${r.label}</b></td>
-          <td class="num-cell" style="font-weight:700">${r.thisMonth}</td>
-          <td class="num-cell">${r.lastMonth}</td>
-          <td class="num-cell" style="color:${r.differenceColor};font-weight:700">${r.difference}</td>
-          <td class="num-cell hide-sm"><span class="breed">${r.percentChange || '—'}</span></td>
-          <td class="num-cell hide-sm">${r.yearToDate}</td></tr>`).join('');
+        `<tr><td><b>${esc(r.label)}</b></td>
+          <td class="num-cell" style="font-weight:700">${esc(r.thisMonth)}</td>
+          <td class="num-cell">${esc(r.lastMonth)}</td>
+          <td class="num-cell" style="color:${esc(r.differenceColor)};font-weight:700">${esc(r.difference)}</td>
+          <td class="num-cell hide-sm"><span class="breed">${esc(r.percentChange || '—')}</span></td>
+          <td class="num-cell hide-sm">${esc(r.yearToDate)}</td></tr>`).join('');
     }
     } catch (err) {
       console.error('Reports render failed', err);
@@ -3112,7 +3332,6 @@ const GoatRecords = (() => {
       document.getElementById('rep-group')?.addEventListener('change', reloadReports);
     }
 
-    function csvEsc(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
     function tableToCsv(tbodyId, headers) {
       const tb = document.getElementById(tbodyId);
       if (!tb) return [];
@@ -3165,7 +3384,7 @@ const GoatRecords = (() => {
       push('INVENTORY — FEED', tableToCsv('repInvFeed', ['Item', 'Quantity', 'Rate', 'Value', 'Status']));
       push('INVENTORY — ASSETS', tableToCsv('repInvAssets', ['Asset', 'Type', 'Value']));
       push('PERIOD COMPARISON', tableToCsv('repCompareRows', ['Metric', 'This month', 'Last month', 'Difference', '%', 'Year to date']));
-      const csv = lines.map(r => r.map(csvEsc).join(',')).join('\n');
+      const csv = lines.map(r => r.map(csvCell).join(',')).join('\r\n');
       const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -3198,6 +3417,7 @@ const GoatRecords = (() => {
   }
 
   function initBackupButtons() {
+    if (!FarmPerms.can('settings', 'edit')) FarmPerms.hide('importBtn');
     document.getElementById('exportBtn')?.addEventListener('click', () => {
       window.location.href = '/Dashboard/Export';
     });
@@ -3228,5 +3448,190 @@ const GoatRecords = (() => {
 
   initBackupButtons();
 
-  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, showModal, showConfirm, showToast };
+  function initShell() {
+    const toggle = document.getElementById('navToggle');
+    const scrim = document.getElementById('navScrim');
+    if (!toggle) return;
+    const mobile = window.matchMedia('(max-width: 1024px)');
+    const body = document.body;
+
+    function sync() {
+      const expanded = mobile.matches ? body.classList.contains('nav-open') : !body.classList.contains('nav-collapsed');
+      toggle.setAttribute('aria-expanded', String(expanded));
+      if (scrim) scrim.hidden = !(mobile.matches && expanded);
+    }
+
+    if (localStorage.getItem('goatNavCollapsed') === '1') body.classList.add('nav-collapsed');
+
+    toggle.addEventListener('click', () => {
+      if (mobile.matches) {
+        body.classList.toggle('nav-open');
+        if (body.classList.contains('nav-open')) document.querySelector('#sideNav .nav-link')?.focus();
+      } else {
+        body.classList.toggle('nav-collapsed');
+        localStorage.setItem('goatNavCollapsed', body.classList.contains('nav-collapsed') ? '1' : '0');
+      }
+      sync();
+    });
+    scrim?.addEventListener('click', () => { body.classList.remove('nav-open'); sync(); toggle.focus(); });
+    document.querySelectorAll('#sideNav .nav-link, #sideNav .side-footer-link').forEach(link => {
+      link.addEventListener('click', () => {
+        if (!mobile.matches) return;
+        body.classList.remove('nav-open');
+        sync();
+      });
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && body.classList.contains('nav-open')) {
+        body.classList.remove('nav-open');
+        sync();
+        toggle.focus();
+      }
+    });
+    mobile.addEventListener('change', () => { body.classList.remove('nav-open'); sync(); });
+    sync();
+
+    document.getElementById('sideAiAssistantBtn')?.addEventListener('click', () => {
+      showToast('AI Assistant is not available yet. It will help with farm questions and tasks in a future update.', 'error');
+    });
+
+    initGlobalSearch();
+  }
+
+  function initGlobalSearch() {
+    const form = document.getElementById('globalSearchForm');
+    const input = document.getElementById('globalTag');
+    if (!form || !input) return;
+
+    form.addEventListener('submit', e => {
+      const tag = input.value.trim();
+      if (!tag) {
+        e.preventDefault();
+        showToast('Enter or scan a tag / RFID ID.', 'error');
+        input.focus();
+        return;
+      }
+      input.value = tag;
+      // Same destination as the Search nav tab: GET /Search?tag=… (full profile page)
+    });
+
+    const pageTag = document.getElementById('search-tag');
+    if (pageTag?.value.trim()) input.value = pageTag.value.trim();
+    else {
+      const path = location.pathname.toLowerCase();
+      if (path.endsWith('/search')) {
+        const fromUrl = new URLSearchParams(location.search).get('tag');
+        if (fromUrl) input.value = fromUrl.trim();
+      }
+    }
+  }
+
+  initShell();
+
+  function initTasks() {
+    const $ = id => document.getElementById(id);
+    const saveBtn = $('saveTask');
+    const cancelBtn = $('cancelTask');
+    const deleteBtn = $('deleteTask');
+    const formTitle = $('taskFormTitle');
+    let editingId = null;
+
+    const canAdd = FarmPerms.can('tasks', 'add');
+    const canEdit = FarmPerms.can('tasks', 'edit');
+    const canDelete = FarmPerms.can('tasks', 'delete');
+
+    if (!canAdd) $('taskFormPanel')?.classList.add('perm-hidden');
+    if (!canEdit) document.querySelectorAll('[data-task-edit]').forEach(b => b.classList.add('perm-hidden'));
+
+    const fields = { title: $('t-title'), assignee: $('t-assignee'), due: $('t-due'), priority: $('t-priority'), type: $('t-type'), goat: $('t-goat'), notes: $('t-notes') };
+
+    function resetForm() {
+      editingId = null;
+      Object.values(fields).forEach(f => { if (f.tagName === 'SELECT') f.selectedIndex = 0; else f.value = ''; });
+      formTitle.textContent = 'Add a task';
+      saveBtn.textContent = '+ Add task';
+      cancelBtn.classList.add('perm-hidden');
+      deleteBtn.classList.add('perm-hidden');
+      if (!canAdd) $('taskFormPanel')?.classList.add('perm-hidden');
+    }
+
+    function startEdit(card) {
+      if (!canEdit) return;
+      const d = card.dataset;
+      editingId = Number(d.taskId);
+      fields.title.value = d.title || '';
+      fields.notes.value = d.notes || '';
+      fields.due.value = d.due || '';
+      fields.priority.value = d.priority || 'Normal';
+      fields.type.value = d.type || 'Task';
+      fields.assignee.value = d.assignee || '';
+      fields.goat.value = d.goat || '';
+      formTitle.textContent = 'Edit task';
+      saveBtn.textContent = 'Save changes';
+      cancelBtn.classList.remove('perm-hidden');
+      if (canDelete) deleteBtn.classList.remove('perm-hidden');
+      $('taskFormPanel')?.classList.remove('perm-hidden');
+      $('taskFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      fields.title.focus();
+    }
+
+    saveBtn?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('tasks', !!editingId)) return;
+      const title = fields.title.value.trim();
+      if (!title) { await showModal('Enter a task title.'); return; }
+      const body = {
+        title,
+        notes: fields.notes.value.trim() || null,
+        dueDate: fields.due.value || null,
+        priority: fields.priority.value,
+        type: fields.type.value,
+        assigneeUserId: fields.assignee.value || null,
+        goatTag: fields.goat.value.trim() || null
+      };
+      saveBtn.disabled = true;
+      try {
+        if (editingId) await api('/Tasks/Update?id=' + editingId, { method: 'PUT', body: JSON.stringify(body) });
+        else await api('/Tasks/Create', { method: 'POST', body: JSON.stringify(body) });
+        reloadWithToast(editingId ? 'Task updated' : 'Task added');
+      } catch { /* api() already showed the error */ } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    cancelBtn?.addEventListener('click', resetForm);
+
+    deleteBtn?.addEventListener('click', async () => {
+      if (!editingId || !canDelete) return;
+      if (!await showConfirm('Delete this task?')) return;
+      try {
+        await api('/Tasks/Delete?id=' + editingId, { method: 'DELETE' });
+        reloadWithToast('Task deleted');
+      } catch { /* shown */ }
+    });
+
+    document.querySelector('.task-board')?.addEventListener('click', async e => {
+      const card = e.target.closest('.task-card');
+      if (!card) return;
+      const statusBtn = e.target.closest('[data-task-status]');
+      if (statusBtn) {
+        statusBtn.disabled = true;
+        try {
+          await api('/Tasks/SetStatus?id=' + card.dataset.taskId, {
+            method: 'POST', body: JSON.stringify({ status: statusBtn.dataset.taskStatus })
+          });
+          reloadWithToast(statusBtn.dataset.taskStatus === 'Completed' ? 'Task completed' : 'Task updated');
+        } catch { statusBtn.disabled = false; }
+        return;
+      }
+      if (e.target.closest('[data-task-edit]')) startEdit(card);
+    });
+
+    $('taskFilter')?.addEventListener('change', e => {
+      const url = new URL(location.href);
+      url.searchParams.set('filter', e.target.value);
+      location.href = url.toString();
+    });
+  }
+
+  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, showModal, showConfirm, showToast };
 })();

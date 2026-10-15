@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Goats;
 using GoatFarm.Domain.Constants;
@@ -7,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
-[IgnoreAntiforgeryToken]
 public class GoatController : Controller
 {
     private static readonly JsonSerializerOptions GoatJsonOptions = new()
@@ -31,10 +31,11 @@ public class GoatController : Controller
         int page = 1,
         string? editTag = null,
         int? editId = null,
+        string? q = null,
         CancellationToken cancellationToken = default)
     {
         ViewData["ActiveTab"] = "herd";
-        var model = await _goatService.GetHerdPageAsync(filter, page, cancellationToken: cancellationToken);
+        var model = await _goatService.GetHerdPageAsync(filter, page, search: q, cancellationToken: cancellationToken);
         ViewBag.Breeds = await _lookupService.GetListAsync(LookupSettingKeys.Breeds, cancellationToken);
 
         GoatViewModel? editGoat = null;
@@ -51,8 +52,8 @@ public class GoatController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(string? filter, int page = 1, CancellationToken cancellationToken = default) =>
-        Json(await _goatService.GetHerdPageAsync(filter, page, cancellationToken: cancellationToken));
+    public async Task<IActionResult> GetAll(string? filter, int page = 1, string? q = null, CancellationToken cancellationToken = default) =>
+        Json(await _goatService.GetHerdPageAsync(filter, page, search: q, cancellationToken: cancellationToken));
 
     [HttpGet]
     public async Task<IActionResult> GetByTag(string tag, CancellationToken cancellationToken)
@@ -71,8 +72,14 @@ public class GoatController : Controller
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
-        var result = await _goatService.CreateAsync(model, cancellationToken);
-        return Json(result);
+        try
+        {
+            return Json(await _goatService.CreateAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPut]
@@ -80,15 +87,33 @@ public class GoatController : Controller
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
-        var result = await _goatService.UpdateAsync(id, model, cancellationToken);
-        return result is null ? NotFound() : Json(result);
+        try
+        {
+            var result = await _goatService.UpdateAsync(id, model, cancellationToken);
+            return result is null ? NotFound() : Json(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]
     public async Task<IActionResult> BulkMove([FromBody] BulkMoveViewModel model, CancellationToken cancellationToken)
     {
-        await _goatService.BulkMoveAsync(model, cancellationToken);
-        return Ok(new { success = true });
+        try
+        {
+            await _goatService.BulkMoveAsync(model, cancellationToken);
+            return Ok(new { success = true });
+        }
+        catch (ConfirmationRequiredException ex)
+        {
+            return Conflict(new { error = ex.Message, warnings = ex.Warnings, requiresConfirmation = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]
@@ -103,9 +128,20 @@ public class GoatController : Controller
     [HttpDelete]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        var ok = await _goatService.DeleteAsync(id, cancellationToken);
-        return ok ? Ok(new { success = true }) : NotFound();
+        try
+        {
+            var ok = await _goatService.DeleteAsync(id, cancellationToken);
+            return ok ? Ok(new { success = true }) : NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
+
+    [HttpGet]
+    public async Task<IActionResult> ParentOptions(CancellationToken cancellationToken) =>
+        Json(await _goatService.GetParentOptionsAsync(cancellationToken));
 
     [HttpPost]
     public async Task<IActionResult> RecordWeight([FromBody] RecordWeightViewModel model, CancellationToken cancellationToken)

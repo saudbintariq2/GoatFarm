@@ -32,7 +32,7 @@ public class FeedService : IFeedService
 
         GoatStatus.Kid, GoatStatus.Milking, GoatStatus.Pregnant,
 
-        GoatStatus.Dry, GoatStatus.Buck, GoatStatus.Sale
+        GoatStatus.Dry, GoatStatus.Buck, GoatStatus.Sale, GoatStatus.Meat
 
     ];
 
@@ -936,7 +936,7 @@ public class FeedService : IFeedService
 
             {
 
-                lines.Add($"{price.DisplayName} {(diff > 0 ? "+" : "")}{diff:F1} kg");
+                lines.Add($"{System.Net.WebUtility.HtmlEncode(price.DisplayName)} {(diff > 0 ? "+" : "")}{diff:F1} kg");
 
                 if (diff < 0)
 
@@ -1055,6 +1055,7 @@ public class FeedService : IFeedService
 
     {
 
+        await EnsurePurchasableFeedAsync(model.FeedType, cancellationToken);
         var amount = Math.Round(model.Kg * model.RatePerKg);
 
         var entity = new FeedPurchase
@@ -1119,6 +1120,13 @@ public class FeedService : IFeedService
 
 
 
+    private async Task EnsurePurchasableFeedAsync(string feedType, CancellationToken cancellationToken)
+    {
+        if (!FeedTypes.IsPurchasable(feedType) ||
+            !await _context.FeedPrices.AnyAsync(p => p.FeedType == feedType, cancellationToken))
+            throw new InvalidOperationException("Pick a feed from the list.");
+    }
+
     public async Task<FeedPurchaseViewModel?> UpdateFeedPurchaseAsync(int id, CreateFeedPurchaseViewModel model, CancellationToken cancellationToken = default)
 
     {
@@ -1126,6 +1134,7 @@ public class FeedService : IFeedService
         var entity = await _context.FeedPurchases.FindAsync([id], cancellationToken);
 
         if (entity is null) return null;
+        await EnsurePurchasableFeedAsync(model.FeedType, cancellationToken);
 
 
 
@@ -1371,7 +1380,9 @@ public class FeedService : IFeedService
 
         var mixCost = GetMixCostPerKg(statusKey);
 
-        var plan = _context.FeedPlans.AsNoTracking().FirstOrDefault(p => DisplayHelper.StatusKey(p.StatusKey) == statusKey);
+        var plan = Enum.TryParse<GoatStatus>(statusKey, ignoreCase: true, out var planStatus)
+            ? _context.FeedPlans.AsNoTracking().FirstOrDefault(p => p.StatusKey == planStatus)
+            : null;
 
         if (plan is null)
 
@@ -1852,7 +1863,7 @@ public class FeedService : IFeedService
 
         AutoInfoHtml = !string.IsNullOrWhiteSpace(dto.LastUsageDate)
 
-            ? $"<span class=\"breed\">Stock reduces automatically each day from your feed plan · up to date to <b>{dto.LastUsageDate}</b></span>"
+            ? $"<span class=\"breed\">Stock reduces automatically each day from your feed plan · up to date to <b>{System.Net.WebUtility.HtmlEncode(dto.LastUsageDate)}</b></span>"
 
             : "<span class=\"breed\">Stock will start reducing automatically from tomorrow.</span>"
 

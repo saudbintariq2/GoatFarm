@@ -1,5 +1,6 @@
 @model GoatFarm.Web.Models.LoginViewModel
 @inject IConfiguration Configuration
+@inject IWebHostEnvironment Env
 @using GoatFarm.Infrastructure.Identity
 @{
     ViewData["Title"] = "Login";
@@ -10,9 +11,15 @@
 }
 
 <div class="login-page">
+    <aside class="login-hero" aria-hidden="true">
+        <div class="logo">@await Html.PartialAsync("_GoatLogoMark")</div>
+        <h2>@farmName — farm management, simplified</h2>
+        <p>Track herd, breeding, milk, feed, tasks and finances in one place built for goat farms.</p>
+    </aside>
+    <div class="login-side">
     <div class="login-card panel">
-        <div class="login-brand">
-            <div class="logo">🐐</div>
+        <div class="login-brand login-brand-mobile">
+            <div class="logo">@await Html.PartialAsync("_GoatLogoMark")</div>
             <div>
                 <h1>@farmName</h1>
                 @if (!string.IsNullOrWhiteSpace(farmLocation))
@@ -23,7 +30,12 @@
         </div>
         <div class="panel-body">
             <h2 class="login-title">Sign in</h2>
-            <p class="note login-hint">Default admin: <b>@IdentitySeedHelper.DefaultAdminEmail</b> / @IdentitySeedHelper.DefaultAdminPassword</p>
+            @if (Env.IsDevelopment())
+            {
+                <p class="note login-hint">Local dev accounts (passwords reset on app startup):<br/>
+                    <b>@IdentitySeedHelper.DefaultAdminEmail</b> / @IdentitySeedHelper.DefaultAdminPassword<br/>
+                    <b>@IdentitySeedHelper.DevUserEmail</b> / @IdentitySeedHelper.DevUserPassword</p>
+            }
             <form asp-action="Login" method="post">
                 @Html.AntiForgeryToken()
                 <input type="hidden" asp-for="ReturnUrl" />
@@ -35,8 +47,15 @@
                     </div>
                     <div class="field">
                         <label asp-for="Password">Password</label>
-                        <input asp-for="Password" type="password" autocomplete="current-password" />
+                        <div class="pw-wrap">
+                            <input asp-for="Password" type="password" autocomplete="current-password" />
+                            <button type="button" class="btn btn-ghost btn-sm pw-toggle" id="pwToggle"
+                                    aria-controls="Password" aria-pressed="false">Show</button>
+                        </div>
                     </div>
+                    <label class="login-remember">
+                        <input asp-for="RememberMe" type="checkbox" /> Keep me signed in on this device
+                    </label>
                 </div>
                 <div class="goat-form-actions login-actions">
                     <button type="submit" class="btn btn-green login-submit">Sign in</button>
@@ -44,4 +63,20 @@
             </form>
         </div>
     </div>
+    </div>
 </div>
+
+@section Scripts {
+<script>
+    (() => {
+        const btn = document.getElementById('pwToggle');
+        const input = document.getElementById('Password');
+        btn?.addEventListener('click', () => {
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.textContent = show ? 'Hide' : 'Show';
+            btn.setAttribute('aria-pressed', String(show));
+        });
+    })();
+</script>
+}

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
@@ -41,7 +42,19 @@ public class LookupService : ILookupService
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Options offered to users. Salary, wage and salary-advance expense types are left out because the guard rejects them;
+    /// they stay in the saved list (no silent rewrite) and existing expenses keep their type.
+    /// </summary>
     public async Task<IReadOnlyList<string>> GetListAsync(string key, CancellationToken cancellationToken = default)
+    {
+        var list = await ReadStoredListAsync(key, cancellationToken);
+        return key == LookupSettingKeys.ExpenseTypes
+            ? list.Where(t => SalaryExpenseRules.Classify(t) == SalaryExpenseKind.None).ToArray()
+            : list;
+    }
+
+    private async Task<IReadOnlyList<string>> ReadStoredListAsync(string key, CancellationToken cancellationToken)
     {
         await EnsureDefaultsAsync(cancellationToken);
         var setting = await _context.AppSettings.AsNoTracking()
@@ -68,9 +81,10 @@ public class LookupService : ILookupService
 
         if (!Defaults.ContainsKey(key))
             throw new ArgumentException("Unknown lookup key.");
+        if (key == LookupSettingKeys.ExpenseTypes && SalaryExpenseRules.Classify(trimmed) != SalaryExpenseKind.None)
+            throw new ArgumentException(SalaryExpenseRules.SalaryBlockedMessage);
 
-        await EnsureDefaultsAsync(cancellationToken);
-        var list = (await GetListAsync(key, cancellationToken)).ToList();
+        var list = (await ReadStoredListAsync(key, cancellationToken)).ToList();
         if (!list.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
             list.Add(trimmed);
 
@@ -87,6 +101,6 @@ public class LookupService : ILookupService
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-        return list;
+        return await GetListAsync(key, cancellationToken);
     }
 }
