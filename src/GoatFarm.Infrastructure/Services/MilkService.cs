@@ -236,6 +236,58 @@ public class MilkService : IMilkService
             .Sum(s => s.Amount);
     }
 
+    public async Task<MilkRangeViewModel> QueryRangeAsync(
+        DateOnly from,
+        DateOnly to,
+        int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        if (to < from)
+            throw new ArgumentException("The end date must be on or after the start date.");
+
+        take = Math.Clamp(take, 1, 100);
+
+        var produced = await _context.MilkProductions.AsNoTracking()
+            .Where(p => p.Date >= from && p.Date <= to)
+            .SumAsync(p => (decimal?)p.Liters, cancellationToken) ?? 0;
+        var sold = await _context.MilkSales.AsNoTracking()
+            .Where(s => s.Date >= from && s.Date <= to)
+            .SumAsync(s => (decimal?)s.Liters, cancellationToken) ?? 0;
+        var wasted = await _context.MilkWastes.AsNoTracking()
+            .Where(w => w.Date >= from && w.Date <= to)
+            .SumAsync(w => (decimal?)w.Liters, cancellationToken) ?? 0;
+        var income = await _context.MilkSales.AsNoTracking()
+            .Where(s => s.Date >= from && s.Date <= to)
+            .SumAsync(s => (decimal?)s.Amount, cancellationToken) ?? 0;
+        var count = await _context.MilkProductions.AsNoTracking()
+            .CountAsync(p => p.Date >= from && p.Date <= to, cancellationToken);
+        var productions = await _context.MilkProductions.AsNoTracking()
+            .Where(p => p.Date >= from && p.Date <= to)
+            .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id)
+            .Take(take)
+            .Select(p => new MilkProductionViewModel
+            {
+                Id = p.Id,
+                Date = p.Date,
+                Breed = p.Breed,
+                Liters = p.Liters,
+                Comment = p.Comment
+            })
+            .ToListAsync(cancellationToken);
+
+        return new MilkRangeViewModel
+        {
+            From = from,
+            To = to,
+            LitersProduced = produced,
+            LitersSold = sold,
+            LitersWasted = wasted,
+            MilkIncome = income,
+            ProductionCount = count,
+            Productions = productions
+        };
+    }
+
     private async Task<(List<MilkProductionViewModel> Items, PaginationViewModel Pagination)> GetPagedProductionsAsync(
         int page, int pageSize, CancellationToken cancellationToken)
     {

@@ -19,6 +19,7 @@
 const GoatRecords = (() => {
   const rs = n => 'Rs ' + Math.round(n).toLocaleString('en-US');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const assistantSafePath = p => typeof p == 'string' && /^\/(?:Milk|Finance|Reports|Goat|Breeding|Feed|Vaccine|Tasks|Search)?(?:\?(?:(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)(?:&(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)*)?$/i.test(p) && !p.includes(':') && !p.includes('\\');
   // Spreadsheet apps execute cells starting with = + - @ TAB CR; plain numbers like -1,250.5 stay numeric.
   const csvCell = v => { v = String(v ?? ''); if (/^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d,]*(\.\d+)?$/.test(v)) v = "'" + v; return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 
@@ -189,30 +190,41 @@ const GoatRecords = (() => {
   };
 
   async function api(url, options = {}) {
+    const { quiet, ...fetchOptions } = options;
     const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(options.headers || {}) },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(fetchOptions.headers || {}) },
       credentials: 'same-origin',
-      ...options
+      ...fetchOptions
     });
+    if (res.redirected && /\/Account\/Login/i.test(res.url)) {
+      const message = 'Your session expired. Sign in again.';
+      if (!quiet) await showModal(message);
+      throw new Error(message);
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (res.status === 409 && err.requiresConfirmation && typeof options.body === 'string') {
+      if (res.status === 409 && err.requiresConfirmation && typeof fetchOptions.body === 'string') {
         if (await showConfirm(err.error + '\n\nSave anyway?')) {
-          const body = { ...JSON.parse(options.body), confirmPossibleDuplicate: true, confirmWarnings: true };
+          const body = { ...JSON.parse(fetchOptions.body), confirmPossibleDuplicate: true, confirmWarnings: true };
           return api(url, { ...options, body: JSON.stringify(body) });
         }
         throw new Error(err.error);
       }
       const message = err.error || err.title || Object.values(err.errors || {}).flat?.()[0] ||
-        (res.status === 403 ? 'You do not have permission for this action.' : 'Something went wrong. Please try again.');
-      await showModal(message);
+        (res.status === 403 ? 'You do not have permission for this action.' :
+          res.status === 401 ? 'Your session expired. Sign in again.' :
+            res.status === 429 ? 'The assistant is busy. Try again in a moment.' :
+              res.status >= 500 ? 'The assistant could not answer just now.' :
+                'Something went wrong. Please try again.');
+      if (!quiet) await showModal(message);
       throw new Error(message);
     }
     if (res.status === 204) return null;
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('json')) return res.json();
-    await showModal('Could not load data from the server. Try refreshing the page or signing in again.');
-    throw new Error('Expected JSON response');
+    const message = 'Could not load data from the server. Try refreshing the page or signing in again.';
+    if (!quiet) await showModal(message);
+    throw new Error(message);
   }
 
   async function initEditableDropdown(selectId, listKey, prefixItems = []) {
@@ -3491,10 +3503,7 @@ const GoatRecords = (() => {
     mobile.addEventListener('change', () => { body.classList.remove('nav-open'); sync(); });
     sync();
 
-    document.getElementById('sideAiAssistantBtn')?.addEventListener('click', () => {
-      showToast('AI Assistant is not available yet. It will help with farm questions and tasks in a future update.', 'error');
-    });
-
+    initAssistant();
     initGlobalSearch();
   }
 
@@ -3633,5 +3642,211 @@ const GoatRecords = (() => {
     });
   }
 
-  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, showModal, showConfirm, showToast };
+  function initAssistant() {
+    const panel = document.getElementById('aiAssistantPanel');
+    const scrim = document.getElementById('aiAssistantScrim');
+    const openBtn = document.getElementById('sideAiAssistantBtn');
+    const closeBtn = document.getElementById('aiAssistantClose');
+    const thread = document.getElementById('aiAssistantThread');
+    const form = document.getElementById('aiAssistantForm');
+    const input = document.getElementById('aiAssistantInput');
+    const sendBtn = document.getElementById('aiAssistantSend');
+    if (!panel || !openBtn || !form || !input || !sendBtn || !thread) return;
+
+    const storageKey = 'goatAiConv';
+    let conversationId = sessionStorage.getItem(storageKey) || '';
+    let busy = false;
+    let lastQuestion = '';
+    let inflight = null;
+
+    function node(tag, className, text) {
+      const el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text != null) el.textContent = text;
+      return el;
+    }
+
+    function setOpen(open) {
+      panel.hidden = !open;
+      if (scrim) scrim.hidden = !open;
+      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+      openBtn.setAttribute('aria-expanded', String(open));
+      document.body.classList.toggle('ai-open', open);
+      if (open) {
+        input.focus();
+        thread.scrollTop = thread.scrollHeight;
+      } else {
+        inflight?.abort();
+        openBtn.focus();
+      }
+    }
+
+    function setBusy(on) {
+      busy = on;
+      sendBtn.disabled = on;
+      input.disabled = on;
+      sendBtn.textContent = on ? 'Sending…' : 'Send';
+    }
+
+    function append(el) {
+      thread.appendChild(el);
+      thread.scrollTop = thread.scrollHeight;
+      return el;
+    }
+
+    function renderBlocks(blocks) {
+      const wrap = node('div', 'ai-turn-blocks');
+      (Array.isArray(blocks) ? blocks : []).forEach(block => wrap.appendChild(renderBlock(block)));
+      if (!wrap.childNodes.length) wrap.appendChild(node('p', '', 'No reply came back. Try again.'));
+      return wrap;
+    }
+
+    function renderBlock(block) {
+      const kind = String(block?.kind || '').toLowerCase();
+      const card = node('div', 'ai-bubble' + (kind === 'error' ? ' ai-bubble-error' : ''));
+      if (block?.title) card.appendChild(node('p', 'ai-block-title', block.title));
+      if (block?.text) card.appendChild(node('p', '', block.text));
+
+      if (kind === 'summary' && Array.isArray(block.summary?.items)) {
+        const grid = node('div', 'ai-kpis');
+        block.summary.items.slice(0, 12).forEach(item => {
+          const kpi = node('div', 'fincard');
+          kpi.appendChild(node('div', 'v', item?.value));
+          kpi.appendChild(node('div', 'k', item?.label));
+          if (item?.note) kpi.appendChild(node('div', 'ai-note', item.note));
+          grid.appendChild(kpi);
+        });
+        card.appendChild(grid);
+      }
+
+      if (kind === 'table' && Array.isArray(block.table?.columns) && Array.isArray(block.table?.rows)) {
+        const wrap = node('div', 'ai-table-wrap');
+        const table = node('table', 'tbl');
+        const thead = node('thead');
+        const hr = node('tr');
+        block.table.columns.slice(0, 12).forEach(col => hr.appendChild(node('th', '', col)));
+        thead.appendChild(hr);
+        table.appendChild(thead);
+        const tbody = node('tbody');
+        block.table.rows.slice(0, 50).forEach(row => {
+          const tr = node('tr');
+          const cells = Array.isArray(row) ? row : [];
+          block.table.columns.slice(0, 12).forEach((_, i) => tr.appendChild(node('td', '', cells[i])));
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        card.appendChild(wrap);
+      }
+
+      if (kind === 'chart' && Array.isArray(block.chart?.points)) {
+        const points = block.chart.points.filter(p => p && Number.isFinite(Number(p.value))).slice(0, 12);
+        const max = Math.max(0, ...points.map(p => Math.abs(Number(p.value))));
+        const bars = node('div', 'dash-bars');
+        points.forEach(p => {
+          const col = node('div', 'dash-bar-col');
+          const track = node('div', 'dash-bar-track');
+          const fill = node('div', 'dash-bar-fill');
+          const pct = max > 0 ? Math.min(100, Math.round(Math.abs(Number(p.value)) / max * 100)) : 0;
+          fill.style.height = pct + '%';
+          track.appendChild(fill);
+          col.appendChild(node('div', 'dash-bar-val', String(p.value)));
+          col.appendChild(track);
+          col.appendChild(node('div', 'dash-bar-lbl', p.label));
+          bars.appendChild(col);
+        });
+        card.appendChild(bars);
+      }
+
+      if (kind === 'navigate' && assistantSafePath(block.navigation?.path)) {
+        const link = node('a', 'btn btn-green ai-nav', block.navigation.label || 'Open page');
+        link.href = block.navigation.path;
+        card.appendChild(link);
+      }
+
+      if (kind === 'clarify' && Array.isArray(block.clarification?.questions)) {
+        const list = node('div', 'ai-clarify-qs');
+        block.clarification.questions.slice(0, 6).forEach(q => {
+          const btn = node('button', '', q);
+          btn.type = 'button';
+          btn.addEventListener('click', () => send(String(q || '')));
+          list.appendChild(btn);
+        });
+        card.appendChild(list);
+      }
+
+      if (kind === 'error') {
+        const retry = node('button', 'btn btn-ghost ai-retry', 'Try again');
+        retry.type = 'button';
+        retry.addEventListener('click', () => { if (lastQuestion) send(lastQuestion); });
+        card.appendChild(retry);
+      }
+
+      return card;
+    }
+
+    async function send(raw) {
+      const message = String(raw || '').trim();
+      if (!message || busy) return;
+      if (message.length > 2000) {
+        showToast('Keep questions under 2000 characters.', 'error');
+        return;
+      }
+      lastQuestion = message;
+      document.getElementById('aiAssistantWelcome')?.remove();
+      append(node('div', 'ai-bubble ai-bubble-user', message));
+      const thinking = append(node('p', 'ai-thinking', 'Looking up farm records…'));
+      setBusy(true);
+      input.value = '';
+      inflight?.abort();
+      const ac = new AbortController();
+      inflight = ac;
+      try {
+        const body = { message, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || '' };
+        if (conversationId) body.conversationId = conversationId;
+        const data = await api('/Assistant/Chat', { method: 'POST', body: JSON.stringify(body), signal: ac.signal, quiet: true });
+        if (data?.conversationId) {
+          conversationId = String(data.conversationId);
+          sessionStorage.setItem(storageKey, conversationId);
+        }
+        thinking.remove();
+        append(renderBlocks(data?.blocks));
+      } catch (err) {
+        thinking.remove();
+        if (err.name === 'AbortError' || ac.signal.aborted) return;
+        const fail = { kind: 'Error', title: 'Could not answer', text: err.message || 'Something went wrong. Please try again.', errorCode: 'provider_error' };
+        append(renderBlocks([fail]));
+      } finally {
+        if (inflight === ac) inflight = null;
+        setBusy(false);
+        if (!panel.hidden) input.focus();
+      }
+    }
+
+    openBtn.addEventListener('click', () => setOpen(true));
+    closeBtn?.addEventListener('click', () => setOpen(false));
+    scrim?.addEventListener('click', () => setOpen(false));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !panel.hidden) {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    });
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      send(input.value);
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send(input.value);
+      }
+    });
+    document.getElementById('aiAssistantStarters')?.addEventListener('click', e => {
+      const btn = e.target.closest('[data-ai-q]');
+      if (btn) send(btn.getAttribute('data-ai-q') || '');
+    });
+  }
+
+  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, showModal, showConfirm, showToast };
 })();

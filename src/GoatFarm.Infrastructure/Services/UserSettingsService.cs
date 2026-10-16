@@ -508,7 +508,10 @@ public class UserSettingsService : IUserSettingsService
                 tabs[tab] = hasTab ? TabPermissionViewModel.FullAccess : TabPermissionViewModel.NoAccess;
             }
             if (role == FarmRoles.Staff)
+            {
                 tabs[FarmTabs.Tasks] = new TabPermissionViewModel { View = true, Add = true, Edit = false, Delete = false };
+                tabs[FarmTabs.Assistant] = new TabPermissionViewModel { View = true };
+            }
             result[role] = tabs;
         }
 

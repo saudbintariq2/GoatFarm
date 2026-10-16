@@ -79,6 +79,18 @@ public class CreateMilkWasteViewModel
     public string? Notes { get; set; }
 }
 
+public class MilkRangeViewModel
+{
+    public DateOnly From { get; set; }
+    public DateOnly To { get; set; }
+    public decimal LitersProduced { get; set; }
+    public decimal LitersSold { get; set; }
+    public decimal LitersWasted { get; set; }
+    public decimal MilkIncome { get; set; }
+    public int ProductionCount { get; set; }
+    public IReadOnlyList<MilkProductionViewModel> Productions { get; set; } = [];
+}
+
 public class MilkPageViewModel
 {
     public decimal MilkIncome { get; set; }

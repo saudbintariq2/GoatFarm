@@ -23,4 +23,10 @@ public interface IMilkService
     decimal GetMilkLitersSold(string month);
     decimal GetMilkLitersWasted(string month);
     decimal GetMilkIncomeMonth(string month);
+    /// <summary>Inclusive date range. Totals are queried directly; <paramref name="take"/> caps the returned production rows.</summary>
+    Task<MilkRangeViewModel> QueryRangeAsync(
+        DateOnly from,
+        DateOnly to,
+        int take = 50,
+        CancellationToken cancellationToken = default);
 }

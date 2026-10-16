@@ -220,10 +220,13 @@
 
                 <div class="side-footer">
 
-                    <button type="button" class="side-ai-assistant" id="sideAiAssistantBtn" title="AI Assistant (coming soon)">
-                        <span class="side-ai-spark" aria-hidden="true">✦</span>
-                        <span class="side-ai-label">AI Assistant</span>
-                    </button>
+                    @if (visibleTabs.Contains(FarmTabs.Assistant))
+                    {
+                        <button type="button" class="side-ai-assistant" id="sideAiAssistantBtn" title="AI Assistant" aria-haspopup="dialog" aria-controls="aiAssistantPanel" aria-expanded="false">
+                            <span class="side-ai-spark" aria-hidden="true">✦</span>
+                            <span class="side-ai-label">AI Assistant</span>
+                        </button>
+                    }
 
                     @if (visibleTabs.Contains(FarmTabs.Settings))
 
@@ -370,6 +373,11 @@
     }
 
 
+
+    @if (useShell && visibleTabs.Contains(FarmTabs.Assistant))
+    {
+        @await Html.PartialAsync("_AssistantPanel")
+    }
 
     <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
 

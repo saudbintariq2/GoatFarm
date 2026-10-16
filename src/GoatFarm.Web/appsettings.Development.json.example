@@ -9,5 +9,10 @@
   "LocalDev": {
     "DisablePermissionChecks": true
   },
-  "_comment": "Option A: run scripts/start-local-postgres.ps1 (trust auth, port 55432). Option B: use PostgreSQL on 5432 with Password=YOUR_PASSWORD. Turn off LocalDev:DisablePermissionChecks after permissions are fixed."
+  "OpenAI": {
+    "Model": "gpt-4.1-mini",
+    "TimeoutSeconds": 60,
+    "MaxOutputTokens": 2048
+  },
+  "_comment": "Option A: run scripts/start-local-postgres.ps1 (trust auth, port 55432). Option B: use PostgreSQL on 5432 with Password=YOUR_PASSWORD. Turn off LocalDev:DisablePermissionChecks after permissions are fixed. Set OpenAI__ApiKey in the environment; never commit a real key."
 }

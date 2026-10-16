@@ -22,6 +22,7 @@ public static class FarmTabs
     public const string Vaccines = "vaccines";
     public const string Settings = "settings";
     public const string Tasks = "tasks";
+    public const string Assistant = "assistant";
 
     public static readonly (string Key, string Label)[] All =
     [
@@ -35,7 +36,8 @@ public static class FarmTabs
         (Reports, "Reports"),
         (Vaccines, "Vaccines"),
         (Search, "Search"),
-        (Settings, "Settings")
+        (Settings, "Settings"),
+        (Assistant, "AI Assistant")
     ];
 }
 

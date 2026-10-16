@@ -73,6 +73,7 @@ public sealed class E2eApp : IAsyncLifetime
         psi.Environment["Seed__ClearFarmData"] = "false";
         psi.Environment["Seed__ResetAdminPassword"] = "false";
         psi.Environment["Logging__LogLevel__Microsoft.AspNetCore.Hosting.Diagnostics"] = "Information";
+        psi.Environment["OpenAI__ApiKey"] = "";
 
         _process = Process.Start(psi)!;
         _process.OutputDataReceived += (_, e) => { if (e.Data is not null) _log.Enqueue(e.Data); };

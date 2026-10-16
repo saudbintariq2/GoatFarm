@@ -1,3 +1,4 @@
+using GoatFarm.Application.Assistant;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Domain.Common;
 using GoatFarm.Infrastructure.Configuration;
@@ -5,6 +6,8 @@ using GoatFarm.Infrastructure.Diagnostics;
 using GoatFarm.Infrastructure.Persistence;
 using GoatFarm.Infrastructure.Repositories;
 using GoatFarm.Infrastructure.Services;
+using GoatFarm.Infrastructure.Services.Assistant;
+using GoatFarm.Infrastructure.Services.Assistant.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +56,18 @@ public static class DependencyInjection
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IDoubleEntryGuardService, DoubleEntryGuardService>();
         services.AddScoped<ITaskService, TaskService>();
+
+        services.AddSingleton(OpenAiOptions.FromConfiguration(configuration));
+        services.AddSingleton<ILlmClient, OpenAiLlmClient>();
+        services.AddSingleton<AssistantConversationStore>();
+        services.AddScoped<IAssistantTool, GetMilkSummaryTool>();
+        services.AddScoped<IAssistantTool, GetMilkRecordsTool>();
+        services.AddScoped<IAssistantTool, GetFinanceSummaryTool>();
+        services.AddScoped<IAssistantTool, GetExpensesTool>();
+        services.AddScoped<IAssistantTool, GetReportsTool>();
+        services.AddScoped<IAssistantTool, GetDashboardTool>();
+        services.AddScoped<IAssistantTool, ResolveNavigationTool>();
+        services.AddScoped<IAssistantService, AssistantService>();
 
         return services;
     }

@@ -1,0 +1,26 @@
+<div id="aiAssistantScrim" class="ai-scrim" hidden></div>
+<div id="aiAssistantPanel" class="ai-panel" role="dialog" aria-modal="true" aria-labelledby="aiAssistantTitle" aria-hidden="true" hidden>
+    <header class="ai-panel-head">
+        <div>
+            <p class="ai-panel-eyebrow">Goat Records</p>
+            <h2 id="aiAssistantTitle">AI Assistant</h2>
+        </div>
+        <button type="button" class="ai-close btn btn-ghost" id="aiAssistantClose" aria-label="Close assistant">✕</button>
+    </header>
+    <div class="ai-thread" id="aiAssistantThread" tabindex="0">
+        <div class="ai-welcome" id="aiAssistantWelcome">
+            <p>Ask about milk, expenses, profit and loss, reports, or the dashboard. I only read farm records you can already see.</p>
+            <div class="ai-starters" id="aiAssistantStarters">
+                <button type="button" class="ai-starter" data-ai-q="Show milk production for last month.">Show milk production for last month.</button>
+                <button type="button" class="ai-starter" data-ai-q="What were my total expenses last month?">What were my total expenses last month?</button>
+                <button type="button" class="ai-starter" data-ai-q="Show my profit and loss for September 2026.">Show my profit and loss for September 2026.</button>
+                <button type="button" class="ai-starter" data-ai-q="Show the latest dashboard summary.">Show the latest dashboard summary.</button>
+            </div>
+        </div>
+    </div>
+    <form class="ai-composer" id="aiAssistantForm">
+        <label class="sr-only" for="aiAssistantInput">Ask a farm question</label>
+        <textarea id="aiAssistantInput" rows="2" maxlength="2000" placeholder="Ask about farm records…" autocomplete="off"></textarea>
+        <button type="submit" class="btn btn-green" id="aiAssistantSend">Send</button>
+    </form>
+</div>

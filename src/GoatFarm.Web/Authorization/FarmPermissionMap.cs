@@ -147,6 +147,8 @@ public static class FarmPermissionMap
             ["Tasks.Create"] = (FarmTabs.Tasks, FarmActions.Add),
             ["Tasks.Update"] = (FarmTabs.Tasks, FarmActions.Edit),
             ["Tasks.SetStatus"] = (FarmTabs.Tasks, FarmActions.View),
-            ["Tasks.Delete"] = (FarmTabs.Tasks, FarmActions.Delete)
+            ["Tasks.Delete"] = (FarmTabs.Tasks, FarmActions.Delete),
+
+            ["Assistant.Chat"] = (FarmTabs.Assistant, FarmActions.View)
         };
 }
