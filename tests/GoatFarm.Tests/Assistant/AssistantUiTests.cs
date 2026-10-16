@@ -11,6 +11,8 @@ public class AssistantUiTests
     [Theory]
     [InlineData("/", true)]
     [InlineData("/Milk", true)]
+    [InlineData("/Products", true)]
+    [InlineData("/Products?month=2026-09", true)]
     [InlineData("/Finance?month=2026-09", true)]
     [InlineData("/Reports?period=lastmonth", true)]
     [InlineData("/Reports?period=custom&from=2026-09-01&to=2026-09-30&groupBy=day", true)]
@@ -19,6 +21,10 @@ public class AssistantUiTests
     [InlineData("https://evil.example/Milk", false)]
     [InlineData("//evil.example", false)]
     [InlineData("/Settings", false)]
+    [InlineData("/Trading", false)]
+    [InlineData("/Projects", false)]
+    [InlineData("/Admin", false)]
+    [InlineData("/BackupCenter", false)]
     [InlineData("/Account/Login", false)]
     [InlineData("javascript:alert(1)", false)]
     [InlineData("/Finance?url=https://evil.example", false)]
@@ -39,6 +45,7 @@ public class AssistantUiTests
         Assert.True(end > start, "Could not isolate initAssistant.");
         var fn = source[start..end];
 
+        Assert.Contains("assistantBound", fn);
         Assert.Contains("/Assistant/Chat", fn);
         Assert.Contains("conversationId", fn);
         Assert.Contains("quiet: true", fn);
@@ -72,8 +79,10 @@ public class AssistantUiTests
         Assert.Contains("What were my total expenses last month?", panel);
         Assert.Contains("Show my profit and loss for September 2026.", panel);
         Assert.Contains("Show the latest dashboard summary.", panel);
+        Assert.Contains("Trading, projects, and product stock are not in this assistant yet.", panel);
         Assert.DoesNotContain("invoice", panel, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".ai-panel[hidden]", css);
+        Assert.Contains("initAssistant();", File.ReadAllText(Path.Combine(root, "src", "GoatFarm.Web", "wwwroot", "js", "goat-records.js")));
     }
 
     [Fact]

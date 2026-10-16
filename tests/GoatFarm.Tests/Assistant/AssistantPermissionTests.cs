@@ -15,6 +15,9 @@ public class AssistantPermissionTests
         Assert.True(roles[FarmRoles.Staff][FarmTabs.Assistant].View);
         Assert.False(roles[FarmRoles.Staff][FarmTabs.Assistant].Add);
         Assert.False(roles[FarmRoles.Staff][FarmTabs.Finance].View);
+        Assert.True(roles[FarmRoles.Staff][FarmTabs.Products].View);
+        Assert.Equal(FarmTabs.Products, FarmPermissionMap.IndexTabs["Milk"]);
+        Assert.Equal(FarmTabs.Products, FarmPermissionMap.ActionPermissions["Milk.GetData"].Tab);
     }
 
     [Fact]

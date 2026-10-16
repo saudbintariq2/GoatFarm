@@ -53,6 +53,18 @@ public class AssistantToolTests
     }
 
     [Fact]
+    public async Task Milk_UsesProductsPermission_NotLegacyMilkTabAlone()
+    {
+        var tool = new GetMilkSummaryTool(new FakeMilk());
+        var legacyOnly = await tool.ExecuteAsync(Args("{}"), Ctx(new FakePermissions(FarmTabs.Assistant, FarmTabs.Milk)), default);
+        Assert.Equal(AssistantErrorCodes.PermissionDenied, legacyOnly[0].ErrorCode);
+
+        var productsOnly = await tool.ExecuteAsync(Args("""{"month":"2026-09"}"""), Ctx(new FakePermissions(FarmTabs.Assistant, FarmTabs.Products)), default);
+        Assert.DoesNotContain(productsOnly, b => b.ErrorCode == AssistantErrorCodes.PermissionDenied);
+        Assert.Contains(productsOnly, b => b.Kind == AssistantBlockKind.Summary);
+    }
+
+    [Fact]
     public async Task Finance_DeniedForStaff()
     {
         var finance = new FakeFinance();
@@ -202,6 +214,23 @@ public class AssistantToolTests
         var blocks = await tool.ExecuteAsync(Args("""{"from":"10/01/2026","to":"2026-10-16"}"""), Ctx(FakePermissions.Staff()), default);
         Assert.Equal(AssistantErrorCodes.InvalidArguments, blocks[0].ErrorCode);
         Assert.Null(milk.LastFrom);
+    }
+
+    [Fact]
+    public async Task Navigation_ProductsAllowed_TradingRejected()
+    {
+        var tool = new ResolveNavigationTool();
+        var products = await tool.ExecuteAsync(
+            Args("""{"destination":"products","month":"2026-09"}"""),
+            Ctx(FakePermissions.Staff()),
+            default);
+        Assert.Contains(products, b => b.Kind == AssistantBlockKind.Navigate && b.Navigation!.Path == "/Products?month=2026-09");
+
+        var trading = await tool.ExecuteAsync(
+            Args("""{"destination":"trading"}"""),
+            Ctx(FakePermissions.Staff()),
+            default);
+        Assert.Equal(AssistantErrorCodes.InvalidArguments, trading[0].ErrorCode);
     }
 
     [Fact]

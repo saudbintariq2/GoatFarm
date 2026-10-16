@@ -31,7 +31,7 @@ public sealed class GetMilkRecordsTool : IAssistantTool
         AssistantToolContext context,
         CancellationToken cancellationToken)
     {
-        if (!await context.Permissions.CanAsync(FarmTabs.Milk, FarmActions.View, cancellationToken))
+        if (!await context.Permissions.CanAsync(FarmTabs.Products, FarmActions.View, cancellationToken))
             return AssistantToolResults.Denied("Milk");
 
         AssistantJson.TryGetString(arguments, "from", out var fromText);

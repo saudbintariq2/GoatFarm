@@ -150,6 +150,8 @@ public class DashboardQueryPgTests(ITestOutputHelper output)
         public string GetAgeLabel(int days) => inner.GetAgeLabel(days);
         public Task<Application.ViewModels.Goats.WeightDeathResultViewModel> RecordWeightAsync(Application.ViewModels.Goats.RecordWeightViewModel m, CancellationToken ct = default) => inner.RecordWeightAsync(m, ct);
         public Task<Application.ViewModels.Goats.WeightDeathResultViewModel> RecordDeathAsync(Application.ViewModels.Goats.RecordDeathViewModel m, CancellationToken ct = default) => inner.RecordDeathAsync(m, ct);
+        public Task<Application.ViewModels.Goats.WeightDeathResultViewModel> RecordSaleAsync(Application.ViewModels.Goats.RecordSaleViewModel m, CancellationToken ct = default) => inner.RecordSaleAsync(m, ct);
+        public Task<Application.ViewModels.Goats.GoatSaleFormDataViewModel> GetSaleFormDataAsync(CancellationToken ct = default) => inner.GetSaleFormDataAsync(ct);
     }
 
     [SkippableFact]

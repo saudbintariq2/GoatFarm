@@ -19,7 +19,7 @@
 const GoatRecords = (() => {
   const rs = n => 'Rs ' + Math.round(n).toLocaleString('en-US');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const assistantSafePath = p => typeof p == 'string' && /^\/(?:Milk|Finance|Reports|Goat|Breeding|Feed|Vaccine|Tasks|Search)?(?:\?(?:(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)(?:&(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)*)?$/i.test(p) && !p.includes(':') && !p.includes('\\');
+  const assistantSafePath = p => typeof p == 'string' && /^\/(?:Milk|Products|Finance|Reports|Goat|Breeding|Feed|Vaccine|Tasks|Search)?(?:\?(?:(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)(?:&(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)*)?$/i.test(p) && !p.includes(':') && !p.includes('\\');
   // Spreadsheet apps execute cells starting with = + - @ TAB CR; plain numbers like -1,250.5 stay numeric.
   const csvCell = v => { v = String(v ?? ''); if (/^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d,]*(\.\d+)?$/.test(v)) v = "'" + v; return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 
@@ -3607,6 +3607,7 @@ const GoatRecords = (() => {
   initBackupButtons();
 
   function initShell() {
+    initAssistant();
     const toggle = document.getElementById('navToggle');
     const scrim = document.getElementById('navScrim');
     if (!toggle) return;
@@ -3649,7 +3650,6 @@ const GoatRecords = (() => {
     mobile.addEventListener('change', () => { body.classList.remove('nav-open'); sync(); });
     sync();
 
-    initAssistant();
     initGlobalSearch();
   }
 
@@ -3788,7 +3788,9 @@ const GoatRecords = (() => {
     });
   }
 
+  let assistantBound = false;
   function initAssistant() {
+    if (assistantBound) return;
     const panel = document.getElementById('aiAssistantPanel');
     const scrim = document.getElementById('aiAssistantScrim');
     const openBtn = document.getElementById('sideAiAssistantBtn');
@@ -3798,6 +3800,7 @@ const GoatRecords = (() => {
     const input = document.getElementById('aiAssistantInput');
     const sendBtn = document.getElementById('aiAssistantSend');
     if (!panel || !openBtn || !form || !input || !sendBtn || !thread) return;
+    assistantBound = true;
 
     const storageKey = 'goatAiConv';
     let conversationId = sessionStorage.getItem(storageKey) || '';

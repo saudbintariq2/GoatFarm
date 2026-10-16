@@ -23,7 +23,8 @@ public static class AssistantNavigationCatalog
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["dashboard"] = FarmTabs.Dashboard,
-            ["milk"] = FarmTabs.Milk,
+            ["milk"] = FarmTabs.Products,
+            ["products"] = FarmTabs.Products,
             ["finance"] = FarmTabs.Finance,
             ["reports"] = FarmTabs.Reports,
             ["herd"] = FarmTabs.Herd,
@@ -50,7 +51,7 @@ public static class AssistantNavigationCatalog
 
         if (string.IsNullOrWhiteSpace(destination))
         {
-            error = "Choose a page: dashboard, milk, finance, or reports.";
+            error = "Choose a page: dashboard, milk, products, finance, or reports.";
             return false;
         }
 
@@ -102,6 +103,7 @@ public static class AssistantNavigationCatalog
         {
             "dashboard" => "/",
             "milk" => "/Milk",
+            "products" => BuildQuery("/Products", ("month", month)),
             "finance" => BuildQuery("/Finance", ("month", month)),
             "reports" => BuildQuery("/Reports", ("period", period), ("from", from), ("to", to), ("groupBy", groupBy)),
             "herd" => "/Goat",
@@ -124,8 +126,9 @@ public static class AssistantNavigationCatalog
             Label = key.ToLowerInvariant() switch
             {
                 "dashboard" => "Open Dashboard",
-                "milk" => "Open Milk",
-                "finance" => "Open Finance",
+                "milk" => "Open Milk ledger",
+                "products" => "Open Products",
+                "finance" => "Open Accounting",
                 "reports" => "Open Reports",
                 "herd" => "Open Herd",
                 "breeding" => "Open Breeding",

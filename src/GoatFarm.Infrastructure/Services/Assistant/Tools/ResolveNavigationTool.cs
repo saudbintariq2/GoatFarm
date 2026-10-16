@@ -10,16 +10,16 @@ public sealed class ResolveNavigationTool : IAssistantTool
 {
     public string Name => "resolve_navigation";
     public string Description =>
-        "Build a validated in-app path for dashboard, milk, finance, reports, herd, breeding, feed, health, tasks, or search. Never pass a URL.";
+        "Build a validated in-app path for dashboard, milk, products, finance, reports, herd, breeding, feed, health, tasks, or search. Never pass a URL.";
     public string ParametersJsonSchema => """
         {
           "type": "object",
           "properties": {
             "destination": {
               "type": "string",
-              "description": "Page name: dashboard, milk, finance, reports, herd, breeding, feed, health, tasks, or search."
+              "description": "Page name: dashboard, milk, products, finance, reports, herd, breeding, feed, health, tasks, or search."
             },
-            "month": { "type": "string", "description": "yyyy-MM for the Finance page." },
+            "month": { "type": "string", "description": "yyyy-MM for Finance or Products." },
             "period": { "type": "string", "description": "Reports period." },
             "from": { "type": "string", "description": "Reports custom from yyyy-MM-dd." },
             "to": { "type": "string", "description": "Reports custom to yyyy-MM-dd." },

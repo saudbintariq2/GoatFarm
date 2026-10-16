@@ -33,7 +33,7 @@ public sealed class GetMilkSummaryTool : IAssistantTool
         AssistantToolContext context,
         CancellationToken cancellationToken)
     {
-        if (!await context.Permissions.CanAsync(FarmTabs.Milk, FarmActions.View, cancellationToken))
+        if (!await context.Permissions.CanAsync(FarmTabs.Products, FarmActions.View, cancellationToken))
             return AssistantToolResults.Denied("Milk");
 
         AssistantJson.TryGetString(arguments, "month", out var monthArg);

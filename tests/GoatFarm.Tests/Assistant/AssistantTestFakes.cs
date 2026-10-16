@@ -13,11 +13,11 @@ internal sealed class FakePermissions : IPermissionService
 
     public static FakePermissions Staff() => new(
         FarmTabs.Dashboard, FarmTabs.Tasks, FarmTabs.Herd, FarmTabs.Breeding, FarmTabs.Search,
-        FarmTabs.Feed, FarmTabs.Milk, FarmTabs.Vaccines, FarmTabs.Reports, FarmTabs.Assistant);
+        FarmTabs.Feed, FarmTabs.Products, FarmTabs.Milk, FarmTabs.Vaccines, FarmTabs.Reports, FarmTabs.Assistant);
 
     public static FakePermissions Manager() => new(
         FarmTabs.Dashboard, FarmTabs.Tasks, FarmTabs.Herd, FarmTabs.Breeding, FarmTabs.Search,
-        FarmTabs.Feed, FarmTabs.Milk, FarmTabs.Vaccines, FarmTabs.Reports, FarmTabs.Finance, FarmTabs.Assistant);
+        FarmTabs.Feed, FarmTabs.Products, FarmTabs.Milk, FarmTabs.Vaccines, FarmTabs.Reports, FarmTabs.Finance, FarmTabs.Assistant);
 
     public Task<string?> GetCurrentUserRoleAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<string?>(_viewTabs.Contains(FarmTabs.Finance) ? FarmRoles.Manager : FarmRoles.Staff);
