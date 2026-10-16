@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using GoatFarm.Application.Assistant;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Assistant;
@@ -10,6 +11,7 @@ using GoatFarm.Application.ViewModels.Reports;
 using GoatFarm.Application.Common;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Infrastructure.Services.Assistant.Tools;
+using Jint;
 
 namespace GoatFarm.Tests.Assistant;
 
@@ -28,6 +30,33 @@ public class AssistantToolTests
     {
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.Clone();
+    }
+
+    private static readonly JsonSerializerOptions SpeakJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    private static string Speak(IReadOnlyList<AssistantBlock> blocks)
+    {
+        var source = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "GoatFarm.Web", "wwwroot", "js", "goat-records.js"));
+        var start = source.IndexOf("  const assistantSafePath =", StringComparison.Ordinal);
+        var end = source.IndexOf("\n  const csvCell =", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "Voice helpers are missing from goat-records.js.");
+        var engine = new Engine();
+        engine.Execute(source[start..end].Replace("const assistantSafePath =", "var assistantSafePath =", StringComparison.Ordinal));
+        var json = JsonSerializer.Serialize(blocks, SpeakJson);
+        return engine.Evaluate($"assistantSpeechText({json})").AsString();
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "GoatFarm.slnx")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 
     [Fact]
@@ -113,6 +142,34 @@ public class AssistantToolTests
         var summary = blocks.Single(b => b.Kind == AssistantBlockKind.Summary);
         Assert.Contains(summary.Summary!.Items, i => i.Label == "Herd" && i.Value == "12");
         Assert.DoesNotContain(summary.Summary.Items, i => i.Label is "Income" or "Profit" or "Expenses");
+    }
+
+    [Fact]
+    public async Task SpeechExtraction_StaffVsFinance_UsesAuthorizedToolBlocksOnly()
+    {
+        var finance = new FakeFinance();
+        var staffFinance = await new GetFinanceSummaryTool(finance).ExecuteAsync(
+            Args("""{"month":"2026-09"}"""), Ctx(FakePermissions.Staff()), default);
+        Assert.False(finance.Called);
+        var staffSpoken = Speak(staffFinance);
+        Assert.Contains("do not have permission to view Finance", staffSpoken, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("900", staffSpoken);
+        Assert.DoesNotContain("get_finance_summary", staffSpoken);
+        Assert.DoesNotContain("Host=", staffSpoken);
+
+        var staffDash = Speak(await new GetDashboardTool(new FakeStats()).ExecuteAsync(
+            Args("""{"month":"2026-10"}"""), Ctx(FakePermissions.Staff()), default));
+        Assert.Contains("Herd, 12.", staffDash);
+        Assert.DoesNotContain("900", staffDash);
+        Assert.DoesNotContain("500", staffDash);
+        Assert.DoesNotContain("900000", staffDash);
+        Assert.DoesNotContain(DisplayHelper.FormatRs(900), staffDash);
+
+        var managerSpoken = Speak(await new GetFinanceSummaryTool(new FakeFinance()).ExecuteAsync(
+            Args("""{"month":"2026-09"}"""), Ctx(FakePermissions.Manager()), default));
+        Assert.Contains(DisplayHelper.FormatRs(900), managerSpoken);
+        Assert.Contains(DisplayHelper.FormatRs(500), managerSpoken);
+        Assert.Contains(DisplayHelper.FormatRs(400), managerSpoken);
     }
 
     [Fact]

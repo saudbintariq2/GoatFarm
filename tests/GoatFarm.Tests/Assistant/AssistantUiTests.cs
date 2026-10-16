@@ -46,6 +46,10 @@ public class AssistantUiTests
         var fn = source[start..end];
 
         Assert.Contains("assistantBound", fn);
+        Assert.True(
+            source.IndexOf("let assistantBound = false;", StringComparison.Ordinal)
+                < source.IndexOf("\n  initShell();", StringComparison.Ordinal),
+            "assistantBound must be initialized before initShell() calls initAssistant().");
         Assert.Contains("/Assistant/Chat", fn);
         Assert.Contains("conversationId", fn);
         Assert.Contains("quiet: true", fn);
@@ -59,6 +63,14 @@ public class AssistantUiTests
         Assert.Contains("kind === 'clarify'", fn);
         Assert.Contains("kind === 'error'", fn);
         Assert.Contains("assistantSafePath", fn);
+        Assert.Contains("createAssistantVoice", source);
+        Assert.Contains("assistantSpeechText", source);
+        Assert.Contains("continuous = false", source);
+        Assert.Contains("pagehide", fn);
+        Assert.Contains("goatAiSpeakReplies", fn);
+        Assert.Contains("voice.onClose()", fn);
+        Assert.DoesNotContain("getUserMedia", source);
+        Assert.DoesNotContain("/Assistant/Voice", source);
         Assert.DoesNotContain("innerHTML", fn);
         Assert.DoesNotContain("AI Assistant is not available yet", source);
         Assert.DoesNotContain("unpaid invoice", source, StringComparison.OrdinalIgnoreCase);
@@ -80,8 +92,15 @@ public class AssistantUiTests
         Assert.Contains("Show my profit and loss for September 2026.", panel);
         Assert.Contains("Show the latest dashboard summary.", panel);
         Assert.Contains("Trading, projects, and product stock are not in this assistant yet.", panel);
+        Assert.Contains("id=\"aiAssistantMic\"", panel);
+        Assert.Contains("Start listening", panel);
+        Assert.Contains("Speak reply", panel);
+        Assert.Contains("Stop speaking", panel);
+        Assert.Contains("Speak new replies", panel);
+        Assert.Contains("aria-live=\"polite\"", panel);
         Assert.DoesNotContain("invoice", panel, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".ai-panel[hidden]", css);
+        Assert.Contains(".ai-composer-actions", css);
         Assert.Contains("initAssistant();", File.ReadAllText(Path.Combine(root, "src", "GoatFarm.Web", "wwwroot", "js", "goat-records.js")));
     }
 

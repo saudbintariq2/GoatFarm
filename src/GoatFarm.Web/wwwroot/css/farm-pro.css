@@ -644,6 +644,26 @@ body.farm-pro .field textarea:focus {
   box-shadow: 0 0 0 3px rgba(64, 145, 108, 0.15);
 }
 
+body.farm-pro .file-picker {
+  border-radius: var(--fp-radius-md);
+  border-color: var(--fp-line);
+  background: #f8fafc;
+}
+
+body.farm-pro .file-picker-btn {
+  border-radius: var(--fp-radius-md);
+  border-color: var(--fp-line);
+}
+
+body.farm-pro .file-picker-btn:hover {
+  border-color: var(--fp-accent);
+  color: var(--fp-accent-dark);
+}
+
+body.farm-pro .backup-desc {
+  color: var(--fp-ink-soft);
+}
+
 body.farm-pro .tbl th {
   background: #f8fafc;
   border-bottom-color: var(--fp-line);
@@ -1618,15 +1638,16 @@ body.farm-pro .ai-thinking { font-size: 13px; font-weight: 600; color: #5c6b5e; 
 
 body.farm-pro .ai-composer {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: flex-end;
   padding: 12px 16px 16px;
   border-top: 1px solid #dce3d8;
   background: #fff;
 }
 
 body.farm-pro .ai-composer textarea {
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   font: inherit;
   font-size: 14px;
   padding: 9px 10px;
@@ -1635,6 +1656,57 @@ body.farm-pro .ai-composer textarea {
   resize: none;
   min-height: 44px;
   max-height: 120px;
+}
+
+body.farm-pro .ai-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+body.farm-pro .ai-composer-actions #aiAssistantSend {
+  margin-left: auto;
+}
+
+body.farm-pro .ai-voice-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+body.farm-pro .ai-speak-pref {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3d4f40;
+}
+
+body.farm-pro .ai-voice-status {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5c6b5e;
+}
+
+body.farm-pro .ai-panel.is-listening .ai-voice-status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #c1121f;
+  vertical-align: middle;
+  animation: ai-listen-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ai-listen-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 body.farm-pro .ai-composer textarea:focus {

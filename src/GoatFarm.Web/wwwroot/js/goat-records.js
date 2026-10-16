@@ -20,6 +20,310 @@ const GoatRecords = (() => {
   const rs = n => 'Rs ' + Math.round(n).toLocaleString('en-US');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const assistantSafePath = p => typeof p == 'string' && /^\/(?:Milk|Products|Finance|Reports|Goat|Breeding|Feed|Vaccine|Tasks|Search)?(?:\?(?:(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)(?:&(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)*)?$/i.test(p) && !p.includes(':') && !p.includes('\\');
+
+  function assistantStripForSpeech(value) {
+    let s = String(value ?? '');
+    s = s.replace(/<[^>]*>/g, ' ');
+    s = s.replace(/&nbsp;/gi, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+    s = s.replace(/<[^>]*>/g, ' ');
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  function assistantSpeechSafe(value) {
+    const s = assistantStripForSpeech(value);
+    if (!s) return '';
+    if (/https?:|javascript:|data:|vbscript:|\/\/|connection ?string|api[_-]?key|\bsecret\b|password\s*=/i.test(s)) return '';
+    return s;
+  }
+
+  function assistantMergeTranscript(current, spoken) {
+    const draft = String(current ?? '');
+    const add = assistantStripForSpeech(spoken);
+    if (!add) return draft;
+    const trimmed = draft.replace(/\s+$/, '');
+    return trimmed ? trimmed + ' ' + add : add;
+  }
+
+  function assistantRecognitionError(code) {
+    const c = String(code || '').toLowerCase();
+    if (c === 'not-allowed' || c === 'service-not-allowed') return 'Microphone access was denied.';
+    if (c === 'audio-capture') return 'No microphone was found.';
+    if (c === 'no-speech') return 'No speech was detected.';
+    if (c === 'network') return 'Speech recognition lost its network connection.';
+    if (c === 'aborted') return '';
+    return 'Speech recognition could not be used.';
+  }
+
+  function assistantSpeechText(blocks) {
+    const maxChars = 1200;
+    const maxSummary = 8;
+    const maxRows = 5;
+    const maxCols = 6;
+    const maxPoints = 8;
+    const maxQs = 4;
+    if (!Array.isArray(blocks)) return '';
+    const parts = [];
+    for (let b = 0; b < blocks.length; b++) {
+      const block = blocks[b];
+      if (!block || typeof block !== 'object') continue;
+      const kind = String(block.kind || '').toLowerCase();
+      const title = assistantSpeechSafe(block.title);
+      const text = assistantSpeechSafe(block.text);
+      if (kind === 'text') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+      } else if (kind === 'summary') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const items = Array.isArray(block.summary && block.summary.items) ? block.summary.items : [];
+        for (let i = 0; i < Math.min(items.length, maxSummary); i++) {
+          const item = items[i];
+          if (!item || typeof item !== 'object') continue;
+          const label = assistantSpeechSafe(item.label);
+          const value = assistantSpeechSafe(item.value);
+          const note = assistantSpeechSafe(item.note);
+          if (label && value) parts.push(label + ', ' + value + '.');
+          else if (value) parts.push(value + '.');
+          else if (label) parts.push(label + '.');
+          if (note) parts.push(note);
+        }
+        if (items.length > maxSummary) parts.push('Additional summary items were omitted.');
+      } else if (kind === 'table') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const cols = Array.isArray(block.table && block.table.columns) ? block.table.columns : [];
+        const rows = Array.isArray(block.table && block.table.rows) ? block.table.rows : [];
+        const colCount = Math.min(cols.length, maxCols);
+        const spokenCols = [];
+        for (let c = 0; c < colCount; c++) {
+          const col = assistantSpeechSafe(cols[c]);
+          if (col) spokenCols.push(col);
+        }
+        if (spokenCols.length) parts.push('Columns: ' + spokenCols.join(', ') + '.');
+        for (let r = 0; r < Math.min(rows.length, maxRows); r++) {
+          const cells = Array.isArray(rows[r]) ? rows[r] : [];
+          const bits = [];
+          for (let c = 0; c < colCount; c++) {
+            const col = assistantSpeechSafe(cols[c]);
+            const cell = assistantSpeechSafe(cells[c]);
+            if (col && cell) bits.push(col + ' ' + cell);
+          }
+          if (bits.length) parts.push('Row ' + (r + 1) + ': ' + bits.join(', ') + '.');
+        }
+        if (rows.length > maxRows || cols.length > maxCols) parts.push('Additional table cells were omitted.');
+      } else if (kind === 'chart') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const points = Array.isArray(block.chart && block.chart.points) ? block.chart.points : [];
+        let spokenPts = 0;
+        for (let i = 0; i < points.length && spokenPts < maxPoints; i++) {
+          const point = points[i];
+          if (!point || !Number.isFinite(Number(point.value))) continue;
+          const label = assistantSpeechSafe(point.label);
+          if (!label) continue;
+          parts.push(label + ', ' + String(point.value) + '.');
+          spokenPts++;
+        }
+        if (points.length > maxPoints) parts.push('Additional chart points were omitted.');
+      } else if (kind === 'navigate') {
+        const path = block.navigation && block.navigation.path;
+        if (!assistantSafePath(path)) continue;
+        const label = assistantSpeechSafe(block.navigation && block.navigation.label);
+        if (label) parts.push(label + '.');
+      } else if (kind === 'clarify') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const qs = Array.isArray(block.clarification && block.clarification.questions) ? block.clarification.questions : [];
+        for (let i = 0; i < Math.min(qs.length, maxQs); i++) {
+          const q = assistantSpeechSafe(qs[i]);
+          if (q) parts.push(q);
+        }
+        if (qs.length > maxQs) parts.push('Additional questions were omitted.');
+      } else if (kind === 'error') {
+        parts.push(text || title || 'The assistant could not answer.');
+      }
+    }
+    let out = parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (out.length > maxChars) {
+      out = out.slice(0, maxChars);
+      const sp = out.lastIndexOf(' ');
+      if (sp > maxChars * 0.6) out = out.slice(0, sp);
+      out = out.trim() + ' Speech truncated.';
+    }
+    return out;
+  }
+
+  function createAssistantVoice(env) {
+    env = env || {};
+    let rec = null;
+    let recGen = 0;
+    let listening = false;
+    let lastBlocks = null;
+    let speakPref = typeof env.getSpeakPref === 'function' ? !!env.getSpeakPref() : false;
+
+    function synth() {
+      if (env.speechSynthesis) return env.speechSynthesis;
+      try { return window.speechSynthesis; } catch (e) { return null; }
+    }
+
+    function recognitionCtor() {
+      if (env.SpeechRecognition) return env.SpeechRecognition;
+      if (env.webkitSpeechRecognition) return env.webkitSpeechRecognition;
+      try { return window.SpeechRecognition || window.webkitSpeechRecognition || null; } catch (e) { return null; }
+    }
+
+    function supportedInput() { return !!recognitionCtor(); }
+    function supportedOutput() {
+      const s = synth();
+      return !!(s && typeof s.speak === 'function' && typeof s.cancel === 'function');
+    }
+
+    function status(state, message) {
+      if (typeof env.setStatus === 'function') env.setStatus(state, message || '');
+    }
+
+    function stopSpeaking() {
+      const s = synth();
+      try { if (s && typeof s.cancel === 'function') s.cancel(); } catch (e) { /* ignore */ }
+    }
+
+    function stopListening() {
+      recGen += 1;
+      listening = false;
+      const current = rec;
+      rec = null;
+      if (!current) return;
+      try { current.onresult = current.onerror = current.onend = null; } catch (e) { /* ignore */ }
+      try {
+        if (typeof current.abort === 'function') current.abort();
+        else if (typeof current.stop === 'function') current.stop();
+      } catch (e) { /* ignore */ }
+    }
+
+    function startListening() {
+      if (typeof env.isOpen === 'function' && !env.isOpen()) return;
+      const Ctor = recognitionCtor();
+      if (!Ctor) {
+        status('unsupported', 'Voice input is not available in this browser. Type your question instead.');
+        return;
+      }
+      if (listening) {
+        stopListening();
+        status('idle', 'Stopped listening. Edit your question and press Send when ready.');
+        return;
+      }
+      stopSpeaking();
+      stopListening();
+      const myGen = recGen;
+      let recObj;
+      try { recObj = new Ctor(); } catch (e) {
+        status('error', 'Voice input could not start. Type your question instead.');
+        return;
+      }
+      rec = recObj;
+      recObj.continuous = false;
+      recObj.interimResults = true;
+      recObj.lang = env.lang || 'en-US';
+      recObj.onresult = function (event) {
+        if (myGen !== recGen) return;
+        if (typeof env.isOpen === 'function' && !env.isOpen()) return;
+        const list = event && event.results;
+        if (!list) return;
+        let finalText = '';
+        let interim = false;
+        for (let i = 0; i < list.length; i++) {
+          const res = list[i];
+          const t = res && res[0] && res[0].transcript ? String(res[0].transcript) : '';
+          if (res && res.isFinal) finalText += (finalText && t ? ' ' : '') + t;
+          else if (t) interim = true;
+        }
+        if (finalText && typeof env.getInput === 'function' && typeof env.setInput === 'function') {
+          env.setInput(assistantMergeTranscript(env.getInput(), finalText));
+          status('processing', 'Transcription ready. Edit if needed, then press Send.');
+        } else if (interim) {
+          status('listening', 'Listening… Click Stop listening when you are done.');
+        }
+      };
+      recObj.onerror = function (event) {
+        if (myGen !== recGen) return;
+        listening = false;
+        const msg = assistantRecognitionError(event && event.error);
+        if (msg) status('error', msg);
+      };
+      recObj.onend = function () {
+        if (myGen !== recGen) return;
+        listening = false;
+        rec = null;
+        status('idle', typeof env.getInput === 'function' && env.getInput()
+          ? 'Edit your question and press Send when ready.'
+          : 'Ready.');
+      };
+      try {
+        recObj.start();
+        listening = true;
+        status('listening', 'Listening… Click Stop listening when you are done.');
+      } catch (e) {
+        listening = false;
+        rec = null;
+        status('error', 'Voice input could not start. Type your question instead.');
+      }
+    }
+
+    function speakLatest(blocks) {
+      stopListening();
+      if (typeof env.isOpen === 'function' && !env.isOpen()) return;
+      const payload = blocks || lastBlocks;
+      if (!supportedOutput()) {
+        status('unsupported', 'Spoken replies are not available in this browser.');
+        return;
+      }
+      const text = assistantSpeechText(payload);
+      if (!text) {
+        status('idle', 'Nothing to speak.');
+        return;
+      }
+      stopSpeaking();
+      lastBlocks = payload;
+      try {
+        const utterance = typeof env.createUtterance === 'function'
+          ? env.createUtterance(text)
+          : new SpeechSynthesisUtterance(text);
+        utterance.onerror = function (event) {
+          const err = String(event && event.error || '').toLowerCase();
+          if (err === 'canceled' || err === 'interrupted' || err === 'cancelled') return;
+          status('error', 'Spoken reply could not be played.');
+        };
+        synth().speak(utterance);
+        status('idle', 'Speaking the latest reply.');
+      } catch (e) {
+        status('error', 'Spoken reply could not be played.');
+      }
+    }
+
+    function setLastBlocks(blocks) {
+      lastBlocks = Array.isArray(blocks) ? blocks : null;
+      if (speakPref && lastBlocks) speakLatest(lastBlocks);
+    }
+
+    function setSpeakPref(on) {
+      speakPref = !!on;
+      if (typeof env.setSpeakPref === 'function') env.setSpeakPref(speakPref);
+    }
+
+    function onClose() {
+      stopListening();
+      stopSpeaking();
+      status('idle', '');
+    }
+
+    return {
+      startListening, stopListening, speakLatest, stopSpeaking,
+      setLastBlocks, setSpeakPref, onClose,
+      isListening: function () { return listening; },
+      supportedInput, supportedOutput
+    };
+  }
+
   // Spreadsheet apps execute cells starting with = + - @ TAB CR; plain numbers like -1,250.5 stay numeric.
   const csvCell = v => { v = String(v ?? ''); if (/^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d,]*(\.\d+)?$/.test(v)) v = "'" + v; return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 
@@ -3681,6 +3985,7 @@ const GoatRecords = (() => {
     }
   }
 
+  let assistantBound = false;
   initShell();
 
   function initTasks() {
@@ -3788,7 +4093,6 @@ const GoatRecords = (() => {
     });
   }
 
-  let assistantBound = false;
   function initAssistant() {
     if (assistantBound) return;
     const panel = document.getElementById('aiAssistantPanel');
@@ -3803,10 +4107,56 @@ const GoatRecords = (() => {
     assistantBound = true;
 
     const storageKey = 'goatAiConv';
+    const speakPrefKey = 'goatAiSpeakReplies';
     let conversationId = sessionStorage.getItem(storageKey) || '';
     let busy = false;
     let lastQuestion = '';
     let inflight = null;
+    const micBtn = document.getElementById('aiAssistantMic');
+    const speakBtn = document.getElementById('aiAssistantSpeak');
+    const stopSpeakBtn = document.getElementById('aiAssistantStopSpeak');
+    const speakPrefEl = document.getElementById('aiAssistantSpeakPref');
+    const voiceStatus = document.getElementById('aiAssistantVoiceStatus');
+
+    const voice = createAssistantVoice({
+      lang: document.documentElement.lang || navigator.language || 'en-US',
+      isOpen: () => !panel.hidden,
+      getInput: () => input.value,
+      setInput: v => { input.value = v; },
+      getSpeakPref: () => {
+        try { return localStorage.getItem(speakPrefKey) === '1'; } catch (e) { return false; }
+      },
+      setSpeakPref: on => {
+        try {
+          if (on) localStorage.setItem(speakPrefKey, '1');
+          else localStorage.removeItem(speakPrefKey);
+        } catch (e) { /* ignore quota / private mode */ }
+      },
+      setStatus: (state, message) => {
+        if (voiceStatus) voiceStatus.textContent = message || '';
+        panel.classList.toggle('is-listening', state === 'listening');
+        if (micBtn) {
+          const on = state === 'listening';
+          micBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+          micBtn.textContent = on ? 'Stop listening' : 'Start listening';
+          micBtn.disabled = busy || !voice.supportedInput();
+        }
+      }
+    });
+
+    function refreshVoiceChrome() {
+      const inOk = voice.supportedInput();
+      const outOk = voice.supportedOutput();
+      if (micBtn) micBtn.disabled = busy || !inOk;
+      if (speakBtn) speakBtn.disabled = !outOk;
+      if (stopSpeakBtn) stopSpeakBtn.disabled = !outOk;
+      if (speakPrefEl) speakPrefEl.disabled = !outOk;
+      if (voiceStatus && !voiceStatus.textContent) {
+        if (!inOk && !outOk) voiceStatus.textContent = 'Voice input and spoken replies are not available in this browser. Type your question instead.';
+        else if (!inOk) voiceStatus.textContent = 'Voice input is not available in this browser. Type your question instead.';
+        else if (!outOk) voiceStatus.textContent = 'Spoken replies are not available in this browser.';
+      }
+    }
 
     function node(tag, className, text) {
       const el = document.createElement(tag);
@@ -3826,6 +4176,7 @@ const GoatRecords = (() => {
         thread.scrollTop = thread.scrollHeight;
       } else {
         inflight?.abort();
+        voice.onClose();
         openBtn.focus();
       }
     }
@@ -3835,6 +4186,8 @@ const GoatRecords = (() => {
       sendBtn.disabled = on;
       input.disabled = on;
       sendBtn.textContent = on ? 'Sending…' : 'Send';
+      if (on) voice.stopListening();
+      if (micBtn) micBtn.disabled = on || !voice.supportedInput();
     }
 
     function append(el) {
@@ -3941,6 +4294,8 @@ const GoatRecords = (() => {
         showToast('Keep questions under 2000 characters.', 'error');
         return;
       }
+      voice.stopListening();
+      voice.stopSpeaking();
       lastQuestion = message;
       document.getElementById('aiAssistantWelcome')?.remove();
       append(node('div', 'ai-bubble ai-bubble-user', message));
@@ -3959,12 +4314,15 @@ const GoatRecords = (() => {
           sessionStorage.setItem(storageKey, conversationId);
         }
         thinking.remove();
-        append(renderBlocks(data?.blocks));
+        const blocks = data?.blocks;
+        append(renderBlocks(blocks));
+        voice.setLastBlocks(Array.isArray(blocks) ? blocks : []);
       } catch (err) {
         thinking.remove();
         if (err.name === 'AbortError' || ac.signal.aborted) return;
         const fail = { kind: 'Error', title: 'Could not answer', text: err.message || 'Something went wrong. Please try again.', errorCode: 'provider_error' };
         append(renderBlocks([fail]));
+        voice.setLastBlocks([fail]);
       } finally {
         if (inflight === ac) inflight = null;
         setBusy(false);
@@ -3995,7 +4353,19 @@ const GoatRecords = (() => {
       const btn = e.target.closest('[data-ai-q]');
       if (btn) send(btn.getAttribute('data-ai-q') || '');
     });
+    micBtn?.addEventListener('click', () => voice.startListening());
+    speakBtn?.addEventListener('click', () => voice.speakLatest());
+    stopSpeakBtn?.addEventListener('click', () => {
+      voice.stopSpeaking();
+      if (voiceStatus) voiceStatus.textContent = 'Stopped speaking.';
+    });
+    if (speakPrefEl) {
+      try { speakPrefEl.checked = localStorage.getItem(speakPrefKey) === '1'; } catch (e) { speakPrefEl.checked = false; }
+      speakPrefEl.addEventListener('change', () => voice.setSpeakPref(speakPrefEl.checked));
+    }
+    window.addEventListener('pagehide', () => voice.onClose());
+    refreshVoiceChrome();
   }
 
-  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, showModal, showConfirm, showToast };
+  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, assistantSpeechText, createAssistantVoice, showModal, showConfirm, showToast };
 })();

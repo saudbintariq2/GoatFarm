@@ -21,6 +21,18 @@
     <form class="ai-composer" id="aiAssistantForm">
         <label class="sr-only" for="aiAssistantInput">Ask a farm question</label>
         <textarea id="aiAssistantInput" rows="2" maxlength="2000" placeholder="Ask about farm records…" autocomplete="off"></textarea>
-        <button type="submit" class="btn btn-green" id="aiAssistantSend">Send</button>
+        <div class="ai-composer-actions">
+            <button type="button" class="btn btn-ghost" id="aiAssistantMic" aria-pressed="false" aria-describedby="aiAssistantVoiceStatus">Start listening</button>
+            <button type="button" class="btn btn-ghost" id="aiAssistantSpeak" aria-describedby="aiAssistantVoiceStatus">Speak reply</button>
+            <button type="button" class="btn btn-ghost" id="aiAssistantStopSpeak">Stop speaking</button>
+            <button type="submit" class="btn btn-green" id="aiAssistantSend">Send</button>
+        </div>
+        <div class="ai-voice-meta">
+            <label class="ai-speak-pref" for="aiAssistantSpeakPref">
+                <input type="checkbox" id="aiAssistantSpeakPref">
+                Speak new replies
+            </label>
+            <p class="ai-voice-status" id="aiAssistantVoiceStatus" role="status" aria-live="polite"></p>
+        </div>
     </form>
 </div>
