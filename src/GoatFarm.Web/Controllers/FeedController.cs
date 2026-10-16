@@ -1,24 +1,23 @@
 using GoatFarm.Application.Interfaces;
-
 using GoatFarm.Application.ViewModels.Feed;
-
+using GoatFarm.Domain.Constants;
+using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
-
-
 
 namespace GoatFarm.Web.Controllers;
 
-
-
 public class FeedController : Controller
-
 {
-
     private readonly IFeedService _feedService;
+    private readonly IApprovalService _approvalService;
+    private readonly IPermissionService _permissionService;
 
-
-
-    public FeedController(IFeedService feedService) => _feedService = feedService;
+    public FeedController(IFeedService feedService, IApprovalService approvalService, IPermissionService permissionService)
+    {
+        _feedService = feedService;
+        _approvalService = approvalService;
+        _permissionService = permissionService;
+    }
 
 
 
@@ -236,13 +235,12 @@ public class FeedController : Controller
     [HttpDelete]
 
     public async Task<IActionResult> DeletePurchase(int id, CancellationToken cancellationToken)
-
     {
-
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Feed, "FeedPurchase", id, cancellationToken);
+        if (pending is not null) return pending;
         var ok = await _feedService.DeleteFeedPurchaseAsync(id, cancellationToken);
-
         return ok ? Ok(new { success = true }) : NotFound();
-
     }
 
 
@@ -264,13 +262,12 @@ public class FeedController : Controller
     [HttpDelete]
 
     public async Task<IActionResult> DeleteFeedType(string feedType, CancellationToken cancellationToken)
-
     {
-
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Feed, "FeedType", new { entity = "FeedType", action = "Delete", feedType }, cancellationToken);
+        if (pending is not null) return pending;
         var ok = await _feedService.DeleteFeedTypeAsync(feedType, cancellationToken);
-
         return ok ? Ok(new { success = true }) : NotFound();
-
     }
 
 

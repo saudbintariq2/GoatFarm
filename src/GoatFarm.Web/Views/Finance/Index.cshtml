@@ -313,4 +313,117 @@
 </div>
 }
 
-@section Scripts {<script>GoatRecords.initFinance();</script>}
+@{
+    var ledger = ViewBag.LedgerPage as GoatFarm.Application.ViewModels.Ledger.LedgerPageViewModel;
+    var statements = ViewBag.Statements as GoatFarm.Application.ViewModels.Ledger.FinancialStatementsViewModel;
+}
+@if (ledger is not null)
+{
+<div class="panel" style="margin-top:18px">
+    <div class="panel-head"><h2>Accounting ledger</h2><span class="sub">AR/AP, cash flow, budget, profit sharing</span></div>
+    <div class="panel-body">
+        <div class="fin3">
+            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(ledger.Receivables)</div><div class="k">Receivables</div></div>
+            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(ledger.Payables)</div><div class="k">Payables</div></div>
+            <div class="fincard"><div class="v">@DisplayHelper.FormatRs(ledger.CashOnHand)</div><div class="k">Cash accounts</div></div>
+            @if (statements is not null)
+            {
+                <div class="fincard"><div class="v">@DisplayHelper.FormatRs(statements.NetProfit)</div><div class="k">P&amp;L (month)</div></div>
+            }
+        </div>
+        <div class="tabs" id="ledger-tabs" style="margin-top:14px">
+            <button type="button" class="tab active" data-ledger-tab="summary">Summary</button>
+            <button type="button" class="tab" data-ledger-tab="accounts">Accounts &amp; tx</button>
+            <button type="button" class="tab" data-ledger-tab="receivables">Receivables</button>
+            <button type="button" class="tab" data-ledger-tab="payables">Payables</button>
+            <button type="button" class="tab" data-ledger-tab="budget">Budget</button>
+            <button type="button" class="tab" data-ledger-tab="profit">Profit share</button>
+        </div>
+        <div data-ledger-pane="summary">
+            @if (statements is not null)
+            {
+                <table class="tbl" style="margin-top:12px"><thead><tr><th>Cash flow (month)</th><th class="num-cell">Amount</th></tr></thead>
+                <tbody>
+                    <tr><td>Cash in (ledger)</td><td class="num-cell">@DisplayHelper.FormatRs(statements.CashIn)</td></tr>
+                    <tr><td>Cash out (ledger)</td><td class="num-cell">@DisplayHelper.FormatRs(statements.CashOut)</td></tr>
+                    <tr><td>Revenue (farm + ledger)</td><td class="num-cell">@DisplayHelper.FormatRs(statements.Revenue)</td></tr>
+                    <tr><td>Expenses</td><td class="num-cell">@DisplayHelper.FormatRs(statements.Expenses)</td></tr>
+                    <tr style="background:var(--green-tint)"><td style="font-weight:800">Net profit</td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(statements.NetProfit)</td></tr>
+                    <tr><td>Assets (est.)</td><td class="num-cell">@DisplayHelper.FormatRs(statements.AssetsTotal)</td></tr>
+                    <tr><td>Liabilities (AP)</td><td class="num-cell">@DisplayHelper.FormatRs(statements.LiabilitiesTotal)</td></tr>
+                </tbody></table>
+            }
+        </div>
+        <div data-ledger-pane="accounts" hidden>
+            <table class="tbl" style="margin-top:12px"><thead><tr><th>Account</th><th>Type</th><th class="num-cell">Balance</th></tr></thead>
+            <tbody>@foreach(var a in ledger.Accounts){<tr><td>@a.Name</td><td>@a.Kind</td><td class="num-cell">@DisplayHelper.FormatRs(a.Balance)</td></tr>}</tbody></table>
+            <h3 style="margin:16px 0 8px">Recent transactions</h3>
+            <table class="tbl"><thead><tr><th>Date</th><th>Kind</th><th>Account</th><th class="num-cell">Amount</th><th>Category</th></tr></thead>
+            <tbody>@foreach(var t in ledger.Transactions){<tr><td>@t.DateDisplay</td><td>@t.Kind</td><td>@t.Account</td><td class="num-cell">@DisplayHelper.FormatRs(t.Amount)</td><td>@t.Category</td></tr>}</tbody></table>
+            <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(5,1fr)">
+                <div class="field"><label>Date</label><input type="date" id="tx-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+                <div class="field"><label>Kind</label><select id="tx-kind"><option value="Income">Income</option><option value="Expense">Expense</option><option value="InvoicePayment">Invoice payment</option><option value="PayablePayment">Payable payment</option></select></div>
+                <div class="field"><label>Account</label><select id="tx-account">@foreach(var a in ledger.Accounts){<option value="@a.Id">@a.Name</option>}</select></div>
+                <div class="field"><label>Amount</label><input type="number" id="tx-amt" min="0"></div>
+                <div class="field"><label>Category</label><input id="tx-cat"></div>
+                <div class="field field-comment"><label>Notes</label><input id="tx-note"></div>
+            </div>
+            <button type="button" class="btn btn-green" id="tx-save">Post transaction</button>
+        </div>
+        <div data-ledger-pane="receivables" hidden>
+            <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr 1fr 1fr auto">
+                <div class="field"><label>New customer</label><input id="cust-name" placeholder="Shop name"></div>
+                <div class="field"><label>Phone</label><input id="cust-phone"></div>
+                <button type="button" class="btn btn-ghost" id="cust-save" style="align-self:end">Add customer</button>
+            </div>
+            <table class="tbl" style="margin-top:12px"><thead><tr><th>Customer</th><th>Date</th><th>Description</th><th class="num-cell">Due</th><th>Status</th></tr></thead>
+            <tbody>@foreach(var i in ledger.Invoices){<tr><td>@i.Customer</td><td>@i.DateDisplay</td><td>@i.Description</td><td class="num-cell">@DisplayHelper.FormatRs(i.Amount - i.PaidAmount)</td><td>@i.Status</td></tr>}</tbody></table>
+            <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(6,1fr)">
+                <div class="field"><label>Customer</label><select id="inv-customer"><option value="">—</option>@foreach(var c in ledger.Customers){<option value="@c.Id">@c.Name</option>}</select></div>
+                <div class="field"><label>Date</label><input type="date" id="inv-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+                <div class="field"><label>Due</label><input type="date" id="inv-due" value="@DateTime.Today.AddDays(14).ToString("yyyy-MM-dd")"></div>
+                <div class="field"><label>Description</label><input id="inv-desc"></div>
+                <div class="field"><label>Amount</label><input type="number" id="inv-amt" min="0"></div>
+                <div class="field"><label>Paid</label><input type="number" id="inv-paid" min="0" value="0"></div>
+            </div>
+            <button type="button" class="btn btn-green" id="inv-save">Add invoice</button>
+        </div>
+        <div data-ledger-pane="payables" hidden>
+            <table class="tbl" style="margin-top:12px"><thead><tr><th>Supplier</th><th>Date</th><th>Description</th><th class="num-cell">Due</th><th>Status</th></tr></thead>
+            <tbody>@foreach(var p in ledger.PayablesList){<tr><td>@p.SupplierName</td><td>@p.DateDisplay</td><td>@p.Description</td><td class="num-cell">@DisplayHelper.FormatRs(p.Amount - p.PaidAmount)</td><td>@p.Status</td></tr>}</tbody></table>
+            <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(5,1fr)">
+                <div class="field"><label>Supplier</label><input id="pay-supplier"></div>
+                <div class="field"><label>Date</label><input type="date" id="pay-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+                <div class="field"><label>Due</label><input type="date" id="pay-due" value="@DateTime.Today.AddDays(14).ToString("yyyy-MM-dd")"></div>
+                <div class="field"><label>Description</label><input id="pay-desc"></div>
+                <div class="field"><label>Amount</label><input type="number" id="pay-amt" min="0"></div>
+                <div class="field"><label>Paid</label><input type="number" id="pay-paid" min="0" value="0"></div>
+            </div>
+            <button type="button" class="btn btn-green" id="pay-save">Add payable</button>
+        </div>
+        <div data-ledger-pane="budget" hidden>
+            <table class="tbl" style="margin-top:12px"><thead><tr><th>Year</th><th>Month</th><th>Category</th><th class="num-cell">Planned</th></tr></thead>
+            <tbody>@foreach(var b in ledger.Budget){<tr><td>@b.Year</td><td>@b.Month</td><td>@b.Category</td><td class="num-cell">@DisplayHelper.FormatRs(b.PlannedAmount)</td></tr>}</tbody></table>
+            <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr 1fr auto">
+                <div class="field"><label>Category</label><input id="bud-cat" placeholder="Feed, salaries…"></div>
+                <div class="field"><label>Planned (Rs)</label><input type="number" id="bud-amt" min="0"></div>
+                <button type="button" class="btn btn-green" id="bud-save" style="align-self:end">Add budget line</button>
+            </div>
+        </div>
+        <div data-ledger-pane="profit" hidden>
+            <table class="tbl" style="margin-top:12px"><thead><tr><th>Partner</th><th class="num-cell">Share %</th></tr></thead>
+            <tbody>@foreach(var p in ledger.Partners){<tr><td>@p.Name</td><td class="num-cell">@p.SharePercent</td></tr>}</tbody></table>
+            <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr 1fr auto">
+                <div class="field"><label>Name</label><input id="part-name"></div>
+                <div class="field"><label>Share %</label><input type="number" id="part-pct" min="0" max="100" step="0.1"></div>
+                <button type="button" class="btn btn-green" id="part-save" style="align-self:end">Add partner</button>
+            </div>
+        </div>
+    </div>
+</div>
+}
+
+@section Scripts {
+<script src="~/js/finance-ledger.js" asp-append-version="true"></script>
+<script>GoatRecords.initFinance();</script>
+}

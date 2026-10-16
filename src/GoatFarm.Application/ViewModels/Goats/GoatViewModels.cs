@@ -128,11 +128,26 @@ public class HerdPageViewModel
 {
     public HerdStatsViewModel Stats { get; set; } = new();
     public IReadOnlyList<GoatViewModel> Goats { get; set; } = [];
+    public IReadOnlyList<HerdTreatmentRowViewModel> UnderTreatment { get; set; } = [];
     public IReadOnlyList<string> Groups { get; set; } = [];
     public string? Filter { get; set; }
     public string? Search { get; set; }
     public PaginationViewModel Pagination { get; set; } = new();
     public CreateGoatViewModel NewGoat { get; set; } = new() { EventDate = DateOnly.FromDateTime(DateTime.Today) };
+}
+
+public class HerdTreatmentRowViewModel
+{
+    public int TreatmentId { get; set; }
+    public int GoatId { get; set; }
+    public string Tag { get; set; } = string.Empty;
+    public string StatusDisplay { get; set; } = string.Empty;
+    public string HealthDisplay { get; set; } = string.Empty;
+    public string Diagnosis { get; set; } = string.Empty;
+    public string Medicine { get; set; } = string.Empty;
+    public int DaysInTreatment { get; set; }
+    public int? WithdrawalDays { get; set; }
+    public int? WithdrawalDaysLeft { get; set; }
 }
 
 public class PaginationViewModel

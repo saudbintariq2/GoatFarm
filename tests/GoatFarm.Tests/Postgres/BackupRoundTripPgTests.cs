@@ -182,7 +182,7 @@ public class BackupRoundTripPgTests
         }
 
         using var doc = JsonDocument.Parse(json);
-        Assert.Equal(2, doc.RootElement.GetProperty("formatVersion").GetInt32());
+        Assert.Equal(3, doc.RootElement.GetProperty("formatVersion").GetInt32());
         var users = doc.RootElement.GetProperty("security").GetProperty("users");
         Assert.Contains(users.EnumerateArray(), u => u.GetProperty("email").GetString() == FarmScenario.StaffEmail);
         Assert.DoesNotContain("PasswordHash", json, StringComparison.OrdinalIgnoreCase);

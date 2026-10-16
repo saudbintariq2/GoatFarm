@@ -21,4 +21,6 @@ public interface IGoatService
     string GetAgeLabel(int days);
     Task<WeightDeathResultViewModel> RecordWeightAsync(RecordWeightViewModel model, CancellationToken cancellationToken = default);
     Task<WeightDeathResultViewModel> RecordDeathAsync(RecordDeathViewModel model, CancellationToken cancellationToken = default);
+    Task<WeightDeathResultViewModel> RecordSaleAsync(RecordSaleViewModel model, CancellationToken cancellationToken = default);
+    Task<GoatSaleFormDataViewModel> GetSaleFormDataAsync(CancellationToken cancellationToken = default);
 }

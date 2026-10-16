@@ -201,6 +201,11 @@ const GoatRecords = (() => {
       if (!quiet) await showModal(message);
       throw new Error(message);
     }
+    if (res.status === 202) {
+      const body = await res.json().catch(() => ({}));
+      if (!quiet) showToast(body.message || 'Submitted for manager approval.');
+      return body;
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       if (res.status === 409 && err.requiresConfirmation && typeof fetchOptions.body === 'string') {
@@ -284,8 +289,10 @@ const GoatRecords = (() => {
     function setEditMode(editing) {
       const cancelBtn = document.getElementById('cancelBtn');
       const deleteBtn = document.getElementById('deleteBtn');
+      const sellBtn = document.getElementById('sellBtn');
       if (cancelBtn) cancelBtn.style.display = editing ? '' : 'none';
       if (deleteBtn) deleteBtn.style.display = editing ? '' : 'none';
+      if (sellBtn) sellBtn.style.display = editing ? '' : 'none';
     }
 
     function resetGoatForm() {
@@ -511,6 +518,92 @@ const GoatRecords = (() => {
       reloadWithToast('Goat deleted successfully');
     });
 
+    async function recordSaleForTag(tag) {
+      if (!FarmPerms.can('herd', 'edit')) return;
+      const priceStr = await showModal(`Sale price (Rs) for ${tag}`, { prompt: true });
+      const price = +priceStr || 0;
+      if (!(price > 0)) { await showModal('Enter the sale price.'); return; }
+      const buyer = await showModal('Buyer (name or market)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+      const weightStr = await showModal('Weight at sale, kg (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+      const weightKg = +weightStr > 0 ? +weightStr : null;
+      const date = document.getElementById('wd-date')?.value || new Date().toISOString().slice(0, 10);
+
+      let formData = { accounts: [], customers: [] };
+      try { formData = await api('/Goat/SaleFormData'); } catch { /* optional */ }
+
+      const payNow = await showConfirm('Receive full payment now? (Cancel = on credit)');
+      let isCredit = !payNow;
+      let accountId = null;
+      let customerId = null;
+
+      if (payNow) {
+        const accounts = formData.accounts || [];
+        if (!accounts.length) {
+          await showModal('Add a cash or bank account on Finance → Accounts before recording a paid sale.');
+          return;
+        }
+        if (accounts.length === 1) {
+          accountId = accounts[0].id;
+        } else {
+          const hint = accounts.map(a => a.name).join(', ');
+          const picked = await showModal(`Money received into (${hint})`, { prompt: true });
+          const match = accounts.find(a => a.name.toLowerCase() === String(picked || '').trim().toLowerCase());
+          if (!match) { await showModal('Choose a valid account name.'); return; }
+          accountId = match.id;
+        }
+      } else {
+        const buyerTrim = (buyer || '').trim();
+        if (!buyerTrim && !(formData.customers || []).length) {
+          await showModal('Enter a buyer name for credit sales.');
+          return;
+        }
+        const match = (formData.customers || []).find(c => c.name.toLowerCase() === buyerTrim.toLowerCase());
+        if (match) customerId = match.id;
+      }
+
+      const confirmed = await showConfirm(
+        `Sell ${tag} for Rs ${price.toLocaleString()}?\nShe leaves the live herd; income is recorded on Finance.`
+      );
+      if (!confirmed) return;
+
+      const result = await api('/Goat/RecordSale', {
+        method: 'POST',
+        body: JSON.stringify({
+          tag,
+          price,
+          buyer: buyer?.trim() || null,
+          weightKg,
+          date,
+          isCredit,
+          accountId,
+          customerId
+        })
+      });
+      if (!result.success) {
+        await showModal(result.message || 'Could not record sale');
+        return;
+      }
+      showToast('Goat sold');
+      setTimeout(() => location.reload(), 800);
+    }
+
+    document.getElementById('sellBtn')?.addEventListener('click', async () => {
+      const tag = normalizeTag(document.getElementById('f-tag')?.value);
+      if (!tag) { await showModal('No goat selected.'); return; }
+      await recordSaleForTag(tag);
+    });
+
+    document.getElementById('treatRows')?.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-recov]');
+      if (!btn || !FarmPerms.can('herd', 'edit')) return;
+      const id = btn.getAttribute('data-recov');
+      const confirmed = await showConfirm('Mark this animal as recovered?');
+      if (!confirmed) return;
+      await api('/Goat/RecoverTreatment?id=' + encodeURIComponent(id), { method: 'POST' });
+      showToast('Recovered');
+      setTimeout(() => location.reload(), 600);
+    });
+
     document.getElementById('addBtn')?.addEventListener('click', async () => {
       if (!FarmPerms.guardAddEdit('herd', !!editingId)) return;
       const tag = document.getElementById('f-tag').value.trim();
@@ -613,7 +706,7 @@ const GoatRecords = (() => {
       addBtnId: 'addBtn',
       deleteBtnId: 'deleteBtn',
       rowSelector: '#rows tr.goat-row',
-      extraHideIds: ['bulkbar', 'newGroupBtn']
+      extraHideIds: ['bulkbar', 'newGroupBtn', 'sellBtn']
     });
 
     async function wdFound() {
@@ -3274,6 +3367,59 @@ const GoatRecords = (() => {
       `<tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
         <td class="num-cell" style="font-weight:800">${rs(inv.assetsTotalValue || 0)}</td></tr>` :
       `<tr><td colspan="3" class="empty">No assets recorded.</td></tr>`);
+
+    const capex = d.capexOpex || {};
+    const repCapexKpi = document.getElementById('repCapexKpi');
+    if (repCapexKpi) {
+      repCapexKpi.innerHTML = [
+        { v: capex.capexTotal, k: 'CAPEX (period)' },
+        { v: capex.opexTotal, k: 'OPEX (period)' }
+      ].map(x => `<div class="fincard"><div class="v">${rs(x.v || 0)}</div><div class="k">${esc(x.k)}</div></div>`).join('');
+    }
+    const repCapexRows = document.getElementById('repCapexRows');
+    if (repCapexRows) {
+      repCapexRows.innerHTML = (capex.capexRows?.length ? capex.capexRows.map(r =>
+        `<tr><td><b>${esc(r.label)}</b></td><td class="hide-sm"><span class="breed">${esc(r.sub || '')}</span></td><td class="num-cell">${rs(r.amount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">No capital spend in this period.</td></tr>`);
+    }
+    const repOpexRows = document.getElementById('repOpexRows');
+    if (repOpexRows) {
+      repOpexRows.innerHTML = (capex.opexRows?.length ? capex.opexRows.map(r =>
+        `<tr><td>${esc(r.label)}</td><td class="num-cell">${rs(r.amount)}</td></tr>`).join('')
+        : `<tr><td colspan="2" class="empty">No OPEX in this period.</td></tr>`);
+    }
+
+    const ps = d.profitShare || {};
+    const repPsSub = document.getElementById('repPsSub');
+    if (repPsSub) repPsSub.textContent = `Net profit basis (period): ${rs(ps.netProfit || 0)}`;
+    const repPsRows = document.getElementById('repPsRows');
+    if (repPsRows) {
+      repPsRows.innerHTML = (ps.partners?.length ? ps.partners.map(p =>
+        `<tr><td><b>${esc(p.name)}</b></td><td class="num-cell">${p.sharePercent}%</td><td class="num-cell">${rs(p.shareAmount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">Add profit partners under Finance → Accounting ledger.</td></tr>`);
+    }
+
+    const proj = d.projectsAssets || {};
+    const repProjKpi = document.getElementById('repProjKpi');
+    if (repProjKpi) {
+      repProjKpi.innerHTML = [
+        { v: proj.activeProjects, k: 'Active projects', fmt: 'n' },
+        { v: proj.totalBudget, k: 'Total budget' },
+        { v: proj.totalSpent, k: 'Total spent' }
+      ].map(x => `<div class="fincard"><div class="v">${x.fmt === 'n' ? esc(x.v) : rs(x.v || 0)}</div><div class="k">${esc(x.k)}</div></div>`).join('');
+    }
+    const repProjRows = document.getElementById('repProjRows');
+    if (repProjRows) {
+      repProjRows.innerHTML = (proj.projects?.length ? proj.projects.map(p =>
+        `<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.status)}</td><td class="num-cell">${rs(p.budget)}</td><td class="num-cell">${rs(p.spent)}</td></tr>`).join('')
+        : `<tr><td colspan="4" class="empty">No projects yet.</td></tr>`);
+    }
+    const repProjAssets = document.getElementById('repProjAssets');
+    if (repProjAssets) {
+      repProjAssets.innerHTML = (proj.fixedAssets?.length ? proj.fixedAssets.map(a =>
+        `<tr><td><b>${esc(a.label)}</b></td><td class="hide-sm">${esc(a.sub || '')}</td><td class="num-cell">${rs(a.amount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">No fixed assets in register.</td></tr>`);
+    }
 
     const repCompareRows = document.getElementById('repCompareRows');
     if (repCompareRows) {

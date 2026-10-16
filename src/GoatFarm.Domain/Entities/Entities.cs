@@ -101,6 +101,21 @@ public class DeathRecord : BaseEntity
     public decimal ValueLost { get; set; }
 }
 
+public class GoatSale : BaseEntity
+{
+    public int GoatId { get; set; }
+    public string Tag { get; set; } = string.Empty;
+    public string? Breed { get; set; }
+    public DateOnly Date { get; set; }
+    public decimal Price { get; set; }
+    public string? Buyer { get; set; }
+    public decimal? WeightKg { get; set; }
+    public bool IsCredit { get; set; }
+    public int? AccountId { get; set; }
+    public int? CustomerInvoiceId { get; set; }
+    public int? IncomeId { get; set; }
+}
+
 public class FeedUsageRecord : BaseEntity
 {
     public DateOnly Date { get; set; }

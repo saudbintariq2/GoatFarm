@@ -1,0 +1,95 @@
+@model GoatFarm.Application.ViewModels.Products.ProductsPageViewModel
+@using GoatFarm.Application.Common
+
+<div class="note">Daily milk collect/sell/waste stays on <a asp-controller="Milk" asp-action="Index">Milk ledger</a>. Use this hub for sessions, stock, meat and product sales.</div>
+
+<div class="filterbar" style="margin-bottom:14px">
+    <div class="field"><label class="hide-sm">Month</label><input type="month" id="prodMonth" value="@Model.Month"></div>
+    <span class="count-pill">Stock value @DisplayHelper.FormatRs(Model.StockValue)</span>
+</div>
+
+<div class="tabs" id="prod-tabs">
+    <button type="button" class="tab active" data-prod-tab="sessions">Milking sessions</button>
+    <button type="button" class="tab" data-prod-tab="catalog">Catalog</button>
+    <button type="button" class="tab" data-prod-tab="stock">Stock</button>
+    <button type="button" class="tab" data-prod-tab="meat">Meat</button>
+    <button type="button" class="tab" data-prod-tab="sales">Sales</button>
+</div>
+
+<div class="panel" data-prod-pane="catalog" hidden>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>SKU</th><th>Name</th><th>Unit</th><th class="num-cell">Default price</th></tr></thead>
+        <tbody>@foreach(var c in Model.Catalog){<tr><td>@c.Sku</td><td>@c.Name</td><td>@c.Unit</td><td class="num-cell">@DisplayHelper.FormatRs(c.DefaultPrice)</td></tr>}</tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(4,1fr)">
+            <div class="field"><label>SKU</label><input id="cat-sku"></div>
+            <div class="field"><label>Name</label><input id="cat-name"></div>
+            <div class="field"><label>Unit</label><input id="cat-unit" value="kg"></div>
+            <div class="field"><label>Price</label><input type="number" id="cat-price" min="0"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="cat-save">Add / update catalog</button>
+    </div>
+</div>
+
+<div class="panel" data-prod-pane="sessions">
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th>Session</th><th>Breed</th><th class="num-cell">L</th><th class="num-cell">Rejected</th></tr></thead>
+        <tbody>@foreach(var s in Model.Sessions){<tr><td>@s.DateDisplay</td><td>@s.Session</td><td>@s.Breed</td><td class="num-cell">@s.Liters</td><td class="num-cell">@s.RejectedLiters</td></tr>}</tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(5,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="ms-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Session</label><select id="ms-session"><option>AM</option><option>PM</option></select></div>
+            <div class="field"><label>Breed</label><input id="ms-breed" value="Mixed"></div>
+            <div class="field"><label>Litres</label><input type="number" id="ms-liters" min="0" step="0.5"></div>
+            <div class="field"><label>Rejected</label><input type="number" id="ms-rej" min="0" step="0.5" value="0"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="ms-save">Add session</button>
+    </div>
+</div>
+
+<div class="panel" data-prod-pane="stock" hidden>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Product</th><th>Warehouse</th><th class="num-cell">Qty</th></tr></thead>
+        <tbody>@foreach(var m in Model.Movements){<tr><td>@m.DateDisplay</td><td>@m.Type</td><td>@m.Product</td><td>@m.Warehouse</td><td class="num-cell">@m.Qty</td></tr>}</tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(4,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="st-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Product</label><select id="st-product">@foreach(var c in Model.Catalog){<option value="@c.Id">@c.Name</option>}</select></div>
+            <div class="field"><label>Warehouse</label><select id="st-wh">@foreach(var w in Model.Warehouses){<option value="@w.Id">@w.Name</option>}</select></div>
+            <div class="field"><label>Qty in</label><input type="number" id="st-qty" min="0" step="0.01"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="st-save">Receive stock</button>
+    </div>
+</div>
+
+<div class="panel" data-prod-pane="meat" hidden>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th>Tag</th><th class="num-cell">Carcass kg</th><th class="num-cell">Sale</th></tr></thead>
+        <tbody>@foreach(var s in Model.Slaughters){<tr><td>@s.DateDisplay</td><td>@s.Tag</td><td class="num-cell">@s.CarcassKg</td><td class="num-cell">@DisplayHelper.FormatRs(s.SaleAmount)</td></tr>}</tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(4,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="sl-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Tag</label><input id="sl-tag"></div>
+            <div class="field"><label>Carcass kg</label><input type="number" id="sl-carcass" min="0"></div>
+            <div class="field"><label>Sale Rs</label><input type="number" id="sl-sale" min="0"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="sl-save">Log slaughter</button>
+    </div>
+</div>
+
+<div class="panel" data-prod-pane="sales" hidden>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th>Product</th><th class="num-cell">Qty</th><th class="num-cell">Amount</th><th>Credit</th></tr></thead>
+        <tbody>@foreach(var s in Model.Sales){<tr><td>@s.DateDisplay</td><td>@s.ProductName</td><td class="num-cell">@s.Qty</td><td class="num-cell">@DisplayHelper.FormatRs(s.Amount)</td><td>@(s.IsCredit?"Yes":"No")</td></tr>}</tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:repeat(5,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="ps-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Catalog</label><select id="ps-product"><option value="">Custom name</option>@foreach(var c in Model.Catalog){<option value="@c.Id" data-name="@c.Name" data-price="@c.DefaultPrice.ToString(System.Globalization.CultureInfo.InvariantCulture)">@c.Name</option>}</select></div>
+            <div class="field"><label>Product name</label><input id="ps-name" placeholder="Milk, meat, ghee…"></div>
+            <div class="field"><label>Customer (credit)</label><select id="ps-customer"><option value="">Cash sale</option>@foreach(var c in Model.Customers){<option value="@c.Id">@c.Name</option>}</select></div>
+            <div class="field"><label>Qty</label><input type="number" id="ps-qty" min="0"></div>
+            <div class="field"><label>Rate</label><input type="number" id="ps-rate" min="0"></div>
+            <div class="field"><label><input type="checkbox" id="ps-credit"> Credit (creates invoice)</label></div>
+        </div>
+        <button type="button" class="btn btn-green" id="ps-save">Record sale</button>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/products-module.js" asp-append-version="true"></script>
+}

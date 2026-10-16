@@ -120,6 +120,16 @@ public class StatisticsService : IStatisticsService
             (r.Title.Contains("vaccin", StringComparison.OrdinalIgnoreCase) ||
              r.Title.Contains("dose", StringComparison.OrdinalIgnoreCase)));
 
+        var receivables = await _context.CustomerInvoices.AsNoTracking()
+            .Where(i => i.Status == InvoiceStatus.Open || i.Status == InvoiceStatus.Partial)
+            .SumAsync(i => i.Amount - i.PaidAmount, cancellationToken);
+        var payables = await _context.SupplierPayables.AsNoTracking()
+            .Where(p => p.Status == PayableStatus.Open || p.Status == PayableStatus.Partial)
+            .SumAsync(p => p.Amount - p.PaidAmount, cancellationToken);
+        var pendingApprovals = await _context.ApprovalRequests.CountAsync(a => a.Status == ApprovalStatus.Pending, cancellationToken);
+
+        var productStockValue = await ComputeProductStockValueAsync(cancellationToken);
+
         var activities = await BuildRecentActivitiesAsync(today, cancellationToken);
 
         var recentSales = finance.Incomes
@@ -183,8 +193,46 @@ public class StatisticsService : IStatisticsService
             PendingVaccinations = pendingVacc,
             RecentActivities = activities,
             RecentSales = recentSales,
-            RecentExpenses = recentExpenses
+            RecentExpenses = recentExpenses,
+            ReceivablesOpen = receivables,
+            PayablesOpen = payables,
+            ProductStockValue = productStockValue,
+            PendingApprovals = pendingApprovals
         };
+    }
+
+    private async Task<decimal> ComputeProductStockValueAsync(CancellationToken cancellationToken)
+    {
+        var catalog = await _context.ProductCatalogItems.AsNoTracking().ToListAsync(cancellationToken);
+        var moves = await _context.StockMovements.AsNoTracking().OrderBy(m => m.Date).ToListAsync(cancellationToken);
+        var qty = new Dictionary<(int product, int wh), decimal>();
+        foreach (var m in moves)
+        {
+            var key = (m.ProductId, m.WarehouseId);
+            qty.TryAdd(key, 0);
+            qty[key] += m.Type switch
+            {
+                StockMovementType.Receive or StockMovementType.Adjust => m.Qty,
+                StockMovementType.Issue or StockMovementType.Spoilage => -m.Qty,
+                StockMovementType.Transfer => -m.Qty,
+                _ => 0
+            };
+            if (m.Type == StockMovementType.Transfer && m.ToWarehouseId is > 0)
+            {
+                var key2 = (m.ProductId, m.ToWarehouseId.Value);
+                qty.TryAdd(key2, 0);
+                qty[key2] += m.Qty;
+            }
+        }
+
+        var prices = catalog.ToDictionary(c => c.Id, c => c.DefaultPrice);
+        decimal total = 0;
+        foreach (var ((pid, _), q) in qty)
+        {
+            if (q <= 0) continue;
+            total += q * prices.GetValueOrDefault(pid, 0);
+        }
+        return total;
     }
 
     private async Task<List<DashboardActivityViewModel>> BuildRecentActivitiesAsync(DateOnly today, CancellationToken cancellationToken)
@@ -234,9 +282,27 @@ public class StatisticsService : IStatisticsService
                 Href = "/Breeding"
             });
 
+        var auditRows = await _context.AuditLogEntries.AsNoTracking()
+            .Where(a => a.ShowInNotices)
+            .OrderByDescending(a => a.CreatedDate)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+        foreach (var a in auditRows)
+        {
+            var d = DateOnly.FromDateTime(a.CreatedDate.ToLocalTime());
+            items.Add(new DashboardActivityViewModel
+            {
+                Icon = "📝",
+                Text = a.Summary,
+                When = ActivityWhen(d, today),
+                SortDate = d,
+                Href = "/Admin"
+            });
+        }
+
         return items
             .OrderByDescending(a => a.SortDate)
-            .Take(8)
+            .Take(10)
             .ToList();
     }
 

@@ -395,7 +395,7 @@ public class BrowserFlowTests
         await admin.Page.GotoAsync("/Dashboard");
         var (exportStatus, export) = await admin.ApiAsync("GET", "/Dashboard/Export");
         Assert.Equal(200, exportStatus);
-        Assert.Equal(2, export.GetProperty("formatVersion").GetInt32());
+        Assert.Equal(3, export.GetProperty("formatVersion").GetInt32());
         var raw = export.GetRawText();
         Assert.DoesNotContain("passwordHash", raw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("securityStamp", raw, StringComparison.OrdinalIgnoreCase);

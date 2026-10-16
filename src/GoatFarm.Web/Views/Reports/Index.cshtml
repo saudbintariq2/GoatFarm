@@ -41,6 +41,14 @@
         <button type="button" class="tab rep-subtab" data-reptab="profit">Profitability</button>
     }
     <button type="button" class="tab rep-subtab" data-reptab="inventory">Inventory</button>
+    @if (!Model.FinanceHidden)
+    {
+        <button type="button" class="tab rep-subtab" data-reptab="capexopex">CAPEX &amp; OPEX</button>
+        <button type="button" class="tab rep-subtab" data-reptab="profitshare">Profit sharing</button>
+    }
+    <button type="button" class="tab rep-subtab" data-reptab="projects">Projects &amp; assets</button>
+    <button type="button" class="tab rep-subtab" data-reptab="logistics">Logistics</button>
+    <button type="button" class="tab rep-subtab" data-reptab="owners">Investors</button>
     <button type="button" class="tab rep-subtab" data-reptab="alerts">Alerts</button>
     <button type="button" class="tab rep-subtab" data-reptab="compare">Comparison</button>
 </div>
@@ -263,6 +271,38 @@
             <th class="num-cell">Value</th></tr></thead><tbody id="repInvAssets"></tbody></table></div>
     </div>
     }
+</div>
+
+<div class="repview" id="rep-capexopex" style="display:none">
+    <div class="fin3" id="repCapexKpi"></div>
+    <div class="panel"><div class="panel-head"><h2>Capital spend (CAPEX)</h2></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Item</th><th class="hide-sm">Detail</th><th class="num-cell">Amount</th></tr></thead>
+        <tbody id="repCapexRows"></tbody></table></div></div>
+    <div class="panel"><div class="panel-head"><h2>Running costs (OPEX)</h2></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Category</th><th class="num-cell">Amount</th></tr></thead>
+        <tbody id="repOpexRows"></tbody></table></div></div>
+</div>
+<div class="repview" id="rep-profitshare" style="display:none">
+    <div class="panel"><div class="panel-head"><h2>Profit sharing</h2><span class="sub" id="repPsSub"></span></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Partner</th><th class="num-cell">Share %</th><th class="num-cell">Amount</th></tr></thead>
+        <tbody id="repPsRows"></tbody></table></div></div>
+</div>
+<div class="repview" id="rep-projects" style="display:none">
+    <div class="fin3" id="repProjKpi"></div>
+    <div class="panel"><div class="panel-head"><h2>Projects</h2></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Name</th><th>Status</th><th class="num-cell">Budget</th><th class="num-cell">Spent</th></tr></thead>
+        <tbody id="repProjRows"></tbody></table></div></div>
+    <div class="panel"><div class="panel-head"><h2>Fixed assets register</h2></div>
+        <div class="panel-body"><table class="tbl"><thead><tr><th>Asset</th><th class="hide-sm">Category</th><th class="num-cell">Cost</th></tr></thead>
+        <tbody id="repProjAssets"></tbody></table></div></div>
+</div>
+<div class="repview" id="rep-logistics" style="display:none">
+    <div class="panel"><div class="panel-head"><h2>Logistics</h2></div>
+        <div class="panel-body"><div class="note">Transport and delivery routes — track shipments via Products stock movements until dedicated logistics is expanded.</div></div></div>
+</div>
+<div class="repview" id="rep-owners" style="display:none">
+    <div class="panel"><div class="panel-head"><h2>Investors / owners</h2></div>
+        <div class="panel-body"><div class="note">Owner investments and profit partners appear in Finance reports and ledger.</div></div></div>
 </div>
 
 <div class="repview" id="rep-alerts" style="display:none">

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GoatFarm.Application.Common;
@@ -18,12 +19,26 @@ public class GoatController : Controller
 
     private readonly IGoatService _goatService;
     private readonly ILookupService _lookupService;
+    private readonly IApprovalService _approvalService;
+    private readonly IPermissionService _permissionService;
+    private readonly ITreatmentService _treatmentService;
 
-    public GoatController(IGoatService goatService, ILookupService lookupService)
+    public GoatController(
+        IGoatService goatService,
+        ILookupService lookupService,
+        IApprovalService approvalService,
+        IPermissionService permissionService,
+        ITreatmentService treatmentService)
     {
         _goatService = goatService;
         _lookupService = lookupService;
+        _approvalService = approvalService;
+        _permissionService = permissionService;
+        _treatmentService = treatmentService;
     }
+
+    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+    private string UserDisplay => User.FindFirst("FullName")?.Value ?? User.Identity?.Name ?? "";
 
     [HttpGet]
     public async Task<IActionResult> Index(
@@ -130,6 +145,18 @@ public class GoatController : Controller
     {
         try
         {
+            var role = await _permissionService.GetCurrentUserRoleAsync(cancellationToken) ?? FarmRoles.Staff;
+            if (await _approvalService.NeedsApprovalAsync(UserId, role, FarmActions.Delete, cancellationToken))
+            {
+                var payload = JsonSerializer.Serialize(new { entity = "Goat", action = "Delete", id });
+                await _approvalService.SubmitAsync(FarmTabs.Herd, "Delete", payload, UserId, UserDisplay, cancellationToken);
+                return StatusCode(StatusCodes.Status202Accepted, new
+                {
+                    pendingApproval = true,
+                    message = "Delete submitted for manager approval."
+                });
+            }
+
             var ok = await _goatService.DeleteAsync(id, cancellationToken);
             return ok ? Ok(new { success = true }) : NotFound();
         }
@@ -155,6 +182,25 @@ public class GoatController : Controller
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
         return Json(await _goatService.RecordDeathAsync(model, cancellationToken));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> SaleFormData(CancellationToken cancellationToken) =>
+        Json(await _goatService.GetSaleFormDataAsync(cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> RecordSale([FromBody] RecordSaleViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return Json(await _goatService.RecordSaleAsync(model, cancellationToken));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> RecoverTreatment(int id, CancellationToken cancellationToken)
+    {
+        if (!await _treatmentService.RecoverAsync(id, cancellationToken))
+            return NotFound(new { error = "Treatment not found." });
+        return Json(new { success = true });
     }
 
     public record CreateGroupRequest(string Name);

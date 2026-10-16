@@ -1,6 +1,7 @@
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Milk;
 using GoatFarm.Domain.Constants;
+using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
@@ -9,11 +10,15 @@ public class MilkController : Controller
 {
     private readonly IMilkService _milkService;
     private readonly ILookupService _lookupService;
+    private readonly IApprovalService _approvalService;
+    private readonly IPermissionService _permissionService;
 
-    public MilkController(IMilkService milkService, ILookupService lookupService)
+    public MilkController(IMilkService milkService, ILookupService lookupService, IApprovalService approvalService, IPermissionService permissionService)
     {
         _milkService = milkService;
         _lookupService = lookupService;
+        _approvalService = approvalService;
+        _permissionService = permissionService;
     }
 
     [HttpGet]
@@ -81,6 +86,9 @@ public class MilkController : Controller
     [HttpDelete]
     public async Task<IActionResult> DeleteProduction(int id, CancellationToken cancellationToken)
     {
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Milk, "MilkProduction", id, cancellationToken);
+        if (pending is not null) return pending;
         var ok = await _milkService.DeleteProductionAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound();
     }
@@ -88,6 +96,9 @@ public class MilkController : Controller
     [HttpDelete]
     public async Task<IActionResult> DeleteSale(int id, CancellationToken cancellationToken)
     {
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Milk, "MilkSale", id, cancellationToken);
+        if (pending is not null) return pending;
         var ok = await _milkService.DeleteSaleAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound();
     }
@@ -95,6 +106,9 @@ public class MilkController : Controller
     [HttpDelete]
     public async Task<IActionResult> DeleteWaste(int id, CancellationToken cancellationToken)
     {
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Milk, "MilkWaste", id, cancellationToken);
+        if (pending is not null) return pending;
         var ok = await _milkService.DeleteWasteAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound();
     }

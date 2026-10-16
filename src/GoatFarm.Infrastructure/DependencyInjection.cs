@@ -8,6 +8,7 @@ using GoatFarm.Infrastructure.Repositories;
 using GoatFarm.Infrastructure.Services;
 using GoatFarm.Infrastructure.Services.Assistant;
 using GoatFarm.Infrastructure.Services.Assistant.Tools;
+using GoatFarm.Infrastructure.Services.Extended;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +57,14 @@ public static class DependencyInjection
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IDoubleEntryGuardService, DoubleEntryGuardService>();
         services.AddScoped<ITaskService, TaskService>();
+        services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IApprovalService, ApprovalService>();
+        services.AddScoped<ITradingService, TradingService>();
+        services.AddScoped<IProjectsService, ProjectsService>();
+        services.AddScoped<ILedgerService, LedgerService>();
+        services.AddScoped<IProductsService, ProductsService>();
+        services.AddScoped<ITreatmentService, TreatmentService>();
+        services.AddScoped<IApprovalExecutionService, ApprovalExecutionService>();
 
         services.AddSingleton(OpenAiOptions.FromConfiguration(configuration));
         services.AddSingleton<ILlmClient, OpenAiLlmClient>();

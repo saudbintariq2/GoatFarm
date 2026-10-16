@@ -37,6 +37,35 @@
 </div>
 
 <div class="panel">
+    <div class="panel-head"><h2>Treatment history</h2></div>
+    <div class="panel-body">
+        @if (Model.Treatments.Count == 0)
+        {
+            <div class="search-empty">No treatments recorded for this goat.</div>
+        }
+        else
+        {
+            <table class="tbl">
+                <thead><tr><th>Start</th><th>End</th><th>Problem</th><th class="hide-sm">Medicine</th><th class="num-cell hide-sm">Cost</th><th>Status</th></tr></thead>
+                <tbody>
+                @foreach (var t in Model.Treatments)
+                {
+                    <tr>
+                        <td>@t.StartDateDisplay</td>
+                        <td>@t.EndDateDisplay</td>
+                        <td>@t.Diagnosis</td>
+                        <td class="hide-sm">@t.Medicine</td>
+                        <td class="num-cell hide-sm">@(t.Cost > 0 ? "Rs " + Math.Round(t.Cost).ToString("N0") : "—")</td>
+                        <td><span class="chip @(t.IsActive ? "chip-exp" : "chip-milk")">@(t.IsActive ? "Active" : "Ended")</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="panel">
     <div class="panel-head"><h2>Vaccine schedule</h2></div>
     <div class="panel-body">
         @if (Model.VaccineSchedule.Count == 0)

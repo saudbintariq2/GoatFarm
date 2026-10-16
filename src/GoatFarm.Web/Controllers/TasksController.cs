@@ -2,6 +2,7 @@ using System.Security.Claims;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Tasks;
 using GoatFarm.Domain.Constants;
+using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
@@ -10,11 +11,13 @@ public class TasksController : Controller
 {
     private readonly ITaskService _taskService;
     private readonly IPermissionService _permissionService;
+    private readonly IApprovalService _approvalService;
 
-    public TasksController(ITaskService taskService, IPermissionService permissionService)
+    public TasksController(ITaskService taskService, IPermissionService permissionService, IApprovalService approvalService)
     {
         _taskService = taskService;
         _permissionService = permissionService;
+        _approvalService = approvalService;
     }
 
     private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
@@ -83,6 +86,9 @@ public class TasksController : Controller
     [HttpDelete]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Tasks, "FarmTask", id, cancellationToken);
+        if (pending is not null) return pending;
         var ok = await _taskService.DeleteAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound(new { error = "Task not found." });
     }

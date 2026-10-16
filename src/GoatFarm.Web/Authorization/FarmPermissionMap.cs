@@ -16,12 +16,18 @@ public static class FarmPermissionMap
             ["Breeding"] = FarmTabs.Breeding,
             ["Search"] = FarmTabs.Search,
             ["Feed"] = FarmTabs.Feed,
-            ["Milk"] = FarmTabs.Milk,
+            ["Milk"] = FarmTabs.Products,
+            ["Products"] = FarmTabs.Products,
             ["Finance"] = FarmTabs.Finance,
             ["Reports"] = FarmTabs.Reports,
             ["Vaccine"] = FarmTabs.Vaccines,
             ["Settings"] = FarmTabs.Settings,
-            ["Tasks"] = FarmTabs.Tasks
+            ["Tasks"] = FarmTabs.Tasks,
+            ["Trading"] = FarmTabs.Trading,
+            ["Products"] = FarmTabs.Products,
+            ["Projects"] = FarmTabs.Projects,
+            ["Admin"] = FarmTabs.Admin,
+            ["BackupCenter"] = FarmTabs.Backup
         };
 
     public static readonly IReadOnlyDictionary<string, (string Tab, string Action)> ActionPermissions =
@@ -42,6 +48,9 @@ public static class FarmPermissionMap
             ["Goat.CreateGroup"] = (FarmTabs.Herd, FarmActions.Add),
             ["Goat.RecordWeight"] = (FarmTabs.Herd, FarmActions.Edit),
             ["Goat.RecordDeath"] = (FarmTabs.Herd, FarmActions.Edit),
+            ["Goat.RecordSale"] = (FarmTabs.Herd, FarmActions.Edit),
+            ["Goat.SaleFormData"] = (FarmTabs.Herd, FarmActions.View),
+            ["Goat.RecoverTreatment"] = (FarmTabs.Herd, FarmActions.Edit),
 
             ["Breeding.GetData"] = (FarmTabs.Breeding, FarmActions.View),
             ["Breeding.LookupTag"] = (FarmTabs.Breeding, FarmActions.View),
@@ -82,16 +91,16 @@ public static class FarmPermissionMap
             ["Lookup.Get"] = (FarmTabs.Herd, FarmActions.View),
             ["Lookup.AddOption"] = (FarmTabs.Herd, FarmActions.Add),
 
-            ["Milk.GetData"] = (FarmTabs.Milk, FarmActions.View),
-            ["Milk.AddProduction"] = (FarmTabs.Milk, FarmActions.Add),
-            ["Milk.UpdateProduction"] = (FarmTabs.Milk, FarmActions.Edit),
-            ["Milk.DeleteProduction"] = (FarmTabs.Milk, FarmActions.Delete),
-            ["Milk.AddSale"] = (FarmTabs.Milk, FarmActions.Add),
-            ["Milk.UpdateSale"] = (FarmTabs.Milk, FarmActions.Edit),
-            ["Milk.DeleteSale"] = (FarmTabs.Milk, FarmActions.Delete),
-            ["Milk.AddWaste"] = (FarmTabs.Milk, FarmActions.Add),
-            ["Milk.UpdateWaste"] = (FarmTabs.Milk, FarmActions.Edit),
-            ["Milk.DeleteWaste"] = (FarmTabs.Milk, FarmActions.Delete),
+            ["Milk.GetData"] = (FarmTabs.Products, FarmActions.View),
+            ["Milk.AddProduction"] = (FarmTabs.Products, FarmActions.Add),
+            ["Milk.UpdateProduction"] = (FarmTabs.Products, FarmActions.Edit),
+            ["Milk.DeleteProduction"] = (FarmTabs.Products, FarmActions.Delete),
+            ["Milk.AddSale"] = (FarmTabs.Products, FarmActions.Add),
+            ["Milk.UpdateSale"] = (FarmTabs.Products, FarmActions.Edit),
+            ["Milk.DeleteSale"] = (FarmTabs.Products, FarmActions.Delete),
+            ["Milk.AddWaste"] = (FarmTabs.Products, FarmActions.Add),
+            ["Milk.UpdateWaste"] = (FarmTabs.Products, FarmActions.Edit),
+            ["Milk.DeleteWaste"] = (FarmTabs.Products, FarmActions.Delete),
 
             ["Finance.GetData"] = (FarmTabs.Finance, FarmActions.View),
             ["Finance.SalaryReconciliation"] = (FarmTabs.Finance, FarmActions.View),
@@ -149,6 +158,48 @@ public static class FarmPermissionMap
             ["Tasks.SetStatus"] = (FarmTabs.Tasks, FarmActions.View),
             ["Tasks.Delete"] = (FarmTabs.Tasks, FarmActions.Delete),
 
-            ["Assistant.Chat"] = (FarmTabs.Assistant, FarmActions.View)
+            ["Assistant.Chat"] = (FarmTabs.Assistant, FarmActions.View),
+
+            ["Trading.GetData"] = (FarmTabs.Trading, FarmActions.View),
+            ["Trading.SaveMaster"] = (FarmTabs.Trading, FarmActions.Edit),
+            ["Trading.SaveEntry"] = (FarmTabs.Trading, FarmActions.Add),
+            ["Trading.DeleteEntry"] = (FarmTabs.Trading, FarmActions.Delete),
+
+            ["Products.GetData"] = (FarmTabs.Products, FarmActions.View),
+            ["Products.SaveCatalog"] = (FarmTabs.Products, FarmActions.Edit),
+            ["Products.SaveWarehouse"] = (FarmTabs.Products, FarmActions.Edit),
+            ["Products.SaveStockMovement"] = (FarmTabs.Products, FarmActions.Add),
+            ["Products.SaveMilkingSession"] = (FarmTabs.Products, FarmActions.Add),
+            ["Products.SaveSlaughter"] = (FarmTabs.Products, FarmActions.Add),
+            ["Products.SaveSale"] = (FarmTabs.Products, FarmActions.Add),
+
+            ["Projects.GetData"] = (FarmTabs.Projects, FarmActions.View),
+            ["Projects.SaveProject"] = (FarmTabs.Projects, FarmActions.Edit),
+            ["Projects.DeleteProject"] = (FarmTabs.Projects, FarmActions.Delete),
+            ["Projects.SaveExpenditure"] = (FarmTabs.Projects, FarmActions.Add),
+            ["Projects.SaveFixedAsset"] = (FarmTabs.Projects, FarmActions.Add),
+            ["Projects.SaveSolarLog"] = (FarmTabs.Projects, FarmActions.Add),
+
+            ["Admin.Notices"] = (FarmTabs.Dashboard, FarmActions.View),
+            ["Admin.PendingApprovalCount"] = (FarmTabs.Admin, FarmActions.View),
+            ["Admin.Approvals"] = (FarmTabs.Admin, FarmActions.View),
+            ["Admin.ReviewApproval"] = (FarmTabs.Admin, FarmActions.Edit),
+            ["Admin.ChangePassword"] = (FarmTabs.Admin, FarmActions.Edit),
+
+            ["BackupCenter.Export"] = (FarmTabs.Backup, FarmActions.View),
+            ["BackupCenter.Import"] = (FarmTabs.Backup, FarmActions.Edit),
+
+            ["Finance.LedgerData"] = (FarmTabs.Finance, FarmActions.View),
+            ["Finance.SaveMoneyAccount"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.SaveLedgerTransaction"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.SaveCustomerInvoice"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.SaveBusinessCustomer"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.SaveSupplierPayable"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.SaveBudgetLine"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.SaveProfitPartner"] = (FarmTabs.Finance, FarmActions.Edit),
+
+            ["Vaccine.Treatments"] = (FarmTabs.Vaccines, FarmActions.View),
+            ["Vaccine.SaveTreatment"] = (FarmTabs.Vaccines, FarmActions.Add),
+            ["Vaccine.DeleteTreatment"] = (FarmTabs.Vaccines, FarmActions.Delete)
         };
 }

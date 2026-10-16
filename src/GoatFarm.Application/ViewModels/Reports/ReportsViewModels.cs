@@ -27,6 +27,54 @@ public class ReportsPageViewModel
     public ReportInventorySectionViewModel Inventory { get; set; } = new();
     public ReportAlertsSectionViewModel Alerts { get; set; } = new();
     public ReportComparisonSectionViewModel Comparison { get; set; } = new();
+    public ReportCapexOpexSectionViewModel CapexOpex { get; set; } = new();
+    public ReportProfitShareSectionViewModel ProfitShare { get; set; } = new();
+    public ReportProjectsSectionViewModel ProjectsAssets { get; set; } = new();
+}
+
+public class ReportCapexOpexSectionViewModel
+{
+    public decimal CapexTotal { get; set; }
+    public decimal OpexTotal { get; set; }
+    public IReadOnlyList<ReportSimpleAmountRowViewModel> CapexRows { get; set; } = [];
+    public IReadOnlyList<ReportSimpleAmountRowViewModel> OpexRows { get; set; } = [];
+}
+
+public class ReportProfitShareSectionViewModel
+{
+    public decimal NetProfit { get; set; }
+    public IReadOnlyList<ReportProfitShareRowViewModel> Partners { get; set; } = [];
+}
+
+public class ReportProfitShareRowViewModel
+{
+    public string Name { get; set; } = "";
+    public decimal SharePercent { get; set; }
+    public decimal ShareAmount { get; set; }
+}
+
+public class ReportProjectsSectionViewModel
+{
+    public int ActiveProjects { get; set; }
+    public decimal TotalBudget { get; set; }
+    public decimal TotalSpent { get; set; }
+    public IReadOnlyList<ReportProjectRowViewModel> Projects { get; set; } = [];
+    public IReadOnlyList<ReportSimpleAmountRowViewModel> FixedAssets { get; set; } = [];
+}
+
+public class ReportProjectRowViewModel
+{
+    public string Name { get; set; } = "";
+    public string Status { get; set; } = "";
+    public decimal Budget { get; set; }
+    public decimal Spent { get; set; }
+}
+
+public class ReportSimpleAmountRowViewModel
+{
+    public string Label { get; set; } = "";
+    public string? Sub { get; set; }
+    public decimal Amount { get; set; }
 }
 
 public class ReportKpiViewModel

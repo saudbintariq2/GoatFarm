@@ -1,0 +1,39 @@
+<div class="note"><b>Backup center:</b> download a full JSON snapshot or restore from a file. Restore replaces farm data — use only trusted backups.</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Export</h2></div>
+    <div class="panel-body">
+        <p>Includes herd, breeding, tasks, finance, products, trading, projects, and settings (no password hashes).</p>
+        <a class="btn btn-green" asp-controller="BackupCenter" asp-action="Export">Download full backup</a>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Import / restore</h2></div>
+    <div class="panel-body">
+        <form id="backupImportForm" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div class="field"><label>Backup file (.json)</label><input type="file" name="file" accept=".json,application/json" required></div>
+            <button type="submit" class="btn btn-danger">Restore from backup</button>
+        </form>
+        <p class="note" style="margin-top:12px">You can also export/import from Dashboard if you have admin access there.</p>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+document.getElementById('backupImportForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!confirm('Restore will replace current farm data. Continue?')) return;
+  const fd = new FormData(e.target);
+  const token = fd.get('__RequestVerificationToken');
+  const file = fd.get('file');
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch('/BackupCenter/Import', { method: 'POST', headers: { 'X-CSRF-TOKEN': token }, body });
+  const j = await res.json().catch(() => ({}));
+  if (res.ok) { alert('Restore completed.'); location.href = '/Dashboard'; }
+  else alert(j.error || 'Restore failed.');
+});
+</script>
+}

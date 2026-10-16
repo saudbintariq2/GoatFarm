@@ -33,10 +33,38 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     public DbSet<BreedingEmptyLog> BreedingEmptyLogs => Set<BreedingEmptyLog>();
     public DbSet<GoatWeightRecord> GoatWeightRecords => Set<GoatWeightRecord>();
     public DbSet<DeathRecord> DeathRecords => Set<DeathRecord>();
+    public DbSet<GoatSale> GoatSales => Set<GoatSale>();
     public DbSet<FeedUsageRecord> FeedUsageRecords => Set<FeedUsageRecord>();
     public DbSet<FarmTask> FarmTasks => Set<FarmTask>();
     public DbSet<BreedingEvent> BreedingEvents => Set<BreedingEvent>();
     public DbSet<KiddingRecord> KiddingRecords => Set<KiddingRecord>();
+    public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<TradeItem> TradeItems => Set<TradeItem>();
+    public DbSet<TradeStore> TradeStores => Set<TradeStore>();
+    public DbSet<TradeAccount> TradeAccounts => Set<TradeAccount>();
+    public DbSet<TradeParty> TradeParties => Set<TradeParty>();
+    public DbSet<TradeExpenseCategory> TradeExpenseCategories => Set<TradeExpenseCategory>();
+    public DbSet<TradeEntry> TradeEntries => Set<TradeEntry>();
+    public DbSet<FarmProject> FarmProjects => Set<FarmProject>();
+    public DbSet<ProjectExpenditure> ProjectExpenditures => Set<ProjectExpenditure>();
+    public DbSet<FixedAssetRegister> FixedAssetRegisters => Set<FixedAssetRegister>();
+    public DbSet<SolarProductionLog> SolarProductionLogs => Set<SolarProductionLog>();
+    public DbSet<MoneyAccount> MoneyAccounts => Set<MoneyAccount>();
+    public DbSet<LedgerTransaction> LedgerTransactions => Set<LedgerTransaction>();
+    public DbSet<BusinessCustomer> BusinessCustomers => Set<BusinessCustomer>();
+    public DbSet<CustomerInvoice> CustomerInvoices => Set<CustomerInvoice>();
+    public DbSet<SupplierPayable> SupplierPayables => Set<SupplierPayable>();
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
+    public DbSet<ProfitSharePartner> ProfitSharePartners => Set<ProfitSharePartner>();
+    public DbSet<ProductCatalogItem> ProductCatalogItems => Set<ProductCatalogItem>();
+    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
+    public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<MilkingSession> MilkingSessions => Set<MilkingSession>();
+    public DbSet<SlaughterRecord> SlaughterRecords => Set<SlaughterRecord>();
+    public DbSet<ProductSale> ProductSales => Set<ProductSale>();
+    public DbSet<GoatTreatment> GoatTreatments => Set<GoatTreatment>();
+    public DbSet<CustomFeedingGroup> CustomFeedingGroups => Set<CustomFeedingGroup>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

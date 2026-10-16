@@ -1,3 +1,4 @@
+using GoatFarm.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace GoatFarm.Infrastructure.Persistence;
@@ -6,6 +7,11 @@ public static class DbDataCleaner
 {
     public static async Task ClearAllFarmDataAsync(GoatFarmDbContext context, CancellationToken cancellationToken = default)
     {
+        await BackupV241Helper.ClearV241Async(context, cancellationToken);
+        context.FarmTasks.RemoveRange(await context.FarmTasks.ToListAsync(cancellationToken));
+        context.BreedingEvents.RemoveRange(await context.BreedingEvents.ToListAsync(cancellationToken));
+        context.KiddingRecords.RemoveRange(await context.KiddingRecords.ToListAsync(cancellationToken));
+        context.MilkWastes.RemoveRange(await context.MilkWastes.ToListAsync(cancellationToken));
         await GoatGraphCleaner.DetachBreedingGraphAsync(context, cancellationToken);
         context.VaccinationHistories.RemoveRange(await context.VaccinationHistories.ToListAsync(cancellationToken));
         context.Goats.RemoveRange(await context.Goats.ToListAsync(cancellationToken));
@@ -27,8 +33,13 @@ public static class DbDataCleaner
         context.FeedUsageRecords.RemoveRange(await context.FeedUsageRecords.ToListAsync(cancellationToken));
         context.GoatWeightRecords.RemoveRange(await context.GoatWeightRecords.ToListAsync(cancellationToken));
         context.DeathRecords.RemoveRange(await context.DeathRecords.ToListAsync(cancellationToken));
+        context.GoatSales.RemoveRange(await context.GoatSales.ToListAsync(cancellationToken));
         context.Employees.RemoveRange(await context.Employees.ToListAsync(cancellationToken));
         context.BreedingEmptyLogs.RemoveRange(await context.BreedingEmptyLogs.ToListAsync(cancellationToken));
+
+        var demoMarker = await context.AppSettings.FirstOrDefaultAsync(s => s.Key == DemoDataSeedHelper.MarkerKey, cancellationToken);
+        if (demoMarker is not null)
+            context.AppSettings.Remove(demoMarker);
 
         await context.SaveChangesAsync(cancellationToken);
     }

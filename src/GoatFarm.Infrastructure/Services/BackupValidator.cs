@@ -9,7 +9,7 @@ namespace GoatFarm.Infrastructure.Services;
 /// </summary>
 public static class BackupFormat
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     public const string AppMarker = "GoatFarmPro";
 
     public static readonly string[] RequiredV2Sections = ["goats", "breedingEvents", "kiddingRecords", "farmTasks"];

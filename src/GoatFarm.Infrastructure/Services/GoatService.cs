@@ -56,6 +56,7 @@ public class GoatService : IGoatService
         {
             Stats = BuildStats(statusCounts),
             Goats = goats.Select(MapGoat).ToList(),
+            UnderTreatment = await LoadUnderTreatmentAsync(cancellationToken),
             Groups = await GetGroupsAsync(cancellationToken),
             Filter = filter ?? "all",
             Search = search,
@@ -432,6 +433,193 @@ public class GoatService : IGoatService
             Tag = goat.Tag,
             Message = $"Recorded: {goat.Tag} died on {model.Date:yyyy-MM-dd}."
         };
+    }
+
+    public async Task<GoatSaleFormDataViewModel> GetSaleFormDataAsync(CancellationToken cancellationToken = default)
+    {
+        var accounts = await _context.MoneyAccounts.AsNoTracking()
+            .Where(a => a.IsActive)
+            .OrderBy(a => a.Name)
+            .Select(a => new SaleMoneyAccountOptionViewModel { Id = a.Id, Name = a.Name })
+            .ToListAsync(cancellationToken);
+
+        var customers = await _context.BusinessCustomers.AsNoTracking()
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.Name)
+            .Select(c => new SaleCustomerOptionViewModel { Id = c.Id, Name = c.Name })
+            .ToListAsync(cancellationToken);
+
+        return new GoatSaleFormDataViewModel { Accounts = accounts, Customers = customers };
+    }
+
+    public async Task<WeightDeathResultViewModel> RecordSaleAsync(
+        RecordSaleViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (model.Price <= 0)
+            return new WeightDeathResultViewModel { Success = false, Message = "Enter the sale price." };
+
+        var goat = await _context.Goats.FirstOrDefaultAsync(
+            g => g.Tag.ToLower() == model.Tag.Trim().ToLower() && !g.IsArchived, cancellationToken);
+        if (goat is null)
+            return new WeightDeathResultViewModel { Success = false, Message = "No live goat found with that tag." };
+
+        if (model.WeightKg is > 0)
+        {
+            _context.GoatWeightRecords.Add(new GoatWeightRecord
+            {
+                GoatId = goat.Id,
+                Date = model.Date,
+                Kg = model.WeightKg.Value
+            });
+        }
+
+        var buyer = string.IsNullOrWhiteSpace(model.Buyer) ? null : model.Buyer.Trim();
+        var incomeNote = goat.Tag + (buyer is not null ? " — " + buyer : "");
+
+        var income = new Income
+        {
+            Type = "Live goat sale",
+            Amount = model.Price,
+            Date = model.Date,
+            Comment = incomeNote
+        };
+        _context.Incomes.Add(income);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        int? invoiceId = null;
+        int? ledgerAccountId = null;
+        if (model.IsCredit)
+        {
+            var customerId = model.CustomerId;
+            if (customerId is null or <= 0)
+            {
+                if (string.IsNullOrEmpty(buyer))
+                    return new WeightDeathResultViewModel { Success = false, Message = "Enter a buyer name or pick a customer for credit sales." };
+
+                var existing = await _context.BusinessCustomers
+                    .FirstOrDefaultAsync(c => c.Name.ToLower() == buyer.ToLower(), cancellationToken);
+                if (existing is null)
+                {
+                    existing = new BusinessCustomer
+                    {
+                        Name = buyer,
+                        IsActive = true,
+                        CreatedDate = DateTime.UtcNow,
+                        UpdatedDate = DateTime.UtcNow
+                    };
+                    _context.BusinessCustomers.Add(existing);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+
+                customerId = existing.Id;
+            }
+
+            var inv = new CustomerInvoice
+            {
+                CustomerId = customerId.Value,
+                Date = model.Date,
+                DueDate = model.Date.AddDays(14),
+                Description = $"Live goat sale · {goat.Tag}",
+                Amount = model.Price,
+                PaidAmount = 0,
+                Status = InvoiceStatus.Open,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            _context.CustomerInvoices.Add(inv);
+            await _context.SaveChangesAsync(cancellationToken);
+            invoiceId = inv.Id;
+        }
+        else
+        {
+            var accountId = model.AccountId;
+            if (accountId is null or <= 0)
+            {
+                accountId = await _context.MoneyAccounts.AsNoTracking()
+                    .Where(a => a.IsActive)
+                    .OrderBy(a => a.Id)
+                    .Select(a => (int?)a.Id)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            if (accountId is null or <= 0)
+                return new WeightDeathResultViewModel { Success = false, Message = "Add a cash or bank account on Finance → Accounts before recording a paid sale." };
+
+            ledgerAccountId = accountId;
+            _context.LedgerTransactions.Add(new LedgerTransaction
+            {
+                Date = model.Date,
+                Kind = LedgerTransactionKind.Income,
+                AccountId = ledgerAccountId,
+                Amount = model.Price,
+                Category = income.Type,
+                Reference = goat.Tag,
+                Notes = "Live goat sale" + (buyer is not null ? " · " + buyer : ""),
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        var sale = new GoatSale
+        {
+            GoatId = goat.Id,
+            Tag = goat.Tag,
+            Breed = goat.Breed,
+            Date = model.Date,
+            Price = model.Price,
+            Buyer = buyer,
+            WeightKg = model.WeightKg,
+            IsCredit = model.IsCredit,
+            AccountId = model.IsCredit ? null : ledgerAccountId ?? model.AccountId,
+            CustomerInvoiceId = invoiceId,
+            IncomeId = income.Id
+        };
+        _context.GoatSales.Add(sale);
+
+        goat.IsArchived = true;
+        goat.ArchivedReason = "sold";
+        goat.ArchivedDate = model.Date;
+        goat.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return new WeightDeathResultViewModel
+        {
+            Success = true,
+            Tag = goat.Tag,
+            Message = $"Sold {goat.Tag} for Rs {model.Price:N0} on {model.Date:yyyy-MM-dd}."
+        };
+    }
+
+    private async Task<IReadOnlyList<HerdTreatmentRowViewModel>> LoadUnderTreatmentAsync(CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var rows = await _context.GoatTreatments.AsNoTracking()
+            .Include(t => t.Goat)
+            .Where(t => (t.EndDate == null || t.EndDate >= today) && !t.Goat.IsArchived)
+            .OrderByDescending(t => t.StartDate)
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(t =>
+        {
+            var days = GetAgeInDays(t.StartDate);
+            var wd = t.WithdrawalDays;
+            int? left = wd is > 0 ? Math.Max(0, wd.Value - days) : null;
+            var (statusText, _) = DisplayHelper.GetStatusDisplay(t.Goat.Status);
+            return new HerdTreatmentRowViewModel
+            {
+                TreatmentId = t.Id,
+                GoatId = t.GoatId,
+                Tag = t.Goat.Tag,
+                StatusDisplay = statusText,
+                HealthDisplay = DisplayHelper.GetHealthLabel(t.Goat.HealthState),
+                Diagnosis = t.Diagnosis,
+                Medicine = t.Medicine,
+                DaysInTreatment = days,
+                WithdrawalDays = wd,
+                WithdrawalDaysLeft = left
+            };
+        }).ToList();
     }
 
     public int GetAgeInDays(DateOnly eventDate)

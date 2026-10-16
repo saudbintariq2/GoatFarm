@@ -73,10 +73,39 @@
                 <button type="button" class="btn btn-green" id="addBtn">+ Add goat</button>
                 <button type="button" class="btn btn-ghost" id="cancelBtn" style="display:none">Cancel</button>
             </div>
+            <button type="button" class="btn btn-ghost" id="sellBtn" style="display:none">Sell goat</button>
             <button type="button" class="btn btn-danger" id="deleteBtn" style="display:none">Delete</button>
         </div>
     </div>
 </div>
+
+@if (Model.UnderTreatment.Count > 0)
+{
+<div class="panel" id="treatPanel">
+    <div class="panel-head"><h2>Under treatment</h2><span class="sub" id="treatCount">@Model.UnderTreatment.Count animal(s)</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Goat</th><th>State</th><th class="hide-sm">Problem</th>
+            <th class="hide-sm">Medicine</th><th class="num-cell">Days</th>
+            <th class="num-cell">Milk withhold</th><th style="width:110px"></th></tr></thead>
+        <tbody id="treatRows">
+            @foreach (var t in Model.UnderTreatment)
+            {
+                var wdLeft = t.WithdrawalDaysLeft;
+                var wdStyle = wdLeft is > 0 ? "color:#8a261c;font-weight:700" : "color:var(--green-dark)";
+                <tr data-treat-id="@t.TreatmentId">
+                    <td><a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(t.Tag)">@t.Tag</a><div class="name">@t.StatusDisplay</div></td>
+                    <td><span class="chip chip-exp">@t.HealthDisplay</span></td>
+                    <td class="hide-sm"><span class="breed">@t.Diagnosis</span></td>
+                    <td class="hide-sm"><span class="breed">@t.Medicine</span></td>
+                    <td class="num-cell">@t.DaysInTreatment d</td>
+                    <td class="num-cell" style="@wdStyle">@(t.WithdrawalDays is > 0 ? (wdLeft is > 0 ? $"{wdLeft} d left" : "clear") : "—")</td>
+                    <td><button type="button" class="btn btn-green btn-sm" data-recov="@t.TreatmentId">Recovered</button></td>
+                </tr>
+            }
+        </tbody></table>
+    </div>
+</div>
+}
 
 <div class="panel">
     <div class="panel-head"><h2>The herd</h2>

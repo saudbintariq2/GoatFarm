@@ -215,6 +215,9 @@ public class ReportsService : IReportsService
             weightRecords, growth.UnderperformingTags);
         dashboard.Alerts = alerts.Items.Take(10).ToList();
         var comparison = BuildComparison(incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, ownerInv, deaths, allGoats);
+        var capexOpex = await BuildCapexOpexSectionAsync(range, cancellationToken);
+        var profitShare = await BuildProfitShareSectionAsync(range, incTot - expTot, cancellationToken);
+        var projectsAssets = await BuildProjectsSectionAsync(cancellationToken);
 
         return new ReportsPageViewModel
         {
@@ -239,7 +242,101 @@ public class ReportsService : IReportsService
             Profitability = profitability,
             Inventory = inventory,
             Alerts = alerts,
-            Comparison = comparison
+            Comparison = comparison,
+            CapexOpex = capexOpex,
+            ProfitShare = profitShare,
+            ProjectsAssets = projectsAssets
+        };
+    }
+
+    private async Task<ReportCapexOpexSectionViewModel> BuildCapexOpexSectionAsync(ReportRange range, CancellationToken cancellationToken)
+    {
+        var projectSpend = (await _context.ProjectExpenditures.AsNoTracking().ToListAsync(cancellationToken))
+            .Where(e => range.Test(e.Date)).OrderByDescending(e => e.Date).Take(50).ToList();
+        var fixedAssets = (await _context.FixedAssetRegisters.AsNoTracking().ToListAsync(cancellationToken))
+            .Where(a => a.PurchaseDate is { } pd && range.Test(pd)).OrderByDescending(a => a.PurchaseDate).Take(50).ToList();
+        var capAssets = (await _context.Assets.AsNoTracking().ToListAsync(cancellationToken))
+            .Where(a => a.PurchaseDate is { } pd && range.Test(pd)).ToList();
+
+        var capexRows = projectSpend.Select(e => new ReportSimpleAmountRowViewModel
+        {
+            Label = e.Description,
+            Sub = e.Date.ToString("yyyy-MM-dd"),
+            Amount = e.Amount
+        }).Concat(fixedAssets.Select(a => new ReportSimpleAmountRowViewModel
+        {
+            Label = a.Name,
+            Sub = a.Category.ToString(),
+            Amount = a.Cost
+        })).Concat(capAssets.Select(a => new ReportSimpleAmountRowViewModel
+        {
+            Label = a.Name,
+            Sub = a.Type,
+            Amount = a.Cost
+        })).ToList();
+
+        var opex = (await _context.Expenses.AsNoTracking().ToListAsync(cancellationToken))
+            .Where(e => range.Test(e.Date))
+            .GroupBy(e => e.Type)
+            .Select(g => new { Type = g.Key, Amount = g.Sum(x => x.Amount) })
+            .OrderByDescending(x => x.Amount)
+            .ToList();
+
+        return new ReportCapexOpexSectionViewModel
+        {
+            CapexTotal = capexRows.Sum(r => r.Amount),
+            OpexTotal = opex.Sum(o => o.Amount),
+            CapexRows = capexRows,
+            OpexRows = opex.Select(o => new ReportSimpleAmountRowViewModel { Label = o.Type, Amount = o.Amount }).ToList()
+        };
+    }
+
+    private async Task<ReportProfitShareSectionViewModel> BuildProfitShareSectionAsync(
+        ReportRange range, decimal netProfit, CancellationToken cancellationToken)
+    {
+        var partners = await _context.ProfitSharePartners.AsNoTracking()
+            .Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync(cancellationToken);
+        return new ReportProfitShareSectionViewModel
+        {
+            NetProfit = netProfit,
+            Partners = partners.Select(p => new ReportProfitShareRowViewModel
+            {
+                Name = p.Name,
+                SharePercent = p.SharePercent,
+                ShareAmount = netProfit > 0 ? Math.Round(netProfit * p.SharePercent / 100m, 0) : 0
+            }).ToList()
+        };
+    }
+
+    private async Task<ReportProjectsSectionViewModel> BuildProjectsSectionAsync(CancellationToken cancellationToken)
+    {
+        var projects = await _context.FarmProjects.AsNoTracking().OrderBy(p => p.Name).ToListAsync(cancellationToken);
+        var spend = await _context.ProjectExpenditures.AsNoTracking()
+            .GroupBy(e => e.ProjectId)
+            .Select(g => new { ProjectId = g.Key, Total = g.Sum(x => x.Amount) })
+            .ToListAsync(cancellationToken);
+        var spendMap = spend.ToDictionary(x => x.ProjectId, x => x.Total);
+        var assets = await _context.FixedAssetRegisters.AsNoTracking()
+            .OrderByDescending(a => a.PurchaseDate).Take(40).ToListAsync(cancellationToken);
+
+        return new ReportProjectsSectionViewModel
+        {
+            ActiveProjects = projects.Count(p => p.Status == ProjectStatus.Active),
+            TotalBudget = projects.Sum(p => p.BudgetAmount),
+            TotalSpent = spend.Sum(s => s.Total),
+            Projects = projects.Select(p => new ReportProjectRowViewModel
+            {
+                Name = p.Name,
+                Status = p.Status.ToString(),
+                Budget = p.BudgetAmount,
+                Spent = spendMap.GetValueOrDefault(p.Id, 0)
+            }).ToList(),
+            FixedAssets = assets.Select(a => new ReportSimpleAmountRowViewModel
+            {
+                Label = a.Name,
+                Sub = a.Category.ToString(),
+                Amount = a.Cost
+            }).ToList()
         };
     }
 

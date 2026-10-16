@@ -23,6 +23,11 @@ public static class FarmTabs
     public const string Settings = "settings";
     public const string Tasks = "tasks";
     public const string Assistant = "assistant";
+    public const string Trading = "trading";
+    public const string Products = "products";
+    public const string Projects = "projects";
+    public const string Admin = "admin";
+    public const string Backup = "backup";
 
     public static readonly (string Key, string Label)[] All =
     [
@@ -30,13 +35,18 @@ public static class FarmTabs
         (Tasks, "Tasks"),
         (Herd, "Herd"),
         (Breeding, "Breeding"),
+        (Products, "Products"),
         (Feed, "Feed & Cost"),
-        (Milk, "Milk"),
-        (Finance, "Finance"),
-        (Reports, "Reports"),
+        (Trading, "Trading"),
         (Vaccines, "Vaccines"),
+        (Finance, "Finance"),
+        (Projects, "Projects & Assets"),
+        (Reports, "Reports"),
+        (Admin, "Users & Audit"),
         (Search, "Search"),
         (Settings, "Settings"),
+        (Backup, "Backup Center"),
+        (Milk, "Milk (legacy tab)"),
         (Assistant, "AI Assistant")
     ];
 }

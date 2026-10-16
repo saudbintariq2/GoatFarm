@@ -370,6 +370,22 @@ public class DeathRecordConfiguration : IEntityTypeConfiguration<DeathRecord>
     }
 }
 
+public class GoatSaleConfiguration : IEntityTypeConfiguration<GoatSale>
+{
+    public void Configure(EntityTypeBuilder<GoatSale> builder)
+    {
+        builder.ToTable("GoatSales");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Tag).IsRequired().HasMaxLength(50);
+        builder.Property(x => x.Breed).HasMaxLength(100);
+        builder.Property(x => x.Buyer).HasMaxLength(200);
+        builder.Property(x => x.Price).HasPrecision(18, 2);
+        builder.Property(x => x.WeightKg).HasPrecision(18, 2);
+        builder.HasIndex(x => x.Date);
+        builder.HasIndex(x => x.GoatId);
+    }
+}
+
 public class FarmTaskConfiguration : IEntityTypeConfiguration<FarmTask>
 {
     public void Configure(EntityTypeBuilder<FarmTask> builder)

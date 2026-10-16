@@ -1,0 +1,57 @@
+@model GoatFarm.Application.ViewModels.Admin.AdminPageViewModel
+@using GoatFarm.Application.ViewModels.Approval
+@{ var approvals = (ApprovalPageViewModel)ViewBag.Approvals!; }
+
+<div class="fin3">
+    <div class="fincard"><div class="v">@Model.PendingApprovals</div><div class="k">Pending approvals</div></div>
+    <div class="fincard"><div class="v">@Model.AuditLog.Count</div><div class="k">Audit rows (latest 100)</div></div>
+    <div class="fincard"><div class="v"><a asp-controller="Settings" asp-action="Index">Settings →</a></div><div class="k">Users &amp; roles</div></div>
+</div>
+
+<div class="tabs" id="admin-tabs">
+    <button type="button" class="tab active" data-admin-tab="approvals">Approval center</button>
+    <button type="button" class="tab" data-admin-tab="audit">Audit log</button>
+    <button type="button" class="tab" data-admin-tab="profile">My profile</button>
+</div>
+
+<div class="panel" data-admin-pane="approvals">
+    <div class="panel-body">
+        <h3 style="margin:0 0 10px">Pending</h3>
+        <table class="tbl"><thead><tr><th>When</th><th>Module</th><th>Action</th><th>By</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var p in approvals.Pending)
+        {
+            <tr data-id="@p.Id"><td>@p.WhenDisplay</td><td>@p.Module</td><td>@p.ActionKey</td><td>@p.RequestedByDisplay</td>
+                <td><button type="button" class="btn btn-green btn-sm appr-yes" data-id="@p.Id">Approve</button>
+                    <button type="button" class="btn btn-ghost btn-sm appr-no" data-id="@p.Id">Reject</button></td></tr>
+        }
+        @if (!approvals.Pending.Any()) {<tr><td colspan="5" class="empty">No pending requests.</td></tr>}
+        </tbody></table>
+    </div>
+</div>
+
+<div class="panel" data-admin-pane="audit" hidden>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>When</th><th>Module</th><th>Action</th><th>Summary</th><th>User</th></tr></thead>
+        <tbody>
+        @foreach (var a in Model.AuditLog)
+        {
+            <tr><td>@a.WhenDisplay</td><td>@a.Module</td><td>@a.Action</td><td>@a.Summary</td><td>@a.UserDisplay</td></tr>
+        }
+        </tbody></table>
+    </div>
+</div>
+
+<div class="panel" data-admin-pane="profile" hidden>
+    <div class="panel-body">
+        <div class="add-grid" style="max-width:420px">
+            <div class="field"><label>Current password</label><input type="password" id="pw-current" autocomplete="current-password"></div>
+            <div class="field"><label>New password</label><input type="password" id="pw-new" autocomplete="new-password"></div>
+            <button type="button" class="btn btn-green" id="pw-save">Update password</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/admin-module.js" asp-append-version="true"></script>
+}

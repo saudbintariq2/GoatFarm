@@ -12,6 +12,14 @@ internal static class ConnectionStringResolver
     /// </summary>
     public static string? Resolve(IConfiguration configuration, string name = "DefaultConnection")
     {
+        if (string.Equals(configuration["Demo:Enabled"], "true", StringComparison.OrdinalIgnoreCase))
+        {
+            var demo = configuration.GetConnectionString("DemoConnection")
+                ?? configuration["ConnectionStrings:DemoConnection"];
+            if (!string.IsNullOrWhiteSpace(demo))
+                return NormalizeConnectionString(demo);
+        }
+
         var candidates = new List<string?>();
 
         // Prefer Railway public URL — internal *.railway.internal often fails to resolve

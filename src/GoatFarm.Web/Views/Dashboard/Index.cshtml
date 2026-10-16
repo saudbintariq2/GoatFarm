@@ -45,7 +45,7 @@
                 <span class="dash-kpi-value">@Model.HerdStats.Total</span>
             </div>
         </a>
-        @if (visibleTabs.Contains(FarmTabs.Milk))
+        @if (visibleTabs.Contains(FarmTabs.Products))
         {
             <a class="dash-kpi" asp-controller="Milk" asp-action="Index">
                 <span class="dash-kpi-icon dash-kpi-icon--milk" aria-hidden="true">🥛</span>
@@ -84,6 +84,43 @@
                 <span class="dash-kpi-value">@DisplayHelper.FormatRs(monthlyCost)</span>
             </div>
         </a>
+        @if (!Model.FinanceHidden)
+        {
+            <a class="dash-kpi" asp-controller="Finance" asp-action="Index">
+                <span class="dash-kpi-icon dash-kpi-icon--cost" aria-hidden="true">📥</span>
+                <div class="dash-kpi-body">
+                    <span class="dash-kpi-label">Receivables</span>
+                    <span class="dash-kpi-value">@DisplayHelper.FormatRs(Model.ReceivablesOpen)</span>
+                </div>
+            </a>
+            <a class="dash-kpi" asp-controller="Finance" asp-action="Index">
+                <span class="dash-kpi-icon dash-kpi-icon--cost" aria-hidden="true">📤</span>
+                <div class="dash-kpi-body">
+                    <span class="dash-kpi-label">Payables</span>
+                    <span class="dash-kpi-value">@DisplayHelper.FormatRs(Model.PayablesOpen)</span>
+                </div>
+            </a>
+        }
+        @if (visibleTabs.Contains(FarmTabs.Products))
+        {
+            <a class="dash-kpi" asp-controller="Products" asp-action="Index">
+                <span class="dash-kpi-icon dash-kpi-icon--milk" aria-hidden="true">📦</span>
+                <div class="dash-kpi-body">
+                    <span class="dash-kpi-label">Product stock value</span>
+                    <span class="dash-kpi-value">@DisplayHelper.FormatRs(Model.ProductStockValue)</span>
+                </div>
+            </a>
+        }
+        @if (visibleTabs.Contains(FarmTabs.Admin) && Model.PendingApprovals > 0)
+        {
+            <a class="dash-kpi" asp-controller="Admin" asp-action="Index">
+                <span class="dash-kpi-icon dash-kpi-icon--vax" aria-hidden="true">✋</span>
+                <div class="dash-kpi-body">
+                    <span class="dash-kpi-label">Pending approvals</span>
+                    <span class="dash-kpi-value">@Model.PendingApprovals</span>
+                </div>
+            </a>
+        }
     </div>
 
     <div class="dash-charts-row">

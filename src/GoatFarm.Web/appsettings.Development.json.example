@@ -1,13 +1,20 @@
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=127.0.0.1;Port=55432;Database=GoatFarmDb;Username=postgres"
+    "DefaultConnection": "Host=127.0.0.1;Port=55432;Database=GoatFarmDb;Username=postgres",
+    "DemoConnection": "Host=127.0.0.1;Port=55432;Database=GoatFarmDemo;Username=postgres"
   },
   "Seed": {
     "ResetAdminPassword": true,
-    "EnsureDevUser": true
+    "EnsureDevUser": true,
+    "DemoData": true,
+    "ReloadDemoData": false,
+    "ClearFarmData": false
   },
   "LocalDev": {
     "DisablePermissionChecks": true
+  },
+  "Demo": {
+    "Enabled": false
   },
   "OpenAI": {
     "Model": "gpt-4.1-mini",

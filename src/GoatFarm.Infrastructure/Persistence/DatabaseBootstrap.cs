@@ -68,6 +68,17 @@ public static class DatabaseBootstrap
             await SettingsSeedHelper.SeedDefaultsAsync(context, cancellationToken);
             await provider.GetRequiredService<ILookupService>().EnsureDefaultsAsync(cancellationToken);
 
+            if (isDevelopment &&
+                string.Equals(configuration["Seed:DemoData"], "true", StringComparison.OrdinalIgnoreCase))
+            {
+                var reloadDemo = string.Equals(configuration["Seed:ReloadDemoData"], "true", StringComparison.OrdinalIgnoreCase);
+                if (reloadDemo)
+                    logger.LogWarning("Reloading demo/sample farm data (Seed:ReloadDemoData=true)...");
+                else
+                    logger.LogInformation("Seeding demo data for empty modules (Seed:DemoData=true)...");
+                await DemoDataSeedHelper.SeedAsync(context, reloadDemo, cancellationToken);
+            }
+
             logger.LogInformation("Database initialization completed.");
         }
         catch (Exception ex)

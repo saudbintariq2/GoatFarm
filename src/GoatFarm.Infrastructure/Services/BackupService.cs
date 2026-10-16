@@ -104,6 +104,7 @@ public class BackupService : Application.Interfaces.IBackupService
             lookupSettings = await _context.AppSettings.AsNoTracking()
                 .Where(s => s.Key.StartsWith("Lookup."))
                 .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken),
+            v241Extended = await BackupV241Helper.ExportAsync(_context, cancellationToken),
             _savedAt = DateTime.UtcNow
         };
     }

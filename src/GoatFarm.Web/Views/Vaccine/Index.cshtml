@@ -258,4 +258,44 @@
     </div>
 </div>
 
+@{
+    var treatments = ViewBag.Treatments as GoatFarm.Application.ViewModels.Treatments.TreatmentsPageViewModel;
+}
+@if (treatments is not null)
+{
+<div class="panel">
+    <div class="panel-head"><h2>Treatments</h2><span class="sub">illness, medicine, withdrawal</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Tag</th><th>Diagnosis</th><th>Medicine</th><th>Start</th><th class="num-cell">Cost</th></tr></thead>
+        <tbody>
+        @foreach (var t in treatments.Active)
+        {
+            <tr><td>@t.Tag</td><td>@t.Diagnosis</td><td>@t.Medicine</td><td>@t.StartDate</td><td class="num-cell">@DisplayHelper.FormatRs(t.Cost)</td></tr>
+        }
+        @if (!treatments.Active.Any()) {<tr><td colspan="5" class="empty">No active treatments.</td></tr>}
+        </tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:1fr 1fr 1fr 1fr auto">
+            <div class="field"><label>Tag / RFID</label><input id="tr-tag" placeholder="e.g. G-101" autocomplete="off"></div>
+            <div class="field"><label>Start</label><input type="date" id="tr-start" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Diagnosis</label><input id="tr-dx"></div>
+            <div class="field"><label>Medicine</label><input id="tr-med"></div>
+            <button type="button" class="btn btn-green" id="tr-save" style="align-self:end">Add</button>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('tr-save')?.addEventListener('click', async () => {
+  const tag = document.getElementById('tr-tag').value.trim();
+  if (!tag) { alert('Enter a goat tag.'); return; }
+  const lookup = await fetch('/Goat/GetByTag?tag=' + encodeURIComponent(tag));
+  const goat = await lookup.json();
+  if (!lookup.ok) { alert(goat.error || 'Goat not found.'); return; }
+  await fetch('/Vaccine/SaveTreatment', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    goatId: goat.id, startDate: document.getElementById('tr-start').value,
+    diagnosis: document.getElementById('tr-dx').value, medicine: document.getElementById('tr-med').value, cost: 0 })});
+  location.reload();
+});
+</script>
+}
+
 @section Scripts {<script>GoatRecords.initHealth();</script>}

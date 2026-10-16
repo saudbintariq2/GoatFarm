@@ -81,4 +81,8 @@ public class DashboardViewModel
     public IReadOnlyList<DashboardActivityViewModel> RecentActivities { get; set; } = [];
     public IReadOnlyList<DashboardLedgerRowViewModel> RecentSales { get; set; } = [];
     public IReadOnlyList<DashboardLedgerRowViewModel> RecentExpenses { get; set; } = [];
+    public decimal ReceivablesOpen { get; set; }
+    public decimal PayablesOpen { get; set; }
+    public decimal ProductStockValue { get; set; }
+    public int PendingApprovals { get; set; }
 }

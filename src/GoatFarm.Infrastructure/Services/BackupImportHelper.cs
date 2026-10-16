@@ -26,6 +26,7 @@ internal static class BackupImportHelper
 
     public static async Task ClearFarmDataAsync(GoatFarmDbContext context, CancellationToken cancellationToken)
     {
+        await BackupV241Helper.ClearV241Async(context, cancellationToken);
         await GoatGraphCleaner.DetachBreedingGraphAsync(context, cancellationToken);
         context.VaccinationHistories.RemoveRange(await context.VaccinationHistories.ToListAsync(cancellationToken));
         context.Goats.RemoveRange(await context.Goats.ToListAsync(cancellationToken));
@@ -241,6 +242,9 @@ internal static class BackupImportHelper
             await UpsertSettingAsync(context, AppSettingKeys.MixRecipe, mixRecipe, cancellationToken);
 
         await ImportV41ExtrasAsync(context, root, goatIdMap.Count > 0 ? goatIdMap : BuildGoatIdRemap(root, goatTagMap), goatTagMap, cancellationToken);
+
+        var goatIntMap = await BuildGoatIntIdRemapAsync(context, root, cancellationToken);
+        await BackupV241Helper.ImportAsync(context, root, goatIntMap, cancellationToken);
 
         await ImportLookupSettingsAsync(context, root, cancellationToken);
         await ImportRemindDaysAsync(context, root, cancellationToken);
@@ -1197,5 +1201,26 @@ internal static class BackupImportHelper
         if (string.IsNullOrWhiteSpace(value)) return RecurringCostPeriod.Month;
         if (Enum.TryParse<RecurringCostPeriod>(value, true, out var parsed)) return parsed;
         return value.Equals("year", StringComparison.OrdinalIgnoreCase) ? RecurringCostPeriod.Year : RecurringCostPeriod.Month;
+    }
+
+    private static async Task<Dictionary<int, int>> BuildGoatIntIdRemapAsync(
+        GoatFarmDbContext context, JsonElement root, CancellationToken cancellationToken)
+    {
+        var map = new Dictionary<int, int>();
+        if (!root.TryGetProperty("goats", out var goats) || goats.ValueKind != JsonValueKind.Array)
+            return map;
+
+        var byTag = await context.Goats.AsNoTracking()
+            .ToDictionaryAsync(g => g.Tag, g => g.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        foreach (var g in goats.EnumerateArray())
+        {
+            if (!g.TryGetProperty("id", out var idEl) || !idEl.TryGetInt32(out var oldId)) continue;
+            var tag = GetString(g, "tag", "Tag")?.Trim();
+            if (string.IsNullOrEmpty(tag) || !byTag.TryGetValue(tag, out var newId)) continue;
+            map[oldId] = newId;
+        }
+
+        return map;
     }
 }

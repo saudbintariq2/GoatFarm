@@ -1,0 +1,133 @@
+@model GoatFarm.Application.ViewModels.Trading.TradingPageViewModel
+@using GoatFarm.Application.Common
+
+<div class="note"><b>Separate books:</b> Trading never posts to farm Accounting. Track godowns, cash/bank, buy/sell and expenses here.</div>
+
+<div class="filterbar" style="margin-bottom:14px">
+    <div class="field"><label class="hide-sm">Month</label><input type="month" id="tradeMonth" value="@Model.Month"></div>
+</div>
+
+<div class="fin3">
+    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.StockValue)</div><div class="k">Stock value (est.)</div></div>
+    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.CashBalance)</div><div class="k">Money accounts</div></div>
+    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.MonthSales)</div><div class="k">Sales this month</div></div>
+    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.MonthProfit)</div><div class="k">P&amp;L this month</div></div>
+</div>
+
+<div class="tabs" id="trade-tabs">
+    <button type="button" class="tab active" data-trade-tab="entries">Entries</button>
+    <button type="button" class="tab" data-trade-tab="buy">Buy</button>
+    <button type="button" class="tab" data-trade-tab="sell">Sell</button>
+    <button type="button" class="tab" data-trade-tab="transfer">Transfer</button>
+    <button type="button" class="tab" data-trade-tab="expense">Expense</button>
+    <button type="button" class="tab" data-trade-tab="pnl">P&amp;L</button>
+    <button type="button" class="tab" data-trade-tab="parties">Parties</button>
+    <button type="button" class="tab" data-trade-tab="masters">Setup</button>
+</div>
+
+<div class="panel" data-trade-pane="entries">
+    <div class="panel-head"><h2>Recent entries</h2></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Detail</th><th class="num-cell">Qty</th><th class="num-cell">Amount</th><th></th></tr></thead>
+        <tbody id="tradeEntryRows">
+        @foreach (var e in Model.Entries)
+        {
+            <tr data-id="@e.Id"><td>@e.DateDisplay</td><td>@e.Type</td><td>@e.Label</td><td class="num-cell">@e.Qty</td><td class="num-cell">@DisplayHelper.FormatRs(e.Amount)</td>
+                <td><button type="button" class="btn btn-ghost btn-sm trade-del" data-id="@e.Id">Cancel</button></td></tr>
+        }
+        </tbody></table>
+    </div>
+</div>
+
+<div class="panel" data-trade-pane="buy" hidden>
+    <div class="panel-head"><h2>Record purchase</h2></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="tb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Item</label><select id="tb-item">@foreach(var i in Model.Items){<option value="@i.Id">@i.Name</option>}</select></div>
+            <div class="field"><label>Godown</label><select id="tb-store">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
+            <div class="field"><label>Account</label><select id="tb-account">@foreach(var a in Model.Accounts){<option value="@a.Id">@a.Name</option>}</select></div>
+            <div class="field"><label>Qty</label><input type="number" id="tb-qty" min="0" step="0.01"></div>
+            <div class="field"><label>Rate</label><input type="number" id="tb-rate" min="0" step="0.01"></div>
+            <div class="field"><label>Notes</label><input id="tb-note"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="tb-save">Save purchase</button>
+    </div>
+</div>
+
+<div class="panel" data-trade-pane="sell" hidden>
+    <div class="panel-head"><h2>Record sale</h2></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="ts-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Item</label><select id="ts-item">@foreach(var i in Model.Items){<option value="@i.Id">@i.Name</option>}</select></div>
+            <div class="field"><label>Godown</label><select id="ts-store">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
+            <div class="field"><label>Account</label><select id="ts-account">@foreach(var a in Model.Accounts){<option value="@a.Id">@a.Name</option>}</select></div>
+            <div class="field"><label>Qty</label><input type="number" id="ts-qty" min="0" step="0.01"></div>
+            <div class="field"><label>Rate</label><input type="number" id="ts-rate" min="0" step="0.01"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="ts-save">Save sale</button>
+    </div>
+</div>
+
+<div class="panel" data-trade-pane="transfer" hidden>
+    <div class="panel-head"><h2>Transfer between godowns</h2></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="tt-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Item</label><select id="tt-item">@foreach(var i in Model.Items){<option value="@i.Id">@i.Name</option>}</select></div>
+            <div class="field"><label>From godown</label><select id="tt-from">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
+            <div class="field"><label>To godown</label><select id="tt-to">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
+            <div class="field"><label>Qty</label><input type="number" id="tt-qty" min="0" step="0.01"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="tt-save">Save transfer</button>
+    </div>
+</div>
+
+<div class="panel" data-trade-pane="pnl" hidden>
+    <div class="panel-head"><h2>P&amp;L by month</h2><span class="sub">trading books only</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Month</th><th class="num-cell">Sales</th><th class="num-cell">Purchases</th><th class="num-cell">Expenses</th><th class="num-cell">Profit</th></tr></thead>
+        <tbody>@foreach(var r in Model.PeriodPnL){<tr><td>@r.Month</td><td class="num-cell">@DisplayHelper.FormatRs(r.Sales)</td><td class="num-cell">@DisplayHelper.FormatRs(r.Buys)</td><td class="num-cell">@DisplayHelper.FormatRs(r.Expenses)</td><td class="num-cell">@DisplayHelper.FormatRs(r.Profit)</td></tr>}</tbody></table>
+    </div>
+</div>
+
+<div class="panel" data-trade-pane="parties" hidden>
+    <div class="panel-head"><h2>Suppliers &amp; buyers</h2></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Name</th><th>Role</th></tr></thead>
+        <tbody>@foreach(var p in Model.Parties){<tr><td>@p.Name</td><td>@p.Extra</td></tr>}</tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr auto">
+            <div class="field"><label>Party name</label><input id="tp-name"></div>
+            <button type="button" class="btn btn-green" id="tp-save" style="align-self:end">Add party</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel" data-trade-pane="expense" hidden>
+    <div class="panel-head"><h2>Record expense</h2></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="field"><label>Date</label><input type="date" id="te-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>Category</label><select id="te-cat">@foreach(var c in Model.Categories){<option value="@c.Id">@c.Name</option>}</select></div>
+            <div class="field"><label>Account</label><select id="te-account">@foreach(var a in Model.Accounts){<option value="@a.Id">@a.Name</option>}</select></div>
+            <div class="field"><label>Amount</label><input type="number" id="te-amt" min="0"></div>
+        </div>
+        <button type="button" class="btn btn-green" id="te-save">Save expense</button>
+    </div>
+</div>
+
+<div class="panel" data-trade-pane="masters" hidden>
+    <div class="panel-head"><h2>Quick add item</h2></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:2fr 1fr auto">
+            <div class="field"><label>Name</label><input id="tm-name"></div>
+            <div class="field"><label>Unit</label><input id="tm-unit" value="kg"></div>
+            <button type="button" class="btn btn-green" id="tm-save" style="align-self:end">Add item</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/trading-module.js" asp-append-version="true"></script>
+}

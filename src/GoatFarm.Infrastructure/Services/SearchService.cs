@@ -72,11 +72,27 @@ public class SearchService : ISearchService
             .Select(r => MapReminder(r, window))
             .ToList();
 
+        var treatments = await _context.GoatTreatments.AsNoTracking()
+            .Where(t => t.GoatId == goatEntity.Id)
+            .OrderByDescending(t => t.StartDate)
+            .Select(t => new GoatTreatmentHistoryViewModel
+            {
+                StartDate = t.StartDate,
+                EndDate = t.EndDate,
+                Diagnosis = t.Diagnosis,
+                Medicine = t.Medicine,
+                Cost = t.Cost,
+                WithdrawalDays = t.WithdrawalDays,
+                Notes = t.Notes
+            })
+            .ToListAsync(cancellationToken);
+
         return new GoatProfileViewModel
         {
             Goat = goat,
             VaccinationHistory = vaccinationHistory,
             VaccineSchedule = vaccineSchedule,
+            Treatments = treatments,
             FeedPlan = feedPlan,
             Reminders = reminderVms
         };

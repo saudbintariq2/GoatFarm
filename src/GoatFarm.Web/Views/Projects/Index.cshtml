@@ -1,0 +1,69 @@
+@model GoatFarm.Application.ViewModels.Projects.ProjectsPageViewModel
+@using GoatFarm.Application.Common
+
+<div class="fin3">
+    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.TotalCapex)</div><div class="k">Fixed assets (register)</div></div>
+    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.ActiveBudget)</div><div class="k">Active project budgets</div></div>
+    <div class="fincard"><div class="v">@Model.Projects.Count</div><div class="k">Projects</div></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Capital projects</h2></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Name</th><th>Status</th><th class="num-cell">Budget</th><th class="num-cell">Spent</th></tr></thead>
+        <tbody>
+        @foreach (var p in Model.Projects)
+        {
+            <tr><td><b>@p.Name</b></td><td>@p.Status</td><td class="num-cell">@DisplayHelper.FormatRs(p.BudgetAmount)</td><td class="num-cell">@DisplayHelper.FormatRs(p.Spent)</td></tr>
+        }
+        </tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr 1fr 1fr auto">
+            <div class="field"><label>Project name</label><input id="pj-name"></div>
+            <div class="field"><label>Budget</label><input type="number" id="pj-budget" min="0"></div>
+            <div class="field"><label>Start</label><input type="date" id="pj-start" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <button type="button" class="btn btn-green" id="pj-save" style="align-self:end">Add project</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Fixed asset register</h2></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Name</th><th>Category</th><th class="num-cell">Cost</th><th>Project</th></tr></thead>
+        <tbody>
+        @foreach (var a in Model.FixedAssets)
+        {
+            <tr><td>@a.Name</td><td>@a.Category</td><td class="num-cell">@DisplayHelper.FormatRs(a.Cost)</td><td>@(a.ProjectName ?? "—")</td></tr>
+        }
+        </tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr 1fr 1fr auto">
+            <div class="field"><label>Asset name</label><input id="fa-name"></div>
+            <div class="field"><label>Cost</label><input type="number" id="fa-cost" min="0"></div>
+            <div class="field"><label>Project</label><select id="fa-project"><option value="">—</option>@foreach(var p in Model.Projects){<option value="@p.Id">@p.Name</option>}</select></div>
+            <button type="button" class="btn btn-green" id="fa-save" style="align-self:end">Add asset</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Solar production</h2></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Date</th><th class="num-cell">kWh</th><th class="num-cell">Savings est.</th></tr></thead>
+        <tbody>
+        @foreach (var s in Model.SolarLogs)
+        {
+            <tr><td>@s.DateDisplay</td><td class="num-cell">@s.KwhGenerated</td><td class="num-cell">@(s.SavingsEstimate.HasValue ? DisplayHelper.FormatRs(s.SavingsEstimate.Value) : "—")</td></tr>
+        }
+        </tbody></table>
+        <div class="add-grid" style="margin-top:12px;grid-template-columns:1fr 1fr 1fr auto">
+            <div class="field"><label>Date</label><input type="date" id="so-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label>kWh</label><input type="number" id="so-kwh" min="0" step="0.1"></div>
+            <div class="field"><label>Savings Rs</label><input type="number" id="so-save" min="0"></div>
+            <button type="button" class="btn btn-green" id="so-add" style="align-self:end">Log day</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/projects-module.js" asp-append-version="true"></script>
+}

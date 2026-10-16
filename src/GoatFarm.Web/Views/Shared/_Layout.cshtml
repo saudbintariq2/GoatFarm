@@ -43,17 +43,23 @@
 
         (FarmTabs.Breeding, "Breeding", "Breeding", "breeding"),
 
-        (FarmTabs.Milk, "Milk", "Milk Production", "milk"),
+        (FarmTabs.Products, "Products", "Products", "products"),
 
         (FarmTabs.Feed, "Feed", "Feed & Inventory", "feed"),
 
+        (FarmTabs.Trading, "Trading", "Trading", "trading"),
+
         (FarmTabs.Vaccines, "Vaccine", "Health", "health"),
 
-        (FarmTabs.Finance, "Finance", "Finance", "finance"),
+        (FarmTabs.Finance, "Finance", "Accounting", "finance"),
+
+        (FarmTabs.Projects, "Projects", "Projects & Assets", "projects"),
 
         (FarmTabs.Reports, "Reports", "Reports", "reports"),
 
         (FarmTabs.Tasks, "Tasks", "Tasks", "tasks"),
+
+        (FarmTabs.Admin, "Admin", "Users & Audit", "admin"),
 
         (FarmTabs.Search, "Search", "Search", "search")
 
@@ -75,6 +81,11 @@
 
         ["health"] = ("Vaccines & health", "Schedules, due lists and purchases", "💉"),
 
+        ["products"] = ("Products", "Milk, meat, stock and sales", "🥛"),
+        ["trading"] = ("Trading", "Separate buy/sell books", "📦"),
+        ["projects"] = ("Projects & assets", "CAPEX, fixed assets, solar", "🏗"),
+        ["admin"] = ("Users & audit", "Approvals, audit log, profile", "👥"),
+        ["backup"] = ("Backup center", "Export and restore your farm", "💾"),
         ["milk"] = ("Milk", "Collect, sell and account for waste", "🥛"),
 
         ["feed"] = ("Feed & stock", "Store, usage, plans and recipes", "🌾"),
@@ -240,6 +251,18 @@
 
                     }
 
+                    @if (visibleTabs.Contains(FarmTabs.Backup))
+
+                    {
+
+                        <a class="side-footer-link" asp-controller="BackupCenter" asp-action="Index">
+
+                            <span aria-hidden="true">💾</span> Backup
+
+                        </a>
+
+                    }
+
                     <a class="side-footer-link" href="#" title="Help documentation coming soon">
 
                         <span aria-hidden="true">?</span> Help
@@ -321,6 +344,20 @@
                                 <a class="farm-header-bell" asp-controller="Tasks" asp-action="Index" asp-route-filter="mine" title="My open tasks">
 
                                     <span aria-hidden="true">🔔</span>
+
+                                    <span class="farm-header-bell-badge" id="headerTaskBadge" hidden>0</span>
+
+                                </a>
+
+                            }
+
+                            @if (visibleTabs.Contains(FarmTabs.Admin))
+
+                            {
+
+                                <a class="farm-header-bell" asp-controller="Admin" asp-action="Index" title="Pending approvals" id="headerNoticesLink">
+
+                                    <span aria-hidden="true">📋</span>
 
                                     <span class="farm-header-bell-badge" id="headerNotifBadge" hidden>0</span>
 
@@ -450,6 +487,13 @@
                 setInterval(tick, 30000);
 
             })();
+
+            fetch('/Admin/PendingApprovalCount').then(r => r.ok ? r.json() : null).then(data => {
+              const badge = document.getElementById('headerNotifBadge');
+              if (!badge || !data || typeof data.count !== 'number') return;
+              const n = data.count;
+              if (n > 0) { badge.hidden = false; badge.textContent = String(n); }
+            }).catch(() => {});
 
         </script>
 
