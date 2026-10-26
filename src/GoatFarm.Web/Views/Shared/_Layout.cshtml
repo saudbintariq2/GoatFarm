@@ -30,6 +30,7 @@
     var bodyClass = ViewData["BodyClass"]?.ToString() ?? "";
 
     var useShell = isAuthenticated && !bodyClass.Contains("auth-page");
+    var assistantUiEnabled = Configuration.GetValue<bool>("Features:AssistantEnabled");
 
 
 
@@ -231,7 +232,7 @@
 
                 <div class="side-footer">
 
-                    @if (visibleTabs.Contains(FarmTabs.Assistant))
+                    @if (assistantUiEnabled && visibleTabs.Contains(FarmTabs.Assistant))
                     {
                         <button type="button" class="side-ai-assistant" id="sideAiAssistantBtn" title="AI Assistant" aria-haspopup="dialog" aria-controls="aiAssistantPanel" aria-expanded="false">
                             <span class="side-ai-spark" aria-hidden="true">✦</span>
@@ -411,7 +412,7 @@
 
 
 
-    @if (useShell && visibleTabs.Contains(FarmTabs.Assistant))
+    @if (useShell && assistantUiEnabled && visibleTabs.Contains(FarmTabs.Assistant))
     {
         @await Html.PartialAsync("_AssistantPanel")
     }
