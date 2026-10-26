@@ -7,6 +7,7 @@ using GoatFarm.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using GoatFarm.Infrastructure.Identity;
 
@@ -29,6 +30,15 @@ var cookieSecurePolicy = builder.Environment.IsDevelopment()
     : CookieSecurePolicy.Always;
 
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+        | ForwardedHeaders.XForwardedProto
+        | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = "__GoatFarm.Antiforgery";
@@ -90,6 +100,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 var app = builder.Build();
 
 await DatabaseBootstrap.InitializeAsync(app.Services, app.Environment.IsDevelopment());
+
+app.UseForwardedHeaders();
 
 app.UseGlobalExceptionMiddleware();
 if (app.Configuration.GetValue<bool>("Diagnostics:ServerTiming"))
