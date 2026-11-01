@@ -26,6 +26,37 @@
 <div class="note"><b>One goat →</b> open her card from the list to record anything.
     <b>Many goats →</b> tick them in the list and use <b>Move to</b>.</div>
 
+<div class="stats" id="stats">
+    <div class="stat" data-filter="all" role="button" tabindex="0" title="Show all goats">
+        <div class="num">@Model.Stats.Total</div>
+        <div class="lbl"><span class="dot" style="background:var(--green)"></span>Total goats</div>
+    </div>
+    <div class="stat" data-filter="st:kid" role="button" tabindex="0" title="Filter: kids">
+        <div class="num">@Model.Stats.Kids</div>
+        <div class="lbl"><span class="dot" style="background:var(--amber)"></span>Kids</div>
+    </div>
+    <div class="stat" data-filter="st:milking" role="button" tabindex="0" title="Filter: milking">
+        <div class="num">@Model.Stats.Milking</div>
+        <div class="lbl"><span class="dot" style="background:var(--green)"></span>Milking</div>
+    </div>
+    <div class="stat" data-filter="st:pregnant" role="button" tabindex="0" title="Filter: pregnant">
+        <div class="num">@Model.Stats.Pregnant</div>
+        <div class="lbl"><span class="dot" style="background:var(--pink)"></span>Pregnant</div>
+    </div>
+    <div class="stat" data-filter="st:dry" role="button" tabindex="0" title="Filter: dry">
+        <div class="num">@Model.Stats.Dry</div>
+        <div class="lbl"><span class="dot" style="background:var(--ink-soft)"></span>Dry</div>
+    </div>
+    <div class="stat" data-filter="st:buck" role="button" tabindex="0" title="Filter: bucks">
+        <div class="num">@Model.Stats.Bucks</div>
+        <div class="lbl"><span class="dot" style="background:var(--blue)"></span>Bucks</div>
+    </div>
+    <div class="stat" data-filter="st:meat" role="button" tabindex="0" title="Filter: meat / finishing">
+        <div class="num">@Model.Stats.Meat</div>
+        <div class="lbl"><span class="dot" style="background:#9a3a1e"></span>Meat</div>
+    </div>
+</div>
+
 <div class="panel" id="goatFormPanel" style="display:none">
     <div class="panel-head"><h2 id="goatFormTitle">Add a goat</h2>
         <button type="button" class="btn btn-ghost btn-sm" id="addGoatClose">Close</button></div>

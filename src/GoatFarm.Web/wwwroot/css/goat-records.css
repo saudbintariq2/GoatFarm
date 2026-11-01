@@ -52,6 +52,11 @@
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(var(--stat-min),1fr));gap:10px;margin-bottom:18px}
   #dashKpi.stats{--stat-min:150px}
   #feedStats.stats{--stat-min:160px}
+  #view-herd #stats.stats{--stat-min:118px;margin-bottom:16px}
+  #view-herd #stats .num{color:var(--green-dark)}
+  @media(min-width:960px){
+    #view-herd #stats.stats{grid-template-columns:repeat(7,minmax(0,1fr))}
+  }
   .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;
     padding:12px 14px;box-shadow:var(--shadow);cursor:pointer;transition:.15s}
   .stat:hover{transform:translateY(-2px);border-color:var(--green)}

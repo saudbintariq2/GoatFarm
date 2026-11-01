@@ -1073,9 +1073,13 @@ const GoatRecords = (() => {
     });
 
     document.querySelectorAll('#stats .stat').forEach(card => {
-      card.addEventListener('click', () => {
+      const go = () => {
         const f = card.dataset.filter;
         if (f) location.href = herdUrl(f, 1);
+      };
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
       });
     });
 
