@@ -421,6 +421,11 @@
 
 
 
+    @if (isAuthenticated)
+    {
+        @await Html.PartialAsync("_GoatCardModals")
+    }
+
     <div id="appModal" class="modal-overlay" aria-hidden="true">
 
         <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="appModalMsg">
@@ -458,6 +463,7 @@
     }
 
     <script src="~/js/goat-records.js" asp-append-version="true"></script>
+    <script src="~/js/goat-card.js" asp-append-version="true"></script>
 
     @if (useShell)
 

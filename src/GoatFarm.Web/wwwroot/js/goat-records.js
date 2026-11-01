@@ -401,7 +401,7 @@ const GoatRecords = (() => {
 
   function showToast(message, type = 'success') {
     const host = document.getElementById('toastHost');
-    if (!host) return;
+    if (!host) return false;
     const el = document.createElement('div');
     el.className = 'toast toast-' + type;
     el.textContent = message;
@@ -411,6 +411,7 @@ const GoatRecords = (() => {
       el.classList.remove('show');
       setTimeout(() => el.remove(), 280);
     }, 3200);
+    return true;
   }
 
   function reloadWithToast(message) {
@@ -536,24 +537,61 @@ const GoatRecords = (() => {
     throw new Error(message);
   }
 
+  function isAddNewLookupLabel(text) {
+    return text === '__add' || /^➕\s*Add new/i.test(String(text || '').trim());
+  }
+
+  function mergeLookupOptions(listKey, list, prefixItems = []) {
+    const clean = (arr) => arr.filter(t => t && !isAddNewLookupLabel(t));
+    const fromApi = clean(list);
+    const extra = clean(prefixItems);
+    if (listKey === 'Lookup.Owners') {
+      const merged = new Set(['Farm', ...extra, ...fromApi]);
+      return ['Farm', ...[...merged].filter(x => x !== 'Farm').sort((a, b) => a.localeCompare(b))];
+    }
+    const seen = new Set();
+    const out = [];
+    for (const t of [...extra, ...fromApi]) {
+      const key = t.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(t);
+    }
+    return out;
+  }
+
+  function setEditableSelectOptions(sel, opts) {
+    const cur = sel.value;
+    const curText = sel.selectedOptions[0]?.text;
+    sel.replaceChildren(...opts.map(t => {
+      const o = document.createElement('option');
+      o.textContent = t;
+      return o;
+    }));
+    const addOpt = document.createElement('option');
+    addOpt.value = '__add';
+    addOpt.textContent = '➕ Add new…';
+    sel.appendChild(addOpt);
+    const pick = cur && cur !== '__add' ? cur : curText;
+    if (pick && pick !== '__add') {
+      const match = [...sel.options].find(o => o.value === pick || o.text === pick);
+      if (match) sel.value = match.value;
+    }
+  }
+
   async function initEditableDropdown(selectId, listKey, prefixItems = []) {
     const sel = document.getElementById(selectId);
     if (!sel || !listKey) return;
     const fill = async () => {
       const list = await api('/Lookup/Get?key=' + encodeURIComponent(listKey));
-      const opts = [...prefixItems, ...list.filter(x => !prefixItems.includes(x))];
-      const cur = sel.value;
-      sel.innerHTML = opts.map(t => `<option>${esc(t)}</option>`).join('') +
-        '<option value="__add">➕ Add new…</option>';
-      if (opts.includes(cur)) sel.value = cur;
+      setEditableSelectOptions(sel, mergeLookupOptions(listKey, list, prefixItems));
     };
     sel.onchange = async () => {
       if (sel.value !== '__add') return;
       const name = await showModal('Add a new option to this list:', { prompt: true });
       if (name?.trim()) {
         const updated = await api('/Lookup/AddOption', { method: 'POST', body: JSON.stringify({ key: listKey, value: name.trim() }) });
-        sel.innerHTML = updated.map(t => `<option>${esc(t)}</option>`).join('') +
-          '<option value="__add">➕ Add new…</option>';
+        setEditableSelectOptions(sel, mergeLookupOptions(listKey, updated, prefixItems));
         sel.value = name.trim();
       } else {
         await fill();
@@ -582,21 +620,23 @@ const GoatRecords = (() => {
       if (!p) return;
       p.disabled = source === 'Born';
       if (source === 'Born') p.value = '';
-      const dob = document.getElementById('f-dob');
-      const est = document.getElementById('f-dob-est');
-      if (dob && est) {
-        dob.disabled = est.disabled = source === 'Born';
-        if (source === 'Born') { dob.value = ''; est.checked = false; }
-      }
     }
 
     function setEditMode(editing) {
       const cancelBtn = document.getElementById('cancelBtn');
       const deleteBtn = document.getElementById('deleteBtn');
-      const sellBtn = document.getElementById('sellBtn');
       if (cancelBtn) cancelBtn.style.display = editing ? '' : 'none';
       if (deleteBtn) deleteBtn.style.display = editing ? '' : 'none';
-      if (sellBtn) sellBtn.style.display = editing ? '' : 'none';
+    }
+
+    function showGoatFormPanel() {
+      const panel = document.getElementById('goatFormPanel');
+      if (panel) panel.style.display = '';
+    }
+
+    function hideGoatFormPanel() {
+      const panel = document.getElementById('goatFormPanel');
+      if (panel) panel.style.display = 'none';
     }
 
     function resetGoatForm() {
@@ -613,7 +653,7 @@ const GoatRecords = (() => {
       document.getElementById('f-status').value = 'Kid';
       document.getElementById('f-date').value = '';
       document.getElementById('f-note').value = '';
-      setHerdExtras({});
+      setHerdExtras({ owner: 'Farm', healthState: 'Healthy', sireTag: '', damTag: '' });
       applySourcePriceState();
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       setEditMode(false);
@@ -623,29 +663,83 @@ const GoatRecords = (() => {
       return typeof value === 'string' ? value : fallback;
     }
 
+    const HEALTH_LABEL_BY_STATE = {
+      Healthy: 'Healthy',
+      Sick: 'Sick',
+      UnderTreatment: 'Under treatment',
+      Recovering: 'Recovering',
+      Quarantine: 'Quarantine',
+      Injured: 'Injured',
+      WeakOffFeed: 'Weak / off feed'
+    };
+
+    function healthLabelFromState(state) {
+      if (!state) return 'Healthy';
+      return HEALTH_LABEL_BY_STATE[state] || state;
+    }
+
+    function healthStateFromLabel(label) {
+      const map = {
+        Healthy: 'Healthy',
+        Sick: 'Sick',
+        'Under treatment': 'UnderTreatment',
+        Recovering: 'Recovering',
+        Quarantine: 'Quarantine',
+        Injured: 'Injured',
+        'Weak / off feed': 'WeakOffFeed'
+      };
+      return map[label] || 'Sick';
+    }
+
+    function ensureSelectOption(sel, value) {
+      if (!sel || value == null || value === '') return;
+      const v = String(value);
+      if (v === '__add' || isAddNewLookupLabel(v)) return;
+      if ([...sel.options].some(o => o.value === v || o.text === v)) return;
+      const addOpt = sel.querySelector('option[value="__add"]');
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      if (addOpt) sel.insertBefore(opt, addOpt);
+      else sel.appendChild(opt);
+    }
+
     function setHerdExtras(goat) {
       const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
-      set('f-health', enumValue(goat.healthState, 'Healthy'));
-      set('f-dob', goat.dateOfBirthDisplay || goat.dateOfBirth);
-      const est = document.getElementById('f-dob-est');
-      if (est) est.checked = !!goat.dateOfBirthIsEstimated;
-      set('f-owner', goat.owner);
-      set('f-sire', goat.sireTag);
+      const healthLabel = goat.healthDisplay || healthLabelFromState(goat.healthState);
+      ensureSelectOption(document.getElementById('f-health'), healthLabel);
+      set('f-health', healthLabel);
+      const ownerSel = document.getElementById('f-owner');
+      const owner = goat.owner || 'Farm';
+      ensureSelectOption(ownerSel, owner);
+      if (ownerSel) ownerSel.value = owner;
+      const sireSel = document.getElementById('f-sire');
+      const sire = goat.sireTag || '';
+      ensureSelectOption(sireSel, sire);
+      if (sireSel) sireSel.value = sire || '';
       set('f-dam', goat.damTag);
     }
 
     async function loadParentOptions() {
-      const sires = document.getElementById('sireOptions');
+      const sireSel = document.getElementById('f-sire');
       const dams = document.getElementById('damOptions');
-      if (!sires || !dams) return;
+      if (!sireSel && !dams) return;
       try {
         const opts = await api('/Goat/ParentOptions');
-        const fill = (el, tags) => {
-          el.replaceChildren(...tags.map(t => { const o = document.createElement('option'); o.value = t; return o; }));
-        };
-        fill(sires, opts.sires || []);
-        fill(dams, opts.dams || []);
-      } catch { /* datalist is optional */ }
+        if (sireSel) {
+          const cur = sireSel.value;
+          sireSel.innerHTML = '<option value="">— none —</option>' +
+            (opts.sires || []).map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+          if (cur && [...sireSel.options].some(o => o.value === cur)) sireSel.value = cur;
+        }
+        if (dams) {
+          dams.replaceChildren(...(opts.dams || []).map(t => {
+            const o = document.createElement('option');
+            o.value = t;
+            return o;
+          }));
+        }
+      } catch { /* parent options are optional */ }
     }
 
     function fillGoatForm(goat) {
@@ -659,7 +753,10 @@ const GoatRecords = (() => {
       const source = enumValue(goat.source, 'Bought');
       document.getElementById('f-source').value = source;
       document.getElementById('f-price').value = source === 'Born' ? '' : (goat.purchasePrice ?? '');
-      document.getElementById('f-status').value = enumValue(goat.status, 'Kid');
+      const statusSel = document.getElementById('f-status');
+      const status = enumValue(goat.status, 'Kid');
+      ensureSelectOption(statusSel, status);
+      if (statusSel) statusSel.value = status;
       document.getElementById('f-date').value = goat.eventDateDisplay || goat.eventDate || '';
       document.getElementById('f-note').value = goat.comment || '';
       setHerdExtras(goat);
@@ -668,8 +765,10 @@ const GoatRecords = (() => {
       if (!FarmPerms.can('herd', 'add')) FarmPerms.revealEditForm('addBtn');
     }
 
-    function openGoatForEdit(goat) {
+    async function openGoatForEdit(goat) {
       if (!goat?.id || !FarmPerms.can('herd', 'edit')) return;
+      showGoatFormPanel();
+      await loadParentOptions();
       fillGoatForm(goat);
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
       const row = document.querySelector(`#rows tr.goat-row[data-id="${goat.id}"]`);
@@ -681,8 +780,10 @@ const GoatRecords = (() => {
       }
     }
 
-    function loadGoatForEdit(row) {
+    async function loadGoatForEdit(row) {
       if (!FarmPerms.can('herd', 'edit')) return;
+      showGoatFormPanel();
+      await loadParentOptions();
       fillGoatForm({
         id: +row.dataset.id,
         tag: row.dataset.tag,
@@ -794,11 +895,14 @@ const GoatRecords = (() => {
         source,
         purchasePrice: source === 'Born' ? 0 : (+document.getElementById('f-price').value || 0),
         eventDate: document.getElementById('f-date').value,
-        dateOfBirth: source === 'Born' ? null : (document.getElementById('f-dob')?.value || null),
-        dateOfBirthIsEstimated: source !== 'Born' && !!document.getElementById('f-dob')?.value && !!document.getElementById('f-dob-est')?.checked,
-        healthState: document.getElementById('f-health')?.value || 'Healthy',
-        owner: document.getElementById('f-owner')?.value.trim() || null,
-        sireTag: document.getElementById('f-sire')?.value.trim() || null,
+        dateOfBirth: null,
+        dateOfBirthIsEstimated: false,
+        healthState: healthStateFromLabel(document.getElementById('f-health')?.value || 'Healthy'),
+        owner: document.getElementById('f-owner')?.value || 'Farm',
+        sireTag: (() => {
+          const v = document.getElementById('f-sire')?.value?.trim();
+          return v && v !== '— none —' ? v : null;
+        })(),
         damTag: document.getElementById('f-dam')?.value.trim() || null
       };
     }
@@ -812,7 +916,22 @@ const GoatRecords = (() => {
       }
     });
 
-    document.getElementById('cancelBtn')?.addEventListener('click', resetGoatForm);
+    document.getElementById('cancelBtn')?.addEventListener('click', () => {
+      resetGoatForm();
+      hideGoatFormPanel();
+    });
+    document.getElementById('addGoatOpen')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'add')) return;
+      resetGoatForm();
+      await loadParentOptions();
+      showGoatFormPanel();
+      document.getElementById('goatFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('f-tag')?.focus();
+    });
+    document.getElementById('addGoatClose')?.addEventListener('click', () => {
+      resetGoatForm();
+      hideGoatFormPanel();
+    });
 
     document.getElementById('deleteBtn')?.addEventListener('click', async () => {
       if (!editingId || !FarmPerms.can('herd', 'delete')) return;
@@ -820,81 +939,6 @@ const GoatRecords = (() => {
       if (!confirmed) return;
       await api('/Goat/Delete?id=' + editingId, { method: 'DELETE' });
       reloadWithToast('Goat deleted successfully');
-    });
-
-    async function recordSaleForTag(tag) {
-      if (!FarmPerms.can('herd', 'edit')) return;
-      const priceStr = await showModal(`Sale price (Rs) for ${tag}`, { prompt: true });
-      const price = +priceStr || 0;
-      if (!(price > 0)) { await showModal('Enter the sale price.'); return; }
-      const buyer = await showModal('Buyer (name or market)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
-      const weightStr = await showModal('Weight at sale, kg (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
-      const weightKg = +weightStr > 0 ? +weightStr : null;
-      const date = document.getElementById('wd-date')?.value || new Date().toISOString().slice(0, 10);
-
-      let formData = { accounts: [], customers: [] };
-      try { formData = await api('/Goat/SaleFormData'); } catch { /* optional */ }
-
-      const payNow = await showConfirm('Receive full payment now? (Cancel = on credit)');
-      let isCredit = !payNow;
-      let accountId = null;
-      let customerId = null;
-
-      if (payNow) {
-        const accounts = formData.accounts || [];
-        if (!accounts.length) {
-          await showModal('Add a cash or bank account on Finance → Accounts before recording a paid sale.');
-          return;
-        }
-        if (accounts.length === 1) {
-          accountId = accounts[0].id;
-        } else {
-          const hint = accounts.map(a => a.name).join(', ');
-          const picked = await showModal(`Money received into (${hint})`, { prompt: true });
-          const match = accounts.find(a => a.name.toLowerCase() === String(picked || '').trim().toLowerCase());
-          if (!match) { await showModal('Choose a valid account name.'); return; }
-          accountId = match.id;
-        }
-      } else {
-        const buyerTrim = (buyer || '').trim();
-        if (!buyerTrim && !(formData.customers || []).length) {
-          await showModal('Enter a buyer name for credit sales.');
-          return;
-        }
-        const match = (formData.customers || []).find(c => c.name.toLowerCase() === buyerTrim.toLowerCase());
-        if (match) customerId = match.id;
-      }
-
-      const confirmed = await showConfirm(
-        `Sell ${tag} for Rs ${price.toLocaleString()}?\nShe leaves the live herd; income is recorded on Finance.`
-      );
-      if (!confirmed) return;
-
-      const result = await api('/Goat/RecordSale', {
-        method: 'POST',
-        body: JSON.stringify({
-          tag,
-          price,
-          buyer: buyer?.trim() || null,
-          weightKg,
-          date,
-          isCredit,
-          accountId,
-          customerId
-        })
-      });
-      if (!result.success) {
-        await showModal(result.message || 'Could not record sale');
-        return;
-      }
-      showToast('Goat sold');
-      setTimeout(() => location.reload(), 800);
-    }
-
-    document.getElementById('sellBtn')?.addEventListener('click', async () => {
-      const tag = normalizeTag(document.getElementById('f-tag')?.value);
-      if (!tag) { await showModal('No goat selected.'); return; }
-      await recordSaleForTag(tag);
     });
 
     document.getElementById('treatRows')?.addEventListener('click', async e => {
@@ -929,9 +973,93 @@ const GoatRecords = (() => {
     document.querySelectorAll('#rows tr.goat-row').forEach(row => {
       row.addEventListener('click', e => {
         if (!FarmPerms.can('herd', 'edit')) return;
-        if (e.target.closest('input[type=checkbox]') || e.target.closest('a.tag-link')) return;
+        if (e.target.closest('input[type=checkbox], a.tag-link, .treebtn, .herd-nextstep, .linkish, .herd-nextstep-wrap, [data-goatcard]')) return;
         loadGoatForEdit(row);
       });
+    });
+
+    document.getElementById('rows')?.addEventListener('click', async e => {
+      const wean = e.target.closest('[data-herd-wean]');
+      if (wean) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!FarmPerms.can('herd', 'edit')) return;
+        const id = +wean.getAttribute('data-herd-wean');
+        const tag = wean.getAttribute('data-tag') || '';
+        if (window.GoatCard?.promptWeanFromHerd) {
+          const ok = await window.GoatCard.promptWeanFromHerd({ id, tag });
+          if (ok) reloadWithToast('Kid weaned');
+        } else {
+          const dt = await showModal(`Weaning date for ${tag} (YYYY-MM-DD)`, {
+            prompt: true,
+            defaultValue: new Date().toISOString().slice(0, 10)
+          });
+          if (!dt) return;
+          await api('/Goat/BulkMove', {
+            method: 'POST',
+            body: JSON.stringify({ goatIds: [id], moveTarget: 'k:wean', weanDate: dt })
+          });
+          reloadWithToast('Kid weaned');
+        }
+        return;
+      }
+      const step = e.target.closest('[data-herd-nextstep]');
+      if (!step) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const action = step.getAttribute('data-herd-nextstep');
+      const permTab = step.getAttribute('data-perm-tab') || 'herd';
+      const permAction = step.getAttribute('data-perm-action') || 'edit';
+      if (!FarmPerms.can(permTab, permAction)) {
+        showToast('You do not have permission for this action.', 'error');
+        return;
+      }
+      const id = +step.getAttribute('data-id');
+      const tag = step.getAttribute('data-tag') || '';
+      const kids = step.getAttribute('data-kids') || '';
+      step.disabled = true;
+      try {
+        if (action === 'Wean') {
+          if (window.GoatCard?.promptWeanFromHerd) {
+            const ok = await window.GoatCard.promptWeanFromHerd({ id, tag });
+            if (ok) reloadWithToast('Kid weaned');
+          } else {
+            const dt = await showModal(`Weaning date for ${tag}`, { prompt: true, defaultValue: new Date().toISOString().slice(0, 10) });
+            if (!dt) return;
+            await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: 'k:wean', weanDate: dt }) });
+            reloadWithToast('Kid weaned');
+          }
+        } else if (action === 'Classify') {
+          const pick = await showModal('Classify as: doeling, buckling, or meat?', { prompt: true, defaultValue: 'doeling' });
+          const map = { doeling: 'k:class-doeling', buckling: 'k:class-buckling', meat: 'k:class-meat' };
+          const target = map[String(pick || '').trim().toLowerCase()];
+          if (!target) { await showModal('Enter doeling, buckling, or meat.'); return; }
+          await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: target }) });
+          location.reload();
+        } else if (action === 'Graduate') {
+          await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: 'k:graduate' }) });
+          location.reload();
+        } else if (action === 'DryOff') {
+          await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: 'br:dryoff' }) });
+          location.reload();
+        } else if (action === 'Scan') {
+          if (window.GoatCard?.runScanFromHerd) {
+            const ok = await window.GoatCard.runScanFromHerd({ id, tag });
+            if (ok) location.reload();
+          } else location.href = '/Breeding?scan=' + encodeURIComponent(tag);
+        } else if (action === 'RecordBirth') {
+          if (window.GoatCard?.open) {
+            const already = window.GoatCard.isOpen?.() && window.GoatCard.currentId?.() === id;
+            if (!already) await window.GoatCard.open({ id });
+            await window.GoatCard.runAction?.('kid');
+          } else {
+            const q = new URLSearchParams({ birth: tag });
+            if (kids) q.set('kids', kids);
+            location.href = '/Breeding?' + q.toString();
+          }
+        }
+      } catch { /* api toast */ }
+      finally { step.disabled = false; }
     });
 
     filter?.addEventListener('change', () => {
@@ -988,11 +1116,64 @@ const GoatRecords = (() => {
       } else if (v === 'br:kidded') {
         const confirmed = await showConfirm('Mark ' + selected.size + ' doe(s) as kidded? They move to Milking.');
         if (!confirmed) return;
+      } else if (v === 'br:plan') {
+        const dt = await showModal('Planned cross date (YYYY-MM-DD)', { prompt: true, defaultValue: defaultDate });
+        if (!dt) return;
+        payload.nextCrossDate = dt;
+      } else if (v === 'k:wean') {
+        if (window.GoatCard?.promptWeanBulk) {
+          const ok = await window.GoatCard.promptWeanBulk({ goatIds: [...selected] });
+          if (!ok) return;
+          location.reload();
+          return;
+        }
+        const dt = await showModal('Weaning date (YYYY-MM-DD)', { prompt: true, defaultValue: defaultDate });
+        if (!dt) return;
+        payload.weanDate = dt;
+      } else if (v.startsWith('k:class-') || v === 'k:graduate' || v === 'br:dryoff') {
+        const label = document.querySelector('#moveTo option:checked')?.textContent || v;
+        const confirmed = await showConfirm('Apply "' + label + '" to ' + selected.size + ' goat(s)?');
+        if (!confirmed) return;
       }
       try {
         await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify(payload) });
         location.reload();
       } catch { /* api() already showed the error */ }
+    });
+
+    async function uploadHerdCsv(file) {
+      if (!FarmPerms.can('herd', 'add')) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      const res = await fetch('/Goat/ImportCsv', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: token ? { 'X-CSRF-TOKEN': token } : {}
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Import failed', 'error');
+        return;
+      }
+      const msg = `Imported ${data.imported || 0} goat(s).` +
+        (data.errors?.length ? `\n\n${data.errors.slice(0, 8).join('\n')}` : '');
+      await showModal(msg);
+      if (data.imported > 0) location.reload();
+    }
+
+    document.getElementById('herdCsvBtn')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'add')) return;
+      const ok = await showConfirm(
+        'Import goats from CSV?\n\nHeader row must include tag and date. Optional: name, breed, sex, status, price, owner, dam, sire, comment.'
+      );
+      if (ok) document.getElementById('herdCsvFile')?.click();
+    });
+    document.getElementById('herdCsvFile')?.addEventListener('change', e => {
+      const f = e.target.files?.[0];
+      if (f) uploadHerdCsv(f);
+      e.target.value = '';
     });
 
     document.getElementById('newGroupBtn')?.addEventListener('click', async () => {
@@ -1010,7 +1191,7 @@ const GoatRecords = (() => {
       addBtnId: 'addBtn',
       deleteBtnId: 'deleteBtn',
       rowSelector: '#rows tr.goat-row',
-      extraHideIds: ['bulkbar', 'newGroupBtn', 'sellBtn']
+      extraHideIds: ['bulkbar', 'newGroupBtn', 'herdCsvBtn']
     });
 
     async function wdFound() {
@@ -1075,10 +1256,10 @@ const GoatRecords = (() => {
 
     if (opts.editGoat && opts.editGoat.id) {
       openGoatForEdit(opts.editGoat);
-    } else {
-      document.getElementById('f-tag')?.focus();
     }
     initEditableDropdown('f-breed', 'Lookup.Breeds');
+    initEditableDropdown('f-owner', 'Lookup.Owners', opts.ownerSeed || []);
+    initEditableDropdown('f-health', 'Lookup.HealthStates');
     if (FarmPerms.can('herd', 'add') || FarmPerms.can('herd', 'edit')) loadParentOptions();
   }
 
@@ -1904,6 +2085,19 @@ const GoatRecords = (() => {
     }
     if (!FarmPerms.can('breeding', 'delete')) {
       document.querySelectorAll('[data-unprep],[data-uncross]').forEach(b => b.classList.add('perm-hidden'));
+    }
+
+    const params = new URLSearchParams(location.search);
+    const birthTag = params.get('birth');
+    const scanTag = params.get('scan');
+    if (birthTag) openBirth(birthTag, params.get('kids') || '1');
+    else if (scanTag) {
+      const input = $('us-tag');
+      if (input) {
+        input.value = scanTag;
+        lookupTag('us-tag', 'us-found');
+        $('scanSection')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
   }
 
@@ -3047,7 +3241,7 @@ const GoatRecords = (() => {
           <div class="panel-body">
             <div class="search-hero">
               <div class="search-hero-main">
-                <h2><span class="tag">${esc(g.tag)}</span></h2>
+                <h2><a href="#" class="tag" data-goatcard="${esc(g.id)}">${esc(g.tag)}</a></h2>
                 ${nameLine}
                 <span class="chip ${esc(g.statusCssClass)}">${esc(g.statusDisplay)}</span>
                 <div class="search-hero-meta">
@@ -4369,3 +4563,4 @@ const GoatRecords = (() => {
 
   return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, assistantSpeechText, createAssistantVoice, showModal, showConfirm, showToast };
 })();
+if (typeof window !== 'undefined') window.GoatRecords = GoatRecords;

@@ -6,7 +6,10 @@ public enum GoatHealthState
     Healthy = 0,
     Sick = 1,
     UnderTreatment = 2,
-    Recovering = 3
+    Recovering = 3,
+    Quarantine = 4,
+    Injured = 5,
+    WeakOffFeed = 6
 }
 
 /// <summary>Current breeding cycle stage of a doe, independent of lifecycle <see cref="GoatStatus"/>.</summary>

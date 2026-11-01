@@ -8,4 +8,6 @@ public static class LookupSettingKeys
     public const string Breeds = "Lookup.Breeds";
     public const string VaccineNames = "Lookup.VaccineNames";
     public const string VaccineUnits = "Lookup.VaccineUnits";
+    public const string Owners = "Lookup.Owners";
+    public const string HealthStates = "Lookup.HealthStates";
 }

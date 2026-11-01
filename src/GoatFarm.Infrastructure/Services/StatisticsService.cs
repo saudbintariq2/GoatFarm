@@ -112,7 +112,8 @@ public class StatisticsService : IStatisticsService
 
         var healthHealthy = healthRows.FirstOrDefault(h => h.Key == GoatHealthState.Healthy)?.Count ?? 0;
         var healthSick = healthRows.FirstOrDefault(h => h.Key == GoatHealthState.Sick)?.Count ?? 0;
-        var healthObs = healthRows.Where(h => h.Key is GoatHealthState.UnderTreatment or GoatHealthState.Recovering)
+        var healthObs = healthRows.Where(h => h.Key is GoatHealthState.UnderTreatment or GoatHealthState.Recovering
+                or GoatHealthState.Quarantine or GoatHealthState.Injured or GoatHealthState.WeakOffFeed)
             .Sum(h => h.Count);
 
         var pendingVacc = vaccine.DueNowCount + reminders.Count(r =>

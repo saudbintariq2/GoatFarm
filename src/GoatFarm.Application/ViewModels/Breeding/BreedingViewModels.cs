@@ -48,6 +48,7 @@ public class BreedingWaitingRowViewModel
 
 public class BreedingEmptyRowViewModel
 {
+    public int Id { get; set; }
     public string Tag { get; set; } = string.Empty;
     public string? Name { get; set; }
     public string? MatedDate { get; set; }
@@ -60,6 +61,7 @@ public class BreedingEmptyRowViewModel
 
 public class BreedingRationRowViewModel
 {
+    public int Id { get; set; }
     public string Tag { get; set; } = string.Empty;
     public string? Name { get; set; }
     public string Stage { get; set; } = string.Empty;
@@ -157,4 +159,10 @@ public class RecordAbortionViewModel
     public string Tag { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
     public string? Notes { get; set; }
+}
+
+public class RecordReturnedToHeatViewModel
+{
+    public string Tag { get; set; } = string.Empty;
+    public DateOnly Date { get; set; }
 }

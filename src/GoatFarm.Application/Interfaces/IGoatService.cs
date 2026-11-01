@@ -23,4 +23,8 @@ public interface IGoatService
     Task<WeightDeathResultViewModel> RecordDeathAsync(RecordDeathViewModel model, CancellationToken cancellationToken = default);
     Task<WeightDeathResultViewModel> RecordSaleAsync(RecordSaleViewModel model, CancellationToken cancellationToken = default);
     Task<GoatSaleFormDataViewModel> GetSaleFormDataAsync(CancellationToken cancellationToken = default);
+    Task<HerdCsvImportResultViewModel> ImportHerdCsvAsync(string csvText, string defaultBreed, CancellationToken cancellationToken = default);
+    Task RecordBcsAsync(RecordBcsViewModel model, CancellationToken cancellationToken = default);
+    Task RecordHeatAsync(RecordHeatViewModel model, CancellationToken cancellationToken = default);
+    Task<GoatViewModel?> GetViewModelForCardAsync(int id, CancellationToken cancellationToken = default);
 }

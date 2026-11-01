@@ -686,6 +686,11 @@ body.farm-pro .modal-box {
   border-radius: var(--fp-radius-lg);
 }
 
+body.farm-pro #goatModal > .modal-box.goat-card-box {
+  max-width: min(96vw, 1024px);
+  padding: 0;
+}
+
 body.farm-pro .toast {
   border-radius: var(--fp-radius-md);
 }

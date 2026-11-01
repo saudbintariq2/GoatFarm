@@ -56,6 +56,7 @@ public class BreedingService : IBreedingService
             var (text, css) = DisplayHelper.GetStatusDisplay(g.Status);
             return new BreedingEmptyRowViewModel
             {
+                Id = g.Id,
                 Tag = g.Tag,
                 Name = g.Name,
                 MatedDate = l.MatedDate?.ToString("yyyy-MM-dd"),
@@ -373,6 +374,40 @@ public class BreedingService : IBreedingService
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task RecordReturnedToHeatAsync(RecordReturnedToHeatViewModel model, CancellationToken cancellationToken = default)
+    {
+        var goat = await FindGoatAsync(model.Tag, cancellationToken)
+            ?? throw new InvalidOperationException("Scan or type a valid doe tag.");
+        if (!goat.MatedDate.HasValue)
+            throw new InvalidOperationException("She has no cross recorded.");
+
+        _context.GoatHeatEvents.Add(new GoatHeatEvent
+        {
+            GoatId = goat.Id,
+            Date = model.Date,
+            Note = "returned after cross"
+        });
+        _context.BreedingEmptyLogs.Add(new BreedingEmptyLog
+        {
+            GoatId = goat.Id,
+            ScanDate = model.Date,
+            MatedDate = goat.MatedDate,
+            BuckTag = goat.BuckTag
+        });
+
+        var open = await BreedingCycleWriter.OpenEventsAsync(_context, goat.Id, cancellationToken);
+        BreedingCycleWriter.CloseCycle(goat, open, BreedingOutcome.Empty, model.Date, "returned to heat");
+        goat.MatedDate = null;
+        goat.BuckTag = null;
+        goat.KidsCount = null;
+        goat.UltrasoundDate = null;
+        goat.PrepCrossDate = null;
+        goat.Status = GoatStatus.Dry;
+        goat.BreedingStage = BreedingStage.None;
+        goat.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     private async Task<List<(string Tag, bool Temporary)>> AssignKidTagsAsync(
         string damTag, DateOnly date, IReadOnlyList<BirthKidViewModel> kids, CancellationToken cancellationToken)
     {
@@ -525,6 +560,7 @@ public class BreedingService : IBreedingService
 
         return new BreedingRationRowViewModel
         {
+            Id = g.Id,
             Tag = g.Tag,
             Name = g.Name,
             Stage = stage,

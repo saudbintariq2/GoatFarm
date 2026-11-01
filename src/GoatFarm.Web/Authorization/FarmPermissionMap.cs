@@ -51,6 +51,10 @@ public static class FarmPermissionMap
             ["Goat.RecordSale"] = (FarmTabs.Herd, FarmActions.Edit),
             ["Goat.SaleFormData"] = (FarmTabs.Herd, FarmActions.View),
             ["Goat.RecoverTreatment"] = (FarmTabs.Herd, FarmActions.Edit),
+            ["Goat.ImportCsv"] = (FarmTabs.Herd, FarmActions.Add),
+            ["Goat.Card"] = (FarmTabs.Herd, FarmActions.View),
+            ["Goat.RecordBcs"] = (FarmTabs.Herd, FarmActions.Edit),
+            ["Goat.RecordHeat"] = (FarmTabs.Herd, FarmActions.Edit),
 
             ["Breeding.GetData"] = (FarmTabs.Breeding, FarmActions.View),
             ["Breeding.LookupTag"] = (FarmTabs.Breeding, FarmActions.View),
@@ -64,6 +68,7 @@ public static class FarmPermissionMap
             ["Breeding.CheckCross"] = (FarmTabs.Breeding, FarmActions.View),
             ["Breeding.RecordBirth"] = (FarmTabs.Breeding, FarmActions.Add),
             ["Breeding.RecordAbortion"] = (FarmTabs.Breeding, FarmActions.Edit),
+            ["Breeding.RecordReturnedToHeat"] = (FarmTabs.Breeding, FarmActions.Edit),
 
             ["Search.Lookup"] = (FarmTabs.Search, FarmActions.View),
 

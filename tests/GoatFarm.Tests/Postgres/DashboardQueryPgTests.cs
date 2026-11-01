@@ -152,6 +152,11 @@ public class DashboardQueryPgTests(ITestOutputHelper output)
         public Task<Application.ViewModels.Goats.WeightDeathResultViewModel> RecordDeathAsync(Application.ViewModels.Goats.RecordDeathViewModel m, CancellationToken ct = default) => inner.RecordDeathAsync(m, ct);
         public Task<Application.ViewModels.Goats.WeightDeathResultViewModel> RecordSaleAsync(Application.ViewModels.Goats.RecordSaleViewModel m, CancellationToken ct = default) => inner.RecordSaleAsync(m, ct);
         public Task<Application.ViewModels.Goats.GoatSaleFormDataViewModel> GetSaleFormDataAsync(CancellationToken ct = default) => inner.GetSaleFormDataAsync(ct);
+        public Task<Application.ViewModels.Goats.HerdCsvImportResultViewModel> ImportHerdCsvAsync(string csvText, string defaultBreed, CancellationToken ct = default) =>
+            inner.ImportHerdCsvAsync(csvText, defaultBreed, ct);
+        public Task RecordBcsAsync(Application.ViewModels.Goats.RecordBcsViewModel m, CancellationToken ct = default) => inner.RecordBcsAsync(m, ct);
+        public Task RecordHeatAsync(Application.ViewModels.Goats.RecordHeatViewModel m, CancellationToken ct = default) => inner.RecordHeatAsync(m, ct);
+        public Task<Application.ViewModels.Goats.GoatViewModel?> GetViewModelForCardAsync(int id, CancellationToken ct = default) => inner.GetViewModelForCardAsync(id, ct);
     }
 
     [SkippableFact]

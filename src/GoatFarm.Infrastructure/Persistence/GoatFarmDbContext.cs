@@ -32,6 +32,8 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<BreedingEmptyLog> BreedingEmptyLogs => Set<BreedingEmptyLog>();
     public DbSet<GoatWeightRecord> GoatWeightRecords => Set<GoatWeightRecord>();
+    public DbSet<GoatBcsRecord> GoatBcsRecords => Set<GoatBcsRecord>();
+    public DbSet<GoatHeatEvent> GoatHeatEvents => Set<GoatHeatEvent>();
     public DbSet<DeathRecord> DeathRecords => Set<DeathRecord>();
     public DbSet<GoatSale> GoatSales => Set<GoatSale>();
     public DbSet<FeedUsageRecord> FeedUsageRecords => Set<FeedUsageRecord>();

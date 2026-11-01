@@ -2,6 +2,7 @@ using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Feed;
 using GoatFarm.Application.ViewModels.Reminders;
+using GoatFarm.Application.ViewModels.Goats;
 using GoatFarm.Application.ViewModels.Search;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
@@ -25,13 +26,25 @@ public class SearchService : ISearchService
         _feedService = feedService;
     }
 
+    public async Task<GoatCardViewModel?> GetGoatCardByTagAsync(string tag, CancellationToken cancellationToken = default)
+    {
+        var goatEntity = await FindGoatByTagAsync(tag, cancellationToken);
+        return goatEntity is null ? null : await BuildGoatCardAsync(goatEntity, cancellationToken);
+    }
+
+    public async Task<GoatCardViewModel?> GetGoatCardByIdAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var goatEntity = await _context.Goats.AsNoTracking().FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
+        return goatEntity is null ? null : await BuildGoatCardAsync(goatEntity, cancellationToken);
+    }
+
     public async Task<GoatProfileViewModel?> GetProfileByTagAsync(string tag, CancellationToken cancellationToken = default)
     {
         var goatEntity = await FindGoatByTagAsync(tag, cancellationToken);
         if (goatEntity is null)
             return null;
 
-        var goat = await _goatService.GetByIdAsync(goatEntity.Id, cancellationToken);
+        var goat = await _goatService.GetViewModelForCardAsync(goatEntity.Id, cancellationToken);
         if (goat is null)
             return null;
 
@@ -87,12 +100,47 @@ public class SearchService : ISearchService
             })
             .ToListAsync(cancellationToken);
 
+        var weights = await _context.GoatWeightRecords.AsNoTracking()
+            .Where(w => w.GoatId == goatEntity.Id)
+            .OrderByDescending(w => w.Date)
+            .Select(w => new GoatWeightRowViewModel { Date = w.Date, Kg = w.Kg })
+            .ToListAsync(cancellationToken);
+
+        var allGoats = await _context.Goats.AsNoTracking()
+            .Include(g => g.Sire).Include(g => g.Dam)
+            .ToDictionaryAsync(g => g.Id, cancellationToken);
+        var pedigreeNodes = PedigreeBuilder.BuildAncestors(goatEntity, allGoats, 4);
+        var pedigree = pedigreeNodes.Select(p => new GoatPedigreeRowViewModel
+        {
+            Generation = p.Generation,
+            Tag = p.Tag,
+            SireTag = p.SireTag,
+            DamTag = p.DamTag,
+            SearchTag = p.Tag
+        }).ToList();
+
+        var breedingHistory = await _context.BreedingEvents.AsNoTracking()
+            .Include(e => e.Buck)
+            .Where(e => e.DoeId == goatEntity.Id)
+            .OrderByDescending(e => e.MatedDate)
+            .Take(12)
+            .Select(e => new GoatBreedingHistoryRowViewModel
+            {
+                MatedDate = e.MatedDate,
+                BuckTag = e.Buck != null ? e.Buck.Tag : e.BuckTagText,
+                Outcome = e.Outcome.ToString()
+            })
+            .ToListAsync(cancellationToken);
+
         return new GoatProfileViewModel
         {
             Goat = goat,
             VaccinationHistory = vaccinationHistory,
             VaccineSchedule = vaccineSchedule,
             Treatments = treatments,
+            Weights = weights,
+            Pedigree = pedigree,
+            BreedingHistory = breedingHistory,
             FeedPlan = feedPlan,
             Reminders = reminderVms
         };
@@ -298,5 +346,113 @@ public class SearchService : ISearchService
             return string.Empty;
 
         return new string(tag.Where(c => !char.IsControl(c)).ToArray()).Trim();
+    }
+
+    private async Task<GoatCardViewModel?> BuildGoatCardAsync(Goat goatEntity, CancellationToken cancellationToken)
+    {
+        var profile = await GetProfileByTagAsync(goatEntity.Tag, cancellationToken);
+        if (profile is null)
+            return null;
+
+        var allGoats = await _context.Goats.AsNoTracking()
+            .Include(g => g.Sire).Include(g => g.Dam)
+            .ToDictionaryAsync(g => g.Id, cancellationToken);
+
+        if (!allGoats.TryGetValue(goatEntity.Id, out var subject))
+            subject = goatEntity;
+
+        var pedigreeNodes = GoatCardBuilder.CollectPedigreeNodes(subject, allGoats)
+            .Select(n => new GoatCardPedigreeNodeViewModel
+            {
+                Id = n.Id,
+                Tag = n.Tag,
+                Gender = n.Gender == GoatGender.Male ? "Male" : "Female",
+                Name = n.Name,
+                Breed = n.Breed,
+                SireId = n.SireId,
+                DamId = n.DamId,
+                IsArchived = n.IsArchived
+            }).ToList();
+
+        var siblings = GoatCardBuilder.Siblings(subject, allGoats.Values)
+            .Select(s => new GoatCardSiblingViewModel
+            {
+                Id = s.Id,
+                Tag = s.Tag,
+                Gender = s.Gender == GoatGender.Male ? "Male" : "Female",
+                BirthDateDisplay = s.BirthDate.ToString("yyyy-MM-dd"),
+                Twin = s.Twin
+            }).ToList();
+
+        var kiddings = await _context.KiddingRecords.AsNoTracking()
+            .Include(k => k.BreedingEvent).ThenInclude(e => e!.Buck)
+            .Where(k => k.DoeId == subject.Id)
+            .OrderBy(k => k.KiddingDate)
+            .Select(k => new GoatCardKiddingRowViewModel
+            {
+                DateDisplay = k.KiddingDate.ToString("yyyy-MM-dd"),
+                SireTag = k.BreedingEvent != null
+                    ? (k.BreedingEvent.Buck != null ? k.BreedingEvent.Buck.Tag : k.BreedingEvent.BuckTagText)
+                    : null,
+                SireGoatId = k.BreedingEvent != null ? k.BreedingEvent.BuckId : null,
+                LiveKids = k.LiveKids,
+                Stillborn = k.Stillborn
+            })
+            .ToListAsync(cancellationToken);
+
+        var tagLower = subject.Tag.ToLower();
+        var siredCount = await _context.Goats.AsNoTracking()
+            .CountAsync(g => !g.IsArchived &&
+                (g.SireId == subject.Id ||
+                 (g.SireTagText != null && g.SireTagText.ToLower() == tagLower)), cancellationToken);
+
+        var emptyScans = await _context.BreedingEmptyLogs.AsNoTracking()
+            .CountAsync(e => e.GoatId == subject.Id, cancellationToken);
+
+        var abortions = await _context.BreedingEvents.AsNoTracking()
+            .CountAsync(e => e.DoeId == subject.Id && e.Outcome == BreedingOutcome.Aborted, cancellationToken);
+
+        var activeTreatment = await _context.GoatTreatments.AsNoTracking()
+            .Where(t => t.GoatId == subject.Id && t.EndDate == null)
+            .OrderByDescending(t => t.StartDate)
+            .Select(t => (int?)t.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var kidsToTag = await _context.Goats.AsNoTracking()
+            .Where(g => !g.IsArchived && g.IsTemporaryTag && g.DamId == subject.Id)
+            .OrderBy(g => g.EventDate).ThenBy(g => g.Tag)
+            .Select(g => new GoatCardKidToTagViewModel { Id = g.Id, Tag = g.Tag })
+            .ToListAsync(cancellationToken);
+
+        var latestWeight = profile.Weights.FirstOrDefault()?.Kg;
+        var latestBcs = await _context.GoatBcsRecords.AsNoTracking()
+            .Where(b => b.GoatId == subject.Id)
+            .OrderByDescending(b => b.Date)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return new GoatCardViewModel
+        {
+            Goat = profile.Goat,
+            VaccinationHistory = profile.VaccinationHistory,
+            VaccineSchedule = profile.VaccineSchedule,
+            Treatments = profile.Treatments,
+            Weights = profile.Weights,
+            Pedigree = profile.Pedigree,
+            BreedingHistory = profile.BreedingHistory,
+            FeedPlan = profile.FeedPlan,
+            Reminders = profile.Reminders,
+            SubjectGoatId = subject.Id,
+            PedigreeNodes = pedigreeNodes,
+            Siblings = siblings,
+            Kiddings = kiddings,
+            SiredKidsCount = siredCount,
+            EmptyScanCount = emptyScans,
+            AbortionCount = abortions,
+            ActiveTreatmentId = activeTreatment,
+            KidsToTag = kidsToTag,
+            LatestWeightKg = latestWeight,
+            LatestBcsScore = latestBcs?.Score,
+            LatestBcsDateDisplay = latestBcs?.Date.ToString("yyyy-MM-dd")
+        };
     }
 }

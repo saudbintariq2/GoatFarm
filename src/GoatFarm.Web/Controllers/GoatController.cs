@@ -22,19 +22,22 @@ public class GoatController : Controller
     private readonly IApprovalService _approvalService;
     private readonly IPermissionService _permissionService;
     private readonly ITreatmentService _treatmentService;
+    private readonly ISearchService _searchService;
 
     public GoatController(
         IGoatService goatService,
         ILookupService lookupService,
         IApprovalService approvalService,
         IPermissionService permissionService,
-        ITreatmentService treatmentService)
+        ITreatmentService treatmentService,
+        ISearchService searchService)
     {
         _goatService = goatService;
         _lookupService = lookupService;
         _approvalService = approvalService;
         _permissionService = permissionService;
         _treatmentService = treatmentService;
+        _searchService = searchService;
     }
 
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
@@ -69,6 +72,24 @@ public class GoatController : Controller
     [HttpGet]
     public async Task<IActionResult> GetAll(string? filter, int page = 1, string? q = null, CancellationToken cancellationToken = default) =>
         Json(await _goatService.GetHerdPageAsync(filter, page, search: q, cancellationToken: cancellationToken));
+
+    [HttpGet]
+    public async Task<IActionResult> Card(int? id, string? tag, CancellationToken cancellationToken)
+    {
+        if (id.HasValue)
+        {
+            var byId = await _searchService.GetGoatCardByIdAsync(id.Value, cancellationToken);
+            return byId is null ? NotFound(new { error = "Goat not found." }) : Json(byId);
+        }
+
+        if (string.IsNullOrWhiteSpace(tag))
+            return BadRequest(new { error = "Enter a tag or id." });
+
+        var byTag = await _searchService.GetGoatCardByTagAsync(tag, cancellationToken);
+        return byTag is null
+            ? NotFound(new { error = $"No goat found with tag \"{tag.Trim()}\"." })
+            : Json(byTag);
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetByTag(string tag, CancellationToken cancellationToken)
@@ -193,6 +214,50 @@ public class GoatController : Controller
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
         return Json(await _goatService.RecordSaleAsync(model, cancellationToken));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ImportCsv(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "Choose a CSV file to import." });
+        await using var stream = file.OpenReadStream();
+        using var reader = new StreamReader(stream);
+        var text = await reader.ReadToEndAsync(cancellationToken);
+        var breeds = await _lookupService.GetListAsync(LookupSettingKeys.Breeds, cancellationToken);
+        var defaultBreed = breeds.FirstOrDefault() ?? "Beetal";
+        var result = await _goatService.ImportHerdCsvAsync(text, defaultBreed, cancellationToken);
+        return Json(result);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> RecordBcs([FromBody] RecordBcsViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _goatService.RecordBcsAsync(model, cancellationToken);
+            return Ok(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> RecordHeat([FromBody] RecordHeatViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _goatService.RecordHeatAsync(model, cancellationToken);
+            return Ok(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]

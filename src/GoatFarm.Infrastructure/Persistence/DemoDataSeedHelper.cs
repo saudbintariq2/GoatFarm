@@ -24,7 +24,7 @@ public static class DemoDataSeedHelper
         var today = DateOnly.FromDateTime(DateTime.Today);
         var monthStart = new DateOnly(today.Year, today.Month, 1);
 
-        await SeedHerdAndBreedingAsync(context, today, cancellationToken);
+        await SeedHerdAndBreedingAsync(context, today, forceReload, cancellationToken);
         await SeedMilkAsync(context, today, monthStart, cancellationToken);
         await SeedFeedAndHealthAsync(context, today, monthStart, cancellationToken);
         await SeedFinanceAsync(context, today, monthStart, cancellationToken);
@@ -45,105 +45,28 @@ public static class DemoDataSeedHelper
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    private static async Task SeedHerdAndBreedingAsync(GoatFarmDbContext context, DateOnly today, CancellationToken cancellationToken)
+    private static async Task SeedHerdAndBreedingAsync(
+        GoatFarmDbContext context, DateOnly today, bool applyIndexNewFeedSettings, CancellationToken cancellationToken)
     {
-        if (await context.Goats.AnyAsync(cancellationToken)) return;
-
-        var group = new GoatGroup { Name = "Main herd", Description = "Demo group" };
-        context.GoatGroups.Add(group);
-        await context.SaveChangesAsync(cancellationToken);
-
-        var buck = new Goat
-        {
-            Tag = "B-001", Name = "Raja", Breed = "Beetal", Gender = GoatGender.Male, Status = GoatStatus.Buck,
-            Source = GoatSource.Born, EventDate = today.AddMonths(-24), GroupId = group.Id, HealthState = GoatHealthState.Healthy
-        };
-        var doe1 = new Goat
-        {
-            Tag = "D-101", Name = "Gulabo", Breed = "Beetal", Gender = GoatGender.Female, Status = GoatStatus.Milking,
-            Source = GoatSource.Born, EventDate = today.AddMonths(-18), GroupId = group.Id, HealthState = GoatHealthState.Healthy
-        };
-        var doe2 = new Goat
-        {
-            Tag = "D-102", Name = "Motia", Breed = "Kamori", Gender = GoatGender.Female, Status = GoatStatus.Pregnant,
-            Source = GoatSource.Bought, PurchasePrice = 45000, EventDate = today.AddMonths(-12), GroupId = group.Id,
-            MatedDate = today.AddDays(-45), BuckTag = "B-001", BreedingStage = BreedingStage.ScanPending,
-            HealthState = GoatHealthState.Healthy
-        };
-        var kid = new Goat
-        {
-            Tag = "K-201", Name = "Chotu", Breed = "Beetal", Gender = GoatGender.Female, Status = GoatStatus.Kid,
-            Source = GoatSource.Born, EventDate = today.AddMonths(-2), DateOfBirth = today.AddMonths(-2), GroupId = group.Id,
-            HealthState = GoatHealthState.Healthy
-        };
-        context.Goats.AddRange(buck, doe1, doe2, kid);
-        await context.SaveChangesAsync(cancellationToken);
-
-        if (!await context.BreedingEvents.AnyAsync(cancellationToken))
-        {
-            context.BreedingEvents.Add(new BreedingEvent
-            {
-                DoeId = doe2.Id,
-                BuckId = buck.Id,
-                MatedDate = today.AddDays(-45),
-                Outcome = BreedingOutcome.Open,
-                Notes = "Demo cross"
-            });
-        }
+        var herdSeeded = await IndexNewDemoSeedHelper.SeedHerdAsync(context, cancellationToken);
+        if (herdSeeded || applyIndexNewFeedSettings)
+            await IndexNewDemoSeedHelper.ApplyIndexNewFeedSettingsAsync(context, cancellationToken);
     }
 
     private static async Task SeedMilkAsync(GoatFarmDbContext context, DateOnly today, DateOnly monthStart, CancellationToken cancellationToken)
     {
-        if (await context.MilkProductions.AnyAsync(cancellationToken)) return;
-
-        for (var i = 0; i < 7; i++)
-        {
-            var d = today.AddDays(-i);
-            context.MilkProductions.Add(new MilkProduction { Date = d, Breed = "Beetal", Liters = 38 + i, Comment = "Demo" });
-        }
-        context.MilkSales.Add(new MilkSale { Date = today.AddDays(-1), Liters = 30, Rate = 220, Amount = 6600, Comment = "Shop sale" });
-        context.MilkWastes.Add(new MilkWaste { Date = today.AddDays(-2), Liters = 2, Notes = "Spoiled sample" });
+        await IndexNewDemoSeedHelper.SeedMilkAsync(context, cancellationToken);
     }
 
     private static async Task SeedFeedAndHealthAsync(GoatFarmDbContext context, DateOnly today, DateOnly monthStart, CancellationToken cancellationToken)
     {
-        if (!await context.FeedPurchases.AnyAsync(cancellationToken))
-        {
-            context.FeedPurchases.Add(new FeedPurchase
-            {
-                Date = today.AddDays(-3), FeedType = "wanda", Kg = 500, RatePerKg = 85, Amount = 42500, Comment = "Demo buy"
-            });
-        }
-
-        if (!await context.VaccinePurchases.AnyAsync(cancellationToken))
-        {
-            context.VaccinePurchases.Add(new VaccinePurchase
-            {
-                Date = monthStart, Name = "PPR", Qty = 20, Unit = "doses", Amount = 8000, Comment = "Demo stock"
-            });
-        }
-
-        if (!await context.Reminders.AnyAsync(cancellationToken))
-        {
-            context.Reminders.Add(new Reminder
-            {
-                Title = "Deworming due — demo",
-                Scope = VaccineScope.All,
-                ReminderDate = today.AddDays(5)
-            });
-        }
+        await IndexNewDemoSeedHelper.SeedFinanceAndOpsAsync(context, cancellationToken);
     }
 
     private static async Task SeedFinanceAsync(GoatFarmDbContext context, DateOnly today, DateOnly monthStart, CancellationToken cancellationToken)
     {
-        if (await context.Incomes.AnyAsync(cancellationToken)) return;
-
-        context.Incomes.Add(new Income { Type = "Milk sales", Amount = 6600, Date = today.AddDays(-1), Comment = "Demo" });
-        context.Expenses.Add(new Expense { Type = "Feed", Amount = 42500, Date = today.AddDays(-3), Comment = "Demo" });
-        context.OwnerInvestments.Add(new OwnerInvestment { Note = "Owner top-up (demo)", Amount = 100000, Date = monthStart });
-        context.Assets.Add(new Asset { Name = "Milking cans", Type = "Equipment", Cost = 15000, PurchaseDate = monthStart.AddMonths(-2) });
-        context.Employees.Add(new Employee { Name = "Ahmed (demo)", Role = "Herdsman", MonthlySalary = 25000 });
-        context.RecurringCosts.Add(new RecurringCost { Name = "Electricity — shed", Amount = 3500, Period = RecurringCostPeriod.Month });
+        /* index_new finance/feed rows seeded in SeedFeedAndHealthAsync */
+        await Task.CompletedTask;
     }
 
     private static async Task SeedTasksAsync(GoatFarmDbContext context, DateOnly today, CancellationToken cancellationToken)
@@ -308,7 +231,7 @@ public static class DemoDataSeedHelper
     {
         if (await context.GoatTreatments.AnyAsync(cancellationToken)) return;
 
-        var sick = await context.Goats.FirstOrDefaultAsync(g => g.Tag == "D-101", cancellationToken);
+        var sick = await context.Goats.FirstOrDefaultAsync(g => g.Tag == "203", cancellationToken);
         if (sick is null) return;
 
         context.GoatTreatments.Add(new GoatTreatment

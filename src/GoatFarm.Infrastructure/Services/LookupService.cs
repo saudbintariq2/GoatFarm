@@ -18,7 +18,9 @@ public class LookupService : ILookupService
             [LookupSettingKeys.AssetTypes] = LookupConstants.AssetTypes,
             [LookupSettingKeys.Breeds] = LookupConstants.Breeds,
             [LookupSettingKeys.VaccineNames] = LookupConstants.VaccineNames,
-            [LookupSettingKeys.VaccineUnits] = LookupConstants.VaccineUnits
+            [LookupSettingKeys.VaccineUnits] = LookupConstants.VaccineUnits,
+            [LookupSettingKeys.Owners] = LookupConstants.Owners,
+            [LookupSettingKeys.HealthStates] = LookupConstants.HealthStates
         };
 
     private readonly GoatFarmDbContext _context;
@@ -39,7 +41,35 @@ public class LookupService : ILookupService
             });
         }
 
+        await MergeMissingLookupOptionsAsync(LookupSettingKeys.HealthStates, LookupConstants.HealthStates, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task MergeMissingLookupOptionsAsync(string key, string[] canonical, CancellationToken cancellationToken)
+    {
+        var setting = await _context.AppSettings.FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+        if (setting is null) return;
+
+        List<string> list;
+        try
+        {
+            list = JsonSerializer.Deserialize<List<string>>(setting.Value) ?? [];
+        }
+        catch
+        {
+            return;
+        }
+
+        var changed = false;
+        foreach (var item in canonical)
+        {
+            if (list.Any(x => string.Equals(x, item, StringComparison.OrdinalIgnoreCase))) continue;
+            list.Add(item);
+            changed = true;
+        }
+
+        if (!changed) return;
+        setting.Value = JsonSerializer.Serialize(list);
     }
 
     /// <summary>

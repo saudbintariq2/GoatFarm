@@ -8,7 +8,8 @@
     "EnsureDevUser": true,
     "DemoData": true,
     "ReloadDemoData": false,
-    "ClearFarmData": false
+    "ClearFarmData": false,
+    "_comment_ClearFarmData": "Set ClearFarmData true once (or run scripts/reset-index-new-demo.ps1) to wipe farm rows and reload index_new.html sample herd."
   },
   "LocalDev": {
     "DisablePermissionChecks": true

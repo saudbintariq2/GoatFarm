@@ -47,6 +47,39 @@ public class GoatViewModel
     public string? SireTag { get; set; }
     public string? DamTag { get; set; }
     public bool IsTemporaryTag { get; set; }
+    public DateOnly? WeanDate { get; set; }
+    public string? WeanDateDisplay => WeanDate?.ToString("yyyy-MM-dd");
+    public YoungGoatClass YoungClass { get; set; }
+    public string YoungClassDisplay { get; set; } = string.Empty;
+    public string? BirthBatchName { get; set; }
+    public DateOnly? NextCrossDate { get; set; }
+    public string? FeedingGroupName { get; set; }
+    public string? KidStageHint { get; set; }
+    public string? KidStageLine { get; set; }
+    public string? KidStageColor { get; set; }
+    public bool KidStageWeanLink { get; set; }
+    public string? NextStepAction { get; set; }
+    public string? NextStepLabel { get; set; }
+    public string? NextStepPermTab { get; set; }
+    public string? NextStepPermAction { get; set; }
+    public int? NextStepKidsCount { get; set; }
+    public bool IsArchived { get; set; }
+    public string? ArchivedReason { get; set; }
+    public string? ArchivedDateDisplay { get; set; }
+}
+
+public class RecordBcsViewModel
+{
+    public int GoatId { get; set; }
+    public DateOnly Date { get; set; }
+    public int Score { get; set; }
+}
+
+public class RecordHeatViewModel
+{
+    public int GoatId { get; set; }
+    public DateOnly Date { get; set; }
+    public string? Note { get; set; }
 }
 
 public class ParentOptionsViewModel
@@ -111,6 +144,43 @@ public class BulkMoveViewModel
     public DateOnly? MatedDate { get; set; }
     public string? BuckTag { get; set; }
     public bool ConfirmWarnings { get; set; }
+    public string? Owner { get; set; }
+    public GoatHealthState? HealthState { get; set; }
+    public string? BirthBatchName { get; set; }
+    public int? CustomFeedingGroupId { get; set; }
+    public DateOnly? WeanDate { get; set; }
+    public DateOnly? NextCrossDate { get; set; }
+}
+
+public class HerdFilterChipViewModel
+{
+    public string Value { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string Color { get; set; } = "var(--green)";
+    public int Count { get; set; }
+    public bool Active { get; set; }
+}
+
+public class HerdFilterRowViewModel
+{
+    public string Label { get; set; } = string.Empty;
+    public IReadOnlyList<HerdFilterChipViewModel> Chips { get; set; } = [];
+}
+
+public class HerdFilterOptionsViewModel
+{
+    public IReadOnlyList<string> BirthBatches { get; set; } = [];
+    public IReadOnlyList<string> SireTags { get; set; } = [];
+    public IReadOnlyList<string> Owners { get; set; } = [];
+    public IReadOnlyList<HerdFilterChipViewModel> Chips { get; set; } = [];
+    public IReadOnlyList<HerdFilterRowViewModel> Rows { get; set; } = [];
+}
+
+public class HerdCsvImportResultViewModel
+{
+    public int Imported { get; set; }
+    public IReadOnlyList<string> Errors { get; set; } = [];
+    public IReadOnlyList<string> SkippedTags { get; set; } = [];
 }
 
 public class HerdStatsViewModel
@@ -130,6 +200,11 @@ public class HerdPageViewModel
     public IReadOnlyList<GoatViewModel> Goats { get; set; } = [];
     public IReadOnlyList<HerdTreatmentRowViewModel> UnderTreatment { get; set; } = [];
     public IReadOnlyList<string> Groups { get; set; } = [];
+    public IReadOnlyList<string> BirthBatches { get; set; } = [];
+    public IReadOnlyList<string> SireFilterTags { get; set; } = [];
+    public IReadOnlyList<string> OwnerFilters { get; set; } = [];
+    public IReadOnlyList<(int Id, string Name)> FeedingGroups { get; set; } = [];
+    public HerdFilterOptionsViewModel FilterOptions { get; set; } = new();
     public string? Filter { get; set; }
     public string? Search { get; set; }
     public PaginationViewModel Pagination { get; set; } = new();

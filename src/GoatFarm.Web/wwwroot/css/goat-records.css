@@ -5,6 +5,7 @@
     --amber:#C2842A;--amber-tint:#F7EDDA;--pink:#B5446E;--pink-tint:#F6E4EC;
     --blue:#2E6F8E;--blue-tint:#E1EEF3;--red:#B23A2E;--red-tint:#FBE7E3;
     --shadow:0 1px 2px rgba(27,42,30,.06),0 8px 24px rgba(27,42,30,.06);
+    --cream:#faf8f2;
     --page-max:1040px;
     --page-gutter:16px;
     --stat-min:140px;
@@ -75,7 +76,9 @@
   .field input:disabled{background:#f0f0ee;color:#aaa}
   .field .inline-check{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:600;font-size:12px;color:var(--ink-soft);white-space:nowrap;margin:0}
   .field .inline-check input{width:auto;padding:0;margin:0}
-  .goat-add-grid{align-items:start}
+  #goatFormPanel .goat-add-grid{grid-template-columns:repeat(6,1fr);align-items:end}
+  #goatFormPanel .goat-add-grid .field-comment{grid-column:1 / -1}
+  #goatFormPanel .goat-form-actions{margin-top:14px}
   .field-dob input[type="date"]{width:100%}
   .field-dob .field-dob-est{margin-top:2px}
   .btn-death{background:var(--red);border-color:var(--red);color:#fff}
@@ -100,6 +103,79 @@
     border:1px solid var(--green);border-radius:11px;padding:10px 14px;margin-bottom:12px;flex-wrap:wrap}
   .bulkbar.show{display:flex}
   .bulkbar .sel{font-weight:700;font-size:14px;color:var(--green-dark)}
+  #view-herd .herd-list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  #view-herd .herd-list-head h2{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0}
+  #view-herd .herd-list-head .filterbar{margin-left:auto}
+  #addGoatOpen{min-height:36px}
+  #herdChips.chipbar{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  #herdChips .chiprow{display:flex;gap:6px;align-items:center}
+  #herdChips .chips{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
+  #herdChips .chl{font-size:11px;font-weight:700;color:#9A9384;text-transform:uppercase;letter-spacing:.4px;width:74px;flex-shrink:0}
+  #herdChips .fchip{font-family:inherit;font-size:13px;font-weight:600;padding:6px 11px;border-radius:22px;
+    border:1px solid var(--line);background:#fff;color:#5F5A51;cursor:pointer;display:inline-flex;
+    gap:6px;align-items:center;transition:.12s;white-space:nowrap;text-decoration:none}
+  #herdChips .fchip:hover{border-color:var(--green);background:#FCFAF3;color:#5F5A51}
+  #herdChips .fchip .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+  #herdChips .fchip .n{font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+  #herdChips .fchip.on{background:linear-gradient(135deg,#6B7F5E,#4A5A40);border-color:#4A5A40;color:#fff;
+    box-shadow:0 6px 14px rgba(74,90,64,.2)}
+  #herdChips .fchip.on .n{color:#DDEBDD}
+  #herdChips .fchip.on .dot{background:#fff !important}
+  #herdChips .fchip.zero{opacity:.5}
+  .young-stock-note{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+    background:var(--cream,#faf8f2);font-size:12px;line-height:1.55;color:var(--ink-soft)}
+  .young-stock-note b{color:var(--green-dark)}
+  @media(max-width:760px){
+    #herdChips .chiprow{flex-direction:column;align-items:flex-start;gap:4px}
+    #herdChips .chl{width:auto}
+    #herdChips .chips{flex-wrap:nowrap;overflow-x:auto;width:100%;padding-bottom:4px;scrollbar-width:none;
+      -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
+    #herdChips .chips::-webkit-scrollbar{display:none}
+  }
+  @media(min-width:761px) and (max-width:1100px){
+    #herdChips .chiprow{align-items:flex-start}
+    #herdChips .chips{flex-wrap:wrap}
+  }
+  .treebtn{font-family:inherit;font-size:11.5px;font-weight:700;padding:2px 8px;margin-left:6px;border-radius:20px;
+    border:1px solid var(--line);background:#fff;color:var(--green-dark);cursor:pointer;vertical-align:middle}
+  .treebtn:hover{border-color:var(--green);background:var(--green-tint)}
+  .herd-nextstep-wrap{margin-top:6px}
+  .herd-nextstep{padding:5px 10px!important;font-size:12px!important;min-height:0!important}
+  button.linkish{font-family:inherit;font-size:inherit;font-weight:700;color:inherit;background:none;border:none;
+    padding:0;margin:0;text-decoration:underline;cursor:pointer}
+  .v207-stage{line-height:1.45}
+  body.goat-card-open #mainContent,
+  body.goat-card-submodal-open #mainContent{pointer-events:none}
+  .goat-card-modal.modal{position:fixed;inset:0;background:rgba(27,42,30,.45);display:none;
+    align-items:center;justify-content:center;z-index:10000;padding:12px 20px}
+  .goat-card-modal.modal.show{display:flex}
+  .goat-card-box{max-height:90vh;display:flex;flex-direction:column;background:#fff;
+    border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:100%;overflow:hidden}
+  .goat-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:14px 18px;border-bottom:1px solid var(--line);font-weight:700;font-size:15px}
+  .goat-card-body{overflow-y:auto;padding:16px 18px;flex:1}
+  .goat-card-foot{display:block;padding:12px 18px;border-top:1px solid var(--line)}
+  .goat-card-close{border:1px solid var(--line);background:#fff;border-radius:10px;width:36px;height:36px;
+    font-size:18px;cursor:pointer;flex-shrink:0}
+  #goatModal .gm-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px}
+  #goatModal .gm-actions .btn{min-height:0;padding:8px 6px;font-size:13px;text-align:center;white-space:normal;line-height:1.25}
+  #goatModal #gmBody svg{min-width:540px}
+  @media(max-width:760px){
+    .goat-card-modal.modal{padding:8px;align-items:flex-end}
+    .goat-card-modal .goat-card-box{max-width:none!important;width:100%;max-height:94dvh;border-radius:14px 14px 0 0}
+    #goatModal .gm-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+    #goatModal #gmBody svg{min-width:520px}
+  }
+  #askModal.goat-card-modal.modal.show{z-index:10001}
+  #askModal .modal-box{max-width:420px;background:#FFFDF8;border:1px solid var(--line);border-radius:20px;overflow:hidden;width:100%;
+    padding:0;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:none}
+  #askModal .modal-body .field{display:flex;flex-direction:column;gap:5px}
+  #askModal .modal-body .field label{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
+  #askModal .modal-head{padding:14px 18px;border-bottom:1px solid var(--line);font-weight:700;font-size:15px}
+  #askModal .modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+  #askModal .modal-body .field input,#askModal .modal-body .field select{width:100%}
+  #askModal .modal-body>*{flex-shrink:0}
+  #askModal .modal-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
   .bulkbar select{font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--green);
     border-radius:8px;background:#fff;color:var(--ink)}
 
@@ -130,9 +206,6 @@
     border-radius:9px;background:#FCFDFB;color:var(--ink)}
   .herd-tag-input:focus{outline:none;border-color:var(--green);background:#fff}
   .herd-tag-input:disabled{background:#f0f0ee;color:#aaa}
-  .goat-add-grid .field-tag{grid-column:span 2}
-  .goat-add-grid .field-comment-goat{grid-column:span 3}
-  .goat-add-grid .field-comment-goat input{width:100%}
   .policy-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end}
   .policy-grid .field-check label{flex-direction:row;align-items:center;gap:8px;text-transform:none;letter-spacing:0;
     font-size:14px;font-weight:500;color:var(--ink);cursor:pointer;white-space:nowrap}
@@ -333,9 +406,15 @@
   .modal-overlay{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;
     padding:20px;background:rgba(27,42,30,.48);backdrop-filter:blur(2px)}
   .modal-overlay.open{display:flex}
+  /* Confirm / prompt — above goat card (10000) and askModal (10001) */
+  #appModal.modal-overlay.open{z-index:10002}
   body.modal-open{overflow:hidden}
+  body.modal-open #mainContent{pointer-events:none}
   .modal-box{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 48px rgba(27,42,30,.16);
     padding:22px 24px 20px;max-width:420px;width:100%;animation:modalIn .18s ease-out}
+  /* Tree / goat card — large; must beat .modal-box 420px cap (same class on .goat-card-box) */
+  #goatModal > .modal-box.goat-card-box{
+    max-width:min(96vw,1024px);padding:0;animation:none;border-radius:16px}
   @keyframes modalIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
   .modal-msg{font-size:15px;color:var(--ink);line-height:1.55;margin:0 0 18px;font-weight:500}
   .modal-input{display:none;width:100%;font-family:inherit;font-size:14px;padding:9px 10px;margin-bottom:16px;
@@ -391,7 +470,6 @@
     #dashKpi.stats,#feedStats.stats{--stat-min:120px}
     .add-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .rep-subtabs .rep-subtab{flex:1 1 calc(50% - 5px);min-width:0;font-size:12px}
-    .goat-add-grid .field-tag,.goat-add-grid .field-comment-goat{grid-column:1 / -1}
     .policy-grid{grid-template-columns:1fr}
     .dash-breed3{grid-template-columns:1fr}
     .price-grid{grid-template-columns:1fr 1fr}

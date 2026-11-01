@@ -101,6 +101,9 @@ var app = builder.Build();
 
 await DatabaseBootstrap.InitializeAsync(app.Services, app.Environment.IsDevelopment());
 
+if (args.Contains("--initialize-only", StringComparer.OrdinalIgnoreCase))
+    return;
+
 app.UseForwardedHeaders();
 
 app.UseGlobalExceptionMiddleware();

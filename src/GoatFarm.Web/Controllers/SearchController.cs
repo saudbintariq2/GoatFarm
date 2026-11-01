@@ -32,7 +32,7 @@ public class SearchController : Controller
         if (string.IsNullOrWhiteSpace(tag))
             return JsonError("Enter a tag / RFID ID.", StatusCodes.Status400BadRequest);
 
-        var profile = await _searchService.GetProfileByTagAsync(tag, cancellationToken);
+        var profile = await _searchService.GetGoatCardByTagAsync(tag, cancellationToken);
         return profile is null
             ? JsonError($"No goat found with tag \"{NormalizeTagForDisplay(tag)}\".", StatusCodes.Status404NotFound)
             : Json(profile);

@@ -404,6 +404,12 @@ public class VaccineService : IVaccineService
             return goats.Where(g => g.Group?.Name == groupName);
         }
 
+        if (target.StartsWith("tag:", StringComparison.OrdinalIgnoreCase))
+        {
+            var tag = target[4..].Trim();
+            return goats.Where(g => string.Equals(g.Tag, tag, StringComparison.OrdinalIgnoreCase));
+        }
+
         return [];
     }
 }

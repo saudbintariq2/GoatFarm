@@ -92,6 +92,10 @@ public class BreedingController : Controller
         Run(() => _breedingService.RecordAbortionAsync(model, cancellationToken));
 
     [HttpPost]
+    public Task<IActionResult> RecordReturnedToHeat([FromBody] RecordReturnedToHeatViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordReturnedToHeatAsync(model, cancellationToken));
+
+    [HttpPost]
     public Task<IActionResult> MarkKidded(int id, CancellationToken cancellationToken) =>
         Run(() => _breedingService.MarkKiddedAsync(id, cancellationToken));
 

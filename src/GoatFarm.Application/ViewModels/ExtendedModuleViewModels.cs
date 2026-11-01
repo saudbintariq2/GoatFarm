@@ -569,6 +569,10 @@ public class SaveTreatmentViewModel
     public decimal Cost { get; set; }
     public int? WithdrawalDays { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Display label from lookup (e.g. Under treatment, Sick).</summary>
+    public string? HealthStateLabel { get; set; }
+    /// <summary>Cash/bank account when <see cref="Cost"/> &gt; 0.</summary>
+    public int? AccountId { get; set; }
 }
 
 }

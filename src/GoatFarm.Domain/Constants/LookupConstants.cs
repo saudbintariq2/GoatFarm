@@ -38,4 +38,12 @@ public static class LookupConstants
     [
         "Box", "Bottle", "Dose", "Vial", "Other"
     ];
+
+    public static readonly string[] Owners = ["Farm"];
+
+    /// <summary>Labels shown on the Add goat form (matches index_new.html HEALTH_STATES).</summary>
+    public static readonly string[] HealthStates =
+    [
+        "Healthy", "Under treatment", "Quarantine", "Injured", "Weak / off feed"
+    ];
 }

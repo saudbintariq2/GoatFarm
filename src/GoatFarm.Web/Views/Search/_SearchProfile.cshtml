@@ -11,7 +11,7 @@
     <div class="panel-body">
         <div class="search-hero">
             <div class="search-hero-main">
-                <h2><span class="tag">@g.Tag</span></h2>
+                <h2><a href="#" class="tag" data-goatcard="@g.Id">@g.Tag</a></h2>
                 @if (!string.IsNullOrEmpty(g.Name))
                 {
                     <div class="name">@g.Name</div>
@@ -35,6 +35,65 @@
         </div>
     </div>
 </div>
+
+@if (Model.Weights.Count > 0)
+{
+<div class="panel">
+    <div class="panel-head"><h2>Weight history</h2></div>
+    <div class="panel-body">
+        <table class="tbl">
+            <thead><tr><th>Date</th><th class="num-cell">kg</th></tr></thead>
+            <tbody>
+            @foreach (var w in Model.Weights)
+            {
+                <tr><td>@w.DateDisplay</td><td class="num-cell">@w.Kg.ToString("F1")</td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+}
+
+@if (Model.Pedigree.Count > 1)
+{
+<div class="panel" id="family-tree">
+    <div class="panel-head"><h2>Family tree</h2><span class="sub">ancestors (up to 4 generations)</span></div>
+    <div class="panel-body">
+        <table class="tbl">
+            <thead><tr><th>Gen</th><th>Tag</th><th class="hide-sm">Sire</th><th class="hide-sm">Dam</th></tr></thead>
+            <tbody>
+            @foreach (var p in Model.Pedigree)
+            {
+                <tr>
+                    <td>@p.Generation</td>
+                    <td>@if (p.Generation == 0){<span class="tag">@p.Tag</span>}else if (!string.IsNullOrEmpty(p.SearchTag)){<a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(p.SearchTag)">@p.Tag</a>}else{@p.Tag}</td>
+                    <td class="hide-sm">@(p.SireTag ?? "—")</td>
+                    <td class="hide-sm">@(p.DamTag ?? "—")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+}
+
+@if (Model.BreedingHistory.Count > 0)
+{
+<div class="panel">
+    <div class="panel-head"><h2>Breeding history</h2></div>
+    <div class="panel-body">
+        <table class="tbl">
+            <thead><tr><th>Mated</th><th>Buck</th><th>Outcome</th></tr></thead>
+            <tbody>
+            @foreach (var b in Model.BreedingHistory)
+            {
+                <tr><td>@b.MatedDisplay</td><td>@(b.BuckTag ?? "—")</td><td>@b.Outcome</td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+}
 
 <div class="panel">
     <div class="panel-head"><h2>Treatment history</h2></div>

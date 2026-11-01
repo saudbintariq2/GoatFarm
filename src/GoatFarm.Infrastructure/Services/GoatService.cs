@@ -34,7 +34,7 @@ public class GoatService : IGoatService
         pageSize = pageSize <= 0 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
         search = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
 
-        var query = ApplySearch(ApplyFilter(LiveGoatsQuery(), filter), search);
+        var query = ApplySearch(await ApplyFilterAsync(LiveGoatsQuery(), filter, cancellationToken), search);
         var totalItems = await query.CountAsync(cancellationToken);
         var totalPages = Math.Max(1, (int)Math.Ceiling(totalItems / (double)pageSize));
         page = Math.Clamp(page, 1, totalPages);
@@ -43,7 +43,7 @@ public class GoatService : IGoatService
             .OrderByDescending(g => g.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Include(g => g.Group).Include(g => g.Sire).Include(g => g.Dam)
+            .Include(g => g.Group).Include(g => g.Sire).Include(g => g.Dam).Include(g => g.CustomFeedingGroup)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -52,13 +52,25 @@ public class GoatService : IGoatService
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
 
+        var groups = await GetGroupsAsync(cancellationToken);
+        var batches = await GetBirthBatchesAsync(cancellationToken);
+        var sireTags = await GetSireFilterTagsAsync(cancellationToken);
+        var owners = await GetOwnerFiltersAsync(cancellationToken);
+        var feedingGroups = await GetFeedingGroupOptionsAsync(cancellationToken);
+        var filterKey = filter ?? "all";
+
         return new HerdPageViewModel
         {
             Stats = BuildStats(statusCounts),
-            Goats = goats.Select(MapGoat).ToList(),
+            Goats = MapGoatsWithWeights(goats, await LoadLatestWeightsAsync(goats.Select(g => g.Id).ToList(), cancellationToken)),
             UnderTreatment = await LoadUnderTreatmentAsync(cancellationToken),
-            Groups = await GetGroupsAsync(cancellationToken),
-            Filter = filter ?? "all",
+            Groups = groups,
+            BirthBatches = batches,
+            SireFilterTags = sireTags,
+            OwnerFilters = owners,
+            FeedingGroups = feedingGroups,
+            FilterOptions = await BuildFilterOptionsAsync(filterKey, statusCounts, batches, sireTags, owners, cancellationToken),
+            Filter = filterKey,
             Search = search,
             Pagination = new PaginationViewModel
             {
@@ -75,6 +87,48 @@ public class GoatService : IGoatService
         var goat = await _context.Goats.Include(g => g.Group).Include(g => g.Sire).Include(g => g.Dam).AsNoTracking()
             .FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
         return goat is null ? null : MapGoat(goat);
+    }
+
+    public async Task<GoatViewModel?> GetViewModelForCardAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var goat = await _context.Goats.Include(g => g.Group).Include(g => g.Sire).Include(g => g.Dam)
+            .Include(g => g.CustomFeedingGroup).AsNoTracking()
+            .FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
+        if (goat is null)
+            return null;
+        var weights = await LoadLatestWeightsAsync([goat.Id], cancellationToken);
+        weights.TryGetValue(goat.Id, out var kg);
+        return MapGoat(goat, weights.ContainsKey(goat.Id) ? kg : null);
+    }
+
+    public async Task RecordBcsAsync(RecordBcsViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (model.Score is < 1 or > 5)
+            throw new InvalidOperationException("Body condition score must be between 1 and 5.");
+        var goat = await _context.Goats.FindAsync([model.GoatId], cancellationToken)
+            ?? throw new InvalidOperationException("Goat not found.");
+        _context.GoatBcsRecords.Add(new GoatBcsRecord
+        {
+            GoatId = goat.Id,
+            Date = model.Date,
+            Score = model.Score
+        });
+        goat.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RecordHeatAsync(RecordHeatViewModel model, CancellationToken cancellationToken = default)
+    {
+        var goat = await _context.Goats.FindAsync([model.GoatId], cancellationToken)
+            ?? throw new InvalidOperationException("Goat not found.");
+        _context.GoatHeatEvents.Add(new GoatHeatEvent
+        {
+            GoatId = goat.Id,
+            Date = model.Date,
+            Note = string.IsNullOrWhiteSpace(model.Note) ? null : model.Note.Trim()
+        });
+        goat.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<GoatViewModel?> GetByTagAsync(string tag, CancellationToken cancellationToken = default)
@@ -219,6 +273,17 @@ public class GoatService : IGoatService
             throw new InvalidOperationException($"{parent.Tag} is this goat's offspring and cannot be its {role.ToLower()}.");
         if (parent.Gender != expected)
             throw new InvalidOperationException($"{role} {parent.Tag} is not {(expected == GoatGender.Male ? "male" : "female")}.");
+
+        if (child.Id != 0)
+        {
+            var links = await _context.Goats.AsNoTracking()
+                .Select(g => new { g.Id, g.SireId, g.DamId })
+                .ToDictionaryAsync(x => x.Id, x => (x.SireId, x.DamId), cancellationToken);
+            if (PedigreeHelper.IsAncestorOf(parent.Id, child.Id, links))
+                throw new InvalidOperationException(
+                    $"{parent.Tag} is an ancestor of this goat and cannot be set as {role.ToLower()}.");
+        }
+
         return (parent.Id, null);
     }
 
@@ -266,6 +331,84 @@ public class GoatService : IGoatService
             return;
         }
 
+        if (target.Equals("k:wean", StringComparison.OrdinalIgnoreCase))
+        {
+            var weanDate = model.WeanDate ?? today;
+            foreach (var goat in goats)
+            {
+                if (goat.Status != GoatStatus.Kid)
+                    throw new InvalidOperationException($"{goat.Tag} is not a kid.");
+                goat.WeanDate = weanDate;
+                goat.UpdatedDate = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (target is "k:class-doeling" or "k:class-buckling" or "k:class-meat")
+        {
+            var cls = target switch
+            {
+                "k:class-doeling" => YoungGoatClass.Doeling,
+                "k:class-buckling" => YoungGoatClass.Buckling,
+                _ => YoungGoatClass.Meat
+            };
+            foreach (var goat in goats)
+            {
+                if (goat.Status != GoatStatus.Kid)
+                    throw new InvalidOperationException($"{goat.Tag} is not a kid.");
+                goat.YoungClass = cls;
+                goat.YoungClassDate = today;
+                if (cls == YoungGoatClass.Meat)
+                    goat.Status = GoatStatus.Meat;
+                goat.UpdatedDate = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (target.Equals("k:graduate", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var goat in goats)
+            {
+                if (goat.YoungClass == YoungGoatClass.Doeling)
+                    goat.Status = GoatStatus.Dry;
+                else if (goat.YoungClass == YoungGoatClass.Buckling)
+                    goat.Status = GoatStatus.Buck;
+                else if (goat.YoungClass == YoungGoatClass.Meat)
+                    goat.Status = GoatStatus.Meat;
+                else
+                    throw new InvalidOperationException($"{goat.Tag} has no young-stock class to graduate.");
+                goat.YoungClass = YoungGoatClass.None;
+                goat.YoungClassDate = null;
+                goat.UpdatedDate = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (target.Equals("br:dryoff", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var goat in goats)
+            {
+                goat.Status = GoatStatus.Dry;
+                goat.UpdatedDate = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (target.Equals("br:plan", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var goat in goats)
+            {
+                goat.NextCrossDate = model.NextCrossDate;
+                goat.UpdatedDate = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         foreach (var goat in goats)
         {
             if (target.Equals("br:kidded", StringComparison.OrdinalIgnoreCase))
@@ -274,14 +417,14 @@ public class GoatService : IGoatService
                 BreedingCycleWriter.CloseCycle(goat, open, BreedingOutcome.Kidded, today, "marked kidded from Herd");
                 goat.Status = GoatStatus.Milking;
             }
-            else if (model.MoveTarget.StartsWith("st:", StringComparison.OrdinalIgnoreCase))
+            else if (target.StartsWith("st:", StringComparison.OrdinalIgnoreCase))
             {
-                var statusKey = model.MoveTarget[3..];
+                var statusKey = target[3..];
                 goat.Status = DisplayHelper.ParseStatusKey(statusKey);
             }
-            else if (model.MoveTarget.StartsWith("grp:", StringComparison.OrdinalIgnoreCase))
+            else if (target.StartsWith("grp:", StringComparison.OrdinalIgnoreCase))
             {
-                var groupName = model.MoveTarget[4..];
+                var groupName = target[4..];
                 var group = await _context.GoatGroups.FirstOrDefaultAsync(g => g.Name == groupName, cancellationToken);
                 if (group is null)
                 {
@@ -291,6 +434,35 @@ public class GoatService : IGoatService
                 }
                 goat.GroupId = group.Id;
             }
+            else if (target.StartsWith("bat:", StringComparison.OrdinalIgnoreCase))
+            {
+                var batch = target[4..];
+                goat.BirthBatchName = batch.Equals("none", StringComparison.OrdinalIgnoreCase) ? null : batch;
+            }
+            else if (target.StartsWith("hl:", StringComparison.OrdinalIgnoreCase))
+            {
+                var key = target[3..];
+                goat.HealthState = key.Equals("sick", StringComparison.OrdinalIgnoreCase)
+                    ? GoatHealthState.Sick
+                    : Enum.Parse<GoatHealthState>(key, true);
+            }
+            else if (target.StartsWith("own:", StringComparison.OrdinalIgnoreCase))
+                goat.Owner = target[4..];
+            else if (target.StartsWith("fg:", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!int.TryParse(target[3..], out var fgId))
+                    throw new InvalidOperationException("Invalid feeding group.");
+                goat.CustomFeedingGroupId = fgId;
+            }
+            else if (!string.IsNullOrWhiteSpace(model.Owner))
+                goat.Owner = model.Owner.Trim();
+            else if (model.HealthState.HasValue)
+                goat.HealthState = model.HealthState.Value;
+            else if (model.BirthBatchName is not null)
+                goat.BirthBatchName = string.IsNullOrWhiteSpace(model.BirthBatchName) ? null : model.BirthBatchName.Trim();
+            else if (model.CustomFeedingGroupId is > 0)
+                goat.CustomFeedingGroupId = model.CustomFeedingGroupId;
+
             goat.UpdatedDate = DateTime.UtcNow;
         }
         await _context.SaveChangesAsync(cancellationToken);
@@ -302,7 +474,11 @@ public class GoatService : IGoatService
         var isCross = model.MoveTarget.Equals("br:cross", StringComparison.OrdinalIgnoreCase);
         var date = isCross ? model.MatedDate : model.PrepCrossDate;
         if (!date.HasValue)
-            throw new InvalidOperationException(isCross ? "Pick the cross date." : "Pick the planned cross date.");
+        {
+            if (isCross)
+                throw new InvalidOperationException("Pick the cross date.");
+            date = today;
+        }
 
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -534,16 +710,7 @@ public class GoatService : IGoatService
         {
             var accountId = model.AccountId;
             if (accountId is null or <= 0)
-            {
-                accountId = await _context.MoneyAccounts.AsNoTracking()
-                    .Where(a => a.IsActive)
-                    .OrderBy(a => a.Id)
-                    .Select(a => (int?)a.Id)
-                    .FirstOrDefaultAsync(cancellationToken);
-            }
-
-            if (accountId is null or <= 0)
-                return new WeightDeathResultViewModel { Success = false, Message = "Add a cash or bank account on Finance → Accounts before recording a paid sale." };
+                return new WeightDeathResultViewModel { Success = false, Message = "Choose the Cash/Bank account that received the money." };
 
             ledgerAccountId = accountId;
             _context.LedgerTransactions.Add(new LedgerTransaction
@@ -650,12 +817,41 @@ public class GoatService : IGoatService
         Meat = counts.GetValueOrDefault(GoatStatus.Meat)
     };
 
-    private GoatViewModel MapGoat(Goat g)
+    private async Task<IReadOnlyDictionary<int, decimal>> LoadLatestWeightsAsync(
+        IReadOnlyList<int> goatIds, CancellationToken cancellationToken)
     {
+        if (goatIds.Count == 0)
+            return new Dictionary<int, decimal>();
+
+        var rows = await _context.GoatWeightRecords.AsNoTracking()
+            .Where(w => goatIds.Contains(w.GoatId))
+            .Select(w => new { w.GoatId, w.Date, w.Kg })
+            .ToListAsync(cancellationToken);
+
+        return rows.GroupBy(w => w.GoatId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Date).First().Kg);
+    }
+
+    private IReadOnlyList<GoatViewModel> MapGoatsWithWeights(
+        IReadOnlyList<Goat> goats, IReadOnlyDictionary<int, decimal> latestWeights)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return goats.Select(g =>
+        {
+            latestWeights.TryGetValue(g.Id, out var kg);
+            return MapGoat(g, latestWeights.ContainsKey(g.Id) ? kg : null, today);
+        }).ToList();
+    }
+
+    private GoatViewModel MapGoat(Goat g, decimal? latestWeightKg = null, DateOnly? today = null)
+    {
+        var now = today ?? DateOnly.FromDateTime(DateTime.Today);
         var birth = BreedingRules.BirthDate(g);
         int? ageDays = birth is { } b ? GetAgeInDays(b) : null;
         var estimated = BreedingRules.AgeIsEstimated(g);
         var (text, css) = DisplayHelper.GetStatusDisplay(g.Status);
+        var next = HerdNextStep.Compute(g, latestWeightKg, now);
+        var stage = HerdNextStep.KidStageLine(g, latestWeightKg, now);
         return new GoatViewModel
         {
             Id = g.Id,
@@ -694,7 +890,24 @@ public class GoatService : IGoatService
             BreedingStageDisplay = DisplayHelper.GetBreedingStageLabel(g.BreedingStage),
             SireTag = g.Sire?.Tag ?? g.SireTagText,
             DamTag = g.Dam?.Tag ?? g.DamTagText,
-            IsTemporaryTag = g.IsTemporaryTag
+            IsTemporaryTag = g.IsTemporaryTag,
+            WeanDate = g.WeanDate,
+            YoungClass = g.YoungClass,
+            YoungClassDisplay = DisplayHelper.GetYoungClassLabel(g.YoungClass),
+            BirthBatchName = g.BirthBatchName,
+            NextCrossDate = g.NextCrossDate,
+            FeedingGroupName = g.CustomFeedingGroup?.Name,
+            KidStageLine = stage?.Text,
+            KidStageColor = stage?.Color,
+            KidStageWeanLink = stage?.WeanLink ?? false,
+            NextStepAction = next?.Action.ToString(),
+            NextStepLabel = next?.ButtonLabel,
+            NextStepPermTab = next?.PermTab,
+            NextStepPermAction = next?.PermAction,
+            NextStepKidsCount = next?.ScanKidsCount,
+            IsArchived = g.IsArchived,
+            ArchivedReason = g.ArchivedReason,
+            ArchivedDateDisplay = g.ArchivedDate?.ToString("yyyy-MM-dd")
         };
     }
 
@@ -707,19 +920,17 @@ public class GoatService : IGoatService
         return g.PrepCrossDate.HasValue ? "ready for cross" : null;
     }
 
-    /// <summary>Same semantics as the former in-memory filter, expressed so the provider can translate it to SQL.</summary>
-    private static IQueryable<Goat> ApplyFilter(IQueryable<Goat> goats, string? filter, DateOnly? today = null)
+    private async Task<IQueryable<Goat>> ApplyFilterAsync(IQueryable<Goat> goats, string? filter, CancellationToken cancellationToken)
     {
         filter ??= "all";
-        var now = today ?? DateOnly.FromDateTime(DateTime.Today);
+        var now = DateOnly.FromDateTime(DateTime.Today);
         if (filter == "all") return goats;
+
         if (filter.StartsWith("age:", StringComparison.Ordinal))
         {
             var parts = filter.Split(':');
             if (parts.Length >= 3 && int.TryParse(parts[1], out var lo) && int.TryParse(parts[2], out var hi))
             {
-                // Age is max(0, today - birth date) days; a future date counts as age 0. The birth date is EventDate
-                // for home-born goats and the optional DateOfBirth for bought goats; bought goats without one have no age.
                 var bornOnOrBefore = now.AddDays(-Math.Clamp(lo, -36500, 36500));
                 var bornAfter = now.AddDays(-Math.Clamp(hi, -36500, 36500));
                 var zeroInRange = lo <= 0 && hi > 0;
@@ -730,15 +941,45 @@ public class GoatService : IGoatService
                      ((g.DateOfBirth <= now && g.DateOfBirth <= bornOnOrBefore && g.DateOfBirth > bornAfter) || (zeroInRange && g.DateOfBirth > now))));
             }
         }
+
         if (filter.StartsWith("st:", StringComparison.Ordinal))
         {
             var status = DisplayHelper.ParseStatusKey(filter[3..]);
             return goats.Where(g => g.Status == status);
         }
+
+        if (filter.Equals("untag", StringComparison.Ordinal))
+            return goats.Where(g => g.IsTemporaryTag);
+
+        if (filter.Equals("wean", StringComparison.Ordinal))
+        {
+            var weanByDate = now.AddDays(-HerdRules.WeanDaysDefault);
+            var minKg = HerdRules.WeanKgDefault;
+            return goats.Where(g => g.Status == GoatStatus.Kid && g.WeanDate == null &&
+                (
+                    (g.Source == GoatSource.Born && g.EventDate <= weanByDate) ||
+                    (g.Source != GoatSource.Born && g.DateOfBirth != null && g.DateOfBirth <= weanByDate) ||
+                    _context.GoatWeightRecords.Where(w => w.GoatId == g.Id).OrderByDescending(w => w.Date).Select(w => w.Kg).FirstOrDefault() >= minKg
+                ));
+        }
+
+        if (filter.Equals("ageup", StringComparison.Ordinal))
+        {
+            var cutoff = now.AddDays(-HerdRules.AgeUpDays);
+            return goats.Where(g => g.Status == GoatStatus.Kid &&
+                ((g.Source == GoatSource.Born && g.EventDate <= cutoff) ||
+                 (g.Source != GoatSource.Born && g.DateOfBirth != null && g.DateOfBirth <= cutoff)));
+        }
+
         if (filter.Equals("br:prep", StringComparison.Ordinal))
             return goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue);
         if (filter.Equals("br:waiting", StringComparison.Ordinal))
             return goats.Where(g => g.MatedDate.HasValue && !g.KidsCount.HasValue);
+        if (filter.Equals("br:scan", StringComparison.Ordinal))
+        {
+            var scanFrom = now.AddDays(-BreedingHelper.ScanAfterDays);
+            return goats.Where(g => g.MatedDate.HasValue && !g.KidsCount.HasValue && g.MatedDate <= scanFrom);
+        }
         if (filter.Equals("br:expecting", StringComparison.Ordinal))
             return goats.Where(g => g.MatedDate.HasValue && g.KidsCount > 0);
         if (filter.Equals("br:due30", StringComparison.Ordinal))
@@ -746,32 +987,362 @@ public class GoatService : IGoatService
             var matedOnOrBefore = now.AddDays(30 - BreedingHelper.GestationDays);
             return goats.Where(g => g.MatedDate.HasValue && g.KidsCount > 0 && g.MatedDate <= matedOnOrBefore);
         }
+
+        if (filter.Equals("dryoff", StringComparison.Ordinal))
+        {
+            return goats.Where(g => g.Status == GoatStatus.Milking && g.MatedDate.HasValue && g.KidsCount > 0 &&
+                g.MatedDate.Value.AddDays(BreedingHelper.GestationDays - HerdRules.DryOffBeforeKiddingDays) <= now &&
+                g.MatedDate.Value.AddDays(BreedingHelper.GestationDays) > now);
+        }
+
+        if (filter.Equals("crossdue", StringComparison.Ordinal))
+        {
+            var weekOut = now.AddDays(7);
+            return goats.Where(g => g.NextCrossDate.HasValue && !g.MatedDate.HasValue &&
+                g.NextCrossDate.Value <= weekOut);
+        }
+
+        if (filter.Equals("buildup", StringComparison.Ordinal))
+        {
+            var buildStart = now.AddDays(HerdRules.BuildUpDays);
+            return goats.Where(g => g.NextCrossDate.HasValue && !g.MatedDate.HasValue &&
+                g.NextCrossDate.Value.AddDays(-HerdRules.BuildUpDays) <= now &&
+                g.NextCrossDate.Value > now);
+        }
+
+        if (filter.Equals("stopmilk", StringComparison.Ordinal))
+        {
+            var stopFrom = now.AddDays(HerdRules.DryBeforeCrossDays);
+            return goats.Where(g => g.Status == GoatStatus.Milking && g.NextCrossDate.HasValue && !g.MatedDate.HasValue &&
+                g.NextCrossDate.Value.AddDays(-HerdRules.DryBeforeCrossDays) <= now);
+        }
+
+        if (filter.Equals("heatdue", StringComparison.Ordinal))
+        {
+            var lastHeatFrom = now.AddDays(-(HerdRules.HeatCycleDays * 2));
+            var lastHeatTo = now.AddDays(-(HerdRules.HeatCycleDays - 2));
+            var latestHeats = _context.GoatHeatEvents
+                .GroupBy(h => h.GoatId)
+                .Select(h => new { GoatId = h.Key, Date = h.Max(x => x.Date) });
+            return from g in goats
+                   join h in latestHeats on g.Id equals h.GoatId
+                   where g.Gender == GoatGender.Female
+                         && g.Status != GoatStatus.Kid
+                         && g.MatedDate == null
+                         && h.Date >= lastHeatFrom
+                         && h.Date <= lastHeatTo
+                   select g;
+        }
+
+        if (filter.Equals("hl:sick", StringComparison.Ordinal))
+            return goats.Where(g => g.HealthState != GoatHealthState.Healthy);
+
+        if (filter.StartsWith("hl:", StringComparison.Ordinal) &&
+            Enum.TryParse<GoatHealthState>(filter[3..], true, out var hl))
+            return goats.Where(g => g.HealthState == hl);
+
         if (filter.StartsWith("health:", StringComparison.Ordinal) &&
             Enum.TryParse<GoatHealthState>(filter[7..], true, out var health))
             return goats.Where(g => g.HealthState == health);
-        if (filter.StartsWith("owner:", StringComparison.Ordinal))
+
+        if (filter.StartsWith("bat:", StringComparison.Ordinal))
         {
-            var owner = filter[6..].Trim().ToLower();
-            return goats.Where(g => g.Owner != null && g.Owner.ToLower() == owner);
+            var batch = filter[4..];
+            return batch.Equals("none", StringComparison.OrdinalIgnoreCase)
+                ? goats.Where(g => g.BirthBatchName == null || g.BirthBatchName == "")
+                : goats.Where(g => g.BirthBatchName == batch);
+        }
+
+        ResolveOwnerSireDamGrp(filter, out var ownerKey, out var sireKey, out var damKey, out var groupKey, out var handled);
+        if (handled)
+        {
+            if (ownerKey is not null)
+            {
+                var o = ownerKey.ToLower();
+                return goats.Where(g => g.Owner != null && g.Owner.ToLower() == o);
+            }
+            if (sireKey is not null)
+            {
+                var s = sireKey.ToLower();
+                return goats.Where(g => (g.Sire != null && g.Sire.Tag.ToLower() == s) ||
+                                        (g.SireTagText != null && g.SireTagText.ToLower() == s));
+            }
+            if (damKey is not null)
+            {
+                var d = damKey.ToLower();
+                return goats.Where(g => (g.Dam != null && g.Dam.Tag.ToLower() == d) ||
+                                        (g.DamTagText != null && g.DamTagText.ToLower() == d));
+            }
+            if (groupKey is not null)
+                return goats.Where(g => g.Group != null && g.Group.Name == groupKey);
+        }
+
+        await Task.CompletedTask;
+        return goats;
+    }
+
+    private static void ResolveOwnerSireDamGrp(
+        string filter,
+        out string? ownerKey,
+        out string? sireKey,
+        out string? damKey,
+        out string? groupKey,
+        out bool handled)
+    {
+        ownerKey = sireKey = damKey = groupKey = null;
+        handled = false;
+        if (filter.StartsWith("owner:", StringComparison.Ordinal) || filter.StartsWith("own:", StringComparison.Ordinal))
+        {
+            handled = true;
+            ownerKey = filter.StartsWith("owner:") ? filter[6..] : filter[4..];
+            ownerKey = ownerKey.Trim();
+            return;
         }
         if (filter.StartsWith("sire:", StringComparison.Ordinal))
         {
-            var sire = filter[5..].Trim().ToLower();
-            return goats.Where(g => (g.Sire != null && g.Sire.Tag.ToLower() == sire) ||
-                                    (g.SireTagText != null && g.SireTagText.ToLower() == sire));
+            handled = true;
+            sireKey = filter[5..].Trim();
+            return;
         }
         if (filter.StartsWith("dam:", StringComparison.Ordinal))
         {
-            var dam = filter[4..].Trim().ToLower();
-            return goats.Where(g => (g.Dam != null && g.Dam.Tag.ToLower() == dam) ||
-                                    (g.DamTagText != null && g.DamTagText.ToLower() == dam));
+            handled = true;
+            damKey = filter[4..].Trim();
+            return;
         }
         if (filter.StartsWith("grp:", StringComparison.Ordinal))
         {
-            var group = filter[4..];
-            return goats.Where(g => g.Group != null && g.Group.Name == group);
+            handled = true;
+            groupKey = filter[4..];
         }
-        return goats;
+    }
+
+    private async Task<IReadOnlyList<string>> GetBirthBatchesAsync(CancellationToken cancellationToken) =>
+        await _context.Goats.Where(g => !g.IsArchived && g.BirthBatchName != null && g.BirthBatchName != "")
+            .Select(g => g.BirthBatchName!)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToListAsync(cancellationToken);
+
+    private async Task<IReadOnlyList<string>> GetSireFilterTagsAsync(CancellationToken cancellationToken)
+    {
+        var fromGoats = await _context.Goats.Where(g => !g.IsArchived && g.Status == GoatStatus.Buck)
+            .Select(g => g.Tag).ToListAsync(cancellationToken);
+        var fromKids = await _context.Goats.Where(g => !g.IsArchived && g.SireTagText != null)
+            .Select(g => g.SireTagText!).ToListAsync(cancellationToken);
+        var fromFk = await _context.Goats.Where(g => !g.IsArchived && g.Sire != null)
+            .Select(g => g.Sire!.Tag).ToListAsync(cancellationToken);
+        return fromGoats.Concat(fromKids).Concat(fromFk).Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private async Task<IReadOnlyList<string>> GetOwnerFiltersAsync(CancellationToken cancellationToken) =>
+        await _context.Goats.Where(g => !g.IsArchived && g.Owner != null && g.Owner != "")
+            .Select(g => g.Owner!)
+            .Distinct()
+            .OrderBy(o => o)
+            .ToListAsync(cancellationToken);
+
+    private async Task<IReadOnlyList<(int Id, string Name)>> GetFeedingGroupOptionsAsync(CancellationToken cancellationToken) =>
+        await _context.CustomFeedingGroups.AsNoTracking()
+            .OrderBy(f => f.Name)
+            .Select(f => new ValueTuple<int, string>(f.Id, f.Name))
+            .ToListAsync(cancellationToken);
+
+    private async Task<HerdFilterOptionsViewModel> BuildFilterOptionsAsync(
+        string currentFilter,
+        IReadOnlyDictionary<GoatStatus, int> statusCounts,
+        IReadOnlyList<string> batches,
+        IReadOnlyList<string> sireTags,
+        IReadOnlyList<string> owners,
+        CancellationToken cancellationToken)
+    {
+        var total = statusCounts.Values.Sum();
+        var sireLabels = await LoadSireLabelsAsync(sireTags, cancellationToken);
+        var chipOwners = owners.Where(o => !o.Equals("Farm", StringComparison.OrdinalIgnoreCase)).ToList();
+        var showNoGroup = await LiveGoatsQuery().AnyAsync(g =>
+            g.Gender == GoatGender.Female &&
+            g.Status != GoatStatus.Kid &&
+            (g.BirthBatchName == null || g.BirthBatchName == ""), cancellationToken);
+
+        async Task<HerdFilterChipViewModel> Chip(string value, string label, string color)
+        {
+            int count;
+            if (value == "all")
+                count = total;
+            else if (value.StartsWith("st:", StringComparison.Ordinal))
+                count = statusCounts.GetValueOrDefault(DisplayHelper.ParseStatusKey(value[3..]));
+            else
+                count = await (await ApplyFilterAsync(LiveGoatsQuery(), value, cancellationToken)).CountAsync(cancellationToken);
+
+            return new HerdFilterChipViewModel
+            {
+                Value = value,
+                Label = label,
+                Color = color,
+                Count = count,
+                Active = string.Equals(value, currentFilter, StringComparison.OrdinalIgnoreCase)
+            };
+        }
+
+        var rows = new List<HerdFilterRowViewModel>();
+
+        rows.Add(new HerdFilterRowViewModel
+        {
+            Label = "Status",
+            Chips =
+            [
+                await Chip("all", "All", "var(--green)"),
+                await Chip("st:kid", "Kids", "var(--amber)"),
+                await Chip("st:milking", "Milking", "var(--green)"),
+                await Chip("st:pregnant", "Pregnant", "var(--pink)"),
+                await Chip("st:dry", "Dry", "var(--ink-soft)"),
+                await Chip("st:buck", "Bucks", "var(--blue)"),
+                await Chip("st:sale", "For sale", "#9a3a1e"),
+            ]
+        });
+
+        rows.Add(new HerdFilterRowViewModel
+        {
+            Label = "Breeding",
+            Chips =
+            [
+                await Chip("br:prep", "Ready for cross", "var(--amber)"),
+                await Chip("br:waiting", "Crossed - awaiting scan", "var(--blue)"),
+                await Chip("br:scan", "Scan due now", "var(--amber)"),
+                await Chip("br:expecting", "Confirmed pregnant", "var(--pink)"),
+                await Chip("br:due30", "Due in 30 days", "var(--red)"),
+            ]
+        });
+
+        var groupChips = new List<HerdFilterChipViewModel>();
+        foreach (var batch in batches)
+            groupChips.Add(await Chip("bat:" + batch, batch, "var(--pink)"));
+        if (showNoGroup)
+            groupChips.Add(await Chip("bat:none", "No group set", "var(--amber)"));
+        if (groupChips.Count > 0)
+            rows.Add(new HerdFilterRowViewModel { Label = "Group", Chips = groupChips });
+
+        var sireChips = new List<HerdFilterChipViewModel>();
+        foreach (var tag in sireTags)
+            sireChips.Add(await Chip("sire:" + tag, sireLabels.GetValueOrDefault(tag, tag), "var(--blue)"));
+        if (sireChips.Count > 0)
+            rows.Add(new HerdFilterRowViewModel { Label = "Sire", Chips = sireChips });
+
+        var checkChips = new List<HerdFilterChipViewModel>
+        {
+            await Chip("untag", "Kids to tag", "var(--amber)"),
+            await Chip("wean", "Ready to wean", "var(--amber)"),
+            await Chip("ageup", "Kids over 1 year", "var(--red)"),
+            await Chip("heatdue", "Heat expected", "var(--blue)"),
+            await Chip("dryoff", "To dry off", "var(--red)"),
+            await Chip("buildup", "On extra feed", "var(--amber)"),
+            await Chip("stopmilk", "Stop milking", "var(--red)"),
+            await Chip("crossdue", "Cross due", "var(--pink)"),
+            await Chip("hl:sick", "Sick / treatment", "var(--red)"),
+        };
+        foreach (var owner in chipOwners)
+            checkChips.Add(await Chip("own:" + owner, owner, "var(--blue)"));
+        rows.Add(new HerdFilterRowViewModel { Label = "Check", Chips = checkChips });
+
+        return new HerdFilterOptionsViewModel
+        {
+            BirthBatches = batches,
+            SireTags = sireTags,
+            Owners = owners,
+            Rows = rows,
+            Chips = rows.SelectMany(r => r.Chips).ToList()
+        };
+    }
+
+    private async Task<Dictionary<string, string>> LoadSireLabelsAsync(
+        IReadOnlyList<string> sireTags, CancellationToken cancellationToken)
+    {
+        var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (sireTags.Count == 0) return labels;
+
+        var goats = await _context.Goats.AsNoTracking()
+            .Where(g => sireTags.Contains(g.Tag))
+            .Select(g => new { g.Tag, g.Name })
+            .ToListAsync(cancellationToken);
+
+        foreach (var tag in sireTags)
+            labels[tag] = tag;
+        foreach (var g in goats)
+            labels[g.Tag] = string.IsNullOrWhiteSpace(g.Name) ? g.Tag : $"{g.Tag} · {g.Name}";
+        return labels;
+    }
+
+    public async Task<HerdCsvImportResultViewModel> ImportHerdCsvAsync(
+        string csvText, string defaultBreed, CancellationToken cancellationToken = default)
+    {
+        var preview = HerdCsvImporter.Parse(csvText, defaultBreed);
+        if (preview.Rows.Count == 0)
+            return new HerdCsvImportResultViewModel { Errors = preview.Errors };
+
+        var existingTags = await _context.Goats.Select(g => g.Tag.ToLower()).ToListAsync(cancellationToken);
+        var existing = existingTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var imported = 0;
+        var skipped = new List<string>();
+        var errors = preview.Errors.ToList();
+
+        foreach (var row in preview.Rows)
+        {
+            if (existing.Contains(row.Tag))
+            {
+                skipped.Add(row.Tag);
+                errors.Add($"Tag \"{row.Tag}\" already exists in the herd.");
+                continue;
+            }
+
+            var model = new CreateGoatViewModel
+            {
+                Tag = row.Tag,
+                Name = row.Name,
+                Comment = row.Comment,
+                Breed = row.Breed,
+                Gender = row.Gender,
+                Status = row.Status,
+                Source = row.Source,
+                PurchasePrice = row.PurchasePrice,
+                EventDate = row.EventDate,
+                Owner = row.Owner,
+                SireTag = row.SireTag,
+                DamTag = row.DamTag
+            };
+
+            try
+            {
+                await CreateAsync(model, cancellationToken);
+                existing.Add(row.Tag);
+                imported++;
+            }
+            catch (InvalidOperationException ex)
+            {
+                errors.Add($"{row.Tag}: {ex.Message}");
+            }
+        }
+
+        // Link dams created in the same import pass
+        foreach (var row in preview.Rows.Where(r => !string.IsNullOrWhiteSpace(r.DamTag)))
+        {
+            var kid = await _context.Goats.FirstOrDefaultAsync(g => g.Tag == row.Tag, cancellationToken);
+            if (kid is null || kid.DamId is not null) continue;
+            var dam = await FindGoatByTagAsync(row.DamTag!, cancellationToken);
+            if (dam is not null && dam.Id != kid.Id)
+            {
+                kid.DamId = dam.Id;
+                kid.DamTagText = null;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        return new HerdCsvImportResultViewModel
+        {
+            Imported = imported,
+            Errors = errors,
+            SkippedTags = skipped
+        };
     }
 
     /// <summary>Case-insensitive contains over tag, name, owner, breed and parent tags.</summary>

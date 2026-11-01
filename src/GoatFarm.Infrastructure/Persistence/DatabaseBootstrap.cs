@@ -72,6 +72,11 @@ public static class DatabaseBootstrap
                 string.Equals(configuration["Seed:DemoData"], "true", StringComparison.OrdinalIgnoreCase))
             {
                 var reloadDemo = string.Equals(configuration["Seed:ReloadDemoData"], "true", StringComparison.OrdinalIgnoreCase);
+                if (reloadDemo && !clearFarmData && await context.Goats.AnyAsync(cancellationToken))
+                {
+                    logger.LogWarning(
+                        "Seed:ReloadDemoData=true but the herd is not empty — set Seed:ClearFarmData=true once (or run scripts/reset-index-new-demo.ps1) to match index_new.html seed().");
+                }
                 if (reloadDemo)
                     logger.LogWarning("Reloading demo/sample farm data (Seed:ReloadDemoData=true)...");
                 else

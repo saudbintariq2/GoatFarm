@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Sandeel Farms"/>
-<title>Sandeel Farms V240 — Local Preview</title>
+<title>Sandeel Farms V242 — Local Preview</title>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
@@ -2699,6 +2699,15 @@ html,body{min-height:100%!important}
 #view-milk .sl-list li span{white-space:normal}
 #view-milk .sl-list li b{white-space:nowrap}
 
+
+/* V242 double-entry warning */
+#view-milk .sl-dup{background:#fff7e6;border:1.5px solid #e0a43a;border-radius:14px;padding:12px 16px;margin:0 0 14px;color:#5c4210}
+#view-milk .sl-dup[hidden]{display:none}
+#view-milk .sl-dup-head{font-weight:800;margin-bottom:6px}
+#view-milk .sl-dup-row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid #f0d9a8}
+#view-milk .sl-dup-item{display:inline-block;background:#fff;border:1px solid #f0d9a8;border-radius:999px;padding:2px 9px;margin:2px 4px 2px 0;font-size:12.5px}
+#view-milk .sl-dup-act{display:flex;flex-wrap:wrap;gap:6px}
+#view-milk .sl-dup-note{font-size:12px;margin:6px 0 0;opacity:.85}
 /* V235 Trading — separate section */
 #view-trade .td-banner{background:#fff7e6;border:1px solid #f0d9a8;color:#5c4210;border-radius:14px;padding:11px 16px;font-size:13px;line-height:1.45;margin:0 0 14px}
 #view-trade .td-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 14px}
@@ -8476,8 +8485,8 @@ function renderDash(){
   const mons=monthsBack(6);
   const herdAt=mm=>{const end=mm+'-31';
     return goats.filter(g=>g.date<=end&&!(g.archived&&g.archivedDate&&g.archivedDate<=end)).length;};
-  const milkBy=mm=>milkProd.filter(x=>x.date.startsWith(mm)).reduce((a,x)=>a+(+x.liters||0),0);
-  const birthsBy=mm=>kiddings.filter(k=>k.date.startsWith(mm)).reduce((a,k)=>a+(+k.alive||0),0);
+  const milkBy=mm=>milkProd.filter(x=>(x.date||x.production_date||'').startsWith(mm)).reduce((a,x)=>a+(+x.liters||0),0);
+  const birthsBy=mm=>kiddings.filter(k=>(k.date||k.kidding_date||'').startsWith(mm)).reduce((a,k)=>a+(+k.alive||0),0);
   const delta=(now,prev)=>{if(!prev)return null;return Math.round((now-prev)/prev*100);};
   const card=(n,l,c,sub,ico,tint,spark,dlt,go)=>{
     const d=dlt===null||dlt===undefined?'':
@@ -8494,7 +8503,7 @@ function renderDash(){
     card(L.length,'Total goats','var(--green)','on the farm now','🐐','var(--green-tint)',
       svgSpark(herdSeries,'#6B7F5E'),delta(herdSeries[5],herdSeries[4]),'all')+
     card(countByStatus('kid'),'Kids','var(--amber)',
-      kiddings.filter(k=>k.date.startsWith(m)).reduce((a,k)=>a+(+k.alive||0),0)+' born this month','🐣','var(--amber-tint)',
+      kiddings.filter(k=>(k.date||k.kidding_date||'').startsWith(m)).reduce((a,k)=>a+(+k.alive||0),0)+' born this month','🐣','var(--amber-tint)',
       svgSpark(birthSeries,'#B08D4F'),delta(birthSeries[5],birthSeries[4]),'st:kid')+
     card(countByStatus('milking'),'Milking','var(--green)',
       milkBy(m).toLocaleString('en-US')+' L this month','🥛','var(--blue-tint)',
@@ -8531,7 +8540,7 @@ function renderDash(){
     kiddings.forEach(k=>{if(addDays(k.date,-GEST).startsWith(mm))n++;});return n;};
   document.getElementById('breedChart').innerHTML=svgLines(bm.map(shortMonth),[
     {n:'Crosses',v:bm.map(crossesBy),c:'#B08D4F'},
-    {n:'Births',v:bm.map(mm=>kiddings.filter(k=>k.date.startsWith(mm)).length),c:'#A8677C'},
+    {n:'Births',v:bm.map(mm=>kiddings.filter(k=>(k.date||k.kidding_date||'').startsWith(mm)).length),c:'#A8677C'},
     {n:'Kids born',v:bm.map(birthsBy),c:'#6B7F5E'}]);
 
   // ----- alerts, quick actions, this month -----
@@ -8575,7 +8584,7 @@ function renderDash(){
     +vaccineBuys.filter(x=>x.date.startsWith(m)).reduce((a,x)=>a+(+x.amount||0),0)
     +expenses.filter(x=>x.date.startsWith(m)).reduce((a,x)=>a+(+x.amount||0),0)
     +staffSalaryTotal()+recurMonthlyTotal(m);
-  const born=kiddings.filter(k=>k.date.startsWith(m)).reduce((a,k)=>a+(+k.alive||0),0);
+  const born=kiddings.filter(k=>(k.date||k.kidding_date||'').startsWith(m)).reduce((a,k)=>a+(+k.alive||0),0);
   const put=ownerInv.filter(x=>x.date.startsWith(m)).reduce((a,x)=>a+(+x.amount||0),0);
   document.getElementById('dashMonth').textContent=m;
   const row=(l,v,col)=>`<tr><td>${l}</td><td class="num-cell" style="font-weight:700;${col?'color:'+col:''}">${v}</td></tr>`;
@@ -13408,10 +13417,18 @@ function outLine(item,l,batch,q,count,pending){
 function inLine(item,l,batch,q,val,count){return {item,loc:l||'',batch:batch||'',qty:Math.abs(q),count:count?Math.abs(count):0,value:r2(val)};}
 
 /* ---------------- posting ---------------- */
+/* V242: every phone has its own short code (e.g. K7P). It is part of every number this phone gives out,
+   so two phones working offline on the same day can never hand out the same number. */
+function deviceCode(){
+  let c='';try{c=localStorage.getItem('sandeel_device_code')||'';}catch(e){}
+  if(!/^[A-Z2-9]{3}$/.test(c)){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';c='';const r=(window.crypto&&crypto.getRandomValues)?crypto.getRandomValues(new Uint8Array(3)):[0,0,0].map(()=>Math.floor(Math.random()*256));for(let i=0;i<3;i++)c+=A[r[i]%A.length];try{localStorage.setItem('sandeel_device_code',c);}catch(e){}}
+  return c;
+}
 function nextNo(type,date){
-  const pre=OP_PREFIX[type]||'OP',d=String(date||today()).replaceAll('-','');
-  const n=stockOps.filter(o=>String(o.opNo||'').startsWith(pre+'-'+d+'-')).length+1;
-  return pre+'-'+d+'-'+String(n).padStart(3,'0');
+  const pre=OP_PREFIX[type]||'OP',d=String(date||today()).replaceAll('-',''),base=pre+'-'+d+'-'+deviceCode()+'-';
+  let n=stockOps.filter(o=>String(o.opNo||'').startsWith(base)).length+1,v;
+  do{v=base+String(n++).padStart(3,'0');}while(stockOps.some(o=>o.opNo===v));
+  return v;
 }
 function shortage(lines){
   const need=new Map();
@@ -13493,6 +13510,10 @@ function ensureSetup(){
   if(stockSettings.rawMilkCostPerL==null){stockSettings.rawMilkCostPerL=0;changed=true;}
   if(!stockSettings.cutCostMethod){stockSettings.cutCostMethod='weight';changed=true;}
   (warehouses||[]).forEach(w=>{if(!w.kind){w.kind=inferKind(w);changed=true;}});
+  // V241: server migration V6 (outside build) seeded 4 duplicate catalog rows (raw_milk, past_milk, carcass_whole, carcass_half
+  // with category 'Milk'/'Meat'). The app has its own bulk-milk and carcass products, so drop those copies when nothing uses them.
+  {const SEEDED=['raw_milk','past_milk','carcass_whole','carcass_half'];const used=new Set([...(productSales||[]).map(x=>x.productId),...(productBatches||[]).map(x=>x.productId)]);
+   const before=productCatalog.length;productCatalog=productCatalog.filter(p=>!(SEEDED.includes(p.id)&&['Milk','Meat'].includes(p.category)&&!used.has(p.id)));if(productCatalog.length!==before)changed=true;}
   if(!locsOfKind('raw_tank',true).length){warehouses.push({id:'rawtank',name:'Raw Milk Tank 1',type:'Raw Milk Tank',kind:'raw_tank',city:'Farm',active:true});changed=true;}
   if(!locsOfKind('past_tank',true).length){warehouses.push(stamp({id:'pasttank',name:'Pasteurized Milk Tank 1',type:'Pasteurized Milk Tank',kind:'past_tank',milkStorageType:'pasteurized-chilled',city:'Farm',active:true}));changed=true;}
   if(!locsOfKind('dairy_store',true).length){warehouses.push({id:'dairycold',name:'Farm Dairy Cold Room',type:'Cold Room',kind:'dairy_store',city:'Farm',active:true});changed=true;}
@@ -13558,7 +13579,7 @@ window.SFStock={
   N,r2,EPS,BUILTIN,KIND_LABEL,OP_LABEL,BULK_RAW_ID,WHOLE_PRODUCT_ID,HALF_PRODUCT_ID,MEAT_PRESETS,
   product,productItem,meatType,itemInfo,isBulkProduct,loc,locName,kindOf,inferKind,locsOfKind,accepts,defaultLoc,
   balances,invalidate,bal,qty,value,unitCost,rows,productQty,outLine,inLine,shortage,post,findOp,reverseCheck,opValueIn,reverse,
-  postCost,removeCosts,opCosts,ensureSetup,syncFromRecords,bulkPastProduct,bulkRawProduct,fmtN,fmtQ,nextNo
+  postCost,removeCosts,opCosts,ensureSetup,syncFromRecords,bulkPastProduct,bulkRawProduct,fmtN,fmtQ,nextNo,deviceCode
 };
 })();
 </script>
@@ -13763,9 +13784,11 @@ async function saveMilking(btn){
       const by={};yields.forEach(y=>{const p=by[y.breed]||(by[y.breed]={breed:y.breed,goats:0,total:0,rejected:0});p.goats++;p.total+=y.liters;p.rejected+=y.rejected;});
       pools=Object.values(by).map(p=>({...p,total:r2(p.total),rejected:r2(p.rejected),usable:r2(p.total-p.rejected)}));
     }
-    const dup=(milkingSessions||[]).find(x=>x.date===date&&String(x.session).toLowerCase()===session.toLowerCase());
+    const sameRun=(milkingSessions||[]).filter(x=>x.date===date&&String(x.session).toLowerCase()===session.toLowerCase());
+    const dup=sameRun[0];
     if(dup&&!confirm(`${session} milking for ${date} is already saved (${fmtQ(dup.usable,'L')}).\n\nOK = this is a second, separate ${session} milking — add it\nCancel = don't save (to change the first one, delete it below and enter it again)`))return false;
-    const x=stamp({id:id(),date,session,goats:s.goats,total:r2(s.total),rejected:r2(s.rejected),usable:r2(s.usable),breedPools:pools,goatYields:yields,mode:mgMode,warehouseId:tank,note:val('mp-note')});
+    const x=stamp({id:id(),date,session,goats:s.goats,total:r2(s.total),rejected:r2(s.rejected),usable:r2(s.usable),breedPools:pools,goatYields:yields,mode:mgMode,warehouseId:tank,note:val('mp-note'),device:S.deviceCode()});
+    if(dup){x.dupOk=true;sameRun.forEach(q=>{q.dupOk=true;});}  // a second milking confirmed on purpose is not flagged as a double entry
     milkingSessions.push(x);
     if(pools.length)pools.forEach(p=>milkProd.push(stamp({id:id(),date,breed:p.breed,goats:p.goats,total:p.total,rejected:p.rejected,liters:p.usable,note:session+' session'+(x.note?' · '+x.note:''),sessionId:x.id})));
     else milkProd.push(stamp({id:id(),date,breed:'Milking Parlor',goats:s.goats,liters:x.usable,note:session+' session'+(x.note?' · '+x.note:''),sessionId:x.id}));
@@ -14096,9 +14119,10 @@ async function saveSlaughter(btn){
     if(g&&g.archived)throw new Error('Goat '+g.tag+' is already out of the live herd ('+(g.archivedReason||'archived')+').');
     if(!g&&!confirm('Tag '+tag+' is not in the herd. Record it as an outside / bought-in animal?'))return false;
     if(!needPaidFrom(fee+labour+other,val('sl-sg-acct')))return false;
-    const d=date.replaceAll('-','');let n=(slaughterBatches||[]).filter(x=>String(x.ref||'').startsWith('CAR-'+d+'-')).length+1,ref;
-    do{ref='CAR-'+d+'-'+String(n++).padStart(3,'0');}while((slaughterBatches||[]).some(x=>x.ref===ref));
-    const rec=stamp({id:id(),ref,date,animalTag:g?g.tag:tag,goatId:g?g.id:'',breed:g?g.breed||'':'',liveWeight:liveKg,carcassWeight:kg,labour,fee,pack:0,other,directCost:labour+fee+other,animalCost:acost,warehouseId:store,note:val('sl-sg-note')});
+    // V242: carcass number includes this phone's code — it is also the carcass batch key in stock, so it must never repeat across phones
+    const d=date.replaceAll('-',''),cbase='CAR-'+d+'-'+S.deviceCode()+'-';let n=(slaughterBatches||[]).filter(x=>String(x.ref||'').startsWith(cbase)).length+1,ref;
+    do{ref=cbase+String(n++).padStart(3,'0');}while((slaughterBatches||[]).some(x=>x.ref===ref));
+    const rec=stamp({id:id(),ref,date,device:S.deviceCode(),animalTag:g?g.tag:tag,goatId:g?g.id:'',breed:g?g.breed||'':'',liveWeight:liveKg,carcassWeight:kg,labour,fee,pack:0,other,directCost:labour+fee+other,animalCost:acost,warehouseId:store,note:val('sl-sg-note')});
     const op=S.post({type:'slaughter',sourceKey:'slaughter:'+rec.id,date,ref,note:'Carcass intake · '+rec.animalTag+(rec.note?' · '+rec.note:''),meta:{slaughterId:rec.id,goatId:rec.goatId,animalTag:rec.animalTag,breed:rec.breed,liveKg,carcassKg:kg,yieldPct:liveKg>0?r2(kg/liveKg*100):null,animalCost:acost},lines:[S.inLine('carcass_whole',store,ref,kg,acost+fee+labour+other,1)]});
     slaughterBatches.push(rec);
     const acct=val('sl-sg-acct');
@@ -14246,7 +14270,7 @@ function saleAvail(){
   const pay=val('sl-sa-pay');$('sl-sa-recv-f').hidden=pay!=='partial';$('sl-sa-due-f').hidden=pay==='paid';$('sl-sa-acct-f').hidden=pay==='credit';
   if(!val('sl-sa-inv'))$('sl-sa-inv').placeholder=nextInvoice(val('sl-sa-date')||today());
 }
-function nextInvoice(date){const ym=String(date).slice(0,7).replace('-','');let n=productSales.filter(x=>String(x.invoiceNo||'').startsWith('SF-'+ym+'-')).length+1,v;do{v='SF-'+ym+'-'+String(n++).padStart(4,'0');}while(productSales.some(x=>String(x.invoiceNo||'').toLowerCase()===v.toLowerCase()));return v;}
+function nextInvoice(date){const ym=String(date).slice(0,7).replace('-',''),base='SF-'+ym+'-'+S.deviceCode()+'-';let n=productSales.filter(x=>String(x.invoiceNo||'').startsWith(base)).length+1,v;do{v=base+String(n++).padStart(4,'0');}while(productSales.some(x=>String(x.invoiceNo||'').toLowerCase()===v.toLowerCase()));return v;}
 function buildSale(){
   const type=val('sl-sa-type'),s=currentSaleSource(),date=val('sl-sa-date');
   if(!date)throw new Error('Enter the sale date.');
@@ -14290,7 +14314,7 @@ async function postSale(btn){
     const r=buildSale();// rebuild: stock may have changed since review
     const sid=id()+id();
     const op=S.post({type:'sale',sourceKey:'sale:'+sid,saleId:sid,date:r.date,ref:r.inv,note:r.customer+(r.deliv?' · '+r.deliv:''),meta:{saleType:r.type,amount:r.amount},lines:[r.line]});
-    const x=stamp({id:sid,date:r.date,productId:r.p.id,qty:r.qty,rate:r.rate,amount:r.amount,warehouseId:r.s.loc,clientId:r.cid,customer:r.customer,paymentStatus:r.pay,receivedAmount:r.received,initialReceived:r.received,dueDate:r.pay==='paid'?'':r.due,note:r.note,accountId:r.received>0?r.acct:'',invoiceNo:r.inv,deliveryRef:r.deliv,stockItem:r.s.item,stockBatch:r.s.batch,stockCount:r.count,unitCost:r.qty?r2(r.cogs/r.qty):0,cogs:r2(r.cogs),incomeType:SALE_TYPES[r.type].income,saleType:r.type,priceBasis:r.basis,stockOpId:op.id});
+    const x=stamp({id:sid,date:r.date,productId:r.p.id,qty:r.qty,rate:r.rate,amount:r.amount,warehouseId:r.s.loc,clientId:r.cid,customer:r.customer,paymentStatus:r.pay,receivedAmount:r.received,initialReceived:r.received,dueDate:r.pay==='paid'?'':r.due,note:r.note,accountId:r.received>0?r.acct:'',invoiceNo:r.inv,device:S.deviceCode(),deliveryRef:r.deliv,stockItem:r.s.item,stockBatch:r.s.batch,stockCount:r.count,unitCost:r.qty?r2(r.cogs/r.qty):0,cogs:r2(r.cogs),incomeType:SALE_TYPES[r.type].income,saleType:r.type,priceBasis:r.basis,stockOpId:op.id});
     productSales.push(x);
     if(r.received>0)postLinkedMoneyTx('in',r.acct,r.received,r.date,'product_sale_initial',x.id,'Sale '+r.inv+' · '+r.customer,r.customer);
     try{logEvent('product_sale','product',x.id,{invoice:r.inv,product:productLabel(r.p),qty:r.qty,amount:r.amount,received:r.received,cogs:x.cogs});}catch(e){}
@@ -14516,6 +14540,7 @@ function bind(){
     if(t.dataset.slOpen){openForm(t.dataset.slOpen,{src:t.dataset.slSrc,key:t.dataset.slKey});return;}
     if(t.dataset.slSell){openSale(t.dataset.slSell,{src:t.dataset.slSrc,key:t.dataset.slKey,item:t.dataset.slItem});return;}
     if(t.dataset.slReverse){reverseOp(t.dataset.slReverse);return;}
+    if(t.dataset.slDupok){markDupOk(t.dataset.slDupok);return;}
     if(t.dataset.slCancel){cancelSale(t.dataset.slCancel);return;}
     if(t.dataset.slDefraw){stockSettings.defaultRawTank=t.dataset.slDefraw;save();renderAll();return;}
     if(t.dataset.slTogloc){const w=S.loc(t.dataset.slTogloc);if(w){const k=S.kindOf(w),it=k==='raw_tank'?'milk_raw':k==='past_tank'?'milk_past':null;const has=S.rows(b=>b.loc===w.id&&Math.abs(b.qty)>EPS).length;if(w.active!==false&&has&&!confirm(w.name+' still holds stock. Disable anyway? (Stock stays recorded there.)'))return;if(w.active!==false&&it==='milk_raw'&&S.locsOfKind('raw_tank').length<=1)return alert('Keep at least one active raw milk tank — milking sessions need somewhere to go.');w.active=w.active===false;save();renderAll();}return;}
@@ -14594,9 +14619,35 @@ async function reverseOp(opId){
 }
 
 /* ======================= render entry ======================= */
+/* ---------- V242: possible double entries from two phones (e.g. both recorded the same milking while offline) ---------- */
+function dupGroups(){
+  const out=[];
+  const g={};(milkingSessions||[]).forEach(s=>{const k=s.date+'|'+String(s.session||'').toLowerCase();(g[k]=g[k]||[]).push(s);});
+  Object.values(g).forEach(a=>{if(a.length>1&&!a.every(s=>s.dupOk))out.push({kind:'milking',items:a});});
+  const sg={};(slaughterBatches||[]).filter(x=>!x.reversed&&(x.goatId||x.animalTag)).forEach(x=>{const k=x.goatId?'id:'+x.goatId:'tag:'+String(x.animalTag).toLowerCase();(sg[k]=sg[k]||[]).push(x);});
+  Object.values(sg).forEach(a=>{if(a.length>1&&!a.every(x=>x.dupOk))out.push({kind:'slaughter',items:a});});
+  return out;
+}
+function renderDupAlerts(){
+  const tabs=$('productTabs');if(!tabs)return;
+  let box=$('sl-dup-alert');
+  if(!box){box=document.createElement('div');box.id='sl-dup-alert';box.className='sl-dup';box.setAttribute('role','alert');tabs.parentNode.insertBefore(box,tabs);}
+  const G=dupGroups();box.hidden=!G.length;if(!G.length){box.innerHTML='';return;}
+  const who=x=>H(x.createdBy||'someone')+(x.device?' · phone '+H(x.device):'');
+  box.innerHTML=`<div class="sl-dup-head">⚠ Possible double entry — two phones may have recorded the same thing</div>`+G.map(gr=>{
+    const ids=gr.items.map(x=>x.id).join(',');
+    if(gr.kind==='milking'){const f=gr.items[0];return `<div class="sl-dup-row"><div><b>${H(f.session)} milking on ${H(f.date)}</b> was saved ${gr.items.length} times: ${gr.items.map(s=>`<span class="sl-dup-item">${fmtQ(s.usable,'L')} by ${who(s)}</span>`).join(' ')}</div><div class="sl-dup-act">${gr.items.map(s=>`<button type="button" class="btn btn-ghost btn-sm" data-sl-delsession="${H(s.id)}">Delete the ${fmtQ(s.usable,'L')}${s.device?' ('+H(s.device)+')':''}</button>`).join('')}<button type="button" class="btn btn-sm" data-sl-dupok="${H(ids)}">Both are real — keep</button></div></div>`;}
+    const f=gr.items[0];return `<div class="sl-dup-row"><div><b>Goat ${H(f.animalTag||'')}</b> was slaughtered ${gr.items.length} times: ${gr.items.map(x=>`<span class="sl-dup-item">${H(x.ref)} · ${fmtQ(x.carcassWeight,'kg')} by ${who(x)}</span>`).join(' ')}</div><div class="sl-dup-act">${gr.items.map(x=>{const op=stockOps.find(o=>o.sourceKey==='slaughter:'+x.id&&!o.reversedBy);return op?`<button type="button" class="btn btn-ghost btn-sm" data-sl-reverse="${H(op.id)}">Reverse ${H(x.ref)}</button>`:'';}).join('')}<button type="button" class="btn btn-sm" data-sl-dupok="${H(ids)}">Both are real — keep</button></div></div>`;
+  }).join('')+`<p class="sl-dup-note">Delete or reverse only the extra copy. Its milk or carcass comes back out of stock. If both really happened, tap “Both are real — keep”.</p>`;
+}
+async function markDupOk(ids){
+  const set=new Set(String(ids).split(','));
+  await run(null,()=>{(milkingSessions||[]).concat(slaughterBatches||[]).forEach(x=>{if(set.has(x.id))x.dupOk=true;});return 'Kept both';});
+}
 function renderAll(){
   try{
     bind();
+    renderDupAlerts();
     const hk=$('productRevenueMonth');if(hk){const m=thisMonth();hk.textContent=money(productSales.filter(x=>!x.cancelled&&inMonth(x.date,m)).reduce((a,x)=>a+N(x.amount),0)+(milkSales||[]).filter(x=>inMonth(x.date,m)).reduce((a,x)=>a+N(x.amount),0));}
     const hs=$('productStockCount');if(hs)hs.textContent=fmtQ(S.qty('milk_raw')+S.qty('milk_past'),'L milk');
     const tab=activeTab();
@@ -14789,7 +14840,7 @@ function render(){
   if(tab==='setup')renderSetup(B);
   if(tab==='parties')renderParties(B);
 }
-function nextBill(){const ym=today().slice(0,7).replace('-','');let n=entries().filter(e=>String(e.billNo||'').startsWith('TR-'+ym)).length+1,v;do{v='TR-'+ym+'-'+String(n++).padStart(3,'0');}while(entries().some(e=>e.billNo===v));return v;}
+function nextBill(){const ym=today().slice(0,7).replace('-',''),dc=(window.SFStock&&SFStock.deviceCode)?SFStock.deviceCode():'',base='TR-'+ym+'-'+(dc?dc+'-':'');let n=entries().filter(e=>String(e.billNo||'').startsWith(base)).length+1,v;do{v=base+String(n++).padStart(3,'0');}while(entries().some(e=>e.billNo===v));return v;}
 function sumBuy(B){
   const q=num('td-b-qty'),r=rateFrom('b',val('td-b-item')),ex=num('td-b-freight')+num('td-b-labour'),goods=r2(q*r),pay=val('td-b-pay'),u=unitOf(val('td-b-item'));
   $('td-b-paid-f').hidden=pay!=='partial';$('td-b-due-f').hidden=pay==='paid';$('td-b-acct-f').hidden=pay==='credit'&&ex<=0;

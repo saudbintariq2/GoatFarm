@@ -47,8 +47,19 @@ public class Goat : BaseEntity
     public bool IsTemporaryTag { get; set; }
     public int? KiddingRecordId { get; set; }
     public KiddingRecord? KiddingRecord { get; set; }
+    public DateOnly? WeanDate { get; set; }
+    public YoungGoatClass YoungClass { get; set; }
+    public DateOnly? YoungClassDate { get; set; }
+    /// <summary>Season birth batch name (prototype <c>goat.batch</c>).</summary>
+    public string? BirthBatchName { get; set; }
+    /// <summary>Planned cross date for build-up / stop-milk filters.</summary>
+    public DateOnly? NextCrossDate { get; set; }
+    public int? CustomFeedingGroupId { get; set; }
+    public CustomFeedingGroup? CustomFeedingGroup { get; set; }
     public ICollection<VaccinationHistory> VaccinationHistories { get; set; } = [];
     public ICollection<GoatWeightRecord> WeightRecords { get; set; } = [];
+    public ICollection<GoatBcsRecord> BcsRecords { get; set; } = [];
+    public ICollection<GoatHeatEvent> HeatEvents { get; set; } = [];
 }
 
 public class BreedingEvent : BaseEntity
@@ -88,6 +99,22 @@ public class GoatWeightRecord : BaseEntity
     public Goat Goat { get; set; } = null!;
     public DateOnly Date { get; set; }
     public decimal Kg { get; set; }
+}
+
+public class GoatBcsRecord : BaseEntity
+{
+    public int GoatId { get; set; }
+    public Goat Goat { get; set; } = null!;
+    public DateOnly Date { get; set; }
+    public int Score { get; set; }
+}
+
+public class GoatHeatEvent : BaseEntity
+{
+    public int GoatId { get; set; }
+    public Goat Goat { get; set; } = null!;
+    public DateOnly Date { get; set; }
+    public string? Note { get; set; }
 }
 
 public class DeathRecord : BaseEntity

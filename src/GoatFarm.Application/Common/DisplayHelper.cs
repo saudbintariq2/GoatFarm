@@ -20,11 +20,38 @@ public static class DisplayHelper
         [GoatHealthState.Healthy] = "Healthy",
         [GoatHealthState.Sick] = "Sick",
         [GoatHealthState.UnderTreatment] = "Under treatment",
-        [GoatHealthState.Recovering] = "Recovering"
+        [GoatHealthState.Recovering] = "Recovering",
+        [GoatHealthState.Quarantine] = "Quarantine",
+        [GoatHealthState.Injured] = "Injured",
+        [GoatHealthState.WeakOffFeed] = "Weak / off feed"
     };
 
     public static string GetHealthLabel(GoatHealthState state) =>
         HealthMap.TryGetValue(state, out var v) ? v : state.ToString();
+
+    public static bool TryParseHealthLabel(string? label, out GoatHealthState state)
+    {
+        state = GoatHealthState.Healthy;
+        if (string.IsNullOrWhiteSpace(label)) return false;
+        var t = label.Trim();
+        foreach (var (key, text) in HealthMap)
+        {
+            if (string.Equals(text, t, StringComparison.OrdinalIgnoreCase))
+            {
+                state = key;
+                return true;
+            }
+        }
+
+        if (string.Equals(t, "Weak / off feed", StringComparison.OrdinalIgnoreCase))
+        {
+            state = GoatHealthState.WeakOffFeed;
+            return true;
+        }
+
+        var compact = t.Replace(" ", "", StringComparison.Ordinal).Replace("/", "", StringComparison.Ordinal);
+        return Enum.TryParse(compact, ignoreCase: true, out state);
+    }
 
     public static string GetBreedingStageLabel(BreedingStage stage) => stage switch
     {
@@ -85,5 +112,13 @@ public static class DisplayHelper
         VaccineScope.Sale => "sale",
         VaccineScope.None => "none",
         _ => "all"
+    };
+
+    public static string GetYoungClassLabel(YoungGoatClass cls) => cls switch
+    {
+        YoungGoatClass.Doeling => "Doeling",
+        YoungGoatClass.Buckling => "Buckling",
+        YoungGoatClass.Meat => "Meat / sale",
+        _ => string.Empty
     };
 }

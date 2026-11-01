@@ -15,4 +15,5 @@ public interface IBreedingService
     Task RemovePrepAsync(int goatId, CancellationToken cancellationToken = default);
     Task RemoveCrossAsync(int goatId, CancellationToken cancellationToken = default);
     Task RecordCrossFromPrepAsync(int goatId, DateOnly date, string? buckTag, bool confirmWarnings, CancellationToken cancellationToken = default);
+    Task RecordReturnedToHeatAsync(RecordReturnedToHeatViewModel model, CancellationToken cancellationToken = default);
 }

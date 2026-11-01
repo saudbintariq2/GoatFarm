@@ -17,7 +17,7 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.21")
+                .HasAnnotation("ProductVersion", "9.0.22")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -913,6 +913,10 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<string>("ArchivedReason")
                         .HasColumnType("text");
 
+                    b.Property<string>("BirthBatchName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Breed")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -931,6 +935,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CustomFeedingGroupId")
+                        .HasColumnType("integer");
 
                     b.Property<int?>("DamId")
                         .HasColumnType("integer");
@@ -976,6 +983,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateOnly?>("NextCrossDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("Owner")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1011,7 +1021,20 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly?>("WeanDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("YoungClass")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("YoungClassDate")
+                        .HasColumnType("date");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("BirthBatchName");
+
+                    b.HasIndex("CustomFeedingGroupId");
 
                     b.HasIndex("DamId");
 
@@ -1033,6 +1056,36 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.HasIndex("IsArchived", "Status");
 
                     b.ToTable("Goats", (string)null);
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.GoatBcsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("GoatId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoatId", "Date");
+
+                    b.ToTable("GoatBcsRecords", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.GoatGroup", b =>
@@ -1063,6 +1116,37 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("GoatGroups", (string)null);
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.GoatHeatEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("GoatId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoatId", "Date");
+
+                    b.ToTable("GoatHeatEvents", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.GoatSale", b =>
@@ -2608,6 +2692,11 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.Goat", b =>
                 {
+                    b.HasOne("GoatFarm.Domain.Entities.CustomFeedingGroup", "CustomFeedingGroup")
+                        .WithMany()
+                        .HasForeignKey("CustomFeedingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GoatFarm.Domain.Entities.Goat", "Dam")
                         .WithMany()
                         .HasForeignKey("DamId")
@@ -2628,6 +2717,8 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasForeignKey("SireId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.Navigation("CustomFeedingGroup");
+
                     b.Navigation("Dam");
 
                     b.Navigation("Group");
@@ -2635,6 +2726,28 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Navigation("KiddingRecord");
 
                     b.Navigation("Sire");
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.GoatBcsRecord", b =>
+                {
+                    b.HasOne("GoatFarm.Domain.Entities.Goat", "Goat")
+                        .WithMany("BcsRecords")
+                        .HasForeignKey("GoatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Goat");
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.GoatHeatEvent", b =>
+                {
+                    b.HasOne("GoatFarm.Domain.Entities.Goat", "Goat")
+                        .WithMany("HeatEvents")
+                        .HasForeignKey("GoatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Goat");
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.GoatTreatment", b =>
@@ -2875,6 +2988,10 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.Goat", b =>
                 {
+                    b.Navigation("BcsRecords");
+
+                    b.Navigation("HeatEvents");
+
                     b.Navigation("VaccinationHistories");
 
                     b.Navigation("WeightRecords");

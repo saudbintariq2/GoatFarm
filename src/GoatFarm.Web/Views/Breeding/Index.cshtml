@@ -23,7 +23,7 @@
             @foreach (var row in Model.PrepRows)
             {
                 <tr>
-                    <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
                     <td class="hide-sm"><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
                     <td><span class="breed">@row.PrepCrossDate</span></td>
                     <td style="@(row.DietStartNow ? "color:var(--amber);font-weight:700" : "")">@row.DietStartDate</td>
@@ -54,7 +54,7 @@
             @foreach (var row in Model.WaitingRows)
             {
                 <tr>
-                    <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
                     <td class="hide-sm"><span class="breed">@row.MatedDate</span></td>
                     <td class="hide-sm"><span class="breed">@(row.BuckTag ?? "—")</span></td>
                     <td class="num-cell">@row.DaysSinceCross</td>
@@ -106,7 +106,7 @@
             @foreach (var row in Model.ExpectingRows)
             {
                 <tr>
-                    <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
                     <td class="hide-sm"><span class="breed">@row.MatedDate</span></td>
                     <td class="hide-sm"><span class="breed">@(row.BuckTag ?? "—")</span></td>
                     <td>
@@ -163,7 +163,7 @@
             @foreach (var row in Model.EmptyRows)
             {
                 <tr>
-                    <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
                     <td class="hide-sm"><span class="breed">@(row.MatedDate ?? "—")</span></td>
                     <td class="hide-sm"><span class="breed">@(row.BuckTag ?? "—")</span></td>
                     <td><span class="breed">@row.ScanDate</span></td>
@@ -188,7 +188,7 @@
             @foreach (var row in Model.RationRows)
             {
                 <tr>
-                    <td><span class="tag">@row.Tag</span>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
+                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
                     <td><span class="breed">@row.Stage</span></td>
                     <td class="num-cell" style="font-weight:700">@row.MixKgPerDay.ToString("F2")</td>
                     <td class="num-cell hide-sm">@row.FodderKgPerDay.ToString("F1")</td>

@@ -21,7 +21,13 @@ public class GoatConfiguration : IEntityTypeConfiguration<Goat>
         builder.Property(x => x.Owner).HasMaxLength(100);
         builder.Property(x => x.SireTagText).HasMaxLength(50);
         builder.Property(x => x.DamTagText).HasMaxLength(50);
+        builder.Property(x => x.BirthBatchName).HasMaxLength(100);
         builder.HasIndex(x => x.Tag).IsUnique();
+        builder.HasIndex(x => x.BirthBatchName);
+        builder.HasOne(x => x.CustomFeedingGroup)
+            .WithMany()
+            .HasForeignKey(x => x.CustomFeedingGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(x => x.SireId);
         builder.HasIndex(x => x.DamId);
         builder.HasIndex(x => new { x.IsArchived, x.Status });
@@ -350,6 +356,35 @@ public class GoatWeightRecordConfiguration : IEntityTypeConfiguration<GoatWeight
         builder.Property(x => x.Kg).HasPrecision(18, 2);
         builder.HasOne(x => x.Goat)
             .WithMany(x => x.WeightRecords)
+            .HasForeignKey(x => x.GoatId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new { x.GoatId, x.Date });
+    }
+}
+
+public class GoatBcsRecordConfiguration : IEntityTypeConfiguration<GoatBcsRecord>
+{
+    public void Configure(EntityTypeBuilder<GoatBcsRecord> builder)
+    {
+        builder.ToTable("GoatBcsRecords");
+        builder.HasKey(x => x.Id);
+        builder.HasOne(x => x.Goat)
+            .WithMany(x => x.BcsRecords)
+            .HasForeignKey(x => x.GoatId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new { x.GoatId, x.Date });
+    }
+}
+
+public class GoatHeatEventConfiguration : IEntityTypeConfiguration<GoatHeatEvent>
+{
+    public void Configure(EntityTypeBuilder<GoatHeatEvent> builder)
+    {
+        builder.ToTable("GoatHeatEvents");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Note).HasMaxLength(500);
+        builder.HasOne(x => x.Goat)
+            .WithMany(x => x.HeatEvents)
             .HasForeignKey(x => x.GoatId)
             .OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(x => new { x.GoatId, x.Date });

@@ -1,3 +1,4 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Treatments;
 using GoatFarm.Domain.Entities;
@@ -43,10 +44,45 @@ public class TreatmentService : ITreatmentService
         row.UpdatedDate = DateTime.UtcNow;
 
         var goat = await _context.Goats.FirstAsync(g => g.Id == model.GoatId, cancellationToken);
-        goat.HealthState = model.EndDate is null || model.EndDate >= DateOnly.FromDateTime(DateTime.Today)
-            ? GoatHealthState.UnderTreatment
-            : GoatHealthState.Healthy;
+        if (DisplayHelper.TryParseHealthLabel(model.HealthStateLabel, out var health))
+            goat.HealthState = health;
+        else if (model.EndDate is null || model.EndDate >= DateOnly.FromDateTime(DateTime.Today))
+            goat.HealthState = GoatHealthState.UnderTreatment;
+        else
+            goat.HealthState = GoatHealthState.Healthy;
         goat.UpdatedDate = DateTime.UtcNow;
+
+        if (model.Cost > 0)
+        {
+            if (model.AccountId is null or <= 0)
+                throw new InvalidOperationException("Choose the Cash/Bank account the medicine was paid from.");
+
+            var accountOk = await _context.MoneyAccounts.AnyAsync(
+                a => a.Id == model.AccountId && a.IsActive, cancellationToken);
+            if (!accountOk)
+                throw new InvalidOperationException("Selected account was not found. Add accounts on Finance → Bank & Cash.");
+
+            var note = goat.Tag + " — " + (string.IsNullOrWhiteSpace(row.Diagnosis) ? "treatment" : row.Diagnosis.Trim());
+            _context.Expenses.Add(new Expense
+            {
+                Type = "Vet / extra medicine",
+                Amount = model.Cost,
+                Date = model.StartDate,
+                Comment = note
+            });
+            _context.LedgerTransactions.Add(new LedgerTransaction
+            {
+                Date = model.StartDate,
+                Kind = LedgerTransactionKind.Expense,
+                AccountId = model.AccountId,
+                Amount = model.Cost,
+                Category = "Vet / extra medicine",
+                Reference = goat.Tag,
+                Notes = "Expense · Vet / extra medicine · " + goat.Tag,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            });
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
         return new { id = row.Id };
