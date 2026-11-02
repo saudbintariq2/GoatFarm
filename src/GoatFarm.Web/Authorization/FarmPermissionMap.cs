@@ -175,6 +175,8 @@ public static class FarmPermissionMap
             ["Products.SaveWarehouse"] = (FarmTabs.Products, FarmActions.Edit),
             ["Products.SaveStockMovement"] = (FarmTabs.Products, FarmActions.Add),
             ["Products.SaveMilkingSession"] = (FarmTabs.Products, FarmActions.Add),
+            ["Products.SaveMilkingSessionNames"] = (FarmTabs.Products, FarmActions.Edit),
+            ["Products.SavePasteurization"] = (FarmTabs.Products, FarmActions.Add),
             ["Products.SaveSlaughter"] = (FarmTabs.Products, FarmActions.Add),
             ["Products.SaveSale"] = (FarmTabs.Products, FarmActions.Add),
 

@@ -1,0 +1,417 @@
+﻿<div class="prod-hero">
+  <div><div class="prod-eyebrow">FARM PRODUCTION</div><h1>Production &amp; Products</h1><p>Milk line, meat line, one sales desk and one stock ledger — every litre and kilo traceable, every sale posted once to Accounting.</p></div>
+  <div class="prod-hero-kpis"><div><span>Sales this month</span><b id="productRevenueMonth">Rs 0</b></div><div><span>Milk in tanks</span><b id="productStockCount">0 L</b></div></div>
+</div>
+<div class="prod-tabs" id="productTabs" role="tablist">
+  <button class="prod-tab active" data-ptab="milk">🥛 Milk &amp; Dairy</button>
+  <button class="prod-tab" data-ptab="meat">🥩 Meat</button>
+  <button class="prod-tab" data-ptab="sales">🧾 Sales</button>
+  <button class="prod-tab" data-ptab="stock">📦 Stock &amp; Movements</button>
+  <button class="prod-tab" data-ptab="performance">📊 Breed Performance</button>
+  <button class="prod-tab" data-ptab="transport">🚚 Transport</button>
+  <button class="prod-tab" data-ptab="costing">🧾 Costs &amp; Expenses</button>
+  <button class="prod-tab" data-ptab="pricing">💰 Pricing &amp; Clients</button>
+  <button class="prod-tab" data-ptab="catalog">⚙ Product Setup</button>
+</div>
+
+<div class="prod-pane active" data-ppane="milk">
+<div class="sl-kpis" id="sl-milk-kpis"></div>
+<div class="sl-flow" id="sl-milk-flow"></div>
+
+<nav class="sl-subnav" role="tablist" aria-label="Milk work">
+  <button type="button" role="tab" data-sl-sub="milking"><span>🥛</span>Record milking</button>
+  <button type="button" role="tab" data-sl-sub="pasteurize"><span>🔥</span>Pasteurize</button>
+  <button type="button" role="tab" data-sl-sub="move"><span>⇄</span>Move milk</button>
+  <button type="button" role="tab" data-sl-sub="make"><span>🍼</span>Bottles &amp; products</button>
+  <button type="button" role="tab" data-sl-sub="spoil"><span>⚠</span>Spoilage</button>
+  <button type="button" role="tab" data-sl-sub="tanks"><span>🛢</span>Tanks &amp; stores</button>
+  <button type="button" role="tab" data-sl-sub="records"><span>📋</span>Milk records</button>
+  <button type="button" class="sl-subnav-sell" data-sl-sell="raw"><span>₨</span>Sell milk</button>
+</nav>
+
+<!-- ============ RECORD MILKING ============ -->
+<section class="panel sl-sub" data-sl-sub-pane="milking">
+<div class="panel-head"><h2>Record milking</h2><span class="sub">one entry per milking — the usable litres go straight into the tank</span></div>
+<div class="panel-body">
+<div class="sl-grid sl-grid-3">
+  <div class="field"><label for="mp-date">Date</label><input type="date" id="mp-date"></div>
+  <div class="field"><label for="mp-session">Milking</label><select id="mp-session"></select></div>
+  <div class="field"><label for="mp-warehouse">Put the milk into</label><select id="mp-warehouse"></select></div>
+</div>
+<div class="sl-howto">
+  <span class="sl-howto-l">How will you count the milk?</span>
+  <div class="sl-seg" role="radiogroup" aria-label="Counting method">
+    <button type="button" role="radio" data-sl-mode="breed">By breed</button>
+    <button type="button" role="radio" data-sl-mode="goat">Goat by goat</button>
+    <button type="button" role="radio" data-sl-mode="total">One total</button>
+  </div>
+</div>
+
+<div data-sl-mode-pane="breed">
+  <p class="sl-hint">One line per breed. All lines together make this one milking. Leave “Goats” blank to use the number of milking goats of that breed in the Herd.</p>
+  <div class="table-wrap"><table class="tbl sl-entry-tbl"><thead><tr><th>Breed</th><th class="num-cell">Goats</th><th class="num-cell">Milk (L)</th><th class="num-cell">Rejected (L)</th><th class="num-cell">Usable</th><th></th></tr></thead><tbody id="sl-mg-breed-rows"></tbody></table></div>
+  <div class="sl-row-actions"><button type="button" class="btn btn-ghost btn-sm" id="sl-mg-add-breed">+ Add breed</button></div>
+</div>
+<div data-sl-mode-pane="goat" hidden>
+  <p class="sl-hint">Every goat marked “milking” in the Herd is listed. Type her litres; leave blank if not milked. Totals per breed are worked out for you.</p>
+  <div class="sl-goat-tools"><input id="sl-mg-goat-find" list="sl-mg-goat-tags" placeholder="Scan or type a tag to add a goat" autocomplete="off"><datalist id="sl-mg-goat-tags"></datalist><button type="button" class="btn btn-ghost btn-sm" id="sl-mg-goat-add">+ Add goat</button></div>
+  <div class="table-wrap"><table class="tbl sl-entry-tbl"><thead><tr><th>Goat</th><th>Breed</th><th class="num-cell">Milk (L)</th><th class="num-cell">Rejected (L)</th><th></th></tr></thead><tbody id="sl-mg-goat-rows"></tbody></table></div>
+</div>
+<div data-sl-mode-pane="total" hidden>
+  <div class="sl-grid sl-grid-3">
+    <div class="field"><label for="mp-goats">Goats milked</label><input type="number" id="mp-goats" min="0" step="1"></div>
+    <div class="field"><label for="mp-total">Milk (L)</label><input type="number" id="mp-total" min="0" step="0.1" inputmode="decimal"></div>
+    <div class="field"><label for="mp-reject">Rejected (L)</label><input type="number" id="mp-reject" min="0" step="0.1" value="0" inputmode="decimal"></div>
+  </div>
+</div>
+<div class="sl-total-bar" id="sl-mg-summary" aria-live="polite"></div>
+<div class="sl-grid sl-grid-3"><div class="field sl-span-2"><label for="mp-note">Note</label><input id="mp-note" placeholder="milker, smell / colour check, reason for rejected milk"></div><div class="field"><label>&nbsp;</label><button class="btn btn-green sl-btn-wide" id="sl-mg-save" data-needs="milk:create">Save milking</button></div></div>
+
+<div class="sl-day">
+  <div class="sl-day-h"><h3>Milking on <span id="sl-mg-day-label"></span></h3><span id="sl-mg-day-total"></span></div>
+  <div class="table-wrap"><table class="tbl"><thead><tr><th>Milking</th><th>Counted</th><th class="num-cell">Goats</th><th class="num-cell">Milk</th><th class="num-cell">Rejected</th><th class="num-cell">Usable</th><th>Tank</th><th class="hide-sm">By</th><th></th></tr></thead><tbody id="sl-mg-day-rows"></tbody></table></div>
+</div>
+</div></section>
+
+<!-- ============ PASTEURIZE ============ -->
+<section class="panel sl-sub" data-sl-sub-pane="pasteurize" hidden>
+<div class="panel-head"><h2>Pasteurize</h2><span class="sub">raw tank → pasteurizer → pasteurized tank</span></div>
+<div class="panel-body">
+<div class="sl-move">
+  <div class="sl-move-side raw"><label for="sl-pz-src">From raw tank</label><select id="sl-pz-src"></select><div class="sl-move-bal" id="sl-pz-src-bal"></div></div>
+  <div class="sl-move-mid">
+    <div class="field"><label for="sl-pz-in">Raw milk taken (L)</label><div class="sl-inline"><input type="number" id="sl-pz-in" min="0" step="0.1" inputmode="decimal"><button type="button" class="btn btn-ghost btn-sm" id="sl-pz-all">All</button></div></div>
+    <div class="sl-move-arrow" aria-hidden="true">🔥 ➜</div>
+    <div class="field"><label for="sl-pz-out">Pasteurized milk obtained (L)</label><input type="number" id="sl-pz-out" min="0" step="0.1" inputmode="decimal"></div>
+  </div>
+  <div class="sl-move-side past"><label for="sl-pz-dst">Into pasteurized tank</label><select id="sl-pz-dst"></select><div class="sl-move-bal" id="sl-pz-dst-bal"></div></div>
+</div>
+<div class="sl-preview" id="sl-pz-preview" aria-live="polite"></div>
+<div class="sl-grid">
+<div class="field"><label for="sl-pz-date">Date</label><input type="date" id="sl-pz-date"></div>
+<div class="field"><label for="sl-pz-temp">Heated to (°C)</label><input type="number" id="sl-pz-temp" step="0.1" placeholder="e.g. 72"></div>
+<div class="field"><label for="sl-pz-cool">Cooled to (°C)</label><input type="number" id="sl-pz-cool" step="0.1" placeholder="e.g. 4"></div>
+<div class="field"><label for="sl-pz-ref">Run no.</label><input id="sl-pz-ref" placeholder="automatic"></div>
+</div>
+<details class="sl-more"><summary>Cost of this run (optional)</summary><div class="sl-grid sl-grid-3">
+<div class="field"><label for="sl-pz-cost">Gas / power / labour (Rs)</label><input type="number" id="sl-pz-cost" min="0" step="1"></div>
+<div class="field"><label for="sl-pz-acct">Paid from</label><select id="sl-pz-acct"></select></div>
+<div class="field"><label for="sl-pz-note">Note</label><input id="sl-pz-note" placeholder="operator, remarks"></div>
+</div></details>
+<label class="sl-check"><input type="checkbox" id="sl-pz-qc"> Pasteurization and cooling are done and this milk passed the check. <small>Milk that failed goes to Spoilage, not into the pasteurized tank.</small></label>
+<div class="sl-submit"><button class="btn btn-green" id="sl-pz-save" data-needs="milk:create">Save pasteurization</button></div>
+</div></section>
+
+<!-- ============ MOVE MILK ============ -->
+<section class="panel sl-sub" data-sl-sub-pane="move" hidden>
+<div class="panel-head"><h2>Move milk between tanks</h2><span class="sub">raw → raw, pasteurized → pasteurized</span></div>
+<div class="panel-body">
+<div class="sl-move">
+  <div class="sl-move-side" id="sl-mv-from-box"><label for="sl-mvm-from">From tank</label><select id="sl-mvm-from"></select><div class="sl-move-bal" id="sl-mvm-from-bal"></div></div>
+  <div class="sl-move-mid">
+    <div class="field"><label for="sl-mvm-qty">Litres to move</label><div class="sl-inline"><input type="number" id="sl-mvm-qty" min="0" step="0.1" inputmode="decimal"><button type="button" class="btn btn-ghost btn-sm" id="sl-mvm-all">All</button></div></div>
+    <div class="sl-move-arrow" aria-hidden="true">➜</div>
+  </div>
+  <div class="sl-move-side" id="sl-mv-to-box"><label for="sl-mvm-to">To tank</label><select id="sl-mvm-to"></select><div class="sl-move-bal" id="sl-mvm-to-bal"></div></div>
+</div>
+<div class="sl-grid sl-grid-3">
+<div class="field"><label for="sl-mvm-date">Date</label><input type="date" id="sl-mvm-date"></div>
+<div class="field sl-span-2"><label for="sl-mvm-note">Note</label><input id="sl-mvm-note" placeholder="why it was moved (tank cleaning, full tank…)"></div>
+</div>
+<div class="sl-submit"><button class="btn btn-green" id="sl-mvm-save" data-needs="milk:create">Move milk</button></div>
+<p class="sl-hint">Raw and pasteurized milk are never mixed: a raw tank only sends to another raw tank. To turn raw milk into pasteurized milk, use Pasteurize.</p>
+</div></section>
+
+<!-- ============ BOTTLES & PRODUCTS ============ -->
+<section class="sl-sub" data-sl-sub-pane="make" hidden>
+<div class="panel">
+<div class="panel-head"><h2>Bottle milk or make a product</h2><span class="sub">milk comes out of a tank · finished product goes into the cold store</span></div>
+<div class="panel-body">
+<div class="sl-move">
+  <div class="sl-move-side"><label for="sl-mk-src">Take milk from</label><select id="sl-mk-src"></select><div class="sl-move-bal" id="sl-mk-src-bal"></div></div>
+  <div class="sl-move-mid">
+    <div class="field"><label for="sl-mk-in">Milk used (L)</label><input type="number" id="sl-mk-in" min="0" step="0.1" inputmode="decimal"></div>
+    <div class="sl-move-arrow" aria-hidden="true">🍼 ➜</div>
+  </div>
+  <div class="sl-move-side prod">
+    <label for="sl-mk-prod">Product made</label><select id="sl-mk-prod"></select>
+    <div class="field"><label for="sl-mk-out">How many made (<span id="sl-mk-unit">units</span>)</label><input type="number" id="sl-mk-out" min="0" step="1" inputmode="decimal"></div>
+    <div class="sl-move-bal" id="sl-mk-expect"></div>
+  </div>
+</div>
+<div class="sl-preview" id="sl-mk-preview" aria-live="polite"></div>
+<div class="sl-grid">
+<div class="field"><label for="sl-mk-date">Date</label><input type="date" id="sl-mk-date"></div>
+<div class="field"><label for="sl-mk-dst">Store in</label><select id="sl-mk-dst"></select></div>
+<div class="field"><label for="sl-mk-exp">Use by</label><input type="date" id="sl-mk-exp"></div>
+<div class="field"><label for="sl-mk-heat">Heat treatment</label><select id="sl-mk-heat"><option value="pasteurized-source">Made from pasteurized milk</option><option value="heat-in-process">Heated during this process</option><option value="raw-product">Raw-milk product (no heat)</option></select></div>
+</div>
+<details class="sl-more"><summary>Costs of this batch (optional)</summary><div class="sl-grid">
+<div class="field"><label for="sl-mk-pack">Bottles / caps / labels (Rs)</label><input type="number" id="sl-mk-pack" min="0" step="1"></div>
+<div class="field"><label for="sl-mk-ingr">Cultures / ingredients (Rs)</label><input type="number" id="sl-mk-ingr" min="0" step="1"></div>
+<div class="field"><label for="sl-mk-proc">Processing / labour (Rs)</label><input type="number" id="sl-mk-proc" min="0" step="1"></div>
+<div class="field"><label for="sl-mk-acct">Paid from</label><select id="sl-mk-acct"></select></div>
+<div class="field"><label for="sl-mk-lot">Lot no.</label><input id="sl-mk-lot" placeholder="automatic"></div>
+<div class="field sl-span-3"><label for="sl-mk-note">Note</label><input id="sl-mk-note" placeholder="optional"></div>
+</div></details>
+<div class="sl-submit"><button class="btn btn-green" id="sl-mk-save" data-needs="milk:create">Save production</button></div>
+</div></div>
+<div class="panel"><div class="panel-head"><h2>Bottles &amp; products in the cold store</h2><span class="sub">finished goods ready to sell · they come only from “Bottle milk or make a product”</span></div><div class="panel-body"><div class="sl-prod-cards" id="sl-dairy-cards"></div></div></div>
+</section>
+
+<!-- ============ SPOILAGE ============ -->
+<section class="panel sl-sub" data-sl-sub-pane="spoil" hidden>
+<div class="panel-head"><h2>Spoilage &amp; corrections</h2><span class="sub">milk or products that went bad, spilled, or a tank count that is different</span></div>
+<div class="panel-body">
+<div class="sl-grid">
+<div class="field"><label for="sl-sp2-date">Date</label><input type="date" id="sl-sp2-date"></div>
+<div class="field"><label for="sl-sp2-item">What</label><select id="sl-sp2-item"></select></div>
+<div class="field"><label for="sl-sp2-dir">Change</label><select id="sl-sp2-dir"><option value="out">Remove (spoiled / spilled / failed)</option><option value="in">Add (count found more)</option></select></div>
+<div class="field"><label for="sl-sp2-qty">Quantity (<span id="sl-sp2-unit">L</span>)</label><input type="number" id="sl-sp2-qty" min="0" step="0.1" inputmode="decimal"></div>
+<div class="field"><label for="sl-sp2-reason">Reason</label><select id="sl-sp2-reason"><option>Spoiled / soured</option><option>Spilled / leaked</option><option>Failed quality check</option><option>Expired</option><option>Fed to kids</option><option>Stock count correction</option><option>Other</option></select></div>
+<div class="field sl-span-3"><label for="sl-sp2-note">Note</label><input id="sl-sp2-note" placeholder="what happened"></div>
+</div>
+<div class="sl-preview" id="sl-sp2-preview"></div>
+<div class="sl-submit"><button class="btn btn-green" id="sl-sp2-save" data-needs="milk:create">Save</button></div>
+</div></section>
+
+<!-- ============ TANKS & STORES ============ -->
+<section class="sl-sub" data-sl-sub-pane="tanks" hidden>
+<div class="panel"><div class="panel-head"><h2>Tanks &amp; cold stores</h2><span class="sub">rename, set capacity and temperature, add more</span></div><div class="panel-body">
+<div class="sl-tank-admin" id="sl-tank-admin"></div>
+<div class="sl-row-actions">
+<button type="button" class="btn btn-ghost btn-sm" data-sl-addloc="raw_tank">+ Add raw milk tank</button>
+<button type="button" class="btn btn-ghost btn-sm" data-sl-addloc="past_tank">+ Add pasteurized tank</button>
+<button type="button" class="btn btn-ghost btn-sm" data-sl-addloc="dairy_store">+ Add cold store for products</button>
+</div>
+<p class="sl-hint">Renaming keeps all history. A tank that still holds milk can be switched off but not deleted.</p>
+</div></div>
+</section>
+
+<!-- ============ RECORDS ============ -->
+<section class="sl-sub" data-sl-sub-pane="records" hidden>
+<div class="panel"><div class="panel-head"><h2>Milk &amp; dairy movements</h2><span class="sub">every litre in and out, newest first</span></div><div class="panel-body table-wrap"><table class="tbl sl-moves"><thead><tr><th>Date</th><th>Operation</th><th>What moved</th><th class="hide-sm">By</th><th></th></tr></thead><tbody id="sl-milk-moves"></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h3>Milk by breed</h3><span class="sub">daily and monthly</span></div><div class="panel-body"><div class="sl-grid sl-grid-3" style="margin-bottom:12px"><div class="field"><label for="mp-report-date">Report date</label><input type="date" id="mp-report-date"/></div><div class="field"><label for="mp-report-breed">Breed</label><select id="mp-report-breed"><option value="">All breeds</option></select></div></div><div id="mp-breed-report"></div></div></div>
+<div class="panel"><div class="panel-head"><h3>All milkings</h3><span class="sub">delete a wrong entry here — its litres are taken back out of the tank</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Session</th><th class="num-cell">Goats</th><th class="num-cell">Total L</th><th class="num-cell">Rejected</th><th class="num-cell">Usable L</th><th class="hide-sm">Tank</th><th></th></tr></thead><tbody id="milkingSessionRows"></tbody></table></div></div>
+<details class="panel sl-details" id="sl-old-entries"><summary>Older single milk entries (before sessions)</summary><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th class="hide-sm">Breed</th><th class="num-cell">Litres</th><th class="hide-sm">Comment</th><th style="width:30px"></th></tr></thead><tbody id="prodRows"></tbody></table></div></details>
+</section>
+</div>
+
+<div class="prod-pane" data-ppane="performance" id="breedPerformancePane">
+<div class="section-intro"><div><span class="prod-badge">FARM ANALYTICS</span><h2>Breed Performance — Milk &amp; Meat</h2><p>Compare breed production using recorded milk, live-goat sales and carcass intake. No duplicate inventory or accounting entries.</p></div></div>
+<div class="panel"><div class="panel-body" style="display:flex;gap:14px;flex-wrap:wrap;align-items:end">
+<div class="field"><label>Month</label><input type="month" id="bp-month"></div>
+<div class="field"><label>Breed</label><select id="bp-breed"><option value="">All breeds</option></select></div>
+<div class="field"><label>Result</label><select id="bp-mode"><option value="milk">🥛 Milk performance</option><option value="meat">🥩 Meat performance</option></select></div>
+<div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost btn-sm" id="bp-export">Export CSV</button></div>
+</div></div>
+<div id="bp-kpis" class="product-kpi-grid" style="margin-bottom:16px"></div>
+<div class="panel"><div class="panel-head"><h2 id="bp-chart-title">Milk by breed</h2><span class="sub">Recorded data only · no estimated production</span></div><div class="panel-body"><div id="bp-chart"></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Breed comparison</h2><span class="sub">Month selected above</span></div><div class="panel-body table-wrap" id="bp-table"></div></div>
+<div class="note" id="bp-methodology"></div>
+</div>
+
+<div class="prod-pane" data-ppane="meat">
+<div class="section-intro"><div><span class="prod-badge meat">MEAT LINE</span><h2>Meat</h2><p>Live goat → slaughter → whole carcass → halves or cuts → sale. Carcasses are kept by actual weight and count, never as 1 kg packs.</p></div></div>
+<div class="sl-kpis" id="sl-meat-kpis"></div>
+<div class="sl-flow sl-flow-4" id="sl-meat-flow"></div>
+<div class="sl-actions" role="toolbar" aria-label="Meat operations">
+  <button type="button" class="sl-act active" data-sl-action="slaughter"><b>1</b> Slaughter / carcass in</button>
+  <button type="button" class="sl-act" data-sl-action="split"><b>2</b> Split into halves</button>
+  <button type="button" class="sl-act" data-sl-action="cut"><b>3</b> Cut into pieces</button>
+  <button type="button" class="sl-act" data-sl-sell="whole"><b>₨</b> Sell carcass</button>
+  <button type="button" class="sl-act" data-sl-sell="cut"><b>₨</b> Sell cuts</button>
+</div>
+
+<section class="panel sl-form" data-sl-form="slaughter">
+<div class="panel-head"><h2>Slaughter / carcass intake</h2><span class="sub">one goat → one carcass batch</span></div>
+<div class="panel-body">
+<div class="sl-grid">
+<div class="field"><label for="sl-sg-date">Date</label><input type="date" id="sl-sg-date"></div>
+<div class="field"><label for="sl-sg-tag">Goat tag</label><input id="sl-sg-tag" list="sl-sg-tags" autocomplete="off" placeholder="scan or type tag"><datalist id="sl-sg-tags"></datalist></div>
+<div class="field sl-wide"><label>Herd check</label><div class="sl-lookup" id="sl-sg-lookup">Scan or type the goat tag.</div></div>
+<div class="field"><label for="sl-sg-live">Live weight (kg)</label><input type="number" id="sl-sg-live" min="0" step="0.1"></div>
+<div class="field"><label for="sl-sg-kg">Carcass weight (kg)</label><input type="number" id="sl-sg-kg" min="0" step="0.01"></div>
+<div class="field"><label for="sl-sg-store">Hang in</label><select id="sl-sg-store"></select></div>
+<div class="field"><label for="sl-sg-acost">Animal cost (Rs)</label><input type="number" id="sl-sg-acost" min="0" step="1" placeholder="auto from herd"></div>
+<div class="field"><label for="sl-sg-fee">Slaughter fee (Rs)</label><input type="number" id="sl-sg-fee" min="0" step="1"></div>
+<div class="field"><label for="sl-sg-labour">Butcher labour (Rs)</label><input type="number" id="sl-sg-labour" min="0" step="1"></div>
+<div class="field"><label for="sl-sg-other">Other costs (Rs)</label><input type="number" id="sl-sg-other" min="0" step="1" placeholder="transport, ice…"></div>
+<div class="field"><label for="sl-sg-acct">Paid from</label><select id="sl-sg-acct"></select></div>
+<div class="field sl-wide"><label for="sl-sg-note">Note</label><input id="sl-sg-note" placeholder="vet check, by-products kept…"></div>
+</div>
+<label class="sl-check"><input type="checkbox" id="sl-sg-herd" checked> Remove this goat from the live herd (marked “slaughtered”)</label>
+<div class="sl-submit"><button class="btn btn-green" id="sl-sg-save" data-needs="milk:create">Save carcass</button></div>
+<p class="sub">Animal cost is for cost-per-kg only — the goat was already paid for and fed through Accounting, so it is not booked as a new expense. Fees and labour you enter here are posted once to Accounting.</p>
+</div></section>
+
+<section class="panel sl-form" data-sl-form="split" hidden>
+<div class="panel-head"><h2>Split a whole carcass into two halves</h2><span class="sub">weight and cost carried over exactly</span></div>
+<div class="panel-body">
+<div class="sl-grid">
+<div class="field"><label for="sl-sp-date">Date</label><input type="date" id="sl-sp-date"></div>
+<div class="field sl-wide"><label for="sl-sp-src">Whole carcass</label><select id="sl-sp-src"></select></div>
+<div class="field"><label for="sl-sp-a">Half A weight (kg)</label><input type="number" id="sl-sp-a" min="0" step="0.01" placeholder="half of total"></div>
+<div class="field sl-wide"><label for="sl-sp-note">Note</label><input id="sl-sp-note"></div>
+</div>
+<div class="sl-preview" id="sl-sp-preview"></div>
+<div class="sl-submit"><button class="btn btn-green" id="sl-sp-save" data-needs="milk:create">Split carcass</button></div>
+</div></section>
+
+<section class="panel sl-form" data-sl-form="cut" hidden>
+<div class="panel-head"><h2>Cut a carcass into pieces</h2><span class="sub">cuts + bone/trim/waste = carcass weight</span></div>
+<div class="panel-body">
+<div class="sl-grid">
+<div class="field"><label for="sl-ct-date">Date</label><input type="date" id="sl-ct-date"></div>
+<div class="field sl-wide"><label for="sl-ct-src">Carcass to cut</label><select id="sl-ct-src"></select></div>
+<div class="field"><label for="sl-ct-in">Kg to cut</label><input type="number" id="sl-ct-in" min="0" step="0.01" placeholder="all of it"></div>
+<div class="field"><label for="sl-ct-store">Store cuts in</label><select id="sl-ct-store"></select></div>
+<div class="field"><label for="sl-ct-method">Share cost by</label><select id="sl-ct-method"><option value="weight">Weight (same Rs/kg for every cut)</option><option value="value">Selling value (prime cuts carry more)</option></select></div>
+</div>
+<div class="table-wrap"><table class="tbl sl-cut-tbl"><thead><tr><th>Cut</th><th>Weighed kg</th><th class="num-cell">Cost / kg</th><th></th></tr></thead><tbody id="sl-ct-rows"></tbody></table></div>
+<button type="button" class="btn btn-ghost btn-sm" id="sl-ct-add">+ Add cut</button>
+<div class="sl-preview" id="sl-ct-preview"></div>
+<div class="field sl-wide"><label for="sl-ct-note">Note</label><input id="sl-ct-note"></div>
+<div class="sl-submit"><button class="btn btn-green" id="sl-ct-save" data-needs="milk:create">Save cuts</button></div>
+</div></section>
+
+<div class="panel"><div class="panel-head"><h2>Carcasses in stock</h2><span class="sub">actual kg and count per carcass</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Carcass</th><th>Type</th><th class="num-cell">Pieces</th><th class="num-cell">Weight</th><th class="num-cell hide-sm">Cost / kg</th><th class="num-cell hide-sm">Value</th><th class="hide-sm">Store</th><th></th></tr></thead><tbody id="sl-carcass-rows"></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h2>Cuts &amp; pieces in stock</h2><span class="sub">by store</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Cut</th><th>Store</th><th class="num-cell">In stock</th><th class="num-cell hide-sm">Cost</th><th class="num-cell hide-sm">Value</th><th class="num-cell">Price</th><th></th></tr></thead><tbody id="sl-cuts-rows"></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h2>Meat movements</h2><span class="sub">latest 40</span></div><div class="panel-body table-wrap"><table class="tbl sl-moves"><thead><tr><th>Date</th><th>Operation</th><th>What moved</th><th class="hide-sm">By</th><th></th></tr></thead><tbody id="sl-meat-moves"></tbody></table></div></div>
+</div>
+
+<div class="prod-pane" data-ppane="sales">
+<div class="section-intro"><div><span class="prod-badge sales">SALES</span><h2>Sales</h2><p>One place to sell everything: bulk raw or pasteurized milk by the litre, bottles and dairy products, whole or half carcasses and cuts. Each sale takes stock out once and posts to Accounting once.</p></div></div>
+<div class="sl-kpis" id="sl-sales-kpis"></div>
+<section class="panel" id="sl-sale-form"><div class="panel-head"><h2>New sale</h2><span class="sub">choose → check → post</span></div><div class="panel-body">
+<div class="sl-grid">
+<div class="field"><label for="sl-sa-date">Date</label><input type="date" id="sl-sa-date"></div>
+<div class="field"><label for="sl-sa-type">Selling</label><select id="sl-sa-type"><option value="raw">Raw milk — bulk (L)</option><option value="past">Pasteurized milk — bulk (L)</option><option value="dairy">Bottled milk &amp; dairy products</option><option value="whole">Whole carcass</option><option value="half">Half carcass</option><option value="cut">Meat cuts &amp; pieces</option><option value="other">Other products</option></select></div>
+<div class="field" id="sl-sa-prod-f" hidden><label for="sl-sa-prod">Product</label><select id="sl-sa-prod"></select></div>
+<div class="field"><label for="sl-sa-src" id="sl-sa-src-l">Sell from</label><select id="sl-sa-src"></select></div>
+<div class="field sl-wide"><label>Available</label><div class="sl-avail" id="sl-sa-avail"></div></div>
+<div class="field"><label for="sl-sa-qty">Quantity (<span id="sl-sa-unit">L</span>)</label><input type="number" id="sl-sa-qty" min="0" step="0.01" inputmode="decimal"></div>
+<div class="field" id="sl-sa-count-f" hidden><label for="sl-sa-count">Halves</label><input type="number" id="sl-sa-count" min="1" step="1"></div>
+<div class="field" id="sl-sa-basis-f" hidden><label for="sl-sa-basis">Price basis</label><select id="sl-sa-basis"><option value="unit">Rate per kg</option><option value="fixed">Agreed total price</option></select></div>
+<div class="field"><label for="sl-sa-rate" id="sl-sa-rate-l">Rate (Rs)</label><input type="number" id="sl-sa-rate" min="0" step="0.01" inputmode="decimal"></div>
+<div class="field"><label for="sl-sa-amt">Amount (Rs)</label><input id="sl-sa-amt" readonly placeholder="automatic"></div>
+<div class="field"><label for="sl-sa-cust">Customer</label><select id="sl-sa-cust"></select></div>
+<div class="field"><label for="sl-sa-pay">Payment</label><select id="sl-sa-pay"><option value="paid">Paid in full</option><option value="partial">Part paid</option><option value="credit">On credit</option></select></div>
+<div class="field" id="sl-sa-recv-f" hidden><label for="sl-sa-recv">Received now (Rs)</label><input type="number" id="sl-sa-recv" min="0" step="1"></div>
+<div class="field" id="sl-sa-acct-f"><label for="sl-sa-acct">Received into</label><select id="sl-sa-acct"></select></div>
+<div class="field" id="sl-sa-due-f" hidden><label for="sl-sa-due">Due date</label><input type="date" id="sl-sa-due"></div>
+<div class="field"><label for="sl-sa-inv">Invoice no.</label><input id="sl-sa-inv"></div>
+<div class="field"><label for="sl-sa-deliv">Delivery / vehicle</label><input id="sl-sa-deliv" placeholder="optional"></div>
+<div class="field sl-wide"><label for="sl-sa-note">Note</label><input id="sl-sa-note" placeholder="optional"></div>
+</div>
+<div class="sl-submit"><button class="btn btn-green" id="sl-sa-check" data-needs="milk:create">Review sale</button></div>
+<div id="sl-sa-review" hidden></div>
+</div></section>
+<div class="panel"><div class="panel-head"><h2>Sales register</h2><span class="sub">latest 80 · cancelled sales stay visible</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Item</th><th class="num-cell">Qty</th><th class="num-cell hide-sm">Rate</th><th class="num-cell">Amount</th><th class="num-cell hide-sm">Cost</th><th class="num-cell hide-sm">Margin</th><th>Payment</th><th></th></tr></thead><tbody id="sl-sales-rows"></tbody></table></div></div>
+<details class="panel sl-details" hidden><summary>Older direct milk sales (before V232)</summary><div class="panel-body table-wrap"><p class="sub">Read-only. These stay in Accounting as paid milk sales and their litres are taken from the tank they named.</p><table class="tbl"><thead><tr><th>Date</th><th>Client / note</th><th>Tank</th><th class="num-cell">Litres</th><th class="num-cell">Rate</th><th class="num-cell">Amount</th></tr></thead><tbody id="sl-legacy-milk-sales"></tbody></table></div></details>
+<div class="note">Payments received later are recorded in <b>Accounting → Sales &amp; receivables → Receive</b>. They reduce what the customer owes; they never add sales twice.</div>
+</div>
+
+<div class="prod-pane" data-ppane="stock">
+<div class="section-intro"><div><span class="prod-badge catalog">STOCK</span><h2>Stock &amp; Movements</h2><p>What is in every tank and store, every movement that put it there, and the tools to move or correct stock.</p></div></div>
+<div id="sl-stock-groups"></div>
+<div class="sl-two">
+<section class="panel sl-form" data-sl-form="transfer"><div class="panel-head"><h2>Move stock</h2><span class="sub">tank to tank · store to store</span></div><div class="panel-body"><div class="sl-grid sl-grid-2">
+<div class="field"><label for="sl-tf-date">Date</label><input type="date" id="sl-tf-date"></div>
+<div class="field"><label for="sl-tf-from">From</label><select id="sl-tf-from"></select></div>
+<div class="field sl-wide"><label for="sl-tf-item">What</label><select id="sl-tf-item"></select></div>
+<div class="field"><label for="sl-tf-to">To</label><select id="sl-tf-to"></select></div>
+<div class="field"><label for="sl-tf-qty">Quantity (<span id="sl-tf-unit"></span>)</label><input type="number" id="sl-tf-qty" min="0" step="0.01"></div>
+<div class="field sl-wide"><label for="sl-tf-note">Note</label><input id="sl-tf-note"></div>
+</div><div class="sl-submit"><button class="btn btn-green" id="sl-tf-save" data-needs="milk:create">Move</button></div><p class="sub">Raw milk only goes to raw tanks, pasteurized milk only to pasteurized tanks, meat only to meat stores.</p></div></section>
+<section class="panel sl-form" data-sl-form="adjust"><div class="panel-head"><h2>Spoilage / correction</h2><span class="sub">every change keeps a reason</span></div><div class="panel-body"><div class="sl-grid sl-grid-2">
+<div class="field"><label for="sl-adj-date">Date</label><input type="date" id="sl-adj-date"></div>
+<div class="field"><label for="sl-adj-loc">Location</label><select id="sl-adj-loc"></select></div>
+<div class="field sl-wide"><label for="sl-adj-item">Item</label><select id="sl-adj-item"></select></div>
+<div class="field"><label for="sl-adj-dir">Change</label><select id="sl-adj-dir"><option value="out">Remove from stock</option><option value="in">Add to stock (count found more)</option></select></div>
+<div class="field"><label for="sl-adj-qty">Quantity (<span id="sl-adj-unit"></span>)</label><input type="number" id="sl-adj-qty" min="0" step="0.01"></div>
+<div class="field"><label for="sl-adj-reason">Reason</label><select id="sl-adj-reason"><option>Spoiled / soured</option><option>Spilled / leaked</option><option>Failed quality check</option><option>Expired</option><option>Used for kids / farm</option><option>Stock count correction</option><option>Other</option></select></div>
+<div class="field sl-wide"><label for="sl-adj-note">Note</label><input id="sl-adj-note"></div>
+</div><div class="sl-submit"><button class="btn btn-green" id="sl-adj-save" data-needs="milk:create">Save adjustment</button></div><p class="sub">Write-offs show in the waste figures. They do not post a new expense: the cost of producing that stock is already in Accounting.</p></div></section>
+</div>
+<div class="panel"><div class="panel-head"><h2>Movement ledger</h2><span class="sub">every operation, newest first · nothing is ever deleted</span></div><div class="panel-body">
+<div class="sl-filters"><div class="field"><label for="sl-mv-from">From</label><input type="date" id="sl-mv-from"></div><div class="field"><label for="sl-mv-to">To</label><input type="date" id="sl-mv-to"></div><div class="field"><label for="sl-mv-type">Operation</label><select id="sl-mv-type"></select></div><div class="field"><label for="sl-mv-group">Line</label><select id="sl-mv-group"><option value="">Milk &amp; meat</option><option value="milk">Milk &amp; dairy</option><option value="meat">Meat</option></select></div><div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost btn-sm" id="sl-mv-csv">Export CSV</button></div></div>
+<div class="table-wrap"><table class="tbl sl-moves"><thead><tr><th>Date</th><th>Operation</th><th>What moved</th><th class="hide-sm">By</th><th></th></tr></thead><tbody id="sl-mv-rows"></tbody></table></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Check: stock against sales</h2><span class="sub">reconciliation</span></div><div class="panel-body" id="sl-recon"></div></div>
+<details class="panel sl-details" id="sl-locations"><summary>Tanks &amp; stores</summary><div class="panel-body">
+<div class="sl-grid">
+<div class="field"><label for="sl-loc-name">Name</label><input id="sl-loc-name" placeholder="e.g. Pasteurized Tank 2"></div>
+<div class="field"><label for="sl-loc-kind">Type</label><select id="sl-loc-kind"><option value="raw_tank">Raw milk tank (chilled)</option><option value="past_tank">Pasteurized milk tank (chilled)</option><option value="dairy_store">Dairy cold store</option><option value="meat_store">Meat chiller / freezer</option><option value="other">Other store</option></select></div>
+<div class="field"><label for="sl-loc-cap">Capacity</label><input type="number" id="sl-loc-cap" min="0" step="1" placeholder="L / kg"></div>
+<div class="field"><label for="sl-loc-temp">Target °C</label><input type="number" id="sl-loc-temp" step="0.1" placeholder="e.g. 4"></div>
+<div class="field"><label for="sl-loc-city">Site</label><input id="sl-loc-city" placeholder="Farm"></div>
+<div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="sl-loc-add" data-needs="milk:create">+ Add</button></div>
+</div>
+<div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Type</th><th class="num-cell">Capacity</th><th class="num-cell">Target</th><th></th></tr></thead><tbody id="sl-loc-rows"></tbody></table></div>
+</div></details>
+<details class="panel sl-details"><summary>Costing &amp; how this connects to Accounting</summary><div class="panel-body sl-explain">
+<div class="sl-grid"><div class="field"><label for="sl-set-rawcost">Farm cost of raw milk (Rs per litre)</label><input type="number" id="sl-set-rawcost" min="0" step="0.5" placeholder="0 = not set"></div><div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="sl-set-save">Save rate</button></div></div>
+<ul>
+<li><b>Sales</b> post once to Accounting as income (Milk sales — raw / pasteurized, Dairy product sales, Meat sales), with cash or bank received and any balance as a receivable.</li>
+<li><b>Real spending</b> you enter here — pasteurization, bottles, cultures, slaughter fee, butcher — posts once as an expense, and is also added to the cost of the stock it made.</li>
+<li><b>Stock cost</b> follows the milk and meat: raw milk at the rate above, pasteurized milk = raw milk used + processing, products = milk used + packaging + ingredients, carcass = animal cost + slaughter costs. Losses (pasteurization loss, bone and trim) stay in the cost of what remains.</li>
+<li><b>Cost of goods sold and gross margin</b> use those stock costs. Feed, salaries and the animals themselves are already in Accounting as expenses, so stock costs are never booked as a second expense. Treat margins as estimates until the raw milk rate reflects your real cost.</li>
+<li>Changing the rate affects milk received from now on; milk already in a tank keeps the cost it came in with.</li>
+</ul></div></details>
+</div>
+
+<div class="prod-pane" data-ppane="transport">
+<div class="section-intro"><div><span class="prod-badge catalog">LOGISTICS</span><h2>Transportation &amp; Delivery</h2><p>Record one transport cost for a complete milk, dairy or meat shipment. Example: send 600 L milk to Islamabad and enter the total delivery cost once.</p></div></div>
+<div class="note"><b>Simple shipment costing:</b> enter the total quantity moved and one total transport cost. The system calculates transport cost per L, kg or item and records the expense once in Finance.</div>
+<div class="product-kpi-grid" id="transportKpis"></div>
+<div class="panel"><div class="panel-head"><h2>Record transportation</h2><span class="sub">one shipment → one cost entry</span></div><div class="panel-body"><div class="add-grid process-grid v221-meat-grid">
+<div class="field"><label>Date</label><input id="tp-date" type="date"/></div>
+<div class="field"><label>Shipment type</label><select id="tp-type" data-custom-product-dropdown="shipmentTypes"><option value="Milk">🥛 Milk</option><option value="Dairy Products">🧀 Dairy Products</option><option value="Meat">🥩 Meat</option><option value="Mixed Products">📦 Mixed Products</option><option value="__addnew__">＋ Add new type…</option></select></div>
+<div class="field"><label>Total quantity</label><input id="tp-qty" min="0" step="0.01" type="number" placeholder="600"/></div>
+<div class="field"><label>Unit</label><select id="tp-unit" data-custom-product-dropdown="units"><option value="L">Litres (L)</option><option value="kg">Kilograms (kg)</option><option value="items">Bottles / packs / items</option><option value="__addnew__">＋ Add new unit…</option></select></div>
+<div class="field"><label>From</label><input id="tp-from" placeholder="Farm / Sargodha"/></div>
+<div class="field"><label>To city / destination</label><input id="tp-to" placeholder="Islamabad"/></div>
+<div class="field"><label>Transport cost (Rs)</label><input id="tp-cost" min="0" type="number"/></div><div class="field"><label>Payment account (optional)</label><select id="tp-account"><option value="">— record expense only —</option></select></div><div class="field product-wide"><label>Automatic transport cost / unit</label><div id="tp-cost-preview" class="transport-cost-preview">Enter quantity and transport cost — the system will calculate Rs/L, Rs/kg or Rs/item automatically.</div></div>
+<div class="field"><label>Transporter / vehicle</label><input id="tp-transporter" placeholder="Driver, vehicle or courier"/></div>
+<div class="field"><label>Dispatch reference</label><input id="tp-ref" placeholder="auto if blank"/></div>
+<div class="field product-wide"><label>Comment</label><input id="tp-note" placeholder="cold van, supplier delivery, customer delivery…"/></div>
+<div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addTransportShipment" data-needs="finance:create">+ Record transport</button></div>
+</div></div></div>
+<div class="panel"><div class="panel-head"><h2>Transportation history</h2><span class="sub">milk, dairy and meat deliveries</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th class="num-cell">Quantity</th><th>Route</th><th class="num-cell">Cost</th><th class="num-cell">Cost / unit</th><th class="hide-sm">Transporter</th><th></th></tr></thead><tbody id="transportRows"></tbody></table></div></div>
+</div>
+
+<div class="prod-pane" data-ppane="costing">
+<div class="section-intro"><div><span class="prod-badge sales">COSTING</span><h2>Product Cost Allocation</h2><p>Record transport, cold-chain, meat-cutting labour, packaging and other costs once in Finance while allocating them to a product, batch or dispatch for landed-cost analysis.</p></div></div>
+<div class="note"><b>No double counting:</b> each entry below creates one Finance expense. The allocation is analytical only. General electricity/utilities can remain a normal farm overhead by selecting <b>General farm / overhead</b>.</div>
+<div class="panel"><div class="panel-head"><h2>Add operational / logistics cost</h2><span class="sub">expense + optional product allocation</span></div><div class="panel-body"><div class="add-grid process-grid"><div class="field"><label>Date</label><input id="ca-date" type="date"/></div><div class="field"><label>Cost type</label><select id="ca-type" data-custom-product-dropdown="costTypes"><option>Transport / delivery</option><option>Cold-chain / cold storage</option><option>Meat cutting labour</option><option>Slaughter / processing fee</option><option>Packaging</option><option>Fuel / vehicle</option><option>Loading / handling</option><option>Utilities / electricity</option><option>Other</option><option value="__addnew__">＋ Add new cost type…</option></select></div><div class="field"><label>Amount (Rs)</label><input id="ca-amount" min="0" type="number"/></div><div class="field"><label>Allocate to</label><select id="ca-scope"><option value="general">General farm / overhead</option><option value="product">Product</option><option value="batch">Production batch</option><option value="shipment">Dispatch / transfer</option></select></div><div class="field"><label>Product (optional)</label><select id="ca-product"></select></div><div class="field"><label>Batch / dispatch ref.</label><input id="ca-ref" placeholder="batch/lot or dispatch reference"/></div><div class="field"><label>Allocated quantity</label><input id="ca-qty" min="0" step="0.01" type="number" placeholder="kg / bottle / pack"/></div><div class="field product-wide"><label>Supplier / transporter / comment</label><input id="ca-note" placeholder="Lahore delivery, butcher team, cold store…"/></div><div class="field"><label>&nbsp;</label><button class="btn btn-green" id="addCostAllocation" data-needs="finance:create">+ Record cost</button></div></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Landed cost &amp; margin view</h2><span class="sub">recorded batch costs + allocated operational costs</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Product</th><th class="num-cell">Produced</th><th class="num-cell">Direct batch cost</th><th class="num-cell">Allocated cost</th><th class="num-cell">Cost / unit</th><th class="num-cell">Default sell</th><th class="num-cell">Indicative margin</th></tr></thead><tbody id="landedCostRows"></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h2>Recent allocated costs</h2><span class="sub">also recorded once in Finance expenses</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Allocation</th><th class="hide-sm">Product / ref.</th><th class="num-cell">Amount</th><th class="num-cell hide-sm">Cost/unit</th><th class="hide-sm">Comment</th><th></th></tr></thead><tbody id="costAllocationRows"></tbody></table></div></div>
+</div>
+
+<div class="prod-pane" data-ppane="pricing">
+<div class="section-intro"><div><span class="prod-badge sales">PRICING</span><h2>Product Pricing &amp; Client Rates</h2><p>Keep one clear cost and selling-price reference for milk, dairy, meat and future products. These planning costs do not create a second Finance expense.</p></div></div>
+<div class="note"><b>Simple rule:</b> actual production, transport and other costs remain recorded once in their normal modules. This tab stores the per-unit pricing profile used by Sales. Client-specific rates override the default selling price.</div>
+<div class="panel"><div class="panel-head"><h2>Product cost &amp; default selling price</h2><span class="sub">cost/unit → selling price → margin</span></div><div class="panel-body">
+<div class="pricing-grid">
+<div class="field"><label>Product</label><select id="pr-product"></select></div><div class="field"><label>Base / production cost per unit</label><input id="pr-base" min="0" step="0.01" type="number"/></div><div class="field"><label>Packaging per unit</label><input id="pr-pack" min="0" step="0.01" type="number"/></div><div class="field"><label>Standard/local transport per unit (optional)</label><input id="pr-transport" min="0" step="0.01" type="number"/></div><div class="field"><label>Cold storage per unit</label><input id="pr-storage" min="0" step="0.01" type="number"/></div><div class="field"><label>Other cost per unit</label><input id="pr-other" min="0" step="0.01" type="number"/></div><div class="field"><label>Default selling price</label><input id="pr-sell" min="0" step="0.01" type="number"/></div><div class="field"><label>&nbsp;</label><button class="btn btn-green" id="saveProductPricing" data-needs="milk:edit">Save pricing</button></div>
+</div><div class="pricing-summary"><div><span>Total landed cost / unit</span><b id="pr-total">Rs 0</b></div><div><span>Default selling price</span><b id="pr-sell-show">Rs 0</b></div><div><span>Margin / unit</span><b id="pr-margin">Rs 0</b></div><div><span>Margin %</span><b id="pr-marginpct">0%</b></div></div>
+<div class="table-wrap"><table class="tbl"><thead><tr><th>Product</th><th class="num-cell">Base</th><th class="num-cell hide-sm">Packaging</th><th class="num-cell hide-sm">Transport</th><th class="num-cell hide-sm">Storage</th><th class="num-cell">Landed cost</th><th class="num-cell">Default sell</th><th class="num-cell">Margin</th></tr></thead><tbody id="productPricingRows"></tbody></table></div>
+</div></div>
+<div class="panel"><div class="panel-head"><h2>🚚 Delivery / Route Pricing</h2><span class="sub">destination shipment cost → automatic transport per unit</span></div><div class="panel-body">
+<div class="note"><b>Planning only:</b> save a route such as Islamabad 200 L / Rs 12,000. The calculated Rs 60/L is used for delivered-cost and margin analysis. Record the actual transporter payment once in the Transport tab; this table does not create another expense.</div>
+<div class="pricing-grid"><div class="field"><label>Destination / route</label><input id="rp-name" placeholder="e.g. Islamabad / Lahore"/></div><div class="field"><label>Product</label><select id="rp-product"></select></div><div class="field"><label>Typical shipment qty</label><input id="rp-qty" min="0" step="0.01" type="number"/></div><div class="field"><label>Transport cost (Rs)</label><input id="rp-cost" min="0" step="0.01" type="number"/></div><div class="field"><label>Transport / unit</label><div class="sale-cost-card"><span>Auto calculated</span><b id="rp-unit">Rs 0</b></div></div><div class="field"><label>&nbsp;</label><button class="btn btn-green" id="saveRoutePricing" data-needs="milk:edit">Save route</button></div></div>
+<div class="table-wrap" style="margin-top:14px"><table class="tbl"><thead><tr><th>Destination / Route</th><th>Product</th><th class="num-cell">Typical Qty</th><th class="num-cell">Transport Cost</th><th class="num-cell">Transport / Unit</th><th class="num-cell hide-sm">Base Cost</th><th class="num-cell">Delivered Cost</th><th></th></tr></thead><tbody id="routePricingRows"></tbody></table></div>
+</div></div>
+<div class="panel"><div class="panel-head"><h2>Clients &amp; special prices</h2><span class="sub">optional customer-specific selling rates</span></div><div class="panel-body">
+<div class="pricing-grid"><div class="field"><label>Client</label><select id="cp-client"></select></div><div class="field"><label>Product</label><select id="cp-product"></select></div><div class="field"><label>Special rate / unit</label><input id="cp-rate" min="0" step="0.01" type="number"/></div><div class="field"><label>&nbsp;</label><button class="btn btn-green" id="saveClientPrice" data-needs="milk:edit">Save client rate</button></div></div>
+<div class="table-wrap" style="margin-top:14px"><table class="tbl"><thead><tr><th>Client</th><th>Product</th><th class="num-cell">Special rate</th><th class="num-cell hide-sm">Default rate</th><th></th></tr></thead><tbody id="clientPricingRows"></tbody></table></div>
+</div></div>
+</div>
+
+<div class="prod-pane" data-ppane="catalog">
+<div class="section-intro"><div><span class="prod-badge catalog">CATALOGUE</span><h2>Product Catalogue</h2><p>Add unlimited products and pack sizes. Keep products configurable so future items do not require software changes.</p></div></div>
+<div class="panel"><div class="panel-head"><h2>Add product / pack size</h2><span class="sub">examples: Milk 1 L, Milk 500 ml, Yogurt 500 g, Leg 1 kg</span></div><div class="panel-body"><div class="add-grid catalog-grid">
+<div class="field"><label>Category</label><select id="pc-category" data-custom-product-dropdown="categories"><option value="dairy">Milk &amp; Dairy</option><option value="meat">Meat</option><option value="other">Other</option><option value="__addnew__">＋ Add new category…</option></select></div><div class="field" id="v221-meat-catalog-type" style="display:none"><label>Meat category</label><select id="v221-pc-meat-type"><option value="whole">Full carcass</option><option value="half">Half carcass</option><option value="cuts">Cut pieces / portions</option></select></div><div class="field"><label>Product name</label><input id="pc-name" placeholder="e.g. Goat Yogurt"/></div><div class="field"><label>Pack size</label><input id="pc-pack" placeholder="e.g. 500 g / 1 L"/></div><div class="field"><label>Stock unit</label><select id="pc-unit" data-custom-product-dropdown="units"><option>Pack</option><option>Bottle</option><option>Tub</option><option>Jar</option><option>kg</option><option>L</option><option>Piece</option><option value="__addnew__">＋ Add new unit…</option></select></div><div class="field"><label>Milk treatment / stock type</label><select id="pc-treatment"><option value="other">Other product / meat</option><option value="raw-chilled">Raw milk — chilled</option><option value="pasteurized-chilled">Pasteurized milk — chilled</option><option value="pasteurized-frozen">Pasteurized milk — frozen</option><option value="dairy-processed">Yogurt / cheese / dairy processed</option></select></div><div class="field"><label>Default price (Rs)</label><input id="pc-price" min="0" type="number"/></div><div class="field"><label>SKU / Code</label><input id="pc-sku" placeholder="optional"/></div><div class="field"><label>&nbsp;</label><button class="btn btn-green" data-needs="milk:create" id="addProductCatalog">+ Add product</button></div>
+</div></div></div>
+<div class="panel"><div class="panel-head"><h2>Active products</h2><span class="sub">editable catalogue for future expansion</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Category</th><th>Product</th><th>Pack</th><th>Unit</th><th class="num-cell">Default price</th><th class="hide-sm">SKU</th><th>Status</th><th></th></tr></thead><tbody id="productCatalogRows"></tbody></table></div></div>
+</div>

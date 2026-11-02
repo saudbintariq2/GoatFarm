@@ -74,4 +74,26 @@ public class ProductsController : Controller
         if (!ModelState.IsValid) return BadRequest(ModelState);
         return Json(await _products.SaveProductSaleAsync(model, cancellationToken));
     }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveMilkingSessionNames([FromBody] string[] sessions, CancellationToken cancellationToken)
+    {
+        await _products.SaveCustomMilkingSessionsAsync(sessions ?? [], cancellationToken);
+        return Ok();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SavePasteurization([FromBody] SavePasteurizationViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _audit.LogAsync(FarmTabs.Products, AuditAction.Create, "Pasteurization", UserId, UserDisplay, cancellationToken: cancellationToken);
+            return Json(await _products.SavePasteurizationAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

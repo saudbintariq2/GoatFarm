@@ -394,12 +394,21 @@ public class SaveBusinessCustomerViewModel
 
 }
 
-namespace GoatFarm.Application.ViewModels.Products {
+namespace GoatFarm.Application.ViewModels.Products
+{
+
+using GoatFarm.Application.ViewModels.Ledger;
 
 public class ProductsPageViewModel
 {
     public string Month { get; set; } = "";
     public decimal StockValue { get; set; }
+    public decimal MonthSalesTotal { get; set; }
+    public decimal MilkInTanksLiters { get; set; }
+    public ProductsMilkDashboardViewModel Milk { get; set; } = new();
+    public ProductsMeatDashboardViewModel Meat { get; set; } = new();
+    public IReadOnlyList<string> CustomMilkingSessions { get; set; } = [];
+    public IReadOnlyList<MilkingSessionRowViewModel> RecentSessions { get; set; } = [];
     public IReadOnlyList<ProductCustomerRowViewModel> Customers { get; set; } = [];
     public IReadOnlyList<ProductCatalogRowViewModel> Catalog { get; set; } = [];
     public IReadOnlyList<WarehouseRowViewModel> Warehouses { get; set; } = [];
@@ -407,6 +416,21 @@ public class ProductsPageViewModel
     public IReadOnlyList<MilkingSessionRowViewModel> Sessions { get; set; } = [];
     public IReadOnlyList<SlaughterRowViewModel> Slaughters { get; set; } = [];
     public IReadOnlyList<ProductSaleRowViewModel> Sales { get; set; } = [];
+    public IReadOnlyList<ProductMilkingGoatRowViewModel> HerdGoats { get; set; } = [];
+    public IReadOnlyList<MoneyAccountRowViewModel> MoneyAccounts { get; set; } = [];
+    public IReadOnlyList<MilkLegacyRowViewModel> LegacyMilkEntries { get; set; } = [];
+}
+
+public class ProductMilkingGoatRowViewModel
+{
+    public int Id { get; set; }
+    public string Tag { get; set; } = "";
+    public string? Name { get; set; }
+    public string Breed { get; set; } = "";
+    public string Gender { get; set; } = "";
+    /// <summary>Lowercase key, e.g. milking, pregnant (matches prototype herd status).</summary>
+    public string StatusKey { get; set; } = "";
+    public string Status { get; set; } = "";
 }
 
 public class ProductCustomerRowViewModel
@@ -429,6 +453,46 @@ public class WarehouseRowViewModel
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public string? Location { get; set; }
+    public string Kind { get; set; } = "other";
+    public decimal LitersOrKg { get; set; }
+    public decimal? Capacity { get; set; }
+    public decimal? TargetTempC { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class ProductsMilkDashboardViewModel
+{
+    public decimal RawTankLiters { get; set; }
+    public decimal PastTankLiters { get; set; }
+    public decimal MilkedTodayLiters { get; set; }
+    public decimal MilkedMonthLiters { get; set; }
+    public decimal BulkSoldMonthLiters { get; set; }
+    public int PasteurizeRunsMonth { get; set; }
+    public decimal PasteurizeInMonth { get; set; }
+    public decimal PasteurizeOutMonth { get; set; }
+    public IReadOnlyList<ProductsDairyStockRowViewModel> DairyProducts { get; set; } = [];
+}
+
+public class ProductsDairyStockRowViewModel
+{
+    public int ProductId { get; set; }
+    public int WarehouseId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Pack { get; set; }
+    public string Unit { get; set; } = "";
+    public decimal Qty { get; set; }
+}
+
+public class ProductsMeatDashboardViewModel
+{
+    public int WholeCount { get; set; }
+    public decimal WholeKg { get; set; }
+    public int HalfCount { get; set; }
+    public decimal HalfKg { get; set; }
+    public decimal CutsKg { get; set; }
+    public int CutsLines { get; set; }
+    public int SlaughteredMonth { get; set; }
+    public decimal SlaughteredCarcassKgMonth { get; set; }
 }
 
 public class StockMovementRowViewModel
@@ -437,8 +501,20 @@ public class StockMovementRowViewModel
     public string DateDisplay { get; set; } = "";
     public string Type { get; set; } = "";
     public string Product { get; set; } = "";
+    public string ProductSku { get; set; } = "";
     public string Warehouse { get; set; } = "";
+    public string? ToWarehouse { get; set; }
     public decimal Qty { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class MilkLegacyRowViewModel
+{
+    public int Id { get; set; }
+    public string DateDisplay { get; set; } = "";
+    public string Breed { get; set; } = "";
+    public decimal Liters { get; set; }
+    public string? Comment { get; set; }
 }
 
 public class MilkingSessionRowViewModel
@@ -485,6 +561,7 @@ public class SaveWarehouseViewModel
     public int? Id { get; set; }
     [Required] public string Name { get; set; } = "";
     public string? Location { get; set; }
+    public bool? IsActive { get; set; }
 }
 
 public class SaveStockMovementViewModel
@@ -500,6 +577,21 @@ public class SaveStockMovementViewModel
     public string? Notes { get; set; }
 }
 
+public class SavePasteurizationViewModel
+{
+    public DateOnly Date { get; set; }
+    public int SourceWarehouseId { get; set; }
+    public int DestWarehouseId { get; set; }
+    public decimal InputLiters { get; set; }
+    public decimal OutputLiters { get; set; }
+    public decimal ProcessCost { get; set; }
+    public int? PaidFromAccountId { get; set; }
+    public string? Note { get; set; }
+    public string? RunRef { get; set; }
+    public string? HeatTempC { get; set; }
+    public string? CoolTempC { get; set; }
+}
+
 public class SaveMilkingSessionViewModel
 {
     public int? Id { get; set; }
@@ -508,6 +600,7 @@ public class SaveMilkingSessionViewModel
     public string Breed { get; set; } = "Mixed";
     public decimal Liters { get; set; }
     public decimal RejectedLiters { get; set; }
+    public int? WarehouseId { get; set; }
 }
 
 public class SaveSlaughterViewModel

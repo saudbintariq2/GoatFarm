@@ -71,6 +71,8 @@ public interface IProductsService
     Task<object> SaveMilkingSessionAsync(SaveMilkingSessionViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveSlaughterAsync(SaveSlaughterViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default);
+    Task SaveCustomMilkingSessionsAsync(IReadOnlyList<string> sessions, CancellationToken cancellationToken = default);
+    Task<object> SavePasteurizationAsync(SavePasteurizationViewModel model, CancellationToken cancellationToken = default);
 }
 
 public interface ITreatmentService
