@@ -63,7 +63,7 @@ public class StatisticsService : IStatisticsService
         var milk = await _milkService.GetMilkPageAsync(cancellationToken: cancellationToken);
         var vaccine = await _vaccineService.GetVaccinePageAsync(null, month, cancellationToken);
         var reminders = await _reminderService.GetRemindersAsync(cancellationToken);
-        var breeding = await _breedingService.GetBreedingPageAsync(cancellationToken);
+        var breeding = await _breedingService.GetBreedingPageAsync(cancellationToken: cancellationToken);
         var feed = await _feedService.GetFeedPageAsync(null, month, cancellationToken: cancellationToken);
         var stats = await GetHerdStatsAsync(cancellationToken);
 

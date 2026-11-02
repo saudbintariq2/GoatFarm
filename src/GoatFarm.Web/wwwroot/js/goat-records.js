@@ -366,7 +366,7 @@ const GoatRecords = (() => {
   }
 
   /** @returns {Promise<boolean|string|null>} */
-  function showModal(message, { prompt = false, defaultValue = '', okText = 'OK', cancelText = 'Cancel' } = {}) {
+  function showModal(message, { prompt = false, defaultValue = '', okText = 'OK', cancelText = 'Cancel', html = false } = {}) {
     return new Promise(resolve => {
       const overlay = document.getElementById('appModal');
       const msg = document.getElementById('appModalMsg');
@@ -375,7 +375,8 @@ const GoatRecords = (() => {
       const cancelBtn = document.getElementById('appModalCancel');
       if (!overlay || !msg) { resolve(false); return; }
 
-      msg.textContent = message;
+      if (html) msg.innerHTML = message;
+      else msg.textContent = message;
       if (okBtn) okBtn.textContent = okText;
       if (cancelBtn) cancelBtn.textContent = cancelText;
       modalDone = resolve;
@@ -395,8 +396,8 @@ const GoatRecords = (() => {
     });
   }
 
-  function showConfirm(message) {
-    return showModal(message, { okText: 'Yes', cancelText: 'No' });
+  function showConfirm(message, { html = false } = {}) {
+    return showModal(message, { okText: 'Yes', cancelText: 'No', html });
   }
 
   function showToast(message, type = 'success') {
@@ -1818,6 +1819,10 @@ const GoatRecords = (() => {
   }
 
   function initBreeding() {
+    if (window.BreedingPage?.init) {
+      window.BreedingPage.init();
+      return;
+    }
     const $ = id => document.getElementById(id);
     const normalizeTag = v => String(v ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
     const today = () => new Date().toISOString().slice(0, 10);
@@ -4565,6 +4570,6 @@ const GoatRecords = (() => {
     refreshVoiceChrome();
   }
 
-  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, assistantSpeechText, createAssistantVoice, showModal, showConfirm, showToast };
+  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, assistantSpeechText, createAssistantVoice, showModal, showConfirm, showToast, api, reloadWithToast };
 })();
 if (typeof window !== 'undefined') window.GoatRecords = GoatRecords;

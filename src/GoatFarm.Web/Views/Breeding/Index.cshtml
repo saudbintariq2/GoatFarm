@@ -4,150 +4,285 @@
 <div class="bignum">
     <div><div class="lbl">Confirmed pregnant</div><div class="big" id="breedExp">@Model.ExpectingCount</div>
         <div class="lbl" id="breedNext">@Model.NextDueText</div></div>
-    <div class="side"><span class="lbl">Crossed — waiting for scan</span><b id="breedWait">@Model.WaitingCount</b></div>
-    <div class="side"><span class="lbl">Getting ready for cross</span><b id="breedPrep">@Model.PrepCount</b></div>
+    <div class="side"><span class="lbl">Ready for cross</span><b id="breedPrep">@Model.PrepCount</b>
+        <span class="lbl" id="breedWait">@Model.BreedWaitText</span></div>
 </div>
-<div class="note"><b>Four stages:</b> <b>1. Ready</b> — mark a doe with a target cross date and start her good diet
-    (about 2 months before). <b>2. Crossed</b> — record the mating; she waits for a scan (from about day
-    @BreedingHelper.ScanAfterDays). <b>3. Confirmed</b> — a positive scan makes her pregnant and starts the kidding
-    countdown (about @BreedingHelper.GestationDays days). <b>4. Birth</b> — record the kids; they are added to the herd
-    with their dam and sire. Does must be at least @BreedingHelper.MinBreedingAgeDays days old, and the app warns
-    about close relatives when the buck is in the herd.</div>
 
-<div class="panel">
-    <div class="panel-head"><h2>1 · Getting ready for cross</h2><span class="sub">condition the doe ~2 months before</span></div>
+<div class="panel" id="bgPanel">
+    <div class="panel-head"><h2>Breeding groups (buck groups)</h2><span class="sub">put one buck with a set of does · every doe keeps her own record</span></div>
     <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Status</th>
-            <th>Target cross</th><th>Start good diet</th><th class="num-cell">Cross in</th><th style="width:150px"></th></tr></thead>
-            <tbody id="prepRows">
-            @foreach (var row in Model.PrepRows)
-            {
-                <tr>
-                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
-                    <td class="hide-sm"><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
-                    <td><span class="breed">@row.PrepCrossDate</span></td>
-                    <td style="@(row.DietStartNow ? "color:var(--amber);font-weight:700" : "")">@row.DietStartDate</td>
-                    <td class="num-cell">@row.CrossInText</td>
-                    <td>
-                        <button type="button" class="btn btn-green btn-sm" data-cross="@row.Id" data-tag="@row.Tag">Crossed</button>
-                        <button type="button" class="del" data-unprep="@row.Id" aria-label="Remove @row.Tag from prep">×</button>
-                    </td>
-                </tr>
-            }
-            @if (!Model.PrepRows.Any()) {<tr><td colspan="6" class="empty">No does being prepared. Add one below.</td></tr>}
-            </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.5fr 1fr auto">
-            <div class="field"><label for="bp-tag">Doe — scan RFID or type tag</label><input id="bp-tag" placeholder="scan or type tag" autocomplete="off"></div>
-            <div class="field"><label for="bp-date">Target cross date</label><input type="date" id="bp-date" value="@DateTime.Today.AddDays(30).ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addPrep">+ Add</button></div>
+        <div class="add-grid" id="bgForm" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+            <div class="field"><label for="bg-buck">Buck</label><select id="bg-buck">
+                @foreach (var b in Model.BuckOptions) { <option value="@b">@b</option> }
+                @if (!Model.BuckOptions.Any()) { <option value="">No adult buck in herd</option> }
+            </select></div>
+            <div class="field"><label for="bg-date">Date buck put in</label><input id="bg-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label for="bg-max">Does per buck (max)</label><input id="bg-max" type="number" min="1" value="15"></div>
+            <div class="field"><label for="bg-n">Select first</label><div style="display:flex;gap:6px"><input id="bg-n" type="number" min="1" placeholder="e.g. 15" style="min-width:0"/><button type="button" class="btn btn-ghost btn-sm" id="bg-pick">Pick</button></div></div>
         </div>
-        <div class="rule" id="bp-found" style="margin-top:8px"></div>
+        <div class="sub" id="bg-count" style="margin:10px 0 6px;font-weight:700"></div>
+        <div class="v206-bg-list" id="bg-does">
+        @if (Model.GroupCandidates.Any())
+        {
+            foreach (var g in Model.GroupCandidates)
+            {
+                <label><input type="checkbox" data-bgdoe="@g.Id"> <b>@g.Tag</b> <span class="breed">@g.Breed</span>
+                @if (g.Ready) {<span class="chip chip-kid">ready</span>}</label>
+            }
+        }
+        else
+        {
+            <div class="empty">No eligible does free. Does must be female, not kids, old enough, and not already crossed.</div>
+        }
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-green" id="bg-create">Create group &amp; record cross</button></div>
+        <div class="v206-bg-groups" id="bg-groups" style="margin-top:16px"></div>
     </div>
 </div>
 
 <div class="panel">
-    <div class="panel-head"><h2>2 · Crossed — waiting for scan</h2><span class="sub">not counted as pregnant until a scan confirms</span></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Crossed</th><th class="hide-sm">Buck</th>
-            <th class="num-cell">Days since</th><th>Scan from</th><th style="width:150px"></th></tr></thead>
-            <tbody id="waitRows">
-            @foreach (var row in Model.WaitingRows)
+    <div class="panel-head"><h2>What needs doing</h2><span class="sub" id="nowSub">@(Model.NowJobs.Count > 0 ? Model.NowJobs.Count + " thing(s) today" : "nothing today")</span></div>
+    <div class="panel-body"><div id="nowList">
+        @if (Model.NowJobs.Any())
+        {
+            foreach (var j in Model.NowJobs)
             {
-                <tr>
-                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
-                    <td class="hide-sm"><span class="breed">@row.MatedDate</span></td>
-                    <td class="hide-sm"><span class="breed">@(row.BuckTag ?? "—")</span></td>
-                    <td class="num-cell">@row.DaysSinceCross</td>
-                    <td style="@(row.ScanDueNow ? "color:var(--amber);font-weight:700" : "")">@row.ScanDueDate@(row.ScanDueNow ? " · scan now" : "")</td>
-                    <td>
-                        <button type="button" class="btn btn-ghost btn-sm" data-scan="@row.Tag">Scan result</button>
-                        <button type="button" class="del" data-uncross="@row.Id" aria-label="Remove cross for @row.Tag">×</button>
-                    </td>
+                <div class="breeding-now-row" style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)">
+                    <span style="font-size:17px">@j.Icon</span>
+                    <div style="flex:1;min-width:0"><div style="font-weight:700;color:@j.Tone">@j.Text</div>
+                        <div class="breed">@string.Join(" · ", j.Tags.Take(10))@(j.Tags.Count > 10 ? " …" : "")</div></div>
+                    @if (!string.IsNullOrEmpty(j.FilterLink))
+                    {<a class="btn btn-ghost btn-sm" href="/Goat?filter=@Uri.EscapeDataString(j.FilterLink!)">Show them</a>}
+                </div>
+            }
+        }
+        else
+        {
+            <div class="alldone">✓ Nothing to do in breeding today. The next job is in the season plan below.</div>
+        }
+    </div></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Season plan</h2><span class="sub" id="seasonSub">@Model.Season.SeasonSub</span></div>
+    <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0">A doe gives birth <b>once a year</b>, so a group crossed in
+            April gives birth in September and is crossed again the following April. Run two groups six months apart
+            and the farm has births twice a year. <b>The birth window is the one date you choose</b> — the green row;
+            everything else is counted from it.</div>
+        <div class="filterbar" style="margin-bottom:14px">
+            <div class="field"><label class="hide-sm">Group</label><select id="se-batch">
+                @foreach (var b in Model.Season.Batches)
+                {<option value="@b.Id" @(b.Id == Model.Season.SelectedBatchId ? "selected" : null)>@b.Name</option>}
+            </select></div>
+            <button type="button" class="btn btn-ghost btn-sm" id="se-rename">✎ Rename</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="se-add">+ Add a group</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="se-del">× Remove</button>
+            <span class="count-pill" id="se-count">@Model.Season.BatchCountText</span>
+        </div>
+        <table class="tbl"><thead><tr><th>Step</th><th>Rule — change any number</th>
+            <th class="hide-sm">Date it happens</th><th class="num-cell">Days from today<div id="se-todayNote" style="font-weight:400;text-transform:none;font-size:10px"></div></th></tr></thead>
+            <tbody id="seasonRows">
+            @foreach (var step in Model.Season.Steps)
+            {
+                var rowStyle = step.Anchor ? "background:var(--green-tint)" : "";
+                <tr style="@rowStyle">
+                    <td><b>@step.Icon @step.Label</b></td>
+                    <td><span style="font-size:13.5px">@Html.Raw(SeasonRuleHtml(step, Model.Season))</span></td>
+                    <td class="hide-sm"><span class="breed">@step.WindowText</span></td>
+                    <td class="num-cell" style="@step.DaysStyle">@step.DaysText</td>
                 </tr>
             }
-            @if (!Model.WaitingRows.Any()) {<tr><td colspan="6" class="empty">No does waiting for a scan.</td></tr>}
             </tbody></table>
+    </div>
+</div>
 
-        <div class="rule" style="margin:16px 0 8px"><b>Record a cross</b></div>
-        <div class="add-grid" style="grid-template-columns:1.4fr 1fr 1fr auto auto">
-            <div class="field"><label for="bc-tag">Doe — scan or type tag</label><input id="bc-tag" placeholder="scan or type tag" autocomplete="off"></div>
-            <div class="field"><label for="bc-date">Mating date</label><input type="date" id="bc-date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label for="bc-buck">Buck (optional)</label><input id="bc-buck" placeholder="tag" autocomplete="off"></div>
-            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost" id="checkCross">Check</button></div>
-            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addCross">Record cross</button></div>
+@functions {
+    string SeasonRuleHtml(GoatFarm.Application.ViewModels.Breeding.BreedingSeasonStepViewModel step, GoatFarm.Application.ViewModels.Breeding.BreedingSeasonPanelViewModel season)
+    {
+        if (step.Label == "Start extra feed")
+            return $"<input type=\"number\" id=\"se-build\" min=\"0\" value=\"{season.BuildUp}\" style=\"width:62px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;text-align:right;font-family:inherit;font-size:14px\"> days <b>before crossing</b>";
+        if (step.Label == "Stop milking")
+            return $"<input type=\"number\" id=\"se-drycross\" min=\"0\" value=\"{season.DryBeforeCross}\" style=\"width:62px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;text-align:right;font-family:inherit;font-size:14px\"> days <b>before crossing</b>";
+        if (step.Label == "Cross the does")
+            return $"<span class=\"breed\">{BreedingHelper.GestationDays} days <b>before birth</b> — a goat's pregnancy</span>";
+        if (step.Label == "Ultrasound scan")
+            return $"<input type=\"number\" id=\"se-scan\" min=\"0\" value=\"{season.ScanAfter}\" style=\"width:62px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;text-align:right;font-family:inherit;font-size:14px\"> days <b>after crossing</b>";
+        if (step.Label == "Dry off the milkers")
+            return $"<input type=\"number\" id=\"se-dry\" min=\"0\" value=\"{season.DryOff}\" style=\"width:62px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;text-align:right;font-family:inherit;font-size:14px\"> days <b>before birth</b>";
+        if (step.Label == "Birth window")
+        {
+            var b = season.Batches.FirstOrDefault(x => x.Id == season.SelectedBatchId) ?? season.Batches.First();
+            var kidY = DateTime.Today.Year;
+            var from = $"{kidY}-{b.From}";
+            var to = $"{kidY}-{b.To}";
+            return $"<b>you choose this</b> — <input type=\"date\" id=\"se-from\" value=\"{from}\" style=\"padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:14px\"> to <input type=\"date\" id=\"se-to\" value=\"{to}\" style=\"padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:14px\">";
+        }
+        if (step.Label == "Wean the kids")
+            return $"<input type=\"number\" id=\"se-wean\" min=\"0\" value=\"{season.WeanDays}\" style=\"width:62px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;text-align:right;font-family:inherit;font-size:14px\"> days <b>after birth</b>, or once they reach <input type=\"number\" id=\"se-weankg\" min=\"0\" step=\"0.1\" value=\"{season.WeanKg}\" style=\"width:58px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;text-align:right;font-family:inherit;font-size:14px\"> kg";
+        return step.RuleHtml;
+    }
+}
+
+<div class="panel">
+    <div class="panel-head"><h2>The farm's year</h2><span class="sub">both groups side by side</span></div>
+    <div class="panel-body"><table class="tbl"><thead><tr><th>Group</th><th class="num-cell">Does</th>
+        <th>Cross</th><th class="hide-sm">Scan</th><th class="hide-sm">Dry off</th>
+        <th>Births</th><th class="num-cell">Next job</th></tr></thead>
+        <tbody id="yearRows">
+        @foreach (var y in Model.YearRows)
+        {
+            <tr @(y.Highlight ? Html.Raw("style=\"background:var(--green-tint)\"") : null)>
+                <td><b>@y.Name</b></td>
+                <td class="num-cell">@y.DoeCount</td>
+                <td>@Html.Raw(y.CrossText)</td>
+                <td class="hide-sm"><span class="breed">@y.ScanText</span></td>
+                <td class="hide-sm"><span class="breed">@y.DryText</span></td>
+                <td>@Html.Raw(y.BirthText)</td>
+                <td class="num-cell" style="@y.NextJobStyle">@y.NextJobText</td>
+            </tr>
+        }
+        </tbody></table></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Does against the plan</h2><span class="sub">who is on track for the window</span></div>
+    <div class="panel-body"><table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Status</th>
+        <th class="hide-sm">Batch</th><th class="hide-sm">BCS</th><th>Where she stands</th></tr></thead>
+        <tbody id="planRows">
+        @foreach (var p in Model.PlanRows)
+        {
+            <tr>
+                <td><a href="#" class="tag" data-goatcard="@p.Id">@p.Tag</a></td>
+                <td class="hide-sm"><span class="chip @p.StatusCssClass">@p.StatusDisplay</span></td>
+                <td class="hide-sm">@Html.Raw(p.BatchHtml)</td>
+                <td class="hide-sm">@Html.Raw(p.BcsHtml)</td>
+                <td style="color:@p.StandColor;font-weight:600">@p.StandText</td>
+            </tr>
+        }
+        @if (!Model.PlanRows.Any()) {<tr><td colspan="5" class="empty">No does yet.</td></tr>}
+        </tbody></table></div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Breeding</h2>
+        <div class="filterbar">
+            <div class="field"><label class="hide-sm">Show</label>
+                <select id="brFilter">
+                    <option value="all">All in breeding</option>
+                    <option value="plan">0 · Next cross planned</option>
+                    <option value="prep">1 · Ready for cross</option>
+                    <option value="wait">2 · Waiting for scan</option>
+                    <option value="preg">3 · Confirmed pregnant</option>
+                    <option value="due30">Due within 30 days</option>
+                    <option value="scan">Scan due now</option>
+                </select></div>
+            <span class="count-pill" id="brCount">@Model.PipelineRows.Count doe(s)</span>
+        </div>
+    </div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr>
+            <th>Doe</th><th>Stage</th><th class="hide-sm">Mated</th><th class="hide-sm">Buck</th>
+            <th>Kids</th><th>Key date</th><th class="num-cell">Days</th>
+            <th style="width:150px">Change stage</th></tr></thead>
+            <tbody id="brRows">
+            @foreach (var r in Model.PipelineRows)
+            {
+                <tr data-br-stage="@r.StageKey" data-br-id="@r.Id" data-br-mated="@r.MatedDate" data-br-kids="@(r.KidsCount?.ToString() ?? "")">
+                    <td><a href="#" class="tag" data-goatcard="@r.Id">@r.Tag</a>
+                        @if (!string.IsNullOrEmpty(r.Name)) {<div class="name">@r.Name</div>}
+                        @if (!string.IsNullOrEmpty(r.Owner)) {<div class="name" style="color:var(--blue)">@r.Owner</div>}</td>
+                    <td><span class="chip @r.StageCssClass">@r.StageLabel</span></td>
+                    <td class="hide-sm"><span class="breed">@(r.MatedDate ?? "—")</span></td>
+                    <td class="hide-sm"><span class="breed">@(r.BuckTag ?? "—")</span></td>
+                    <td>@Html.Raw(r.KidsHtml)</td>
+                    <td>@Html.Raw(r.KeyDateHtml)</td>
+                    <td class="num-cell" style="@r.DaysStyle">@r.DaysText</td>
+                    <td><select data-bract="@r.Id" data-br-stage="@r.StageKey" style="font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;width:100%"></select></td>
+                </tr>
+            }
+            @if (!Model.PipelineRows.Any()) {<tr id="brEmpty"><td colspan="8" class="empty">No does in breeding. Add one below.</td></tr>}
+            </tbody></table>
+        <div class="rule" style="margin-top:12px"><b>Change stage</b> on any row to move her forward — each step asks
+            for the date it happened. A <b>not pregnant</b> scan returns her to Dry and counts against your conception rate.</div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Heat &amp; cycles</h2><span class="sub">a doe returns to heat about every 21 days</span></div>
+    <div class="panel-body">
+        <div class="note" style="margin:0 0 14px 0">Tap <b>♡ Seen today</b> the moment you notice a doe in heat —
+            that is the whole job. The app then expects her again in 21 days, which is when to put her to the buck.
+            A crossed doe seen in heat did not take: tapping it here catches that three weeks before a scan would.</div>
+        <div class="filterbar" style="margin-bottom:12px">
+            <div class="field"><label class="hide-sm">Show</label>
+                <select id="heatFilter">
+                    <option value="active">Does that can cycle</option>
+                    <option value="due">Expected in heat now</option>
+                    <option value="seen">Only ones I have recorded</option>
+                    <option value="all">Every doe</option>
+                </select></div>
+            <span class="count-pill" id="heatCount">@Model.HeatRows.Count doe(s)</span>
+        </div>
+        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Status</th><th>Last seen</th>
+            <th class="hide-sm">Next expected</th><th class="num-cell">In</th>
+            <th class="num-cell hide-sm">Times</th><th style="width:120px"></th></tr></thead>
+            <tbody id="heatRows">
+            @foreach (var h in Model.HeatRows)
+            {
+                var canCycle = !(h.CrossedNote is not null);
+                <tr data-heat-row data-can-cycle="@(canCycle ? "1" : "0")" data-times="@h.Times" data-in="@h.InText">
+                    <td><a href="#" class="tag" data-goatcard="@h.Id">@h.Tag</a></td>
+                    <td class="hide-sm"><span class="chip @h.StatusCssClass">@h.StatusDisplay</span>
+                        @if (h.CrossedNote is not null) {<div class="name" style="color:var(--blue)">@h.CrossedNote</div>}</td>
+                    <td>@Html.Raw(h.LastSeenHtml)</td>
+                    <td class="hide-sm"><span class="breed">@(h.NextExpected ?? "—")</span></td>
+                    <td class="num-cell" style="@h.InStyle">@h.InText</td>
+                    <td class="num-cell hide-sm"><span class="breed">@h.Times</span></td>
+                    <td><button type="button" class="btn btn-ghost btn-sm" data-heat="@h.Id" style="width:100%">♡ Seen today</button></td>
+                </tr>
+            }
+            </tbody></table>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Buck workload</h2><span class="sub">do not overwork one buck</span></div>
+    <div class="panel-body">
+        <table class="tbl"><thead><tr><th>Buck</th><th class="num-cell">Does carrying now</th>
+            <th class="num-cell hide-sm">Crosses this year</th><th class="num-cell">Conception</th>
+            <th class="hide-sm">Last used</th><th>Load</th></tr></thead>
+            <tbody id="buckRows">
+            @foreach (var b in Model.BuckRows)
+            {
+                <tr>
+                    <td><a href="#" class="tag" data-goatcard="@b.Id">@b.Tag</a></td>
+                    <td class="num-cell" style="font-weight:700">@b.Carrying</td>
+                    <td class="num-cell hide-sm">@b.CrossesThisYear</td>
+                    <td class="num-cell" style="@b.ConceptionStyle">@b.ConceptionText</td>
+                    <td class="hide-sm"><span class="breed">@(b.LastUsed ?? "—")</span></td>
+                    <td><span style="color:@b.LoadColor;font-weight:700">@b.LoadText</span></td>
+                </tr>
+            }
+            @if (!Model.BuckRows.Any()) {<tr><td colspan="6" class="empty">No bucks in the herd.</td></tr>}
+            </tbody></table>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Add a doe to breeding</h2><span class="sub">scan her tag, pick the stage</span></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:1.3fr 1.1fr 1fr 1fr auto">
+            <div class="field"><label for="bc-tag">Doe — scan or type tag</label><input autocomplete="off" id="bc-tag" placeholder="scan or type tag"/></div>
+            <div class="field"><label for="bc-stage">Stage</label><select id="bc-stage">
+                <option value="prep">Getting ready for cross</option>
+                <option value="cross">Already crossed</option></select></div>
+            <div class="field" id="bc-datefield" style="display:none"><label id="bc-datelbl">Mating date</label><input id="bc-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field" id="bc-buckfield" style="display:none"><label for="bc-buck">Buck</label><select id="bc-buck"><option value="">—</option>
+                @foreach (var bk in Model.BuckOptions) { <option value="@bk">@bk</option> }</select></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addCross">Add</button></div>
         </div>
         <div class="rule" id="bc-found" style="margin-top:8px"></div>
-        <div id="bc-check" class="cross-check" aria-live="polite"></div>
-
-        <div id="scanSection" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
-            <div class="rule" style="margin-bottom:8px"><b>Record an ultrasound / pregnancy check</b> — from about day @BreedingHelper.ScanAfterDays</div>
-            <div class="add-grid" style="grid-template-columns:1.3fr 1.2fr 1fr auto">
-                <div class="field"><label for="us-tag">Doe — scan or type tag</label><input id="us-tag" placeholder="scan or type tag" autocomplete="off"></div>
-                <div class="field"><label for="us-result">Result</label><select id="us-result">
-                    <option value="1">1 kid (single)</option>
-                    <option value="2">Twins (2)</option>
-                    <option value="3">Triplets (3)</option>
-                    <option value="4">4+ kids</option>
-                    <option value="0">Not pregnant (empty)</option></select></div>
-                <div class="field"><label for="us-date">Date</label><input type="date" id="us-date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-                <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addUs">Save</button></div>
-            </div>
-            <div class="rule" id="us-found" style="margin-top:8px"></div>
-        </div>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>3 · Confirmed pregnant — due dates</h2><span class="sub">estimated kidding timeline</span></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Mated</th><th class="hide-sm">Buck</th>
-            <th>Kids (scan)</th><th>Expected kidding</th><th class="hide-sm">Window</th><th class="num-cell">Due in</th><th style="width:190px"></th></tr></thead>
-            <tbody id="expRows">
-            @foreach (var row in Model.ExpectingRows)
-            {
-                <tr>
-                    <td><a href="#" class="tag" data-goatcard="@row.Id">@row.Tag</a>@if (!string.IsNullOrEmpty(row.Name)) {<div class="name">@row.Name</div>}</td>
-                    <td class="hide-sm"><span class="breed">@row.MatedDate</span></td>
-                    <td class="hide-sm"><span class="breed">@(row.BuckTag ?? "—")</span></td>
-                    <td>
-                        <b>@row.KidsDisplay</b>
-                        @if (!string.IsNullOrEmpty(row.UltrasoundDate)) {<div class="name">@row.UltrasoundDate</div>}
-                        @if (row.ExtraFeed) {<div class="name" style="color:var(--amber);font-weight:700">↑ extra feed (multiples)</div>}
-                    </td>
-                    <td><b>@row.ExpectedKidding</b></td>
-                    <td class="hide-sm"><span class="breed">@row.KiddingWindow</span></td>
-                    <td class="num-cell" style="font-weight:700;@row.DueColor">@row.DueText</td>
-                    <td>
-                        <button type="button" class="btn btn-green btn-sm" data-birth="@row.Tag" data-kids="@row.KidsCount">Record birth</button>
-                        <button type="button" class="btn btn-ghost btn-sm" data-abort="@row.Tag">Lost</button>
-                        <button type="button" class="del" data-uncross="@row.Id" aria-label="Remove pregnancy for @row.Tag">×</button>
-                    </td>
-                </tr>
-            }
-            @if (!Model.ExpectingRows.Any()) {<tr><td colspan="8" class="empty">No confirmed pregnancies yet.</td></tr>}
-            </tbody></table>
-    </div>
-</div>
-
-<div class="panel perm-hidden" id="birthPanel">
-    <div class="panel-head"><h2>4 · Record a birth</h2><span class="sub">kids are added to the herd with their dam and sire</span></div>
-    <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:1.3fr 1fr 1fr 1fr 1fr">
-            <div class="field"><label for="kb-doe">Doe tag</label><input id="kb-doe" autocomplete="off"></div>
-            <div class="field"><label for="kb-date">Birth date</label><input type="date" id="kb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label for="kb-live">Live kids</label><select id="kb-live">
-                @for (var i = 0; i <= BreedingHelper.MaxKidsPerBirth; i++) { <option value="@i" @(i == 1 ? "selected" : null)>@i</option> }</select></div>
-            <div class="field"><label for="kb-still">Stillborn</label><input type="number" id="kb-still" min="0" max="@BreedingHelper.MaxKidsPerBirth" value="0"></div>
-            <div class="field"><label for="kb-ease">Birth</label><select id="kb-ease">
-                <option value="Normal">Normal</option><option value="Assisted">Assisted</option><option value="Difficult">Difficult</option></select></div>
-        </div>
-        <table class="tbl" style="margin-top:12px"><thead><tr><th>#</th><th>Gender</th><th>Tag (blank = temporary)</th><th>Name</th><th class="num-cell">Birth weight kg</th></tr></thead>
-            <tbody id="kb-kids"></tbody></table>
-        <div class="field" style="margin-top:10px"><label for="kb-notes">Notes</label><input id="kb-notes" maxlength="1000" placeholder="optional"></div>
-        <div class="goat-form-actions" style="margin-top:12px">
-            <button type="button" class="btn btn-green" id="kb-save">Save birth</button>
-            <button type="button" class="btn btn-ghost" id="kb-cancel">Cancel</button>
-        </div>
     </div>
 </div>
 
@@ -201,6 +336,29 @@
     </div>
 </div>
 
+<div class="panel perm-hidden" id="birthPanel">
+    <div class="panel-head"><h2>Record a birth</h2><span class="sub">kids are added to the herd with their dam and sire</span></div>
+    <div class="panel-body">
+        <div class="add-grid" style="grid-template-columns:1.3fr 1fr 1fr 1fr 1fr">
+            <div class="field"><label for="kb-doe">Doe tag</label><input id="kb-doe" autocomplete="off"></div>
+            <div class="field"><label for="kb-date">Birth date</label><input type="date" id="kb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+            <div class="field"><label for="kb-live">Live kids</label><select id="kb-live">
+                @for (var i = 0; i <= BreedingHelper.MaxKidsPerBirth; i++) { <option value="@i" @(i == 1 ? "selected" : null)>@i</option> }</select></div>
+            <div class="field"><label for="kb-still">Stillborn</label><input type="number" id="kb-still" min="0" max="@BreedingHelper.MaxKidsPerBirth" value="0"></div>
+            <div class="field"><label for="kb-ease">Birth</label><select id="kb-ease">
+                <option value="Normal">Normal</option><option value="Assisted">Assisted</option><option value="Difficult">Difficult</option></select></div>
+        </div>
+        <table class="tbl" style="margin-top:12px"><thead><tr><th>#</th><th>Gender</th><th>Tag (blank = temporary)</th><th>Name</th><th class="num-cell">Birth weight kg</th></tr></thead>
+            <tbody id="kb-kids"></tbody></table>
+        <div class="field" style="margin-top:10px"><label for="kb-notes">Notes</label><input id="kb-notes" maxlength="1000" placeholder="optional"></div>
+        <div class="goat-form-actions" style="margin-top:12px">
+            <button type="button" class="btn btn-green" id="kb-save">Save birth</button>
+            <button type="button" class="btn btn-ghost" id="kb-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
+<script src="~/js/breeding-page.js" asp-append-version="true"></script>
 <script>GoatRecords.initBreeding();</script>
 }

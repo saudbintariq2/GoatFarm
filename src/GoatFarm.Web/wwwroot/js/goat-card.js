@@ -448,13 +448,14 @@
   }
 
   /** @returns {Promise<boolean>} true when a scan was saved */
-  async function performScanForGoat(g, { afterSuccess } = {}) {
+  async function performScanForGoat(g, options = {}) {
+    const { afterSuccess, allowRescan } = options;
     const mated = g.matedDate || g.matedDateDisplay;
     if (!mated) {
       toast(g.tag + ' has no mating recorded. Record her cross first.', 'error');
       return false;
     }
-    if (g.kidsCount > 0) {
+    if (g.kidsCount > 0 && !allowRescan) {
       toast(g.tag + ' already has a confirmed scan. Use Record birth when she kids.', 'error');
       return false;
     }
@@ -478,13 +479,216 @@
         body: JSON.stringify({ tag: g.tag, kidsCount, date: when })
       });
     } catch { return false; }
-    if (kidsCount === 0) {
-      toast(g.tag + ' — not pregnant, moved back to Dry');
-    } else {
-      toast(g.tag + ' — ' + kidsScanLabel(kidsCount) + ', due ~' + addDaysIso(mated, GESTATION_DAYS));
-    }
+    const msg = kidsCount === 0
+      ? g.tag + ' — not pregnant, moved back to Dry'
+      : g.tag + ' — ' + kidsScanLabel(kidsCount) + ', due ~' + addDaysIso(mated, GESTATION_DAYS);
+    if (afterSuccess) sessionStorage.setItem('goatToast', msg);
+    else toast(msg);
     if (afterSuccess) await afterSuccess();
     return true;
+  }
+
+  async function performCrossForGoat(g, id, { suppressToast } = {}) {
+    const bucks = await api('/Goat/ParentOptions');
+    const opts = bucks.sires || [];
+    const buckVal = g.buckTag && opts.includes(g.buckTag) ? g.buckTag : '— none —';
+    const r = await ask('Record cross — ' + g.tag, [
+      { key: 'date', label: 'Mating date', type: 'date', value: today() },
+      {
+        key: 'buck',
+        label: 'Buck  (⚠ = related to this doe)',
+        type: 'select',
+        options: ['— none —'].concat(opts),
+        value: buckVal
+      }
+    ]);
+    if (!r?.date) return false;
+    const buckTag = r.buck && r.buck !== '— none —' ? r.buck : null;
+    let confirmWarnings = false;
+    const params = new URLSearchParams({ tag: g.tag, date: r.date });
+    if (buckTag) params.set('buckTag', buckTag);
+    const check = await api('/Breeding/CheckCross?' + params.toString()).catch(() => null);
+    if (check?.errors?.length) {
+      toast(check.errors.join(' '), 'error');
+      return false;
+    }
+    if (check?.warnings?.length) {
+      if (!await confirmDlg(check.warnings.join('\n\n') + '\n\nContinue anyway?')) return false;
+      confirmWarnings = true;
+    }
+    try {
+      await api('/Breeding/StageAction', {
+        method: 'POST',
+        body: JSON.stringify({ goatId: id, action: 'cross', date: r.date, buckTag, confirmWarnings })
+      });
+    } catch { return false; }
+    if (!suppressToast) toast('Cross recorded — waiting for scan');
+    return true;
+  }
+
+  async function performBirthForGoat(g) {
+    cardState.birthRequestId = uuid();
+    const bucks = await api('/Goat/ParentOptions');
+    const sOpts = bucks.sires || [];
+    const scanNote = g.kidsCount ? '  (scan said ' + kidsScanLabel(g.kidsCount) + ')' : '';
+    const sireDefault = g.buckTag && sOpts.includes(g.buckTag) ? g.buckTag : '— none —';
+    const r = await ask('Record birth — ' + g.tag + scanNote, [
+      { key: 'date', label: 'Date she gave birth', type: 'date', value: today() },
+      {
+        key: 'sire',
+        label: 'Sire (buck)' + (g.buckTag ? ' — from her cross' : ''),
+        type: 'select',
+        options: ['— none —'].concat(sOpts),
+        value: sireDefault
+      },
+      { key: 'fem', label: 'Female kids born alive', type: 'number', placeholder: '0' },
+      { key: 'male', label: 'Male kids born alive', type: 'number', placeholder: '0' },
+      { key: 'still', label: 'Stillborn (if any)', type: 'number', placeholder: '0' },
+      {
+        key: 'ease',
+        label: 'How was the birth?',
+        type: 'select',
+        options: ['Normal', 'Assisted', 'Difficult / vet needed'],
+        value: 'Normal'
+      },
+      { key: 'note', label: 'Note (optional)', type: 'text', placeholder: 'e.g. large single kid' }
+    ]);
+    if (!r?.date) return false;
+    const fem = Math.max(0, Math.floor(+r.fem || 0));
+    const male = Math.max(0, Math.floor(+r.male || 0));
+    const still = Math.max(0, Math.floor(+r.still || 0));
+    if (fem + male + still === 0) {
+      toast('Enter how many kids were born.', 'error');
+      return false;
+    }
+    if (fem + male > 8) {
+      toast('That is more kids than one doe can carry — please check the numbers.', 'error');
+      return false;
+    }
+    const kids = [];
+    for (let i = 0; i < fem; i++) kids.push({ gender: 'Female' });
+    for (let i = 0; i < male; i++) kids.push({ gender: 'Male' });
+    const easeMap = { Normal: 'Normal', Assisted: 'Assisted', 'Difficult / vet needed': 'Difficult' };
+    try {
+      await api('/Breeding/RecordBirth', {
+        method: 'POST',
+        body: JSON.stringify({
+          clientRequestId: cardState.birthRequestId,
+          doeTag: g.tag,
+          kiddingDate: r.date,
+          ease: easeMap[r.ease] || 'Normal',
+          stillborn: still,
+          notes: (r.note || '').trim() || null,
+          kids
+        })
+      });
+    } catch { return false; }
+    toast('Birth recorded');
+    return true;
+  }
+
+  /** Breeding tab — Change stage dropdown (same ask modals as index_new.html). */
+  async function runBreedingStageAction(id, action, stageKey, { afterSuccess } = {}) {
+    let g;
+    try {
+      const profile = await api('/Goat/Card?id=' + encodeURIComponent(id));
+      g = profile.goat;
+    } catch { return false; }
+
+    const finish = async msg => {
+      if (msg) sessionStorage.setItem('goatToast', msg);
+      if (afterSuccess) await afterSuccess();
+      else location.reload();
+    };
+
+    switch (action) {
+      case 'prep2':
+        try {
+          await api('/Breeding/StageAction', { method: 'POST', body: JSON.stringify({ goatId: id, action: 'prep2' }) });
+        } catch { return false; }
+        return finish('Marked ready for cross');
+      case 'notcross':
+        if (!await confirmDlg('Take ' + g.tag + ' off the ready-to-cross list? She stays in the herd.')) return false;
+        try {
+          await api('/Breeding/StageAction', { method: 'POST', body: JSON.stringify({ goatId: id, action: 'notcross' }) });
+        } catch { return false; }
+        return finish('Removed from ready list');
+      case 'replan': {
+        const r = await ask('Plan next cross — ' + g.tag, [
+          { key: 'date', label: 'Cross her again on', type: 'date', value: g.nextCrossDate || today() },
+          {
+            key: 'clear',
+            label: 'Keep this plan?',
+            type: 'select',
+            options: ['Yes, save it', 'No, remove the plan'],
+            value: 'Yes, save it'
+          }
+        ]);
+        if (!r) return false;
+        if (String(r.clear).startsWith('No')) {
+          try {
+            await api('/Breeding/StageAction', { method: 'POST', body: JSON.stringify({ goatId: id, action: 'mistake' }) });
+          } catch { return false; }
+          return finish('Plan removed');
+        }
+        if (!r.date) return false;
+        try {
+          await api('/Breeding/StageAction', { method: 'POST', body: JSON.stringify({ goatId: id, action: 'replan', date: r.date }) });
+        } catch { return false; }
+        await modal(
+          'Plan for ' + g.tag + ':\n\n♥ Cross her on ' + r.date +
+          '\n🍼 She would kid around ' + addDaysIso(r.date, GESTATION_DAYS)
+        );
+        return finish('Cross plan saved');
+      }
+      case 'cross':
+        if (!await performCrossForGoat(g, id, { suppressToast: !!afterSuccess })) return false;
+        return finish('Cross recorded — waiting for scan');
+      case 'scan':
+        if (!await performScanForGoat(g, { afterSuccess: () => finish(null) })) return false;
+        return true;
+      case 'rescan':
+        if (!await performScanForGoat(g, { allowRescan: true, afterSuccess: () => finish(null) })) return false;
+        return true;
+      case 'kidded':
+        if (!await performBirthForGoat(g)) return false;
+        return finish('Birth recorded');
+      case 'abort': {
+        const r = await ask('Aborted / lost pregnancy — ' + g.tag, [
+          { key: 'date', label: 'When', type: 'date', value: today() },
+          { key: 'reason', label: 'Reason if known', type: 'text', placeholder: 'unknown, injury, illness…' }
+        ]);
+        if (!r?.date) return false;
+        try {
+          await api('/Breeding/StageAction', {
+            method: 'POST',
+            body: JSON.stringify({
+              goatId: id,
+              action: 'abort',
+              date: r.date,
+              notes: (r.reason || '').trim() || null
+            })
+          });
+        } catch { return false; }
+        return finish('Pregnancy loss recorded');
+      }
+      case 'mistake':
+        if (stageKey === 'plan') {
+          try {
+            await api('/Breeding/StageAction', { method: 'POST', body: JSON.stringify({ goatId: id, action: 'mistake' }) });
+          } catch { return false; }
+          return finish('Plan removed');
+        }
+        if (!await confirmDlg(
+          'Clear the breeding record for ' + g.tag + '?\n\nUse this ONLY if it was entered wrongly — it leaves no trace.\nIf she actually lost the pregnancy, choose "Aborted / lost it" instead so it counts in your records.'
+        )) return false;
+        try {
+          await api('/Breeding/StageAction', { method: 'POST', body: JSON.stringify({ goatId: id, action: 'mistake' }) });
+        } catch { return false; }
+        return finish('Record cleared');
+      default:
+        return false;
+    }
   }
 
   async function runScanFromHerd({ id, tag }) {
@@ -673,60 +877,16 @@
       return runRefresh();
     }
     if (act === 'cross') {
-      const bucks = await api('/Goat/ParentOptions');
-      const opts = ['— none —'].concat(bucks.sires || []);
-      const r = await ask('Record cross — ' + g.tag, [
-        { key: 'date', label: 'Mating date', type: 'date', value: today() },
-        { key: 'buck', label: 'Buck', type: 'select', options: opts }
-      ]);
-      if (!r?.date) return;
-      const buck = r.buck && r.buck !== '— none —' ? r.buck : null;
-      await api('/Goat/BulkMove', {
-        method: 'POST',
-        body: JSON.stringify({ goatIds: [id], moveTarget: 'br:cross', matedDate: r.date, buckTag: buck })
-      });
-      toast('Cross recorded');
-      return runRefresh();
+      if (await performCrossForGoat(g, id)) return runRefresh();
+      return;
     }
     if (act === 'scan') {
       await performScanForGoat(g, { afterSuccess: runRefresh });
       return;
     }
     if (act === 'kid') {
-      cardState.birthRequestId = uuid();
-      const bucks = await api('/Goat/ParentOptions');
-      const sOpts = (bucks.sires || []);
-      const r = await ask('Record birth — ' + g.tag + (g.kidsCount ? ' (scan said ' + g.kidsCount + ')' : ''), [
-        { key: 'date', label: 'Date she gave birth', type: 'date', value: today() },
-        { key: 'sire', label: 'Sire (buck)', type: 'select', options: ['— none —'].concat(sOpts), value: g.buckTag || '— none —' },
-        { key: 'fem', label: 'Female kids alive', type: 'number', placeholder: '0' },
-        { key: 'male', label: 'Male kids alive', type: 'number', placeholder: '0' },
-        { key: 'still', label: 'Stillborn', type: 'number', placeholder: '0' },
-        { key: 'ease', label: 'Birth ease', type: 'select', options: ['Normal', 'Assisted', 'Difficult / vet needed'] },
-        { key: 'note', label: 'Note', type: 'text' }
-      ]);
-      if (!r?.date) return;
-      const fem = Math.max(0, Math.floor(+r.fem || 0));
-      const male = Math.max(0, Math.floor(+r.male || 0));
-      const still = Math.max(0, Math.floor(+r.still || 0));
-      const kids = [];
-      for (let i = 0; i < fem; i++) kids.push({ gender: 'Female' });
-      for (let i = 0; i < male; i++) kids.push({ gender: 'Male' });
-      const easeMap = { Normal: 'Normal', Assisted: 'Assisted', 'Difficult / vet needed': 'Difficult' };
-      await api('/Breeding/RecordBirth', {
-        method: 'POST',
-        body: JSON.stringify({
-          clientRequestId: cardState.birthRequestId,
-          doeTag: g.tag,
-          kiddingDate: r.date,
-          ease: easeMap[r.ease] || 'Normal',
-          stillborn: still,
-          notes: r.note || null,
-          kids
-        })
-      });
-      toast('Birth recorded');
-      return runRefresh();
+      if (await performBirthForGoat(g)) return runRefresh();
+      return;
     }
     if (act === 'heat') {
       const r = await ask('Seen in heat — ' + g.tag, [
@@ -923,6 +1083,7 @@
     open: openGoatCard,
     refresh: refreshCard,
     runAction,
+    runBreedingStageAction,
     runScanFromHerd,
     promptWeanFromHerd,
     promptWeanBulk,

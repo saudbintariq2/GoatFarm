@@ -7,4 +7,6 @@ public static class AppSettingKeys
     public const string FodderPool = "FodderPool";
     public const string FeedSettings = "FeedSettings";
     public const string RemindDays = "RemindDays";
+    public const string BreedingSeason = "BreedingSeason";
+    public const string BreedingGroups = "BreedingGroups";
 }

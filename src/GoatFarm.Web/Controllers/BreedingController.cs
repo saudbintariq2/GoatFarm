@@ -17,15 +17,15 @@ public class BreedingController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(string? batch, CancellationToken cancellationToken)
     {
         ViewData["ActiveTab"] = "breeding";
-        return View(await _breedingService.GetBreedingPageAsync(cancellationToken));
+        return View(await _breedingService.GetBreedingPageAsync(batch, cancellationToken));
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetData(CancellationToken cancellationToken) =>
-        Json(await _breedingService.GetBreedingPageAsync(cancellationToken));
+    public async Task<IActionResult> GetData(string? batch, CancellationToken cancellationToken) =>
+        Json(await _breedingService.GetBreedingPageAsync(batch, cancellationToken));
 
     [HttpGet]
     public async Task<IActionResult> LookupTag(string tag, CancellationToken cancellationToken)
@@ -115,6 +115,47 @@ public class BreedingController : Controller
     {
         await _breedingService.RemoveCrossAsync(id, cancellationToken);
         return Ok(new { success = true });
+    }
+
+    [HttpPost]
+    public Task<IActionResult> UpdateSeason([FromBody] UpdateBreedingSeasonViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.UpdateSeasonAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> AddDoe([FromBody] BreedingAddDoeViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.AddDoeToPipelineAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> StageAction([FromBody] BreedingStageActionViewModel model, CancellationToken cancellationToken) =>
+        RunStage(() => _breedingService.ApplyStageActionAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> ClearMistake(int id, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.ClearBreedingMistakeAsync(id, cancellationToken));
+
+    [HttpGet]
+    public async Task<IActionResult> Groups(CancellationToken cancellationToken) =>
+        Json(await _breedingService.GetBreedingGroupsAsync(cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> CreateGroup([FromBody] CreateBreedingGroupViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.CreateBreedingGroupAsync(model, cancellationToken));
+
+    private async Task<IActionResult> RunStage(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            return Ok(new { success = true });
+        }
+        catch (ConfirmationRequiredException ex)
+        {
+            return ConfirmationRequired(ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     private async Task<IActionResult> Run(Func<Task> action)

@@ -1731,6 +1731,33 @@ body.farm-pro.ai-open { overflow: hidden; }
   body.farm-pro .ai-panel { width: 100vw; }
 }
 
+body.farm-pro #bgPanel .v206-bg-list {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 8px;
+  background: #FCFDFB;
+}
+body.farm-pro #bgPanel .v206-bg-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+body.farm-pro #bgPanel .v206-bg-list label:last-child { border-bottom: none; }
+body.farm-pro #bgPanel .v206-bg-list input { width: 18px; height: 18px; accent-color: var(--green); }
+body.farm-pro .v206-bg-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+
 @media print {
   body.farm-pro .ai-panel,
   body.farm-pro .ai-scrim {
