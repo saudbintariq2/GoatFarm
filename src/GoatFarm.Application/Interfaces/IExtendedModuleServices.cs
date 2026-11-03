@@ -46,7 +46,11 @@ public interface IProjectsService
     Task<object> SaveProjectAsync(SaveProjectViewModel model, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectAsync(int id, CancellationToken cancellationToken = default);
     Task<object> SaveExpenditureAsync(SaveProjectExpenditureViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteExpenditureAsync(int id, CancellationToken cancellationToken = default);
+    Task<object> PayExpenditureAsync(PayProjectExpenditureViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveFixedAssetAsync(SaveFixedAssetViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteFixedAssetAsync(int id, CancellationToken cancellationToken = default);
+    Task<object> CapitalizeProjectAsync(CapitalizeProjectViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveSolarLogAsync(SaveSolarLogViewModel model, CancellationToken cancellationToken = default);
 }
 

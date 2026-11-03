@@ -109,10 +109,14 @@ public class FarmProject : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+    public string? Category { get; set; }
+    public string? Funding { get; set; }
     public ProjectStatus Status { get; set; } = ProjectStatus.Planned;
     public DateOnly? StartDate { get; set; }
     public DateOnly? TargetEndDate { get; set; }
     public decimal BudgetAmount { get; set; }
+    public DateOnly? CapitalizedAt { get; set; }
+    public int? CapitalizedAssetId { get; set; }
 }
 
 public class ProjectExpenditure : BaseEntity
@@ -121,27 +125,53 @@ public class ProjectExpenditure : BaseEntity
     public FarmProject Project { get; set; } = null!;
     public DateOnly Date { get; set; }
     public string Description { get; set; } = string.Empty;
+    public string? CostType { get; set; }
+    public string? Item { get; set; }
+    public decimal Qty { get; set; }
+    public string? Unit { get; set; }
+    public string? Model { get; set; }
+    public string? Spec { get; set; }
+    public DateOnly? WarrantyUntil { get; set; }
     public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public string PaymentStatus { get; set; } = "Paid";
+    public int? AccountId { get; set; }
+    public MoneyAccount? Account { get; set; }
+    public string? FundingSource { get; set; }
+    public DateOnly? DueDate { get; set; }
     public string? Vendor { get; set; }
+    public string? Note { get; set; }
 }
 
 public class FixedAssetRegister : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
     public FixedAssetCategory Category { get; set; }
+    public string? CategoryName { get; set; }
     public decimal Cost { get; set; }
     public DateOnly? PurchaseDate { get; set; }
     public int? ProjectId { get; set; }
     public FarmProject? Project { get; set; }
+    public bool ProjectCapitalized { get; set; }
+    public string? Location { get; set; }
+    public string? Supplier { get; set; }
+    public decimal PaidAmount { get; set; }
+    public int? AccountId { get; set; }
+    public MoneyAccount? Account { get; set; }
+    public DateOnly? WarrantyUntil { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
 public class SolarProductionLog : BaseEntity
 {
+    public int? ProjectId { get; set; }
+    public FarmProject? Project { get; set; }
     public DateOnly Date { get; set; }
     public decimal KwhGenerated { get; set; }
     public decimal? SavingsEstimate { get; set; }
+    public decimal MaintenanceAmount { get; set; }
+    public decimal? InstalledCapacityKw { get; set; }
     public string? Notes { get; set; }
 }
 

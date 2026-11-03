@@ -171,17 +171,36 @@ public class ProjectsPageViewModel
     public IReadOnlyList<ProjectExpenditureRowViewModel> Expenditures { get; set; } = [];
     public IReadOnlyList<FixedAssetRowViewModel> FixedAssets { get; set; } = [];
     public IReadOnlyList<SolarLogRowViewModel> SolarLogs { get; set; } = [];
+    public IReadOnlyList<ProjectAccountOptionViewModel> Accounts { get; set; } = [];
+    public IReadOnlyList<string> ProjectCategories { get; set; } = [];
+    public IReadOnlyList<string> CostTypes { get; set; } = [];
+    public IReadOnlyList<string> AssetCategories { get; set; } = [];
+    public IReadOnlyList<string> FundingSources { get; set; } = [];
+    public decimal TotalBudget { get; set; }
+    public decimal TotalSpent { get; set; }
+    public decimal TotalCip { get; set; }
     public decimal TotalCapex { get; set; }
     public decimal ActiveBudget { get; set; }
+}
+
+public class ProjectAccountOptionViewModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
 }
 
 public class ProjectRowViewModel
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
+    public string? Note { get; set; }
+    public string Category { get; set; } = "";
     public string Status { get; set; } = "";
+    public string Funding { get; set; } = "";
     public decimal BudgetAmount { get; set; }
     public decimal Spent { get; set; }
+    public decimal Cip { get; set; }
+    public decimal Remaining { get; set; }
     public string? StartDate { get; set; }
 }
 
@@ -191,8 +210,24 @@ public class ProjectExpenditureRowViewModel
     public int ProjectId { get; set; }
     public string ProjectName { get; set; } = "";
     public string DateDisplay { get; set; } = "";
+    public string CostType { get; set; } = "";
     public string Description { get; set; } = "";
+    public string? Item { get; set; }
+    public string? Model { get; set; }
+    public decimal Qty { get; set; }
+    public string? Unit { get; set; }
+    public string? Spec { get; set; }
+    public string? Warranty { get; set; }
+    public string? Supplier { get; set; }
+    public string? FundingSource { get; set; }
+    public string PaymentStatus { get; set; } = "";
+    public string? AccountName { get; set; }
+    public int? AccountId { get; set; }
+    public string? DueDate { get; set; }
+    public string? Note { get; set; }
     public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal Payable { get; set; }
 }
 
 public class FixedAssetRowViewModel
@@ -202,15 +237,26 @@ public class FixedAssetRowViewModel
     public string Category { get; set; } = "";
     public decimal Cost { get; set; }
     public string? PurchaseDate { get; set; }
+    public int? ProjectId { get; set; }
     public string? ProjectName { get; set; }
+    public string? Location { get; set; }
+    public string? Supplier { get; set; }
+    public bool ProjectCapitalized { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal Due { get; set; }
 }
 
 public class SolarLogRowViewModel
 {
     public int Id { get; set; }
+    public int? ProjectId { get; set; }
+    public string ProjectName { get; set; } = "";
     public string DateDisplay { get; set; } = "";
     public decimal KwhGenerated { get; set; }
     public decimal? SavingsEstimate { get; set; }
+    public decimal MaintenanceAmount { get; set; }
+    public decimal? InstalledCapacityKw { get; set; }
+    public string? Notes { get; set; }
 }
 
 public class SaveProjectViewModel
@@ -218,7 +264,9 @@ public class SaveProjectViewModel
     public int? Id { get; set; }
     [Required] public string Name { get; set; } = "";
     public string? Description { get; set; }
-    public ProjectStatus Status { get; set; } = ProjectStatus.Active;
+    public string? Category { get; set; }
+    public string? Funding { get; set; }
+    public string? Status { get; set; }
     public DateOnly? StartDate { get; set; }
     public DateOnly? TargetEndDate { get; set; }
     public decimal BudgetAmount { get; set; }
@@ -229,29 +277,64 @@ public class SaveProjectExpenditureViewModel
     public int? Id { get; set; }
     public int ProjectId { get; set; }
     public DateOnly Date { get; set; }
-    [Required] public string Description { get; set; } = "";
+    public string? CostType { get; set; }
+    public string? Description { get; set; }
+    public string? Item { get; set; }
+    public decimal Qty { get; set; }
+    public string? Unit { get; set; }
+    public string? Model { get; set; }
+    public string? Spec { get; set; }
+    public DateOnly? WarrantyUntil { get; set; }
     public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public string? PaymentStatus { get; set; }
+    public int? AccountId { get; set; }
+    public string? FundingSource { get; set; }
+    public DateOnly? DueDate { get; set; }
     public string? Vendor { get; set; }
+    public string? Note { get; set; }
 }
 
 public class SaveFixedAssetViewModel
 {
     public int? Id { get; set; }
     [Required] public string Name { get; set; } = "";
-    public FixedAssetCategory Category { get; set; }
+    public string? Category { get; set; }
     public decimal Cost { get; set; }
     public DateOnly? PurchaseDate { get; set; }
     public int? ProjectId { get; set; }
+    public string? Location { get; set; }
+    public string? Supplier { get; set; }
+    public decimal PaidAmount { get; set; }
+    public int? AccountId { get; set; }
+    public DateOnly? WarrantyUntil { get; set; }
     public string? Notes { get; set; }
 }
 
 public class SaveSolarLogViewModel
 {
     public int? Id { get; set; }
+    public int? ProjectId { get; set; }
     public DateOnly Date { get; set; }
     public decimal KwhGenerated { get; set; }
     public decimal? SavingsEstimate { get; set; }
+    public decimal MaintenanceAmount { get; set; }
+    public decimal? InstalledCapacityKw { get; set; }
     public string? Notes { get; set; }
+}
+
+public class PayProjectExpenditureViewModel
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+    public int AccountId { get; set; }
+}
+
+public class CapitalizeProjectViewModel
+{
+    public int ProjectId { get; set; }
+    [Required] public string AssetName { get; set; } = "";
+    public DateOnly? InServiceDate { get; set; }
 }
 
 }

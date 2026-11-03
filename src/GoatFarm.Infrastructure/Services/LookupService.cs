@@ -22,7 +22,11 @@ public class LookupService : ILookupService
             [LookupSettingKeys.Owners] = LookupConstants.Owners,
             [LookupSettingKeys.HealthStates] = LookupConstants.HealthStates,
             [LookupSettingKeys.SaleTypes] = LookupConstants.SaleTypes,
-            [LookupSettingKeys.FundingShareholders] = LookupConstants.FundingShareholders
+            [LookupSettingKeys.FundingShareholders] = LookupConstants.FundingShareholders,
+            [LookupSettingKeys.ProjectCategories] = LookupConstants.ProjectCategories,
+            [LookupSettingKeys.CapexCostTypes] = LookupConstants.CapexCostTypes,
+            [LookupSettingKeys.ProjectAssetCategories] = LookupConstants.ProjectAssetCategories,
+            [LookupSettingKeys.ProjectFundingSources] = LookupConstants.ProjectFundingSources
         };
 
     private readonly GoatFarmDbContext _context;
@@ -44,6 +48,10 @@ public class LookupService : ILookupService
         }
 
         await MergeMissingLookupOptionsAsync(LookupSettingKeys.HealthStates, LookupConstants.HealthStates, cancellationToken);
+        await MergeMissingLookupOptionsAsync(LookupSettingKeys.ProjectCategories, LookupConstants.ProjectCategories, cancellationToken);
+        await MergeMissingLookupOptionsAsync(LookupSettingKeys.CapexCostTypes, LookupConstants.CapexCostTypes, cancellationToken);
+        await MergeMissingLookupOptionsAsync(LookupSettingKeys.ProjectAssetCategories, LookupConstants.ProjectAssetCategories, cancellationToken);
+        await MergeMissingLookupOptionsAsync(LookupSettingKeys.ProjectFundingSources, LookupConstants.ProjectFundingSources, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
     }
 

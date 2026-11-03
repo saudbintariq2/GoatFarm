@@ -117,14 +117,70 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
     }
 }
 
+public class FarmProjectConfiguration : IEntityTypeConfiguration<FarmProject>
+{
+    public void Configure(EntityTypeBuilder<FarmProject> builder)
+    {
+        builder.ToTable("FarmProjects");
+        builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.Category).HasMaxLength(80);
+        builder.Property(x => x.Funding).HasMaxLength(80);
+        builder.Property(x => x.BudgetAmount).HasPrecision(18, 2);
+    }
+}
+
+public class ProjectExpenditureConfiguration : IEntityTypeConfiguration<ProjectExpenditure>
+{
+    public void Configure(EntityTypeBuilder<ProjectExpenditure> builder)
+    {
+        builder.ToTable("ProjectExpenditures");
+        builder.Property(x => x.Description).HasMaxLength(300).IsRequired();
+        builder.Property(x => x.CostType).HasMaxLength(120);
+        builder.Property(x => x.Item).HasMaxLength(200);
+        builder.Property(x => x.Unit).HasMaxLength(40);
+        builder.Property(x => x.Model).HasMaxLength(200);
+        builder.Property(x => x.Spec).HasMaxLength(300);
+        builder.Property(x => x.PaymentStatus).HasMaxLength(20).HasDefaultValue("Paid");
+        builder.Property(x => x.FundingSource).HasMaxLength(80);
+        builder.Property(x => x.Vendor).HasMaxLength(200);
+        builder.Property(x => x.Note).HasMaxLength(500);
+        builder.Property(x => x.Qty).HasPrecision(18, 3);
+        builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
+        builder.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.Date);
+    }
+}
+
 public class FixedAssetRegisterConfiguration : IEntityTypeConfiguration<FixedAssetRegister>
 {
     public void Configure(EntityTypeBuilder<FixedAssetRegister> builder)
     {
         builder.ToTable("FixedAssetRegisters");
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.CategoryName).HasMaxLength(80);
         builder.Property(x => x.Cost).HasPrecision(18, 2);
+        builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
+        builder.Property(x => x.Location).HasMaxLength(200);
+        builder.Property(x => x.Supplier).HasMaxLength(200);
         builder.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class SolarProductionLogConfiguration : IEntityTypeConfiguration<SolarProductionLog>
+{
+    public void Configure(EntityTypeBuilder<SolarProductionLog> builder)
+    {
+        builder.ToTable("SolarProductionLogs");
+        builder.Property(x => x.KwhGenerated).HasPrecision(18, 3);
+        builder.Property(x => x.SavingsEstimate).HasPrecision(18, 2);
+        builder.Property(x => x.MaintenanceAmount).HasPrecision(18, 2);
+        builder.Property(x => x.InstalledCapacityKw).HasPrecision(18, 3);
+        builder.Property(x => x.Notes).HasMaxLength(500);
+        builder.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.Date);
     }
 }
 

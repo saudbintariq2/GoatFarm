@@ -41,9 +41,16 @@ public class ProjectsController : Controller
     public async Task<IActionResult> SaveProject([FromBody] SaveProjectViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        var result = await _projects.SaveProjectAsync(model, cancellationToken);
-        await _audit.LogAsync(FarmTabs.Projects, AuditAction.Update, $"Project {model.Name}", UserId, UserDisplay, cancellationToken: cancellationToken);
-        return Json(result);
+        try
+        {
+            var result = await _projects.SaveProjectAsync(model, cancellationToken);
+            await _audit.LogAsync(FarmTabs.Projects, AuditAction.Update, $"Project {model.Name}", UserId, UserDisplay, cancellationToken: cancellationToken);
+            return Json(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpDelete]
@@ -60,20 +67,94 @@ public class ProjectsController : Controller
     public async Task<IActionResult> SaveExpenditure([FromBody] SaveProjectExpenditureViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _projects.SaveExpenditureAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _projects.SaveExpenditureAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteExpenditure(int id, CancellationToken cancellationToken)
+    {
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Projects, "ProjectExpenditure", id, cancellationToken);
+        if (pending is not null) return pending;
+        var ok = await _projects.DeleteExpenditureAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> PayExpenditure([FromBody] PayProjectExpenditureViewModel model, CancellationToken cancellationToken)
+    {
+        var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Projects, "ProjectExpenditure", model.Id, model, cancellationToken);
+        if (pending is not null) return pending;
+        try
+        {
+            return Json(await _projects.PayExpenditureAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]
     public async Task<IActionResult> SaveFixedAsset([FromBody] SaveFixedAssetViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _projects.SaveFixedAssetAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _projects.SaveFixedAssetAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteFixedAsset(int id, CancellationToken cancellationToken)
+    {
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Projects, "FixedAssetRegister", id, cancellationToken);
+        if (pending is not null) return pending;
+        var ok = await _projects.DeleteFixedAssetAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CapitalizeProject([FromBody] CapitalizeProjectViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Projects, "FarmProject", model.ProjectId, model, cancellationToken);
+        if (pending is not null) return pending;
+        try
+        {
+            return Json(await _projects.CapitalizeProjectAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]
     public async Task<IActionResult> SaveSolarLog([FromBody] SaveSolarLogViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _projects.SaveSolarLogAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _projects.SaveSolarLogAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }

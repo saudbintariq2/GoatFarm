@@ -1,69 +1,131 @@
 @model GoatFarm.Application.ViewModels.Projects.ProjectsPageViewModel
-@using GoatFarm.Application.Common
+@using System.Text.Json
+@section Head {
+    <link rel="stylesheet" href="~/css/projects-parity.css" asp-append-version="true" />
+}
 
-<div class="fin3">
-    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.TotalCapex)</div><div class="k">Fixed assets (register)</div></div>
-    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.ActiveBudget)</div><div class="k">Active project budgets</div></div>
-    <div class="fincard"><div class="v">@Model.Projects.Count</div><div class="k">Projects</div></div>
-</div>
+<div id="view-projects">
+  <div class="tabs project-tabs" style="margin-bottom:16px">
+    <button type="button" class="tab active" data-projecttab="projects">🏗 Projects</button>
+    <button type="button" class="tab" data-projecttab="capex">💳 Capital Expenditure</button>
+    <button type="button" class="tab" data-projecttab="assets">⚙ Fixed Assets</button>
+    <button type="button" class="tab" data-projecttab="solar">☀ Solar</button>
+  </div>
 
-<div class="panel">
-    <div class="panel-head"><h2>Capital projects</h2></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Name</th><th>Status</th><th class="num-cell">Budget</th><th class="num-cell">Spent</th></tr></thead>
-        <tbody>
-        @foreach (var p in Model.Projects)
-        {
-            <tr><td><b>@p.Name</b></td><td>@p.Status</td><td class="num-cell">@DisplayHelper.FormatRs(p.BudgetAmount)</td><td class="num-cell">@DisplayHelper.FormatRs(p.Spent)</td></tr>
-        }
-        </tbody></table>
-        <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr 1fr 1fr auto">
-            <div class="field"><label>Project name</label><input id="pj-name"></div>
-            <div class="field"><label>Budget</label><input type="number" id="pj-budget" min="0"></div>
-            <div class="field"><label>Start</label><input type="date" id="pj-start" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <button type="button" class="btn btn-green" id="pj-save" style="align-self:end">Add project</button>
+  <div class="projectview" id="proj-projects">
+    <div class="proj-kpis" id="projectKpis"></div>
+    <div class="panel"><div class="panel-head"><h2>Farm development projects</h2><span class="sub">construction, solar, parlors, processing facilities and major upgrades</span></div><div class="panel-body">
+      <div class="add-grid project-entry">
+        <div class="field"><label>Project name</label><input id="pj-name" placeholder="e.g. 20-goat Milking Parlor"></div>
+        <div class="field"><label>Category</label>
+          <select id="pj-cat" data-lookup="Lookup.ProjectCategories">
+            @foreach (var o in Model.ProjectCategories) { <option>@o</option> }
+            <option value="__addnew__">＋ Add new category…</option>
+          </select>
         </div>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>Fixed asset register</h2></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Name</th><th>Category</th><th class="num-cell">Cost</th><th>Project</th></tr></thead>
-        <tbody>
-        @foreach (var a in Model.FixedAssets)
-        {
-            <tr><td>@a.Name</td><td>@a.Category</td><td class="num-cell">@DisplayHelper.FormatRs(a.Cost)</td><td>@(a.ProjectName ?? "—")</td></tr>
-        }
-        </tbody></table>
-        <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr 1fr 1fr auto">
-            <div class="field"><label>Asset name</label><input id="fa-name"></div>
-            <div class="field"><label>Cost</label><input type="number" id="fa-cost" min="0"></div>
-            <div class="field"><label>Project</label><select id="fa-project"><option value="">—</option>@foreach(var p in Model.Projects){<option value="@p.Id">@p.Name</option>}</select></div>
-            <button type="button" class="btn btn-green" id="fa-save" style="align-self:end">Add asset</button>
+        <div class="field"><label>Budget (Rs)</label><input id="pj-budget" type="number" min="0" step="1000"></div>
+        <div class="field"><label>Start date</label><input id="pj-start" type="date"></div>
+        <div class="field"><label>Status</label>
+          <select id="pj-status">
+            <option>Planned</option>
+            <option>In Progress</option>
+            <option>On Hold</option>
+            <option>Completed</option>
+          </select>
         </div>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>Solar production</h2></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Date</th><th class="num-cell">kWh</th><th class="num-cell">Savings est.</th></tr></thead>
-        <tbody>
-        @foreach (var s in Model.SolarLogs)
-        {
-            <tr><td>@s.DateDisplay</td><td class="num-cell">@s.KwhGenerated</td><td class="num-cell">@(s.SavingsEstimate.HasValue ? DisplayHelper.FormatRs(s.SavingsEstimate.Value) : "—")</td></tr>
-        }
-        </tbody></table>
-        <div class="add-grid" style="margin-top:12px;grid-template-columns:1fr 1fr 1fr auto">
-            <div class="field"><label>Date</label><input type="date" id="so-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label>kWh</label><input type="number" id="so-kwh" min="0" step="0.1"></div>
-            <div class="field"><label>Savings Rs</label><input type="number" id="so-save" min="0"></div>
-            <button type="button" class="btn btn-green" id="so-add" style="align-self:end">Log day</button>
+        <div class="field"><label>Funding source</label>
+          <select id="pj-funding" data-lookup="Lookup.ProjectFundingSources">
+            @foreach (var o in Model.FundingSources) { <option>@o</option> }
+            <option value="__addnew__">＋ Add new funding source…</option>
+          </select>
         </div>
-    </div>
+        <div class="field wide"><label>Notes / scope</label><input id="pj-note" placeholder="civil works, equipment, installation, capacity..."></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addProject">+ Add project</button></div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px"><table class="tbl"><thead><tr><th>Project</th><th>Category</th><th>Status</th><th class="num-cell">Budget</th><th class="num-cell">Spent</th><th class="num-cell">CIP</th><th class="num-cell">Remaining</th><th>Funding</th><th>Action</th></tr></thead><tbody id="projectRows"></tbody></table></div>
+    </div></div>
+  </div>
+
+  <div class="projectview" id="proj-capex" style="display:none">
+    <div class="panel"><div class="panel-head"><h2>Capital expenditure</h2><span class="sub">cash spent on long-term projects — excluded from normal operating P&amp;L</span></div><div class="panel-body">
+      <div class="note">Record construction, installation and each major equipment/component here — for example solar panels, inverter, mounting structure, milking machine, milk tank, pasteurizer and parlor equipment. They reduce Cash/Bank when paid but are <b>not normal operating expenses</b>. Project CAPEX stays in <b>Construction / Projects in Progress (CIP)</b> until it is converted to a fixed asset.</div>
+      <div class="add-grid capex-entry" style="margin-top:14px">
+        <div class="field"><label>Project</label><select id="cx-project"></select></div>
+        <div class="field"><label>Date</label><input id="cx-date" type="date"></div>
+        <div class="field"><label>Cost type</label>
+          <select id="cx-type" data-lookup="Lookup.CapexCostTypes">
+            @foreach (var o in Model.CostTypes) { <option>@o</option> }
+            <option value="__addnew__">＋ Add new cost type…</option>
+          </select>
+        </div>
+        <div class="component-details">
+          <div class="component-title">Equipment / Component Details <span style="font-weight:500;text-transform:none;letter-spacing:0">— use for solar panels, inverter, milking equipment, tanks, pasteurizer, machinery, etc.</span></div>
+          <div class="field"><label>Item / component</label><input id="cx-item" placeholder="e.g. 620W Solar Panel"></div>
+          <div class="field"><label>Qty</label><input id="cx-qty" type="number" min="0" step="1" placeholder="20"></div>
+          <div class="field"><label>Unit</label><select id="cx-unit"><option>Nos</option><option>Set</option><option>Lot</option><option>Meter</option><option>Kg</option><option>Other</option></select></div>
+          <div class="field"><label>Brand / model</label><input id="cx-model" placeholder="Brand / model"></div>
+          <div class="field"><label>Specification</label><input id="cx-spec" placeholder="620W, 10kW, 100 L, 20-stall..."></div>
+          <div class="field"><label>Warranty until</label><input id="cx-warranty" type="date"></div>
+          <div class="component-help">These details remain part of the project CAPEX/CIP record. When the project is completed and capitalized, the project value moves to Fixed Assets without creating another payment.</div>
+        </div>
+        <div class="field"><label>Supplier / contractor</label><input id="cx-supplier" placeholder="Supplier or contractor"></div>
+        <div class="field"><label>Amount (Rs)</label><input id="cx-amount" type="number" min="0" step="100"></div>
+        <div class="field"><label>Funding source</label><input id="cx-funding" readonly placeholder="From selected project"></div>
+        <div class="field"><label>Payment status</label><select id="cx-paystatus"><option value="Paid">Paid</option><option value="Part Paid">Part Paid</option><option value="Credit">Credit</option></select></div>
+        <div class="field"><label>Paid now (Rs)</label><input id="cx-paid" type="number" min="0" step="100" placeholder="Amount paid now"></div>
+        <div class="field"><label>Paid from</label><select id="cx-account"><option value="">Select Cash / Bank</option></select></div>
+        <div class="field"><label>Due date</label><input id="cx-due" type="date"></div>
+        <div class="field wide"><label>Reference / note</label><input id="cx-note" placeholder="invoice, stage payment, equipment details..."></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addCapex">+ Record capital cost</button></div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px"><table class="tbl"><thead><tr><th>Date</th><th>Project</th><th>Cost</th><th>Component / Equipment</th><th>Qty</th><th>Specification</th><th>Supplier</th><th>Funding</th><th>Status</th><th>Paid from</th><th>Due date</th><th>Reference</th><th class="num-cell">Amount</th><th class="num-cell">Paid</th><th class="num-cell">Payable</th><th></th></tr></thead><tbody id="capexRows"></tbody></table></div>
+    </div></div>
+  </div>
+
+  <div class="projectview" id="proj-assets" style="display:none">
+    <div class="panel"><div class="panel-head"><h2>Fixed asset register</h2><span class="sub">buildings, solar, dairy/meat equipment, vehicles and machinery</span></div><div class="panel-body">
+      <div class="add-grid asset-entry">
+        <div class="field"><label>Asset name</label><input id="fa-name" placeholder="e.g. 100 L Pasteurizer"></div>
+        <div class="field"><label>Category</label>
+          <select id="fa-type" data-lookup="Lookup.ProjectAssetCategories">
+            @foreach (var o in Model.AssetCategories) { <option>@o</option> }
+            <option value="__addnew__">＋ Add new asset category…</option>
+          </select>
+        </div>
+        <div class="field"><label>Project</label><select id="fa-project"><option value="">Independent asset</option></select></div>
+        <div class="field"><label>Value (Rs)</label><input id="fa-cost" type="number" min="0" step="1000"></div>
+        <div class="field"><label>In service date</label><input id="fa-date" type="date"></div>
+        <div class="field"><label>Location</label><input id="fa-location" placeholder="Main farm / dairy room"></div>
+        <div class="field"><label>Supplier</label><input id="fa-supplier" placeholder="Supplier"></div>
+        <div class="field"><label>Paid now (Rs)</label><input id="fa-paid" type="number" min="0" step="100" placeholder="0 = payable"></div>
+        <div class="field"><label>Paid from</label><select id="fa-account"><option value="">Not linked to account</option></select></div>
+        <div class="field"><label>Warranty until</label><input id="fa-warranty" type="date"></div>
+        <div class="field wide"><label>Notes</label><input id="fa-note" placeholder="model, serial, capacity..."></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addFixedAsset">+ Add asset</button></div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px"><table class="tbl"><thead><tr><th>Asset</th><th>Category</th><th>Project</th><th>Location</th><th>In service</th><th class="num-cell">Value</th><th></th></tr></thead><tbody id="fixedAssetRows"></tbody></table></div>
+    </div></div>
+  </div>
+
+  <div class="projectview" id="proj-solar" style="display:none">
+    <div class="panel"><div class="panel-head"><h2>Solar performance &amp; ROI</h2><span class="sub">investment, generation, savings and maintenance</span></div><div class="panel-body">
+      <div class="add-grid solar-entry">
+        <div class="field"><label>Solar project</label><select id="sol-project"></select></div>
+        <div class="field"><label>Date</label><input id="sol-date" type="date"></div>
+        <div class="field"><label>Generation (kWh)</label><input id="sol-kwh" type="number" min="0" step="0.1"></div>
+        <div class="field"><label>Electricity saving (Rs)</label><input id="sol-saving" type="number" min="0" step="100"></div>
+        <div class="field"><label>Maintenance (Rs)</label><input id="sol-maint" type="number" min="0" step="100"></div>
+        <div class="field"><label>Installed capacity (kW)</label><input id="sol-kw" type="number" min="0" step="0.1"></div>
+        <div class="field wide"><label>Note</label><input id="sol-note" placeholder="meter reading / cleaning / inverter service..."></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addSolarLog">+ Add solar record</button></div>
+      </div>
+      <div id="solarSummary" class="proj-kpis" style="margin-top:16px"></div>
+      <div class="table-wrap" style="margin-top:16px"><table class="tbl"><thead><tr><th>Date</th><th>Project</th><th class="num-cell">kWh</th><th class="num-cell">Savings</th><th class="num-cell">Maintenance</th><th class="num-cell">Capacity</th><th>Note</th></tr></thead><tbody id="solarRows"></tbody></table></div>
+    </div></div>
+  </div>
 </div>
 
+<script type="application/json" id="projects-page-json">@Html.Raw(JsonSerializer.Serialize(Model, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))</script>
 @section Scripts {
 <script src="~/js/projects-module.js" asp-append-version="true"></script>
 }

@@ -132,9 +132,21 @@ internal static class BackupV241Helper
                 {
                     ProjectId = pid.Value,
                     Date = GetDate(el, "date") ?? DateOnly.FromDateTime(DateTime.Today),
-                    Description = GetStr(el, "description") ?? "",
+                    Description = GetStr(el, "description") ?? GetStr(el, "costType") ?? "",
+                    CostType = GetStr(el, "costType"),
+                    Item = GetStr(el, "item"),
+                    Qty = GetDec(el, "qty"),
+                    Unit = GetStr(el, "unit"),
+                    Model = GetStr(el, "model"),
+                    Spec = GetStr(el, "spec"),
+                    WarrantyUntil = GetDate(el, "warrantyUntil"),
                     Amount = GetDec(el, "amount"),
-                    Vendor = GetStr(el, "vendor")
+                    PaidAmount = GetDec(el, "paidAmount"),
+                    PaymentStatus = GetStr(el, "paymentStatus") ?? "Paid",
+                    FundingSource = GetStr(el, "fundingSource"),
+                    DueDate = GetDate(el, "dueDate"),
+                    Vendor = GetStr(el, "vendor"),
+                    Note = GetStr(el, "note")
                 });
             }
         }
@@ -145,7 +157,12 @@ internal static class BackupV241Helper
             a.ProjectId = RemapNullable(GetInt(el, "projectId"), projectMap);
             context.FixedAssetRegisters.Add(a);
         });
-        ImportList(ext, "solarProductionLogs", el => context.SolarProductionLogs.Add(MapSolar(el)));
+        ImportList(ext, "solarProductionLogs", el =>
+        {
+            var s = MapSolar(el);
+            s.ProjectId = RemapNullable(GetInt(el, "projectId"), projectMap);
+            context.SolarProductionLogs.Add(s);
+        });
         ImportList(ext, "moneyAccounts", el => context.MoneyAccounts.Add(MapMoneyAccount(el)));
         await context.SaveChangesAsync(cancellationToken);
         var moneyMap = await context.MoneyAccounts.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Id, cancellationToken);
@@ -361,18 +378,28 @@ internal static class BackupV241Helper
     {
         Name = GetStr(el, "name") ?? "",
         Description = GetStr(el, "description"),
+        Category = GetStr(el, "category"),
+        Funding = GetStr(el, "funding"),
         Status = ParseEnum<ProjectStatus>(GetStr(el, "status")) ?? ProjectStatus.Active,
         StartDate = GetDate(el, "startDate"),
         TargetEndDate = GetDate(el, "targetEndDate"),
-        BudgetAmount = GetDec(el, "budgetAmount")
+        BudgetAmount = GetDec(el, "budgetAmount"),
+        CapitalizedAt = GetDate(el, "capitalizedAt"),
+        CapitalizedAssetId = GetInt(el, "capitalizedAssetId")
     };
 
     private static FixedAssetRegister MapFixedAsset(JsonElement el) => new()
     {
         Name = GetStr(el, "name") ?? "",
         Category = ParseEnum<FixedAssetCategory>(GetStr(el, "category")) ?? FixedAssetCategory.Other,
+        CategoryName = GetStr(el, "categoryName"),
         Cost = GetDec(el, "cost"),
         PurchaseDate = GetDate(el, "purchaseDate"),
+        ProjectCapitalized = GetBool(el, "projectCapitalized"),
+        Location = GetStr(el, "location"),
+        Supplier = GetStr(el, "supplier"),
+        PaidAmount = GetDec(el, "paidAmount"),
+        WarrantyUntil = GetDate(el, "warrantyUntil"),
         Notes = GetStr(el, "notes"),
         IsActive = true
     };
@@ -382,6 +409,8 @@ internal static class BackupV241Helper
         Date = GetDate(el, "date") ?? DateOnly.FromDateTime(DateTime.Today),
         KwhGenerated = GetDec(el, "kwhGenerated"),
         SavingsEstimate = el.TryGetProperty("savingsEstimate", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetDecimal() : null,
+        MaintenanceAmount = GetDec(el, "maintenanceAmount"),
+        InstalledCapacityKw = el.TryGetProperty("installedCapacityKw", out var k) && k.ValueKind == JsonValueKind.Number ? k.GetDecimal() : null,
         Notes = GetStr(el, "notes")
     };
 

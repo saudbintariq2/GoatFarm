@@ -175,6 +175,8 @@ public static class DemoDataSeedHelper
         {
             Name = "Solar for milk chiller",
             Status = ProjectStatus.Active,
+            Category = "Solar / Power",
+            Funding = "Farm Cash",
             StartDate = today.AddMonths(-3),
             BudgetAmount = 350000,
             Description = "Demo CAPEX project"
@@ -184,16 +186,20 @@ public static class DemoDataSeedHelper
 
         context.ProjectExpenditures.Add(new ProjectExpenditure
         {
-            ProjectId = solar.Id, Date = today.AddMonths(-2), Description = "Panels + inverter", Amount = 280000, Vendor = "Solar Co."
+            ProjectId = solar.Id, Date = today.AddMonths(-2),
+            Description = "Solar Panels", CostType = "Solar Panels", Item = "Solar panels + inverter",
+            Amount = 280000, PaidAmount = 280000, PaymentStatus = "Paid",
+            Vendor = "Solar Co.", FundingSource = "Farm Cash"
         });
         context.FixedAssetRegisters.Add(new FixedAssetRegister
         {
-            Name = "5kW Solar array", Category = FixedAssetCategory.Solar, Cost = 280000,
-            PurchaseDate = today.AddMonths(-2), ProjectId = solar.Id
+            Name = "5kW Solar array", Category = FixedAssetCategory.Solar, CategoryName = "Solar / Power",
+            Cost = 280000, PurchaseDate = today.AddMonths(-2), ProjectId = solar.Id, ProjectCapitalized = true
         });
         context.SolarProductionLogs.Add(new SolarProductionLog
         {
-            Date = today.AddDays(-1), KwhGenerated = 18.5m, SavingsEstimate = 1200, Notes = "Demo log"
+            ProjectId = solar.Id, Date = today.AddDays(-1), KwhGenerated = 18.5m, SavingsEstimate = 1200,
+            InstalledCapacityKw = 5, Notes = "Demo log"
         });
     }
 

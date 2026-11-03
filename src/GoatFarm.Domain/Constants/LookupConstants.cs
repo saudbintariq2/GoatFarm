@@ -56,4 +56,31 @@ public static class LookupConstants
     [
         "Healthy", "Under treatment", "Quarantine", "Injured", "Weak / off feed"
     ];
+
+    public static readonly string[] ProjectCategories =
+    [
+        "Construction", "Milking Parlor", "Solar / Power", "Slaughter / Processing",
+        "Cold Room / Warehouse", "Water / Utilities", "Other Capital Project"
+    ];
+
+    public static readonly string[] CapexCostTypes =
+    [
+        "Civil / Construction", "Solar Panels", "Solar Inverter", "Solar Structure / Mounting",
+        "Battery / Storage", "Milking Parlor Equipment", "Milking Machine / Cluster",
+        "Milk Tank / Chiller", "Pasteurizer / Dairy Equipment", "Cold Room Equipment",
+        "Electrical", "Plumbing", "Installation Labour", "Professional / Approval Fees",
+        "Transport / Delivery", "Other Equipment", "Other Capital Cost"
+    ];
+
+    public static readonly string[] ProjectAssetCategories =
+    [
+        "Buildings / Sheds", "Milking / Dairy Equipment", "Solar / Power",
+        "Slaughter / Meat Equipment", "Cold Storage", "Machinery", "Vehicle",
+        "Water / Utilities", "Other Asset"
+    ];
+
+    public static readonly string[] ProjectFundingSources =
+    [
+        "Farm Cash", "Shareholder Funding", "Bank / Loan", "Mixed"
+    ];
 }

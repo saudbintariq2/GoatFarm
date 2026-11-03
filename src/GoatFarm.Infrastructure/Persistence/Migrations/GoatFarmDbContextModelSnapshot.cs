@@ -643,7 +643,18 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("BudgetAmount")
-                        .HasColumnType("numeric");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("CapitalizedAssetId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("CapitalizedAt")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
@@ -651,9 +662,14 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<string>("Funding")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateOnly?>("StartDate")
                         .HasColumnType("date");
@@ -669,7 +685,7 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FarmProjects");
+                    b.ToTable("FarmProjects", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.FarmTask", b =>
@@ -985,8 +1001,15 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Category")
                         .HasColumnType("integer");
+
+                    b.Property<string>("CategoryName")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
                     b.Property<decimal>("Cost")
                         .HasPrecision(18, 2)
@@ -998,6 +1021,10 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1006,16 +1033,32 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
+                    b.Property<decimal>("PaidAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("ProjectCapitalized")
+                        .HasColumnType("boolean");
+
                     b.Property<int?>("ProjectId")
                         .HasColumnType("integer");
 
                     b.Property<DateOnly?>("PurchaseDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("Supplier")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly?>("WarrantyUntil")
+                        .HasColumnType("date");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
 
                     b.HasIndex("ProjectId");
 
@@ -2011,8 +2054,16 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("Amount")
-                        .HasColumnType("numeric");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CostType")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
@@ -2022,22 +2073,73 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("FundingSource")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Item")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Paid");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("Qty")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("Spec")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Vendor")
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly?>("WarrantyUntil")
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("Date");
+
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectExpenditures");
+                    b.ToTable("ProjectExpenditures", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.RecurringCost", b =>
@@ -2157,21 +2259,39 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
+                    b.Property<decimal?>("InstalledCapacityKw")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
                     b.Property<decimal>("KwhGenerated")
-                        .HasColumnType("numeric");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<decimal>("MaintenanceAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<string>("Notes")
-                        .HasColumnType("text");
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("integer");
 
                     b.Property<decimal?>("SavingsEstimate")
-                        .HasColumnType("numeric");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.ToTable("SolarProductionLogs");
+                    b.HasIndex("Date");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("SolarProductionLogs", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.StockMovement", b =>
@@ -3107,10 +3227,17 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.FixedAssetRegister", b =>
                 {
+                    b.HasOne("GoatFarm.Domain.Entities.MoneyAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GoatFarm.Domain.Entities.FarmProject", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Account");
 
                     b.Navigation("Project");
                 });
@@ -3258,11 +3385,18 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.ProjectExpenditure", b =>
                 {
+                    b.HasOne("GoatFarm.Domain.Entities.MoneyAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GoatFarm.Domain.Entities.FarmProject", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Account");
 
                     b.Navigation("Project");
                 });
@@ -3274,6 +3408,16 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasForeignKey("GoatId");
 
                     b.Navigation("Goat");
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.SolarProductionLog", b =>
+                {
+                    b.HasOne("GoatFarm.Domain.Entities.FarmProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.StockMovement", b =>

@@ -260,13 +260,13 @@ public class ReportsService : IReportsService
 
         var capexRows = projectSpend.Select(e => new ReportSimpleAmountRowViewModel
         {
-            Label = e.Description,
+            Label = e.CostType ?? e.Description,
             Sub = e.Date.ToString("yyyy-MM-dd"),
             Amount = e.Amount
         }).Concat(fixedAssets.Select(a => new ReportSimpleAmountRowViewModel
         {
             Label = a.Name,
-            Sub = a.Category.ToString(),
+            Sub = ProjectParity.AssetCategoryLabel(a.Category, a.CategoryName),
             Amount = a.Cost
         })).Concat(capAssets.Select(a => new ReportSimpleAmountRowViewModel
         {
@@ -327,14 +327,14 @@ public class ReportsService : IReportsService
             Projects = projects.Select(p => new ReportProjectRowViewModel
             {
                 Name = p.Name,
-                Status = p.Status.ToString(),
+                Status = ProjectParity.StatusLabel(p.Status),
                 Budget = p.BudgetAmount,
                 Spent = spendMap.GetValueOrDefault(p.Id, 0)
             }).ToList(),
             FixedAssets = assets.Select(a => new ReportSimpleAmountRowViewModel
             {
                 Label = a.Name,
-                Sub = a.Category.ToString(),
+                Sub = ProjectParity.AssetCategoryLabel(a.Category, a.CategoryName),
                 Amount = a.Cost
             }).ToList()
         };

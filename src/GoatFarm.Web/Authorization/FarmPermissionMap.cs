@@ -199,10 +199,14 @@ public static class FarmPermissionMap
             ["Products.SaveSale"] = (FarmTabs.Products, FarmActions.Add),
 
             ["Projects.GetData"] = (FarmTabs.Projects, FarmActions.View),
-            ["Projects.SaveProject"] = (FarmTabs.Projects, FarmActions.Edit),
+            ["Projects.SaveProject"] = (FarmTabs.Projects, FarmActions.Add),
             ["Projects.DeleteProject"] = (FarmTabs.Projects, FarmActions.Delete),
             ["Projects.SaveExpenditure"] = (FarmTabs.Projects, FarmActions.Add),
+            ["Projects.DeleteExpenditure"] = (FarmTabs.Projects, FarmActions.Delete),
+            ["Projects.PayExpenditure"] = (FarmTabs.Projects, FarmActions.Edit),
             ["Projects.SaveFixedAsset"] = (FarmTabs.Projects, FarmActions.Add),
+            ["Projects.DeleteFixedAsset"] = (FarmTabs.Projects, FarmActions.Delete),
+            ["Projects.CapitalizeProject"] = (FarmTabs.Projects, FarmActions.Edit),
             ["Projects.SaveSolarLog"] = (FarmTabs.Projects, FarmActions.Add),
 
             ["Admin.Notices"] = (FarmTabs.Dashboard, FarmActions.View),

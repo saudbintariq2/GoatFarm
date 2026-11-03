@@ -744,7 +744,7 @@ public class FinanceService : IFinanceService
             {
                 DateDisplay = p.Date.ToString("yyyy-MM-dd"),
                 Name = p.Project.Name,
-                Type = p.Description,
+                Type = p.CostType ?? p.Description,
                 Supplier = p.Vendor,
                 Amount = p.Amount
             }).ToListAsync(cancellationToken);
