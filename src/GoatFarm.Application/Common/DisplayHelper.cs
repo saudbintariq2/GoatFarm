@@ -85,6 +85,14 @@ public static class DisplayHelper
     public static string StatusKey(GoatStatus status) =>
         status.ToString().ToLowerInvariant();
 
+    public static string FeedPlanLabel(string statusKey) =>
+        string.Equals(statusKey, "kid", StringComparison.OrdinalIgnoreCase) ? "Weaned Kids"
+        : string.Equals(statusKey, "kidstarter", StringComparison.OrdinalIgnoreCase) ? "Kid Starter Mix"
+        : Enum.TryParse<GoatStatus>(statusKey, true, out var st) ? GetStatusDisplay(st).Text
+        : statusKey;
+
+    public static string FeedRecipeLabel(string statusKey) => FeedPlanLabel(statusKey);
+
     public static GoatStatus ParseStatusKey(string key) =>
         Enum.TryParse<GoatStatus>(key, true, out var s) ? s : GoatStatus.Kid;
 

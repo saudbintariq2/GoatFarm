@@ -116,6 +116,7 @@ public class FeedPriceConfiguration : IEntityTypeConfiguration<FeedPrice>
         builder.Property(x => x.PricePerKg).HasPrecision(18, 2);
         builder.Property(x => x.StockKg).HasPrecision(18, 2);
         builder.Property(x => x.StockKgFull).HasPrecision(18, 2);
+        builder.Property(x => x.UseType).HasMaxLength(20).HasDefaultValue("recipe");
         builder.HasIndex(x => x.FeedType).IsUnique();
     }
 }
@@ -160,6 +161,11 @@ public class FeedPurchaseConfiguration : IEntityTypeConfiguration<FeedPurchase>
         builder.Property(x => x.RatePerKg).HasPrecision(18, 2);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.Comment).HasMaxLength(500);
+        builder.Property(x => x.UseAs).HasMaxLength(20).HasDefaultValue("recipe");
+        builder.Property(x => x.PaymentStatus).HasMaxLength(20).HasDefaultValue("paid");
+        builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
+        builder.Property(x => x.Supplier).HasMaxLength(200);
+        builder.Property(x => x.AllocationMonths).HasDefaultValue(1);
     }
 }
 

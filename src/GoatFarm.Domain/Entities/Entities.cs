@@ -159,6 +159,8 @@ public class FeedPrice : BaseEntity
     public decimal PricePerKg { get; set; }
     public decimal StockKg { get; set; }
     public decimal StockKgFull { get; set; }
+    /// <summary>recipe = mix ingredient; direct = bulk feed shown on the Feeding Plan.</summary>
+    public string UseType { get; set; } = "recipe";
 }
 
 public class FeedPlan : BaseEntity
@@ -203,6 +205,13 @@ public class FeedPurchase : BaseEntity
     public decimal RatePerKg { get; set; }
     public decimal Amount { get; set; }
     public string? Comment { get; set; }
+    public string UseAs { get; set; } = "recipe";
+    public string PaymentStatus { get; set; } = "paid";
+    public decimal PaidAmount { get; set; }
+    public int? AccountId { get; set; }
+    public string? Supplier { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public int AllocationMonths { get; set; } = 1;
 }
 
 public class RecurringCost : BaseEntity

@@ -183,6 +183,8 @@ public class SupplierPayable : BaseEntity
     public decimal Amount { get; set; }
     public decimal PaidAmount { get; set; }
     public PayableStatus Status { get; set; } = PayableStatus.Open;
+    public string? SourceType { get; set; }
+    public string? SourceId { get; set; }
 }
 
 public class BudgetLine : BaseEntity
@@ -359,4 +361,7 @@ public class CustomFeedingGroup : BaseEntity
     public string? Description { get; set; }
     public decimal MixKgPerDay { get; set; }
     public decimal FodderKgPerDay { get; set; }
+    public decimal FodderDryKgPerDay { get; set; }
+    /// <summary>Status recipe this group copies (milking, kid, …).</summary>
+    public string RecipeFrom { get; set; } = "milking";
 }

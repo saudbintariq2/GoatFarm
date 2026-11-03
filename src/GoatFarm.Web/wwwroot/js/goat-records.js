@@ -1293,7 +1293,7 @@ const GoatRecords = (() => {
 
   function initFeed() {
     let editingFeedBuyId = null;
-    let recipeGroup = 'milking';
+    let recipeGroup = document.getElementById('masterRecipeSelect')?.value || 'milking';
     let checkDraft = {};
     let feedData = null;
 
@@ -1314,21 +1314,139 @@ const GoatRecords = (() => {
       btn.addEventListener('click', () => showFeedTab(btn.dataset.feedtab));
     });
 
+    function fillAccountSelects() {
+      const opts = '<option value="">Select Cash / Bank account...</option>' +
+        (feedData?.moneyAccounts || []).map(a =>
+          `<option value="${esc(a.id)}">${esc(a.name)} · ${rs(a.balance || 0)}</option>`).join('');
+      ['fb-account', 'v182BuyAccount'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const cur = el.value;
+        el.innerHTML = opts;
+        if ([...el.options].some(o => o.value === cur)) el.value = cur;
+      });
+    }
+
+    function purchaseAmount() {
+      return Math.round((+document.getElementById('fb-kg')?.value || 0) * (+document.getElementById('fb-rate')?.value || 0));
+    }
+
+    function syncPaymentFields() {
+      const status = document.getElementById('fb-payment')?.value || 'paid';
+      const paid = document.getElementById('fb-paid');
+      const acct = document.getElementById('fb-account');
+      const due = document.getElementById('fb-due');
+      const total = purchaseAmount();
+      if (!paid || !acct || !due) return;
+      if (status === 'paid') {
+        paid.value = total || '';
+        paid.readOnly = true;
+        acct.disabled = false;
+        due.value = '';
+        due.disabled = true;
+      } else if (status === 'credit') {
+        paid.value = '0';
+        paid.readOnly = true;
+        acct.value = '';
+        acct.disabled = true;
+        due.disabled = false;
+      } else {
+        paid.readOnly = false;
+        acct.disabled = false;
+        due.disabled = false;
+        if (total && +paid.value >= total) paid.value = '';
+      }
+    }
+
+    function syncKidPayFields() {
+      const status = document.getElementById('v182BuyStatus')?.value || 'paid';
+      const paid = document.getElementById('v182BuyPaid');
+      const acct = document.getElementById('v182BuyAccount');
+      const due = document.getElementById('v182BuyDue');
+      const kg = +document.getElementById('v182BuyKg')?.value || 0;
+      const rate = +document.getElementById('v182BuyRate')?.value || 0;
+      const total = Math.round(kg * rate);
+      const totalEl = document.getElementById('v182BuyTotal');
+      if (totalEl) totalEl.value = kg && rate ? total : '';
+      if (!paid || !acct || !due) return;
+      if (status === 'paid') {
+        paid.value = total || '';
+        paid.readOnly = true;
+        acct.disabled = false;
+        due.value = '';
+        due.disabled = true;
+      } else if (status === 'credit') {
+        paid.value = '0';
+        paid.readOnly = true;
+        acct.value = '';
+        acct.disabled = true;
+        due.disabled = false;
+      } else {
+        paid.readOnly = false;
+        acct.disabled = false;
+        due.disabled = false;
+      }
+    }
+
+    function feedUseType(feedType) {
+      const p = (feedData?.allPrices || []).find(x => x.feedType === feedType);
+      return p?.useType === 'direct' ? 'direct' : 'recipe';
+    }
+
+    function syncUseAs() {
+      const feedType = document.getElementById('fb-feed')?.value;
+      const use = document.getElementById('fb-use');
+      if (!use || !feedType || feedType === '__addfeed') return;
+      const fixed = ['fodder', 'fodderdry', 'milkpowder'].includes(feedType);
+      use.disabled = fixed;
+      use.value = feedUseType(feedType);
+    }
+
     const updateFbTotal = () => {
       const kg = +document.getElementById('fb-kg')?.value || 0;
       const rate = +document.getElementById('fb-rate')?.value || 0;
       const total = document.getElementById('fb-total');
       if (total) total.value = kg && rate ? Math.round(kg * rate) : '';
+      syncPaymentFields();
     };
     document.getElementById('fb-kg')?.addEventListener('input', updateFbTotal);
     document.getElementById('fb-rate')?.addEventListener('input', updateFbTotal);
-    document.getElementById('fb-feed')?.addEventListener('change', () => {
+    document.getElementById('fb-payment')?.addEventListener('change', syncPaymentFields);
+    document.getElementById('fb-feed')?.addEventListener('change', async () => {
       const feedType = document.getElementById('fb-feed')?.value;
+      if (feedType === '__addfeed') {
+        await addNewFeedFromDropdown();
+        return;
+      }
       const priceInput = feedType ? document.querySelector(`[data-price="${CSS.escape(feedType)}"]`) : null;
       const rateInput = document.getElementById('fb-rate');
       if (priceInput && rateInput) rateInput.value = priceInput.value;
+      else if (rateInput) {
+        const p = (feedData?.allPrices || []).find(x => x.feedType === feedType);
+        if (p) rateInput.value = p.pricePerKg;
+      }
+      syncUseAs();
       updateFbTotal();
     });
+
+    async function addNewFeedFromDropdown() {
+      const name = await showModal('Name of the new feed', { prompt: true });
+      if (!name) { await reloadFeed(); return; }
+      const pr = await showModal('Price per kg (Rs) for ' + name, { prompt: true, defaultValue: '0' });
+      if (pr === null) { await reloadFeed(); return; }
+      const direct = await showConfirm('Will ' + name + ' be fed separately as a direct/bulk feed (for example Mungphali Bhusa or silage)?\n\nYes = Direct / bulk feed\nNo = Recipe ingredient');
+      const created = await api('/Feed/AddFeedType', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: name, pricePerKg: +pr || 0, useType: direct ? 'direct' : 'recipe' })
+      });
+      await reloadFeed();
+      const sel = document.getElementById('fb-feed');
+      if (sel && created?.feedType) sel.value = created.feedType;
+      const rate = document.getElementById('fb-rate');
+      if (rate) rate.value = created?.pricePerKg ?? (+pr || 0);
+      syncUseAs();
+      updateFbTotal();
+    }
 
     document.getElementById('feedMonth')?.addEventListener('change', () => reloadFeed());
 
@@ -1377,38 +1495,55 @@ const GoatRecords = (() => {
     function resetFeedBuyForm() {
       editingFeedBuyId = null;
       const addBtn = document.getElementById('addFeedBuy');
-      if (addBtn) addBtn.textContent = '+ Add';
+      if (addBtn) addBtn.textContent = '+ Record purchase';
       document.getElementById('fb-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('fb-kg').value = '';
       document.getElementById('fb-rate').value = '';
       document.getElementById('fb-total').value = '';
       document.getElementById('fb-note').value = '';
+      const paid = document.getElementById('fb-paid'); if (paid) paid.value = '';
+      const sup = document.getElementById('fb-supplier'); if (sup) sup.value = '';
+      const due = document.getElementById('fb-due'); if (due) due.value = '';
+      const pay = document.getElementById('fb-payment'); if (pay) pay.value = 'paid';
+      const alloc = document.getElementById('fb-alloc-months'); if (alloc) alloc.value = '1';
       document.querySelectorAll('#buyLogRows tr.feed-buy-row.editing').forEach(r => r.classList.remove('editing'));
-      document.getElementById('cancelFeedBuyBtn').style.display = 'none';
-      document.getElementById('deleteFeedBuyBtn').style.display = 'none';
+      const cancelBtn = document.getElementById('cancelFeedBuyBtn'); if (cancelBtn) cancelBtn.style.display = 'none';
+      const delBtn = document.getElementById('deleteFeedBuyBtn'); if (delBtn) delBtn.style.display = 'none';
+      syncPaymentFields();
     }
 
     function loadFeedBuyForEdit(row) {
       if (!FarmPerms.can('feed', 'edit')) return;
       editingFeedBuyId = +row.dataset.id;
       const addBtn = document.getElementById('addFeedBuy');
-      if (addBtn) addBtn.textContent = 'Save';
+      if (addBtn) addBtn.textContent = 'Save purchase';
       document.getElementById('fb-date').value = row.dataset.date || '';
       document.getElementById('fb-feed').value = row.dataset.feed || '';
       document.getElementById('fb-kg').value = row.dataset.kg || '';
       document.getElementById('fb-rate').value = row.dataset.rate || '';
       document.getElementById('fb-note').value = row.dataset.comment || '';
+      const use = document.getElementById('fb-use'); if (use) use.value = row.dataset.useas || 'recipe';
+      const pay = document.getElementById('fb-payment'); if (pay) pay.value = row.dataset.payment || 'paid';
+      const paid = document.getElementById('fb-paid'); if (paid) paid.value = row.dataset.paid || '';
+      const acct = document.getElementById('fb-account'); if (acct) acct.value = row.dataset.account || '';
+      const sup = document.getElementById('fb-supplier'); if (sup) sup.value = row.dataset.supplier || '';
+      const due = document.getElementById('fb-due'); if (due) due.value = row.dataset.due || '';
+      const alloc = document.getElementById('fb-alloc-months'); if (alloc) alloc.value = row.dataset.alloc || '1';
       updateFbTotal();
+      syncPaymentFields();
       document.querySelectorAll('#buyLogRows tr.feed-buy-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
-      document.getElementById('cancelFeedBuyBtn').style.display = '';
-      document.getElementById('deleteFeedBuyBtn').style.display = '';
+      const cancelBtn = document.getElementById('cancelFeedBuyBtn'); if (cancelBtn) cancelBtn.style.display = '';
+      const delBtn = document.getElementById('deleteFeedBuyBtn'); if (delBtn) delBtn.style.display = '';
     }
 
     function renderMix(recipe) {
       if (!recipe) return;
       const nameEl = document.getElementById('recipeGroupName');
       if (nameEl) nameEl.textContent = recipe.statusDisplay;
+      const mrs = document.getElementById('masterRecipeSelect');
+      if (mrs && recipe.statusKey && [...mrs.options].some(o => o.value === recipe.statusKey))
+        mrs.value = recipe.statusKey;
       const mixList = document.getElementById('mixList');
       if (!mixList) return;
       mixList.innerHTML = (recipe.items || []).map(m =>
@@ -1525,7 +1660,7 @@ const GoatRecords = (() => {
             if (sel) sel.value = note.feedType;
             const priceInput = document.querySelector(`[data-price="${CSS.escape(note.feedType)}"]`);
             if (priceInput) document.getElementById('fb-rate').value = priceInput.value;
-            showFeedTab('store');
+            showFeedTab('purchases');
             document.getElementById('fb-kg')?.focus();
             document.getElementById('fb-kg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           });
@@ -1570,7 +1705,9 @@ const GoatRecords = (() => {
             <td class="num-cell hide-sm"><span class="breed">${rs(row.fodderCostPerGoatPerDay || 0)}</span></td>
             <td class="num-cell" style="font-weight:700">${rs(row.dailyCostPerGoat || 0)}</td>
             <td class="num-cell" style="color:var(--green-dark);font-weight:700">${rs(row.monthlyTotal || 0)}</td>
-            <td><button type="button" class="btn btn-ghost btn-sm" data-recipe="${row.statusKey}">Recipe</button></td></tr>`;
+            <td>${row.isCustomGroup
+              ? `<select data-fgrecipe="${esc(row.statusKey)}" title="Mix recipe used" style="font-size:12px;padding:4px">${(data.recipeOptions || []).filter(o => o.key !== 'kidstarter').map(o => `<option value="${esc(o.key)}" ${o.key === (row.recipeFrom || 'milking') ? 'selected' : ''}>${esc(o.name)} mix</option>`).join('')}</select> <span class="del" data-fgdel="${esc(row.statusKey)}" title="remove group">×</span>`
+              : `<button type="button" class="btn btn-ghost btn-sm" data-recipe="${esc(row.statusKey)}">Recipe</button>`}</td></tr>`;
         }).join('');
         gp.innerHTML = rows + (rows ? `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
           <td class="num-cell" style="font-weight:800">${tG}</td>
@@ -1582,13 +1719,40 @@ const GoatRecords = (() => {
         document.querySelectorAll('[data-recipe]').forEach(b => {
           b.onclick = async () => {
             recipeGroup = b.dataset.recipe;
-            const recipe = await api('/Feed/GetMixRecipe?status=' + encodeURIComponent(recipeGroup));
-            document.getElementById('recipePanel').style.display = 'block';
-            renderMix(recipe);
+            showFeedTab('recipes');
+            await reloadFeed(recipeGroup);
             document.getElementById('recipePanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           };
         });
+        document.querySelectorAll('[data-fgrecipe]').forEach(sel => {
+          sel.onchange = async () => {
+            await api('/Feed/UpdatePlan', {
+              method: 'POST',
+              body: JSON.stringify({
+                statusKey: sel.dataset.fgrecipe,
+                mixKgPerDay: +document.querySelector(`[data-plan="${CSS.escape(sel.dataset.fgrecipe)}"][data-fld="mix"]`)?.value || 0,
+                fodderKgPerDay: +document.querySelector(`[data-plan="${CSS.escape(sel.dataset.fgrecipe)}"][data-fld="fodder"]`)?.value || 0,
+                fodderDryKgPerDay: +document.querySelector(`[data-plan="${CSS.escape(sel.dataset.fgrecipe)}"][data-fld="fodderDry"]`)?.value || 0,
+                recipeFrom: sel.value
+              })
+            });
+            await reloadFeed();
+          };
+        });
+        document.querySelectorAll('[data-fgdel]').forEach(x => {
+          x.onclick = async e => {
+            e.preventDefault();
+            if (!FarmPerms.can('feed', 'delete')) return;
+            const confirmed = await showConfirm('Delete this feeding group? Animals in it go back to their normal status plan.');
+            if (!confirmed) return;
+            const key = x.dataset.fgdel || '';
+            const id = key.startsWith('fg:') ? key.slice(3) : key;
+            await api('/Feed/DeleteFeedingGroup?id=' + encodeURIComponent(id), { method: 'DELETE' });
+            await reloadFeed();
+          };
+        });
       }
+      renderDirectFeedPlans(data);
       const pfm = document.getElementById('planFodderMode');
       if (pfm) pfm.innerHTML = data.planFodderModeHtml || '';
 
@@ -1606,22 +1770,46 @@ const GoatRecords = (() => {
       document.getElementById('buyRows').innerHTML = buyHtml ||
         '<tr><td colspan="4" class="empty">Set your mix recipe and group amounts first.</td></tr>';
 
-      const feedOpts = purchPrices.map(p => `<option value="${esc(p.feedType)}">${esc(p.displayName)}</option>`).join('');
+      const feedOpts = purchPrices.map(p => `<option value="${esc(p.feedType)}">${esc(p.displayName)}</option>`).join('')
+        + '<option value="__addfeed">➕ Add new feed…</option>';
       const fbFeed = document.getElementById('fb-feed');
       const curFeed = fbFeed?.value;
       if (fbFeed) {
         fbFeed.innerHTML = feedOpts;
         if ([...fbFeed.options].some(o => o.value === curFeed)) fbFeed.value = curFeed;
+        syncUseAs();
       }
 
-      document.getElementById('buyLogRows').innerHTML = (data.feedPurchases?.length ? data.feedPurchases.map(b =>
-        `<tr class="feed-buy-row" data-id="${esc(b.id)}" data-date="${esc(b.dateDisplay)}" data-feed="${esc(b.feedType)}"
-          data-kg="${esc(b.kg)}" data-rate="${esc(b.ratePerKg)}" data-comment="${esc(b.comment)}">
+      const mrs = document.getElementById('masterRecipeSelect');
+      if (mrs) {
+        mrs.innerHTML = (data.recipeOptions || []).map(o =>
+          `<option value="${esc(o.key)}">${esc(o.name)}</option>`).join('');
+        if (data.activeRecipeStatusKey) recipeGroup = data.activeRecipeStatusKey;
+        if ([...mrs.options].some(o => o.value === recipeGroup)) mrs.value = recipeGroup;
+      }
+
+      fillAccountSelects();
+
+      document.getElementById('buyLogRows').innerHTML = (data.feedPurchases?.length ? data.feedPurchases.map(b => {
+        const pay = b.paymentStatus || ((+b.paidAmount || 0) > 0 ? 'paid' : 'credit');
+        const payTxt = pay + ((+b.paidAmount || 0) < (+b.amount || 0) ? ' · ' + rs(+b.paidAmount || 0) + ' paid' : '');
+        const alloc = Math.max(1, +b.allocationMonths || 1);
+        return `<tr class="feed-buy-row" data-id="${esc(b.id)}" data-date="${esc(b.dateDisplay)}" data-feed="${esc(b.feedType)}"
+          data-kg="${esc(b.kg)}" data-rate="${esc(b.ratePerKg)}" data-comment="${esc(b.comment)}"
+          data-useas="${esc(b.useAs || 'recipe')}" data-payment="${esc(pay)}" data-paid="${esc(b.paidAmount)}"
+          data-account="${esc(b.accountId || '')}" data-supplier="${esc(b.supplier)}" data-due="${esc(b.dueDateDisplay || '')}"
+          data-alloc="${esc(alloc)}">
           <td><span class="breed">${esc(b.dateDisplay)}</span></td><td>${esc(b.feedDisplayName)}</td>
           <td class="num-cell">${(+b.kg).toFixed(1)} kg</td><td class="num-cell hide-sm">Rs ${esc(b.ratePerKg)}</td>
           <td class="num-cell">${rs(b.amount)}</td>
-          <td class="hide-sm">${b.comment ? `<span class="name">${esc(b.comment)}</span>` : ''}</td></tr>`).join('') :
-        '<tr class="feed-buy-empty"><td colspan="6" class="empty">No feed purchases logged this month.</td></tr>');
+          <td class="hide-sm"><span class="breed">${esc(b.supplier || '—')}</span></td>
+          <td class="hide-sm"><span class="breed">${esc(payTxt)}</span></td>
+          <td class="hide-sm"><span class="breed">${esc(b.accountName || '—')}</span></td>
+          <td class="hide-sm"><span class="breed">${alloc} mo · ${rs(b.allocationPerMonth || (b.amount / alloc))}/mo</span></td>
+          <td class="hide-sm">${b.comment ? `<span class="name">${esc(b.comment)}</span>` : ''}</td>
+          <td></td></tr>`;
+      }).join('') :
+        '<tr class="feed-buy-empty"><td colspan="11" class="empty">No feed purchases logged this month.</td></tr>');
 
       document.querySelectorAll('#buyLogRows tr.feed-buy-row').forEach(row => {
         row.addEventListener('click', () => loadFeedBuyForEdit(row));
@@ -1631,8 +1819,8 @@ const GoatRecords = (() => {
       renderStoreStats(data);
       renderStock(data.stock);
       renderCheckList(data.stockCheckRows);
-      if (data.activeRecipe && document.getElementById('recipePanel')?.style.display === 'block')
-        renderMix(data.activeRecipe);
+      if (data.activeRecipe) renderMix(data.activeRecipe);
+      renderKidDiet(data.kidMilkDiet);
 
       bindFeedInputs(async (inp) => {
         if (inp?.dataset?.mix) await saveMixRecipe();
@@ -1653,8 +1841,134 @@ const GoatRecords = (() => {
           <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${esc(s.feedType)}" value="${esc(s.stockKg)}"
             style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
           <td class="num-cell">${(+s.kgPerDay).toFixed(1)} kg</td>
-          <td class="num-cell" style="${esc(s.daysLeftColor)}">${esc(s.daysLeftText)}</td></tr>`).join('');
+          <td class="num-cell" style="${esc(s.daysLeftColor)}">${esc(s.daysLeftText)}</td>
+          <td class="num-cell hide-sm">${rs(s.avgCostPerKg || 0)}</td>
+          <td class="num-cell hide-sm"><span class="chip ${esc(s.statusCssClass || '')}">${esc(s.statusText || '—')}</span></td></tr>`).join('');
       bindStockInputs();
+    }
+
+    function renderDirectFeedPlans(data) {
+      const box = document.getElementById('directFeedPlanBox');
+      if (!box) return;
+      const dfs = data.directFeeds || [];
+      const groups = data.groupPlans || [];
+      if (!dfs.length) { box.innerHTML = ''; return; }
+      box.innerHTML = `<div class="note" style="margin:0 0 10px"><b>Direct / bulk feeds</b> — use this for items such as Mungphali Bhusa, silage or another feed bought in bulk and fed separately. Enter kg per goat per day; stock and animal cost follow automatically.</div>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Group</th>${dfs.map(f => `<th class="num-cell">${esc(f.displayName)}<div class="name">kg/goat/day</div></th>`).join('')}</tr></thead>
+        <tbody>${groups.map(row => `<tr><td><span class="chip ${esc(row.statusCssClass)}">${esc(row.statusDisplay)}</span></td>${dfs.map(f => {
+          const v = (row.directKg && row.directKg[f.feedType]) || 0;
+          return `<td class="num-cell"><input type="number" min="0" step="0.05" data-direct-st="${esc(row.statusKey)}" data-direct-k="${esc(f.feedType)}" value="${esc(v)}"
+            style="width:86px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>`;
+        }).join('')}</tr>`).join('')}</tbody></table></div>`;
+      box.querySelectorAll('[data-direct-st]').forEach(inp => {
+        inp.onchange = async () => {
+          await api('/Feed/UpdateDirectPlan', {
+            method: 'POST',
+            body: JSON.stringify({
+              groupKey: inp.dataset.directSt,
+              feedType: inp.dataset.directK,
+              kgPerGoatPerDay: +inp.value || 0
+            })
+          });
+          await reloadFeed();
+        };
+      });
+    }
+
+    function kidStarterBatchKg() {
+      const sel = document.getElementById('v185BatchKg');
+      if (!sel) return 100;
+      return sel.value === 'custom' ? Math.max(1, +document.getElementById('v185CustomKg')?.value || 100) : (+sel.value || 100);
+    }
+
+    function renderKidMonths(months) {
+      const box = document.getElementById('v182Months');
+      if (!box || !months) return;
+      box.innerHTML = months.map((m, i) => `<div class="v182-month"><h3>${esc(m.name)}</h3><div class="v182-age">${m.from === 0 ? 'Birth' : m.from + ' days'} → ${m.to} days</div>
+        <div class="field"><label>Powder milk g/day</label><input data-v182="powderG" data-i="${i}" type="number" min="0" value="${esc(m.powderG)}"></div>
+        <div class="field"><label>Mother milk ml/day (optional)</label><input data-v182="motherMilkMl" data-i="${i}" type="number" min="0" value="${esc(m.motherMilkMl)}"></div>
+        <div class="field"><label>Kid starter mix g/day</label><input data-v182="mixG" data-i="${i}" type="number" min="0" value="${esc(m.mixG)}"></div>
+        <div class="field"><label>Green fodder g/day</label><input data-v182="greenG" data-i="${i}" type="number" min="0" value="${esc(m.greenG)}"></div>
+        <div class="field"><label>Dry fodder g/day</label><input data-v182="dryG" data-i="${i}" type="number" min="0" value="${esc(m.dryG)}"></div></div>`).join('');
+      box.querySelectorAll('[data-v182]').forEach(el => {
+        el.oninput = () => {
+          const msg = document.getElementById('v189SaveMsg');
+          if (msg) { msg.textContent = 'Unsaved changes — press Save Monthly Kid Diet.'; msg.style.fontWeight = '700'; }
+        };
+      });
+    }
+
+    function renderKidStarter(recipe) {
+      const box = document.getElementById('v183StarterRecipe');
+      if (!box) return;
+      if (!recipe?.items?.length) {
+        box.innerHTML = '<div class="muted">Feed ingredients will appear here from your Feed Store.</div>';
+        return;
+      }
+      const batch = kidStarterBatchKg();
+      const total = +recipe.totalKg || 0;
+      const factor = total > 0 ? batch / total : 1;
+      box.innerHTML = '<div class="table-wrap"><table class="tbl"><thead><tr><th>Ingredient</th><th class="num-cell">Quantity in batch (kg)</th><th class="num-cell">Current rate/kg</th><th class="num-cell">Ingredient cost</th></tr></thead><tbody>' +
+        recipe.items.map(m => {
+          const kg = (+m.kgInBatch || 0) * factor;
+          const rate = (feedData?.allPrices || []).find(p => p.feedType === m.feedType)?.pricePerKg || 0;
+          return `<tr><td>${esc(m.displayName)}</td><td class="num-cell"><input data-v183recipe="${esc(m.feedType)}" type="number" min="0" step="0.1" value="${kg ? kg.toFixed(2) : 0}"></td><td class="num-cell">${rs(rate)}</td><td class="num-cell">${rs(kg * rate)}</td></tr>`;
+        }).join('') + '</tbody></table></div>';
+      box.querySelectorAll('[data-v183recipe]').forEach(el => {
+        el.onchange = async () => {
+          const recipeMap = {};
+          box.querySelectorAll('[data-v183recipe]').forEach(inp => { recipeMap[inp.dataset.v183recipe] = +inp.value || 0; });
+          await api('/Feed/UpdateMixRecipeForStatus', {
+            method: 'POST',
+            body: JSON.stringify({ statusKey: 'kidstarter', recipe: recipeMap })
+          });
+          await reloadFeed(recipeGroup);
+        };
+      });
+      const tot = document.getElementById('v183StarterRecipeTotal');
+      if (tot) {
+        const entered = recipe.items.reduce((a, m) => a + (+m.kgInBatch || 0) * factor, 0);
+        const cost = recipe.items.reduce((a, m) => {
+          const kg = (+m.kgInBatch || 0) * factor;
+          const rate = (feedData?.allPrices || []).find(p => p.feedType === m.feedType)?.pricePerKg || 0;
+          return a + kg * rate;
+        }, 0);
+        const costKg = entered > 0 ? cost / entered : 0;
+        tot.innerHTML = `Target batch: <b>${batch.toFixed(0)} kg</b> &nbsp; | &nbsp; Ingredients entered: <b>${entered.toFixed(2)} kg</b>${entered && Math.abs(entered - batch) > 0.05 ? ' <span style="color:#a65b00">— adjust ingredients to ' + batch.toFixed(0) + ' kg</span>' : ''} &nbsp; | &nbsp; Total batch cost: <b>${rs(cost)}</b> &nbsp; | &nbsp; Starter cost: <b>${rs(costKg)}/kg</b>`;
+      }
+    }
+
+    function renderKidDiet(diet) {
+      if (!diet) return;
+      const q = id => document.getElementById(id);
+      if (q('v182Un')) q('v182Un').textContent = diet.unweanedKids || 0;
+      if (q('v182Pow')) q('v182Pow').textContent = Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US') + ' g';
+      if (q('v182Stock')) q('v182Stock').textContent = (+diet.powderStockKg || 0).toFixed(1) + ' kg';
+      const as = q('v188AutoStatus');
+      if (as) {
+        as.innerHTML = diet.autoStartDate
+          ? `<b>Automatic daily recording: ON</b> · Started ${esc(diet.autoStartDate)} · Recorded through ${esc(diet.lastAutoDate || 'not yet')}. Missed days are caught up when the software opens.`
+          : `<b>Automatic daily recording:</b> Enter Month 1–3 amounts and press <b>Save Monthly Kid Diet</b> to start.`;
+      }
+      const req = q('v182Req');
+      if (req) {
+        const c = diet.counts || [0, 0, 0];
+        req.innerHTML = `<b>Today's requirement:</b> ${c[0] || 0} kid(s) Month 1 · ${c[1] || 0} Month 2 · ${c[2] || 0} Month 3 &nbsp; | &nbsp; Powder milk <b>${Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US')} g/day</b> (${(+diet.powderTodayKg || 0).toFixed(2)} kg) · Mother milk ${(+diet.motherTodayL || 0).toFixed(2)} L · Starter mix ${(+diet.mixTodayKg || 0).toFixed(2)} kg · Green ${(+diet.greenTodayKg || 0).toFixed(2)} kg · Dry ${(+diet.dryTodayKg || 0).toFixed(2)} kg`;
+      }
+      const logs = q('v182Logs');
+      if (logs) {
+        logs.innerHTML = (diet.logs || []).length
+          ? diet.logs.map(x => `<tr><td>${esc(x.date)}</td><td>${x.kids}</td><td>${Math.round((+x.powder || 0) * 1000).toLocaleString('en-US')} g</td><td>${(+x.mother || 0).toFixed(2)} L</td><td>${(+x.mix || 0).toFixed(2)} kg</td><td>${(+x.green || 0).toFixed(2)} kg</td><td>${(+x.dry || 0).toFixed(2)} kg</td></tr>`).join('')
+          : '<tr><td colspan="7" class="empty">No kid milk feeding recorded yet.</td></tr>';
+      }
+      renderKidMonths(diet.months);
+      renderKidStarter(diet.starterRecipe);
+      const rate = (feedData?.allPrices || []).find(p => p.feedType === 'milkpowder')?.pricePerKg;
+      const rateEl = q('v182BuyRate');
+      if (rate && rateEl && !rateEl.value) rateEl.value = rate;
+      const dateEl = q('v182BuyDate');
+      if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+      syncKidPayFields();
     }
 
     function bindStockInputs() {
@@ -1696,8 +2010,10 @@ const GoatRecords = (() => {
       const confirmed = await showConfirm('Delete this feed purchase?');
       if (!confirmed) return;
       await api('/Feed/DeletePurchase?id=' + editingFeedBuyId, { method: 'DELETE' });
+      resetFeedBuyForm();
       sessionStorage.setItem('goatToast', 'Feed purchase deleted');
-      location.href = '/Feed?month=' + encodeURIComponent(feedMonth());
+      await reloadFeed();
+      flashStoredToast();
     });
 
     document.getElementById('addFeedBuy')?.addEventListener('click', async () => {
@@ -1706,10 +2022,28 @@ const GoatRecords = (() => {
       const feedType = document.getElementById('fb-feed').value;
       const kg = +document.getElementById('fb-kg').value || 0;
       const ratePerKg = +document.getElementById('fb-rate').value || 0;
-      if (!date || !feedType || !kg || !ratePerKg) { await showModal('Enter date, feed, qty and rate'); return; }
+      if (!date || !feedType || feedType === '__addfeed' || !kg || !ratePerKg) {
+        await showModal('Enter date, feed, qty and rate'); return;
+      }
+      const amount = Math.round(kg * ratePerKg);
+      const status = document.getElementById('fb-payment')?.value || 'paid';
+      let paidAmount = status === 'paid' ? amount : status === 'credit' ? 0 : (+document.getElementById('fb-paid')?.value || 0);
+      paidAmount = Math.max(0, Math.min(amount, paidAmount));
+      const accountId = document.getElementById('fb-account')?.value;
+      if (paidAmount > 0 && !accountId) {
+        await showModal('Select Paid from: Cash in Hand or a Bank account.');
+        return;
+      }
       const payload = {
         date, feedType, kg, ratePerKg,
-        comment: document.getElementById('fb-note').value.trim() || null
+        comment: document.getElementById('fb-note').value.trim() || null,
+        useAs: document.getElementById('fb-use')?.value || 'recipe',
+        paymentStatus: status,
+        paidAmount,
+        accountId: accountId ? +accountId : null,
+        supplier: document.getElementById('fb-supplier')?.value.trim() || 'Feed supplier',
+        dueDate: document.getElementById('fb-due')?.value || null,
+        allocationMonths: +document.getElementById('fb-alloc-months')?.value || 1
       };
       if (editingFeedBuyId) {
         await api('/Feed/UpdatePurchase?id=' + editingFeedBuyId, { method: 'PUT', body: JSON.stringify(payload) });
@@ -1718,15 +2052,18 @@ const GoatRecords = (() => {
         await api('/Feed/AddPurchase', { method: 'POST', body: JSON.stringify(payload) });
         sessionStorage.setItem('goatToast', 'Feed purchase added');
       }
-      location.href = '/Feed?month=' + encodeURIComponent(feedMonth());
+      resetFeedBuyForm();
+      await reloadFeed();
+      flashStoredToast();
     });
 
     document.getElementById('addFeedType')?.addEventListener('click', async () => {
       if (!FarmPerms.can('feed', 'add')) return;
       const displayName = document.getElementById('nf-name').value.trim();
       const pricePerKg = +document.getElementById('nf-price').value || 0;
+      const useType = document.getElementById('nf-use')?.value || 'recipe';
       if (!displayName) { await showModal('Enter feed name'); return; }
-      await api('/Feed/AddFeedType', { method: 'POST', body: JSON.stringify({ displayName, pricePerKg }) });
+      await api('/Feed/AddFeedType', { method: 'POST', body: JSON.stringify({ displayName, pricePerKg, useType }) });
       document.getElementById('nf-name').value = '';
       document.getElementById('nf-price').value = '';
       sessionStorage.setItem('goatToast', 'Feed type added');
@@ -1735,7 +2072,7 @@ const GoatRecords = (() => {
     });
 
     document.getElementById('jumpPurchase')?.addEventListener('click', () => {
-      showFeedTab('store');
+      showFeedTab('purchases');
       document.getElementById('fb-kg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       document.getElementById('fb-kg')?.focus();
     });
@@ -1804,17 +2141,103 @@ const GoatRecords = (() => {
       await reloadFeed();
     });
 
+    document.getElementById('masterRecipeSelect')?.addEventListener('change', async e => {
+      recipeGroup = e.target.value;
+      await reloadFeed(recipeGroup);
+    });
+    document.getElementById('fgAdd')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'add')) return;
+      const name = await showModal('Group name (e.g. High-yield milkers)', { prompt: true });
+      if (!name) return;
+      try {
+        await api('/Feed/AddFeedingGroup', { method: 'POST', body: JSON.stringify({ name, recipeFrom: 'milking' }) });
+        await showModal('"' + name + '" added with the same ration as Milking to start. Change the kg in the Feeding Plan, then move animals into it from Herd → Move to.');
+        await reloadFeed();
+      } catch { /* shown */ }
+    });
+    document.getElementById('v189SaveMonthlyDiet')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'edit')) return;
+      const months = (feedData?.kidMilkDiet?.months || []).map((m, i) => ({
+        name: m.name, from: m.from, to: m.to,
+        powderG: +document.querySelector(`[data-v182="powderG"][data-i="${i}"]`)?.value || 0,
+        motherMilkMl: +document.querySelector(`[data-v182="motherMilkMl"][data-i="${i}"]`)?.value || 0,
+        mixG: +document.querySelector(`[data-v182="mixG"][data-i="${i}"]`)?.value || 0,
+        greenG: +document.querySelector(`[data-v182="greenG"][data-i="${i}"]`)?.value || 0,
+        dryG: +document.querySelector(`[data-v182="dryG"][data-i="${i}"]`)?.value || 0
+      }));
+      const saved = await api('/Feed/SaveKidMilkDiet', { method: 'POST', body: JSON.stringify({ months }) });
+      const msg = document.getElementById('v189SaveMsg');
+      if (msg) {
+        msg.textContent = '✓ Diet saved — automatic daily recording active from ' + (saved.autoStartDate || '') + '.';
+        msg.style.fontWeight = '700';
+      }
+      await reloadFeed();
+    });
+    document.getElementById('v184OpenMasterRecipe')?.addEventListener('click', async () => {
+      recipeGroup = 'kidstarter';
+      showFeedTab('recipes');
+      await reloadFeed('kidstarter');
+      document.getElementById('recipePanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    document.getElementById('v185BatchKg')?.addEventListener('change', () => {
+      const wrap = document.getElementById('v185CustomWrap');
+      if (wrap) wrap.style.display = document.getElementById('v185BatchKg').value === 'custom' ? 'block' : 'none';
+      renderKidStarter(feedData?.kidMilkDiet?.starterRecipe);
+    });
+    document.getElementById('v185CustomKg')?.addEventListener('change', () => renderKidStarter(feedData?.kidMilkDiet?.starterRecipe));
+    ['v182BuyKg', 'v182BuyRate'].forEach(id => document.getElementById(id)?.addEventListener('input', syncKidPayFields));
+    document.getElementById('v182BuyStatus')?.addEventListener('change', syncKidPayFields);
+    document.getElementById('v182BuyBtn')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('feed', false)) return;
+      const date = document.getElementById('v182BuyDate')?.value;
+      const kg = +document.getElementById('v182BuyKg')?.value || 0;
+      const ratePerKg = +document.getElementById('v182BuyRate')?.value || 0;
+      if (!date || !kg || !ratePerKg) { await showModal('Enter date, quantity and rate.'); return; }
+      const amount = Math.round(kg * ratePerKg);
+      const status = document.getElementById('v182BuyStatus')?.value || 'paid';
+      let paidAmount = status === 'paid' ? amount : status === 'credit' ? 0 : (+document.getElementById('v182BuyPaid')?.value || 0);
+      paidAmount = Math.max(0, Math.min(amount, paidAmount));
+      const accountId = document.getElementById('v182BuyAccount')?.value;
+      if (paidAmount > 0 && !accountId) { await showModal('Select Paid from account.'); return; }
+      await api('/Feed/AddPurchase', {
+        method: 'POST',
+        body: JSON.stringify({
+          date, feedType: 'milkpowder', kg, ratePerKg,
+          comment: 'Kid Milk Diet purchase',
+          useAs: 'recipe',
+          paymentStatus: status,
+          paidAmount,
+          accountId: accountId ? +accountId : null,
+          supplier: document.getElementById('v182BuySupplier')?.value.trim() || 'Milk powder supplier',
+          dueDate: document.getElementById('v182BuyDue')?.value || null,
+          allocationMonths: 1
+        })
+      });
+      ['v182BuyKg', 'v182BuyPaid', 'v182BuySupplier', 'v182BuyDue'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      const st = document.getElementById('v182BuyStatus'); if (st) st.value = 'paid';
+      sessionStorage.setItem('goatToast', 'Powder milk purchase added');
+      await reloadFeed();
+      flashStoredToast();
+    });
+
     if (!FarmPerms.can('feed', 'edit')) {
-      FarmPerms.readonlyInputs('[data-price], [data-mix], [data-plan], [data-stock], [data-check], [data-fodamt], #feedMonth, #fb-date, #fb-feed, #fb-kg, #fb-rate, #fb-note, #nf-name, #nf-price, #nf-fodname, #nf-fodamt, #fodderMode, #fodderAcres');
+      FarmPerms.readonlyInputs('[data-price], [data-mix], [data-plan], [data-stock], [data-check], [data-fodamt], #feedMonth, #fb-date, #fb-feed, #fb-use, #fb-kg, #fb-rate, #fb-note, #fb-payment, #fb-paid, #fb-account, #fb-supplier, #fb-due, #nf-name, #nf-price, #nf-use, #nf-fodname, #nf-fodamt, #fodderMode, #fodderAcres, #masterRecipeSelect, #v182BuyDate, #v182BuyKg, #v182BuyRate, #v182BuyStatus, #v182BuyPaid, #v182BuyAccount, #v182BuySupplier, #v182BuyDue');
       FarmPerms.hide('addFeedType');
       FarmPerms.hide('addFeedBuy');
       FarmPerms.hide('addFodderLine');
       FarmPerms.hide('saveCheck');
       FarmPerms.hide('fillCheck');
+      FarmPerms.hide('fgAdd');
+      FarmPerms.hide('v189SaveMonthlyDiet');
+      FarmPerms.hide('v182BuyBtn');
     } else {
       bindStockInputs();
     }
     FarmPerms.applyForm('feed', { addBtnId: 'addFeedBuy', deleteBtnId: 'deleteFeedBuyBtn', rowSelector: '#buyLogRows tr.feed-buy-row' });
+    syncPaymentFields();
+    syncKidPayFields();
     reloadFeed();
   }
 

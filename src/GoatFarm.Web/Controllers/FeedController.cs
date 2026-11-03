@@ -286,6 +286,44 @@ public class FeedController : Controller
 
 
 
+    [HttpPost]
+    public async Task<IActionResult> AddFeedingGroup([FromBody] AddFeedingGroupViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _feedService.AddFeedingGroupAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteFeedingGroup(int id, CancellationToken cancellationToken)
+    {
+        var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
+            FarmTabs.Feed, "FeedingGroup", id, cancellationToken);
+        if (pending is not null) return pending;
+        var ok = await _feedService.DeleteFeedingGroupAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateDirectPlan([FromBody] UpdateDirectPlanViewModel model, CancellationToken cancellationToken)
+    {
+        await _feedService.UpdateDirectPlanAsync(model, cancellationToken);
+        return Ok(new { success = true });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetKidMilkDiet(CancellationToken cancellationToken) =>
+        Json(await _feedService.GetKidMilkDietAsync(cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> SaveKidMilkDiet([FromBody] SaveKidMilkDietViewModel model, CancellationToken cancellationToken) =>
+        Json(await _feedService.SaveKidMilkDietAsync(model, cancellationToken));
+
     public record UpdatePriceRequest(string FeedType, decimal Price);
 
 }

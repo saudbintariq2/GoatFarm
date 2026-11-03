@@ -56,6 +56,24 @@ public static class MixRecipeHelper
             }
         };
 
+    public static readonly IReadOnlyDictionary<string, decimal> DefaultKidStarterRecipe =
+        new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+        {
+            [FeedTypes.Wanda] = 40, [FeedTypes.Binola] = 20, [FeedTypes.Sarson] = 0,
+            [FeedTypes.Bran] = 25, [FeedTypes.Maize] = 12, [FeedTypes.Sheera] = 3
+        };
+
+    public static readonly IReadOnlyList<(string Key, string Name)> RecipeOptions =
+    [
+        (FeedTypes.KidStarter, "Kid Starter Mix"),
+        ("kid", "Weaned Kids"),
+        ("milking", "Milking"),
+        ("pregnant", "Pregnant"),
+        ("dry", "Dry"),
+        ("buck", "Bucks"),
+        ("sale", "For sale")
+    ];
+
     public static readonly IReadOnlyDictionary<GoatStatus, (decimal Mix, decimal Fodder, decimal FodderDry, decimal Med)> DefaultPlans =
         new Dictionary<GoatStatus, (decimal, decimal, decimal, decimal)>
         {

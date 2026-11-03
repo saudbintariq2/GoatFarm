@@ -139,6 +139,8 @@ public class SupplierPayableConfiguration : IEntityTypeConfiguration<SupplierPay
         builder.Property(x => x.SupplierName).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
+        builder.Property(x => x.SourceType).HasMaxLength(64);
+        builder.Property(x => x.SourceId).HasMaxLength(64);
     }
 }
 
@@ -195,5 +197,15 @@ public class ClientProductPriceConfiguration : IEntityTypeConfiguration<ClientPr
         builder.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(x => new { x.CustomerId, x.ProductId }).IsUnique();
+    }
+}
+
+public class CustomFeedingGroupConfiguration : IEntityTypeConfiguration<CustomFeedingGroup>
+{
+    public void Configure(EntityTypeBuilder<CustomFeedingGroup> builder)
+    {
+        builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
+        builder.Property(x => x.RecipeFrom).HasMaxLength(50).HasDefaultValue("milking");
+        builder.Property(x => x.FodderDryKgPerDay).HasPrecision(18, 3);
     }
 }

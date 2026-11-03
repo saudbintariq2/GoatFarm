@@ -58,6 +58,16 @@ public interface IFeedService
 
     Task UpdateFeedStockAsync(UpdateFeedStockViewModel model, CancellationToken cancellationToken = default);
 
+    Task<object> AddFeedingGroupAsync(AddFeedingGroupViewModel model, CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteFeedingGroupAsync(int id, CancellationToken cancellationToken = default);
+
+    Task UpdateDirectPlanAsync(UpdateDirectPlanViewModel model, CancellationToken cancellationToken = default);
+
+    Task<KidMilkDietViewModel> GetKidMilkDietAsync(CancellationToken cancellationToken = default);
+
+    Task<KidMilkDietViewModel> SaveKidMilkDietAsync(SaveKidMilkDietViewModel model, CancellationToken cancellationToken = default);
+
     decimal CalculateDailyFeedCost(decimal mixKgPerDay, string? statusKey = null);
 
     decimal CalculateFarmFeedMonthly();

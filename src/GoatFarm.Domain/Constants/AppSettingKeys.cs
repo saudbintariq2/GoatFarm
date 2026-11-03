@@ -6,6 +6,8 @@ public static class AppSettingKeys
     public const string MixRecipes = "MixRecipes";
     public const string FodderPool = "FodderPool";
     public const string FeedSettings = "FeedSettings";
+    public const string FeedDirectPlans = "FeedDirectPlans";
+    public const string KidMilkDiet = "KidMilkDiet";
     public const string RemindDays = "RemindDays";
     public const string BreedingSeason = "BreedingSeason";
     public const string BreedingGroups = "BreedingGroups";

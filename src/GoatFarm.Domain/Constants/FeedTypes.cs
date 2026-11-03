@@ -10,6 +10,11 @@ public static class FeedTypes
     public const string Sheera = "sheera";
     public const string Fodder = "fodder";
     public const string FodderDry = "fodderdry";
+    public const string MilkPowder = "milkpowder";
+    public const string KidStarter = "kidstarter";
+
+    public const string UseRecipe = "recipe";
+    public const string UseDirect = "direct";
 
     public static readonly IReadOnlyList<(string Key, string Name)> All =
     [
@@ -20,7 +25,8 @@ public static class FeedTypes
         (Maize, "Maize (makai)"),
         (Sheera, "Sheera (molasses)"),
         (Fodder, "Green fodder (chaara)"),
-        (FodderDry, "Dry fodder (toori / bhoosa)")
+        (FodderDry, "Dry fodder (toori / bhoosa)"),
+        (MilkPowder, "Powder milk (kids)")
     ];
 
     public static bool IsGreenFodder(string feedType) =>
@@ -29,7 +35,14 @@ public static class FeedTypes
     public static bool IsPurchasable(string feedType) =>
         !IsGreenFodder(feedType);
 
+    public static bool IsMilkPowder(string feedType) =>
+        string.Equals(feedType, MilkPowder, StringComparison.OrdinalIgnoreCase);
+
     public static bool IsMixIngredient(string feedType) =>
         IsPurchasable(feedType) &&
-        !string.Equals(feedType, FodderDry, StringComparison.OrdinalIgnoreCase);
+        !string.Equals(feedType, FodderDry, StringComparison.OrdinalIgnoreCase) &&
+        !IsMilkPowder(feedType);
+
+    public static bool IsDirectUse(string? useType) =>
+        string.Equals(useType, UseDirect, StringComparison.OrdinalIgnoreCase);
 }

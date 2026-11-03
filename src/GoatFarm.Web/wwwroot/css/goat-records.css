@@ -258,6 +258,7 @@
   .chip-buck{background:var(--blue-tint);color:#1e5470}.chip-sale{background:#fde6e0;color:#9a3a1e}
   .chip-cap{background:var(--blue-tint);color:#1e5470}.chip-inc{background:var(--green-tint);color:var(--green-dark)}
   .chip-exp{background:var(--red-tint);color:#8a261c}
+  .chip-warn{background:var(--amber-tint);color:#8a5b13}
   .chip-legacy{background:var(--amber-tint);color:#8a5b13;margin-left:6px}
 
   .empty{text-align:center;padding:30px 16px;color:var(--ink-soft);font-size:14px}
@@ -559,3 +560,65 @@
   .file-picker-input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .file-picker-btn{margin:0;flex-shrink:0;cursor:pointer}
   .file-picker-name{font-size:14px;color:var(--ink-soft);word-break:break-all;flex:1;min-width:120px}
+
+  .v170-feed-buy-form{display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid #e6dfd0;border-radius:14px;background:#fffdf8}
+  .v170-feed-row{display:grid;gap:12px;align-items:end}
+  .v170-feed-purchase-row{grid-template-columns:1.15fr 1.35fr .85fr .9fr 1fr .9fr}
+  .v170-feed-payment-row{grid-template-columns:1fr 1fr 1.35fr 1.35fr 1.05fr 1fr}
+  .v170-feed-note-row{grid-template-columns:minmax(0,1fr) auto}
+  .v170-feed-buy-form .field{min-width:0;margin:0}
+  .v170-feed-buy-form .field label{display:block;min-height:18px;margin-bottom:6px;white-space:normal}
+  .v170-feed-buy-form input,.v170-feed-buy-form select{width:100%;min-width:0;box-sizing:border-box}
+  .v170-feed-buy-form #fb-total{font-weight:800;background:#f4f6f1;color:#174d39}
+  .v170-feed-note{min-width:0}
+  .v170-feed-submit{min-width:160px}
+  .v170-feed-submit .btn{width:100%;min-height:44px;white-space:nowrap}
+  @media(max-width:1100px){.v170-feed-purchase-row{grid-template-columns:repeat(3,minmax(0,1fr))}.v170-feed-payment-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:760px){.v170-feed-purchase-row,.v170-feed-payment-row{grid-template-columns:repeat(2,minmax(0,1fr))}.v170-feed-note-row{grid-template-columns:1fr}.v170-feed-submit{min-width:0}}
+  @media(max-width:480px){.v170-feed-purchase-row,.v170-feed-payment-row{grid-template-columns:1fr}.v170-feed-buy-form{padding:11px;gap:10px}}
+
+  .v195-feed-flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--green-tint);font-size:12px;font-weight:800;color:var(--green-dark)}
+  .v195-feed-flow b{opacity:.45}
+  .v195-feed-tabs{gap:6px;flex-wrap:wrap}
+  .v195-feed-tabs .tab{min-width:120px}
+  .v195-help{margin:0 0 14px;padding:12px 14px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:13px;color:var(--ink-soft)}
+  .v195-summary{cursor:pointer;padding:15px 18px;font-weight:800;color:var(--green-dark);list-style:none}
+  .v195-summary::-webkit-details-marker{display:none}
+  .v195-summary span{font-weight:500;color:var(--ink-soft);margin-left:8px;font-size:12px}
+  .v195-details-body{padding:0 0 2px}
+  .v195-advanced-tag{font-size:9px;padding:2px 5px;border-radius:8px;background:var(--amber-tint);color:var(--amber);font-weight:800}
+  .tbl tr.feed-buy-row{cursor:pointer}
+  .tbl tr.feed-buy-row.editing{background:var(--green-tint);outline:2px solid var(--green);outline-offset:-2px}
+  @media(max-width:760px){.v195-feed-tabs .tab{min-width:calc(50% - 6px);font-size:12px}.v195-feed-flow{font-size:10px;gap:5px}.v195-summary span{display:block;margin:4px 0 0}}
+
+  #view-feed .v205-feed-scroll{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  @media(max-width:900px){
+    #view-feed .v205-feed-scroll>table.tbl{width:max-content;min-width:100%}
+    #view-feed .v205-feed-scroll th,#view-feed .v205-feed-scroll td{white-space:nowrap}
+    #view-feed .v205-feed-scroll th:first-child,#view-feed .v205-feed-scroll td:first-child{position:sticky;left:0;z-index:2;background-color:var(--card,#fff);box-shadow:1px 0 0 var(--line)}
+  }
+
+  #feed-kiddiet .v182-grid{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:12px}
+  #feed-kiddiet .v182-kpi{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card,#fff)}
+  #feed-kiddiet .v182-kpi span{display:block;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+  #feed-kiddiet .v182-kpi b{display:block;font-size:22px;margin-top:4px}
+  #feed-kiddiet .v182-help{background:var(--green-tint,#eef7f0);border:1px solid var(--line);border-radius:12px;padding:12px;line-height:1.5}
+  #feed-kiddiet .v182-months{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px}
+  #feed-kiddiet .v182-month{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--card,#fff)}
+  #feed-kiddiet .v182-month h3{margin:0 0 4px;font-size:15px}
+  #feed-kiddiet .v182-age{font-size:12px;color:var(--ink-soft);margin-bottom:10px}
+  #feed-kiddiet .v182-month .field{margin-top:8px}
+  #feed-kiddiet .v182-buy{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:10px;align-items:end}
+  #v183StarterRecipe .tbl{table-layout:auto}
+  #v183StarterRecipe .tbl th:nth-child(2),
+  #v183StarterRecipe .tbl td:nth-child(2){width:1%;white-space:nowrap}
+  #v183StarterRecipe input[data-v183recipe]{
+    width:86px;max-width:86px;min-width:0;box-sizing:border-box;
+    font-family:inherit;font-size:14px;padding:5px 7px;
+    border:1px solid var(--line);border-radius:7px;background:#fff;
+    text-align:right;font-variant-numeric:tabular-nums;
+    appearance:textfield;-moz-appearance:textfield;-webkit-appearance:textfield}
+  #v183StarterRecipe input[data-v183recipe]::-webkit-outer-spin-button,
+  #v183StarterRecipe input[data-v183recipe]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  @media(max-width:1050px){#feed-kiddiet .v182-months{grid-template-columns:1fr 1fr}#feed-kiddiet .v182-buy{grid-template-columns:1fr 1fr 1fr}}
+  @media(max-width:700px){#feed-kiddiet .v182-grid,#feed-kiddiet .v182-months,#feed-kiddiet .v182-buy{grid-template-columns:1fr}}

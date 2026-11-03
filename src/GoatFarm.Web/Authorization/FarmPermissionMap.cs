@@ -92,6 +92,11 @@ public static class FarmPermissionMap
             ["Feed.UpdateFeedSettings"] = (FarmTabs.Feed, FarmActions.Edit),
             ["Feed.RunAutoUsage"] = (FarmTabs.Feed, FarmActions.Edit),
             ["Feed.SaveStockCheck"] = (FarmTabs.Feed, FarmActions.Edit),
+            ["Feed.AddFeedingGroup"] = (FarmTabs.Feed, FarmActions.Add),
+            ["Feed.DeleteFeedingGroup"] = (FarmTabs.Feed, FarmActions.Delete),
+            ["Feed.UpdateDirectPlan"] = (FarmTabs.Feed, FarmActions.Edit),
+            ["Feed.GetKidMilkDiet"] = (FarmTabs.Feed, FarmActions.View),
+            ["Feed.SaveKidMilkDiet"] = (FarmTabs.Feed, FarmActions.Edit),
 
             ["Lookup.Get"] = (FarmTabs.Herd, FarmActions.View),
             ["Lookup.AddOption"] = (FarmTabs.Herd, FarmActions.Add),

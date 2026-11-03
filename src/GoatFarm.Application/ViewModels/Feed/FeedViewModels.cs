@@ -14,6 +14,8 @@ public class FeedPriceViewModel
 
     public decimal StockKg { get; set; }
 
+    public string UseType { get; set; } = "recipe";
+
 }
 
 
@@ -101,6 +103,12 @@ public class FeedGroupPlanRowViewModel
     public decimal MedicineCostPerGoatPerMonth { get; set; }
 
     public decimal MonthlyTotal { get; set; }
+
+    public bool IsCustomGroup { get; set; }
+
+    public string RecipeFrom { get; set; } = string.Empty;
+
+    public IReadOnlyDictionary<string, decimal> DirectKg { get; set; } = new Dictionary<string, decimal>();
 
 }
 
@@ -388,6 +396,14 @@ public class FeedPageViewModel
 
     public MixRecipeStatusViewModel? ActiveRecipe { get; set; }
 
+    public IReadOnlyList<FeedRecipeOptionViewModel> RecipeOptions { get; set; } = [];
+
+    public IReadOnlyList<FeedMoneyAccountViewModel> MoneyAccounts { get; set; } = [];
+
+    public IReadOnlyList<FeedDirectFeedViewModel> DirectFeeds { get; set; } = [];
+
+    public KidMilkDietViewModel KidMilkDiet { get; set; } = new();
+
 }
 
 
@@ -419,6 +435,12 @@ public class FeedStockRowViewModel
     public decimal? StockPercent { get; set; }
 
     public bool IsLowStock { get; set; }
+
+    public decimal AvgCostPerKg { get; set; }
+
+    public string StatusText { get; set; } = "—";
+
+    public string StatusCssClass { get; set; } = "";
 
 }
 
@@ -458,6 +480,26 @@ public class FeedPurchaseViewModel
 
     public string? Comment { get; set; }
 
+    public string UseAs { get; set; } = "recipe";
+
+    public string PaymentStatus { get; set; } = "paid";
+
+    public decimal PaidAmount { get; set; }
+
+    public int? AccountId { get; set; }
+
+    public string AccountName { get; set; } = "—";
+
+    public string? Supplier { get; set; }
+
+    public DateOnly? DueDate { get; set; }
+
+    public string? DueDateDisplay => DueDate?.ToString("yyyy-MM-dd");
+
+    public int AllocationMonths { get; set; } = 1;
+
+    public decimal AllocationPerMonth => AllocationMonths > 0 ? Amount / AllocationMonths : Amount;
+
 }
 
 
@@ -482,6 +524,24 @@ public class CreateFeedPurchaseViewModel
     [System.ComponentModel.DataAnnotations.StringLength(500)]
     public string? Comment { get; set; }
 
+    [System.ComponentModel.DataAnnotations.StringLength(20)]
+    public string UseAs { get; set; } = "recipe";
+
+    [System.ComponentModel.DataAnnotations.StringLength(20)]
+    public string PaymentStatus { get; set; } = "paid";
+
+    public decimal PaidAmount { get; set; }
+
+    public int? AccountId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.StringLength(200)]
+    public string? Supplier { get; set; }
+
+    public DateOnly? DueDate { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Range(1, 12)]
+    public int AllocationMonths { get; set; } = 1;
+
 }
 
 
@@ -493,6 +553,8 @@ public class AddFeedTypeViewModel
     public string DisplayName { get; set; } = string.Empty;
 
     public decimal PricePerKg { get; set; }
+
+    public string UseType { get; set; } = "recipe";
 
 }
 
@@ -511,6 +573,8 @@ public class UpdateFeedPlanViewModel
     public decimal FodderDryKgPerDay { get; set; }
 
     public decimal MedicineCostPerGoatPerMonth { get; set; }
+
+    public string? RecipeFrom { get; set; }
 
 }
 
@@ -595,6 +659,166 @@ public class StockCheckResultViewModel
     public string? DetailHtml { get; set; }
 
     public decimal UnderageKg { get; set; }
+
+}
+
+
+
+public class FeedRecipeOptionViewModel
+
+{
+
+    public string Key { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+}
+
+
+
+public class FeedMoneyAccountViewModel
+
+{
+
+    public int Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Kind { get; set; } = string.Empty;
+
+    public decimal Balance { get; set; }
+
+}
+
+
+
+public class FeedDirectFeedViewModel
+
+{
+
+    public string FeedType { get; set; } = string.Empty;
+
+    public string DisplayName { get; set; } = string.Empty;
+
+}
+
+
+
+public class AddFeedingGroupViewModel
+
+{
+
+    public string Name { get; set; } = string.Empty;
+
+    public string RecipeFrom { get; set; } = "milking";
+
+}
+
+
+
+public class UpdateDirectPlanViewModel
+
+{
+
+    public string GroupKey { get; set; } = string.Empty;
+
+    public string FeedType { get; set; } = string.Empty;
+
+    public decimal KgPerGoatPerDay { get; set; }
+
+}
+
+
+
+public class KidMilkMonthViewModel
+
+{
+
+    public string Name { get; set; } = string.Empty;
+
+    public int From { get; set; }
+
+    public int To { get; set; }
+
+    public decimal PowderG { get; set; }
+
+    public decimal MotherMilkMl { get; set; }
+
+    public decimal MixG { get; set; }
+
+    public decimal GreenG { get; set; }
+
+    public decimal DryG { get; set; }
+
+}
+
+
+
+public class KidMilkLogViewModel
+
+{
+
+    public string Date { get; set; } = string.Empty;
+
+    public int Kids { get; set; }
+
+    public decimal Powder { get; set; }
+
+    public decimal Mother { get; set; }
+
+    public decimal Mix { get; set; }
+
+    public decimal Green { get; set; }
+
+    public decimal Dry { get; set; }
+
+    public int[] Counts { get; set; } = [0, 0, 0];
+
+    public bool AutoDaily { get; set; }
+
+}
+
+
+
+public class KidMilkDietViewModel
+
+{
+
+    public IReadOnlyList<KidMilkMonthViewModel> Months { get; set; } = [];
+
+    public IReadOnlyList<KidMilkLogViewModel> Logs { get; set; } = [];
+
+    public string? AutoStartDate { get; set; }
+
+    public string? LastAutoDate { get; set; }
+
+    public int UnweanedKids { get; set; }
+
+    public decimal PowderTodayKg { get; set; }
+
+    public decimal PowderStockKg { get; set; }
+
+    public decimal MixTodayKg { get; set; }
+
+    public decimal GreenTodayKg { get; set; }
+
+    public decimal DryTodayKg { get; set; }
+
+    public decimal MotherTodayL { get; set; }
+
+    public int[] Counts { get; set; } = [0, 0, 0];
+
+    public MixRecipeStatusViewModel? StarterRecipe { get; set; }
+
+}
+
+
+
+public class SaveKidMilkDietViewModel
+
+{
+
+    public List<KidMilkMonthViewModel> Months { get; set; } = [];
 
 }
 
