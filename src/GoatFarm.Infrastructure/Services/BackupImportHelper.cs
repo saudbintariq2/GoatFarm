@@ -726,7 +726,8 @@ internal static class BackupImportHelper
         {
             Name = GetString(v, "name", "Name") ?? "",
             Scope = ParseScope(GetString(v, "scope", "Scope")),
-            RuleType = ruleType
+            RuleType = ruleType,
+            Note = GetString(v, "note", "Note")
         };
 
         if (ruleType == VaccineRuleType.Age)
@@ -817,15 +818,28 @@ internal static class BackupImportHelper
         IsStockCheck = GetBool(el, "check", "Check", "isStockCheck", "IsStockCheck")
     };
 
-    private static VaccinePurchase ImportVaccinePurchase(JsonElement el) => new()
+    private static VaccinePurchase ImportVaccinePurchase(JsonElement el)
     {
-        Date = ParseDateRequired(el, "date", "Date"),
-        Name = GetString(el, "name", "Name") ?? "",
-        Qty = GetDecimal(el, "qty", "Qty"),
-        Unit = GetString(el, "unit", "Unit") ?? "",
-        Amount = GetDecimal(el, "amount", "Amount"),
-        Comment = GetString(el, "note", "Comment", "comment")
-    };
+        var amount = GetDecimal(el, "amount", "Amount");
+        var paid = el.TryGetProperty("paid", out _) || el.TryGetProperty("PaidAmount", out _) || el.TryGetProperty("paidAmount", out _)
+            ? GetDecimal(el, "paid", "PaidAmount", "paidAmount")
+            : amount;
+        var status = GetString(el, "paymentStatus", "PaymentStatus") ?? (paid >= amount ? "paid" : paid > 0 ? "partial" : "credit");
+        return new VaccinePurchase
+        {
+            Date = ParseDateRequired(el, "date", "Date"),
+            Name = GetString(el, "name", "Name") ?? "",
+            Qty = GetDecimal(el, "qty", "Qty"),
+            Unit = GetString(el, "unit", "Unit") ?? "",
+            Amount = amount,
+            Comment = GetString(el, "note", "Comment", "comment"),
+            PaymentStatus = status,
+            PaidAmount = paid,
+            AccountId = GetNullableInt(el, "accountId", "AccountId"),
+            Supplier = GetString(el, "supplier", "Supplier"),
+            DueDate = ParseDate(el, "dueDate", "DueDate")
+        };
+    }
 
     private static FeedPurchase ImportFeedPurchaseV19(
         GoatFarmDbContext context, JsonElement el, Dictionary<string, (string Key, string Name)> feedTypeMap)

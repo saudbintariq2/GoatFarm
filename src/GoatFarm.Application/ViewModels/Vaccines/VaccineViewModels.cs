@@ -13,6 +13,7 @@ public class VaccineViewModel
     public string RuleDisplay { get; set; } = string.Empty;
     public int? Days { get; set; }
     public int? Months { get; set; }
+    public string? Note { get; set; }
 }
 
 public class CreateVaccineViewModel
@@ -29,6 +30,9 @@ public class CreateVaccineViewModel
 
     [Range(1, int.MaxValue, ErrorMessage = "Enter a number")]
     public int Value { get; set; }
+
+    [StringLength(500)]
+    public string? Note { get; set; }
 }
 
 public class VaccineDueRowViewModel
@@ -100,6 +104,7 @@ public class VaccinePageViewModel
     public string PurchaseMonth { get; set; } = string.Empty;
     public CreateVaccineViewModel NewVaccine { get; set; } = new();
     public IReadOnlyList<string> GoatGroups { get; set; } = [];
+    public IReadOnlyList<VaccineMoneyAccountViewModel> MoneyAccounts { get; set; } = [];
 }
 
 public class VaccinePurchaseViewModel
@@ -112,6 +117,13 @@ public class VaccinePurchaseViewModel
     public string Unit { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public string? Comment { get; set; }
+    public string PaymentStatus { get; set; } = "paid";
+    public decimal PaidAmount { get; set; }
+    public int? AccountId { get; set; }
+    public string AccountName { get; set; } = "—";
+    public string? Supplier { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public string? DueDateDisplay => DueDate?.ToString("yyyy-MM-dd");
 }
 
 public class CreateVaccinePurchaseViewModel
@@ -124,7 +136,7 @@ public class CreateVaccinePurchaseViewModel
     public string Name { get; set; } = string.Empty;
 
     [Required]
-    [Range(0.01, double.MaxValue)]
+    [Range(0, double.MaxValue)]
     public decimal Qty { get; set; }
 
     [Required]
@@ -136,4 +148,24 @@ public class CreateVaccinePurchaseViewModel
 
     [StringLength(500)]
     public string? Comment { get; set; }
+
+    [StringLength(20)]
+    public string PaymentStatus { get; set; } = "paid";
+
+    public decimal PaidAmount { get; set; }
+
+    public int? AccountId { get; set; }
+
+    [StringLength(200)]
+    public string? Supplier { get; set; }
+
+    public DateOnly? DueDate { get; set; }
+}
+
+public class VaccineMoneyAccountViewModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public decimal Balance { get; set; }
 }

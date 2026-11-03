@@ -3215,6 +3215,49 @@ const GoatRecords = (() => {
     let editingVaccId = null;
     let editingHist = null;
     let editingVaccBuyId = null;
+    let healthData = { moneyAccounts: [] };
+    try {
+      const raw = document.getElementById('health-page-json')?.textContent;
+      if (raw) healthData = JSON.parse(raw);
+    } catch (e) { /* keep empty accounts */ }
+
+    function fillVaccAccountSelect() {
+      const el = document.getElementById('vb-account');
+      if (!el) return;
+      const cur = el.value;
+      const opts = '<option value="">Select Cash / Bank account...</option>' +
+        (healthData.moneyAccounts || []).map(a =>
+          `<option value="${esc(a.id)}">${esc(a.name)} · ${rs(a.balance || 0)}</option>`).join('');
+      el.innerHTML = opts;
+      if ([...el.options].some(o => o.value === cur)) el.value = cur;
+    }
+
+    function syncVaccPayFields() {
+      const status = document.getElementById('vb-payment')?.value || 'paid';
+      const paid = document.getElementById('vb-paid');
+      const acct = document.getElementById('vb-account');
+      const due = document.getElementById('vb-due');
+      const amt = +document.getElementById('vb-amt')?.value || 0;
+      if (!paid || !acct || !due) return;
+      if (status === 'paid') {
+        paid.value = amt || '';
+        paid.readOnly = true;
+        acct.disabled = false;
+        due.value = '';
+        due.disabled = true;
+      } else if (status === 'credit') {
+        paid.value = '0';
+        paid.readOnly = true;
+        acct.value = '';
+        acct.disabled = true;
+        due.disabled = false;
+      } else {
+        paid.readOnly = false;
+        acct.disabled = false;
+        due.disabled = false;
+        if (amt && +paid.value >= amt) paid.value = '';
+      }
+    }
 
     const vaccBuyMonth = () => document.getElementById('vbMonth')?.value || new Date().toISOString().slice(0, 7);
 
@@ -3276,6 +3319,8 @@ const GoatRecords = (() => {
       document.getElementById('v-scope').value = 'All';
       document.getElementById('v-type').value = 'Age';
       document.getElementById('v-val').value = '';
+      const note = document.getElementById('v-note');
+      if (note) note.value = '';
       applyVaccRuleLabel();
       document.querySelectorAll('#vaccRows tr.vacc-row.editing').forEach(r => r.classList.remove('editing'));
       setVaccEditMode(false);
@@ -3300,9 +3345,14 @@ const GoatRecords = (() => {
       document.getElementById('vb-qty').value = '';
       document.getElementById('vb-amt').value = '';
       document.getElementById('vb-note').value = '';
+      const paid = document.getElementById('vb-paid'); if (paid) paid.value = '';
+      const sup = document.getElementById('vb-supplier'); if (sup) sup.value = '';
+      const due = document.getElementById('vb-due'); if (due) due.value = '';
+      const pay = document.getElementById('vb-payment'); if (pay) pay.value = 'paid';
       document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row.editing').forEach(r => r.classList.remove('editing'));
       document.getElementById('cancelVaccBuyBtn').style.display = 'none';
       document.getElementById('deleteVaccBuyBtn').style.display = 'none';
+      syncVaccPayFields();
     }
 
     function loadVaccBuyForEdit(row) {
@@ -3316,10 +3366,16 @@ const GoatRecords = (() => {
       document.getElementById('vb-unit').value = row.dataset.unit || '';
       document.getElementById('vb-amt').value = row.dataset.amount || '';
       document.getElementById('vb-note').value = row.dataset.comment || '';
+      const pay = document.getElementById('vb-payment'); if (pay) pay.value = row.dataset.payment || 'paid';
+      const paid = document.getElementById('vb-paid'); if (paid) paid.value = row.dataset.paid || '';
+      const acct = document.getElementById('vb-account'); if (acct) acct.value = row.dataset.account || '';
+      const sup = document.getElementById('vb-supplier'); if (sup) sup.value = row.dataset.supplier || '';
+      const due = document.getElementById('vb-due'); if (due) due.value = row.dataset.due || '';
       document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       document.getElementById('cancelVaccBuyBtn').style.display = '';
       document.getElementById('deleteVaccBuyBtn').style.display = '';
+      syncVaccPayFields();
     }
 
     function loadRemForEdit(row) {
@@ -3348,6 +3404,8 @@ const GoatRecords = (() => {
       document.getElementById('v-scope').value = row.dataset.scope || 'All';
       document.getElementById('v-type').value = row.dataset.ruleType || 'Age';
       document.getElementById('v-val').value = row.dataset.value || '';
+      const note = document.getElementById('v-note');
+      if (note) note.value = row.dataset.note || '';
       applyVaccRuleLabel();
       document.querySelectorAll('#vaccRows tr.vacc-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
@@ -3458,7 +3516,8 @@ const GoatRecords = (() => {
         name,
         scope: document.getElementById('v-scope').value,
         ruleType: document.getElementById('v-type').value,
-        value: val
+        value: val,
+        note: document.getElementById('v-note')?.value.trim() || null
       };
       if (editingVaccId) {
         await api('/Vaccine/Update?id=' + editingVaccId, { method: 'PUT', body: JSON.stringify(payload) });
@@ -3476,13 +3535,26 @@ const GoatRecords = (() => {
       const qty = +document.getElementById('vb-qty').value || 0;
       const unit = document.getElementById('vb-unit').value;
       const amount = +document.getElementById('vb-amt').value || 0;
-      if (!date || !name || name === '__add' || !qty || !unit || !amount) {
-        await showModal('Enter date, vaccine, qty, unit and amount');
+      if (!date || !name || name === '__add' || !unit || !amount) {
+        await showModal('Enter date, vaccine name and amount');
+        return;
+      }
+      const status = document.getElementById('vb-payment')?.value || 'paid';
+      let paid = status === 'paid' ? amount : status === 'credit' ? 0 : (+document.getElementById('vb-paid')?.value || 0);
+      paid = Math.max(0, Math.min(amount, paid));
+      const accountId = document.getElementById('vb-account')?.value;
+      if (paid > 0 && !accountId) {
+        await showModal('Select Paid from: Cash in Hand or a Bank account.');
         return;
       }
       const payload = {
         date, name, qty, unit, amount,
-        comment: document.getElementById('vb-note').value.trim() || null
+        comment: document.getElementById('vb-note').value.trim() || null,
+        paymentStatus: status,
+        paidAmount: paid,
+        accountId: accountId ? +accountId : null,
+        supplier: document.getElementById('vb-supplier')?.value.trim() || null,
+        dueDate: document.getElementById('vb-due')?.value || null
       };
       if (editingVaccBuyId) {
         await api('/Vaccine/UpdatePurchase?id=' + editingVaccBuyId, { method: 'PUT', body: JSON.stringify(payload) });
@@ -3568,6 +3640,13 @@ const GoatRecords = (() => {
     initEditableDropdown('v-name', 'Lookup.VaccineNames');
     initEditableDropdown('vb-name', 'Lookup.VaccineNames');
     initEditableDropdown('vb-unit', 'Lookup.VaccineUnits');
+    fillVaccAccountSelect();
+    document.getElementById('vb-payment')?.addEventListener('change', syncVaccPayFields);
+    document.getElementById('vb-amt')?.addEventListener('input', () => {
+      const status = document.getElementById('vb-payment')?.value || 'paid';
+      if (status === 'paid') syncVaccPayFields();
+    });
+    syncVaccPayFields();
     if (!FarmPerms.can('vaccines', 'edit')) {
       FarmPerms.readonlyInputs('#remindWin');
       document.querySelectorAll('[data-dovacc]').forEach(b => b.classList.add('perm-hidden'));

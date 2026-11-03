@@ -212,7 +212,8 @@ public static class IndexNewDemoSeedHelper
         {
             context.VaccinePurchases.Add(new VaccinePurchase
             {
-                Date = MonthDate(4), Name = "PPR", Qty = 1, Unit = "Box", Amount = 3500, Comment = "50 doses"
+                Date = MonthDate(4), Name = "PPR", Qty = 1, Unit = "Box", Amount = 3500, PaidAmount = 3500,
+                PaymentStatus = "paid", Comment = "50 doses"
             });
         }
 

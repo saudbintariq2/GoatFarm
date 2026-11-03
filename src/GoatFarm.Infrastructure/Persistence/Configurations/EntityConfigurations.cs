@@ -191,6 +191,9 @@ public class VaccinePurchaseConfiguration : IEntityTypeConfiguration<VaccinePurc
         builder.Property(x => x.Unit).IsRequired().HasMaxLength(50);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.Comment).HasMaxLength(500);
+        builder.Property(x => x.PaymentStatus).HasMaxLength(20).HasDefaultValue("paid");
+        builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
+        builder.Property(x => x.Supplier).HasMaxLength(200);
     }
 }
 
@@ -285,6 +288,7 @@ public class VaccineConfiguration : IEntityTypeConfiguration<Vaccine>
         builder.ToTable("Vaccines");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Note).HasMaxLength(500);
     }
 }
 

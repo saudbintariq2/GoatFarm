@@ -133,7 +133,7 @@ public static class AssistantNavigationCatalog
                 "herd" => "Open Herd",
                 "breeding" => "Open Breeding",
                 "feed" => "Open Feed",
-                "health" or "vaccines" => "Open Health",
+                "health" or "vaccines" => "Open Health & vaccines",
                 "tasks" => "Open Tasks",
                 "search" => "Open Search",
                 _ => "Open page"

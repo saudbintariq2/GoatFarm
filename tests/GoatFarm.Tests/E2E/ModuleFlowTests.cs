@@ -307,13 +307,15 @@ public class ModuleFlowTests
         await Expect(page.Locator("#dueList")).ToBeAttachedAsync();
 
         await page.ClickAsync("#addVaccBuy");
-        await s.CloseModalAsync("Enter date, vaccine, qty, unit and amount");
+        await s.CloseModalAsync("Enter date, vaccine name and amount");
         var name = (await page.Locator("#vb-name option").First.GetAttributeAsync("value")) ?? (await page.Locator("#vb-name option").First.InnerTextAsync());
         Assert.Equal(400, (await s.ApiAsync("POST", "/Vaccine/AddPurchase", new { date = Today(), name, qty = -1, unit = "Box", amount = 100 })).Status);
 
         await page.SelectOptionAsync("#vb-name", new SelectOptionValue { Index = 0 });
         await page.FillAsync("#vb-qty", "2");
         await page.FillAsync("#vb-amt", "1500");
+        if (await page.Locator("#vb-account option").CountAsync() > 1)
+            await page.SelectOptionAsync("#vb-account", new SelectOptionValue { Index = 1 });
         await page.FillAsync("#vb-note", Hostile + " " + id);
         await page.ClickAsync("#addVaccBuy");
         await Expect(page.Locator("#toastHost")).ToContainTextAsync("Vaccine purchase added");

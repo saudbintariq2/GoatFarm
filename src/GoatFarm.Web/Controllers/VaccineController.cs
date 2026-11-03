@@ -144,15 +144,29 @@ public class VaccineController : Controller
     public async Task<IActionResult> AddPurchase([FromBody] CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _vaccineService.AddVaccinePurchaseAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _vaccineService.AddVaccinePurchaseAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPut]
     public async Task<IActionResult> UpdatePurchase(int id, [FromBody] CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        var result = await _vaccineService.UpdateVaccinePurchaseAsync(id, model, cancellationToken);
-        return result is null ? NotFound() : Json(result);
+        try
+        {
+            var result = await _vaccineService.UpdateVaccinePurchaseAsync(id, model, cancellationToken);
+            return result is null ? NotFound() : Json(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpDelete]

@@ -229,6 +229,11 @@ public class VaccinePurchase : BaseEntity
     public string Unit { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public string? Comment { get; set; }
+    public string PaymentStatus { get; set; } = "paid";
+    public decimal PaidAmount { get; set; }
+    public int? AccountId { get; set; }
+    public string? Supplier { get; set; }
+    public DateOnly? DueDate { get; set; }
 }
 
 public class Asset : BaseEntity
@@ -294,6 +299,7 @@ public class Vaccine : BaseEntity
     public VaccineRuleType RuleType { get; set; }
     public int? Days { get; set; }
     public int? Months { get; set; }
+    public string? Note { get; set; }
     public ICollection<VaccinationHistory> VaccinationHistories { get; set; } = [];
 }
 
