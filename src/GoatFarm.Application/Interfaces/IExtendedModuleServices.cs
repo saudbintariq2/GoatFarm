@@ -66,13 +66,25 @@ public interface IProductsService
 {
     Task<ProductsPageViewModel> GetPageAsync(string? month, CancellationToken cancellationToken = default);
     Task<object> SaveCatalogItemAsync(SaveProductCatalogViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteCatalogItemAsync(int id, CancellationToken cancellationToken = default);
     Task<object> SaveWarehouseAsync(SaveWarehouseViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveStockMovementAsync(SaveStockMovementViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveMilkingSessionAsync(SaveMilkingSessionViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveSlaughterAsync(SaveSlaughterViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default);
     Task SaveCustomMilkingSessionsAsync(IReadOnlyList<string> sessions, CancellationToken cancellationToken = default);
+    Task SaveProductDropdownOptionsAsync(Dictionary<string, List<string>> options, CancellationToken cancellationToken = default);
     Task<object> SavePasteurizationAsync(SavePasteurizationViewModel model, CancellationToken cancellationToken = default);
+    Task<object> SaveTransportShipmentAsync(SaveTransportShipmentViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteTransportShipmentAsync(int id, CancellationToken cancellationToken = default);
+    Task<object> SaveProductCostAllocationAsync(SaveProductCostAllocationViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteProductCostAllocationAsync(int id, CancellationToken cancellationToken = default);
+    Task<object> SaveProductPricingAsync(SaveProductPricingViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteProductPricingAsync(int productId, CancellationToken cancellationToken = default);
+    Task<object> SaveDeliveryRouteAsync(SaveDeliveryRouteViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteDeliveryRouteAsync(int id, CancellationToken cancellationToken = default);
+    Task<object> SaveClientProductPriceAsync(SaveClientProductPriceViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteClientProductPriceAsync(int id, CancellationToken cancellationToken = default);
 }
 
 public interface ITreatmentService

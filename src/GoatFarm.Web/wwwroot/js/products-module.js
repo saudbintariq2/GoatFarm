@@ -20,6 +20,10 @@
   const milk = page.milk || {};
   const meat = page.meat || {};
   let customSessions = [...(page.customMilkingSessions || [])];
+  const productDropdownOptions = { ...(page.productDropdownOptions || {}) };
+  ['costTypes', 'shipmentTypes', 'units', 'categories', 'warehouseTypes'].forEach(k => {
+    if (!Array.isArray(productDropdownOptions[k])) productDropdownOptions[k] = [];
+  });
   const reload = () => location.reload();
   const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   async function postJson(url, body) {
@@ -109,6 +113,64 @@
         <div class="sl-flow-arrow" aria-hidden="true">➜</div>
         <div class="sl-stage"><div class="sl-stage-h"><span>4</span>Cuts in stock</div><div class="sl-stage-b"><small>No cuts in stock.</small><button type="button" class="btn btn-sm btn-ghost" data-sl-sell="cut">Sell cuts</button></div></div>`;
     }
+
+    fillMeatFormSelects();
+  }
+
+  function carcassOpts(emptyLabel) {
+    const rows = page.slaughters || [];
+    if (!rows.length) return `<option value="">${esc(emptyLabel)}</option>`;
+    return rows.map(s =>
+      `<option value="${s.id}">${esc(s.tag || 'Carcass')} · ${fmtQ(s.carcassKg, 'kg')} · ${esc(s.dateDisplay || '')}</option>`
+    ).join('');
+  }
+
+  function fillMeatFormSelects() {
+    setSelectHtml('sl-sg-store', tankOptsMeat());
+    setSelectHtml('sl-ct-store', tankOptsMeat());
+    setSelectHtml('sl-sp-src', carcassOpts('No whole carcass in stock'));
+    setSelectHtml('sl-ct-src', carcassOpts('No carcass in stock'));
+    fillPaidFromSelects();
+    refreshSlaughterGoatDatalist();
+    sgLookup();
+  }
+
+  function liveHerdGoats() {
+    return (page.herdGoats || []).slice().sort((a, b) =>
+      String(a.tag).localeCompare(String(b.tag), undefined, { numeric: true }));
+  }
+
+  function refreshSlaughterGoatDatalist() {
+    const dl = document.getElementById('sl-sg-tags');
+    if (!dl) return;
+    dl.innerHTML = liveHerdGoats().slice(0, 800).map(g =>
+      `<option value="${esc(g.tag)}">${esc(`${g.breed || ''} · ${g.gender || ''} · ${g.status || ''}`.trim())}</option>`
+    ).join('');
+  }
+
+  function sgLookup() {
+    const out = document.getElementById('sl-sg-lookup');
+    if (!out) return;
+    const tag = (document.getElementById('sl-sg-tag')?.value || '').trim();
+    if (!tag) {
+      out.innerHTML = 'Scan or type the goat tag.';
+      out.className = 'sl-lookup';
+      return;
+    }
+    const g = findGoatByTag(tag);
+    if (!g) {
+      out.innerHTML = 'Tag not in herd — will be recorded as an outside animal.';
+      out.className = 'sl-lookup warn';
+      return;
+    }
+    const cost = N(g.purchasePrice);
+    out.innerHTML = `✓ <b>${esc(g.tag)}</b>${g.name ? ` · ${esc(g.name)}` : ''} · ${esc(g.breed || '')} · ${esc(g.gender || '')} · ${esc(g.status || '')}` +
+      (cost > 0 ? `<br><small>Animal cost: ${rs(cost)} — purchase price</small>` : '');
+    out.className = 'sl-lookup ok';
+    const ac = document.getElementById('sl-sg-acost');
+    if (ac && !ac.dataset.touched && cost > 0) ac.value = Math.round(cost);
+    const live = document.getElementById('sl-sg-live');
+    if (live && !live.value && N(g.liveWeightKg) > 0) live.value = N(g.liveWeightKg);
   }
 
   function activateProductTab(tab) {
@@ -123,6 +185,13 @@
       renderMilkPane();
       if (typeof renderMilking === 'function') renderMilking();
     } else if (tab === 'meat') renderMeatPane();
+    else if (tab === 'sales') renderSalesPane();
+    else if (tab === 'stock') renderStockPane();
+    else if (tab === 'performance') renderBreedPerformance();
+    else if (tab === 'transport') renderTransportPane();
+    else if (tab === 'costing') renderCostAllocationPane();
+    else if (tab === 'pricing') renderPricingPane();
+    else if (tab === 'catalog') renderCatalogPane();
   }
 
   /* Main product tabs */
@@ -149,8 +218,13 @@
       renderSpoil(spoilBtn.dataset.slSpoil);
       return;
     }
-    if (e.target.closest('[data-sl-sell]')) {
-      document.querySelector('.prod-tab[data-ptab="sales"]')?.click();
+    const sellBtn = e.target.closest('[data-sl-sell]');
+    if (sellBtn?.dataset.slSell) {
+      openSale(sellBtn.dataset.slSell, {
+        src: sellBtn.dataset.slSrc,
+        key: sellBtn.dataset.slKey,
+        item: sellBtn.dataset.slItem
+      });
       return;
     }
     const open = e.target.closest('[data-sl-open]');
@@ -181,11 +255,6 @@
   document.querySelectorAll('.sl-subnav [data-sl-sub]').forEach(btn => {
     btn.addEventListener('click', () => setMilkSub(btn.dataset.slSub));
   });
-  document.querySelectorAll('.sl-subnav [data-sl-sell]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelector('.prod-tab[data-ptab="sales"]')?.click();
-    });
-  });
   function lsGet(key, def) {
     try { const v = localStorage.getItem('gr232:' + key); return v == null ? def : v; } catch { return def; }
   }
@@ -215,6 +284,7 @@
   function isRawTank(w) { return tankKind(w) === 'raw_tank'; }
   function isPastTank(w) { return tankKind(w) === 'past_tank'; }
   function isDairyStore(w) { return tankKind(w) === 'dairy_store'; }
+  function isMeatStore(w) { return tankKind(w) === 'meat_store'; }
   function isActiveWh(w) { return w && w.isActive !== false; }
 
   function warehousesOfKind(kind, includeInactive) {
@@ -242,7 +312,8 @@
   const TANK_EXTRA = {
     raw_tank: '<option value="__add_raw_tank">＋ Add new raw tank…</option>',
     past_tank: '<option value="__add_past_tank">＋ Add new pasteurized tank…</option>',
-    dairy_store: '<option value="__add_dairy_store">＋ Add new cold store…</option>'
+    dairy_store: '<option value="__add_dairy_store">＋ Add new cold store…</option>',
+    meat_store: '<option value="__add_meat_store">＋ Add new meat chiller…</option>'
   };
   const MANAGE_TANK_OPT = '<option value="__manage">✎ Rename / manage tanks…</option>';
 
@@ -266,6 +337,15 @@
     ).join('');
     const head = tanks.length ? '' : '<option value="" disabled selected>No cold store yet — add one below</option>';
     return head + opts + TANK_EXTRA.dairy_store + MANAGE_TANK_OPT;
+  }
+
+  function tankOptsMeat() {
+    const stores = (page.warehouses || []).filter(w => isMeatStore(w) && isActiveWh(w));
+    const opts = stores.map(w =>
+      `<option value="${w.id}">${esc(w.name)}${N(w.litersOrKg) ? ` — ${fmtQ(w.litersOrKg, 'kg')}` : ''}</option>`
+    ).join('');
+    const head = stores.length ? '' : '<option value="" disabled selected>No meat chiller yet — add one below</option>';
+    return head + opts + TANK_EXTRA.meat_store;
   }
 
   function isBulkMilkSku(sku) {
@@ -372,15 +452,602 @@
     return accts.map(a => `<option value="${a.id}">${esc(a.name)} · ${money(a.balance)}</option>`).join('');
   }
 
+  function fillTransportAccountSelect() {
+    const el = document.getElementById('tp-account');
+    if (!el) return;
+    const prev = el.value;
+    const accts = page.moneyAccounts || [];
+    el.innerHTML = '<option value="">— record expense only —</option>' +
+      (accts.length
+        ? accts.map(a => `<option value="${a.id}">${esc(a.name)} · ${esc(a.kind || '')}</option>`).join('')
+        : '<option value="" disabled>Add cash/bank on Finance → Bank &amp; Cash</option>');
+    if (prev && [...el.options].some(o => o.value === prev)) el.value = prev;
+  }
+
   function fillPaidFromSelects() {
     const html = accountOptionsHtml();
-    ['sl-pz-acct', 'sl-mk-acct', 'sl-sg-acct'].forEach(id => {
+    ['sl-pz-acct', 'sl-mk-acct', 'sl-sg-acct', 'sl-sa-acct'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       const prev = el.value;
       el.innerHTML = html;
       if (prev && [...el.options].some(o => o.value === prev)) el.value = prev;
     });
+  }
+
+  function catalogActiveOnly() {
+    return (page.catalog || []).filter(c => c.isActive !== false);
+  }
+
+  function catalogCategoryLabel(cat) {
+    const c = (cat || 'other').toLowerCase();
+    if (c === 'dairy') return 'DAIRY';
+    if (c === 'meat') return 'MEAT';
+    return String(cat || 'other').toUpperCase();
+  }
+
+  function catalogSaleGroup(p) {
+    if (!p) return 'other';
+    const cat = (p.category || '').toLowerCase();
+    if (cat === 'meat') return 'meat';
+    if (cat === 'dairy') return 'dairy';
+    if (cat === 'other') return 'other';
+    const sku = (p.sku || '').toUpperCase();
+    const name = (p.name || '').toLowerCase();
+    if (sku === 'MILK-RAW' || sku === 'MILK-PAST') return 'bulk';
+    if (sku === 'MEAT' || /carcass|cut|meat|mince|keema|\braan\b|dasti|rib|chop|liver|kaleji|shank|flank|loin|neck|brisket|trotter|paye/.test(name)) return 'meat';
+    if (/milk|yogurt|yoghurt|ghee|cheese|butter|lassi|kefir|dairy|paneer/.test(name) || /bottle/i.test(p.unit || '')) return 'dairy';
+    return 'other';
+  }
+
+  function saleProducts(type) {
+    const group = type === 'dairy' ? 'dairy' : type === 'cut' ? 'meat' : type === 'other' ? 'other' : '';
+    if (!group) return [];
+    return catalogActiveOnly().filter(p => catalogSaleGroup(p) === group);
+  }
+
+  function dairyRowsForProduct(pid) {
+    const p = catalogById(pid);
+    return (milk.dairyProducts || []).filter(d =>
+      (d.productId && d.productId === +pid) ||
+      (p && d.name && p.name && d.name.toLowerCase() === p.name.toLowerCase())
+    );
+  }
+
+  function saleSources(type) {
+    if (type === 'raw' || type === 'past') {
+      return warehousesOfKind(type === 'raw' ? 'raw_tank' : 'past_tank').map(w => ({
+        key: String(w.id),
+        label: w.name,
+        qty: N(w.litersOrKg),
+        unit: 'L',
+        productId: catalogId(type === 'raw' ? 'MILK-RAW' : 'MILK-PAST')
+      }));
+    }
+    if (type === 'whole' || type === 'half') {
+      if (type === 'half') return [];
+      return (page.slaughters || []).map(s => ({
+        key: String(s.id),
+        label: `${s.tag || 'Carcass'} · ${fmtQ(s.carcassKg, 'kg')}`,
+        qty: N(s.carcassKg),
+        unit: 'kg',
+        count: 1,
+        productId: catalogId('MEAT')
+      }));
+    }
+    const pid = document.getElementById('sl-sa-prod')?.value;
+    if (!pid || String(pid).startsWith('__')) return [];
+    const p = catalogById(pid);
+    const unit = p?.unit || (type === 'cut' ? 'kg' : 'units');
+    if (type === 'dairy') {
+      const rows = dairyRowsForProduct(pid).filter(d => d.warehouseId);
+      if (rows.length) {
+        return rows.map(d => ({
+          key: String(d.warehouseId),
+          label: whName(d.warehouseId),
+          qty: N(d.qty),
+          unit: d.unit || unit,
+          productId: +pid
+        }));
+      }
+      return warehousesOfKind('dairy_store').map(w => ({
+        key: String(w.id),
+        label: w.name,
+        qty: dairyStockQty(pid),
+        unit,
+        productId: +pid
+      }));
+    }
+    const kind = type === 'cut' ? 'meat_store' : 'other';
+    let stores = warehousesOfKind(kind);
+    if (!stores.length && type !== 'cut') {
+      stores = (page.warehouses || []).filter(w => isActiveWh(w) && !isRawTank(w) && !isPastTank(w) && !isMeatStore(w));
+    }
+    return stores.map(w => ({
+      key: String(w.id),
+      label: w.name,
+      qty: N(w.litersOrKg),
+      unit,
+      productId: +pid
+    }));
+  }
+
+  function currentSaleSource() {
+    const type = document.getElementById('sl-sa-type')?.value || 'raw';
+    const key = document.getElementById('sl-sa-src')?.value;
+    return saleSources(type).find(s => String(s.key) === String(key)) || null;
+  }
+
+  function renderSaleForm(pref) {
+    pref = pref || {};
+    const typeSel = document.getElementById('sl-sa-type');
+    if (!typeSel) return;
+    if (pref.type) typeSel.value = pref.type;
+    const type = typeSel.value || 'raw';
+    const needProd = ['dairy', 'cut', 'other'].includes(type);
+    const prodF = document.getElementById('sl-sa-prod-f');
+    if (prodF) prodF.hidden = !needProd;
+    if (needProd) {
+      const list = saleProducts(type);
+      const html = list.length
+        ? list.map(p => {
+            const q = type === 'dairy' ? dairyStockQty(p.id) : 0;
+            const extra = type === 'dairy' ? ` — ${fmtQ(q, p.unit || '')}${q > 0.0005 ? '' : ' (none in stock)'}` : '';
+            return `<option value="${p.id}">${esc(productLabel(p))}${extra}</option>`;
+          }).join('')
+        : '<option value="">No products — add one in Product Setup</option>';
+      setSelectHtml('sl-sa-prod', html, pref.item);
+    }
+    const src = saleSources(type);
+    const srcL = document.getElementById('sl-sa-src-l');
+    if (srcL) {
+      srcL.textContent = (type === 'whole' || type === 'half') ? 'Carcass (batch)'
+        : (type === 'raw' || type === 'past') ? 'Sell from tank' : 'Sell from store';
+    }
+    const srcHtml = src.length
+      ? src.map(s => {
+          const extra = (type === 'raw' || type === 'past') ? ` — ${fmtQ(s.qty, 'L')}`
+            : (type === 'whole' || type === 'half') ? '' : ` — ${fmtQ(s.qty, s.unit)}`;
+          return `<option value="${esc(s.key)}">${esc(s.label)}${extra}</option>`;
+        }).join('')
+      : '<option value="">Nothing in stock</option>';
+    setSelectHtml('sl-sa-src', srcHtml, pref.key || pref.src);
+    const carcass = type === 'whole' || type === 'half';
+    const countF = document.getElementById('sl-sa-count-f');
+    const basisF = document.getElementById('sl-sa-basis-f');
+    if (countF) countF.hidden = type !== 'half';
+    if (basisF) basisF.hidden = !carcass;
+    if (!carcass) {
+      const b = document.getElementById('sl-sa-basis');
+      if (b) b.value = 'unit';
+    }
+    if (pref.type || pref.reset) saleSourceChanged(true);
+    else saleAvail();
+  }
+
+  function saleSourceChanged(setDefaults) {
+    const s = currentSaleSource();
+    const type = document.getElementById('sl-sa-type')?.value || 'raw';
+    const qtyEl = document.getElementById('sl-sa-qty');
+    if (qtyEl) qtyEl.readOnly = !!(s && type === 'whole');
+    if (s && type === 'whole' && qtyEl) qtyEl.value = s.qty;
+    if (s && type === 'half' && setDefaults) {
+      const countEl = document.getElementById('sl-sa-count');
+      if (countEl) countEl.value = s.count >= 1 ? 1 : 0;
+      if (qtyEl) qtyEl.value = s.count > 1 ? (s.qty / s.count) : s.qty;
+    }
+    if (s && setDefaults && s.productId) {
+      const cid = document.getElementById('sl-sa-cust')?.value;
+      const rateEl = document.getElementById('sl-sa-rate');
+      if (rateEl && !rateEl.dataset.touched) {
+        const rate = cid && cid !== '__add'
+          ? clientRateForSale(cid, s.productId)
+          : defaultSellPrice(s.productId);
+        if (rate > 0) rateEl.value = rate;
+      }
+    }
+    saleAvail();
+  }
+
+  function saleAvail() {
+    const s = currentSaleSource();
+    const type = document.getElementById('sl-sa-type')?.value || 'raw';
+    const u = s ? s.unit : (type === 'raw' || type === 'past' ? 'L' : '');
+    const unitEl = document.getElementById('sl-sa-unit');
+    if (unitEl) unitEl.textContent = u || 'units';
+    const basis = document.getElementById('sl-sa-basis')?.value || 'unit';
+    const rateL = document.getElementById('sl-sa-rate-l');
+    if (rateL) rateL.textContent = basis === 'fixed' ? 'Agreed total price (Rs)' : `Rate per ${u || 'unit'} (Rs)`;
+    const qty = +document.getElementById('sl-sa-qty')?.value || 0;
+    const rate = +document.getElementById('sl-sa-rate')?.value || 0;
+    const amount = basis === 'fixed' ? rate : qty * rate;
+    const amtEl = document.getElementById('sl-sa-amt');
+    if (amtEl) amtEl.value = amount ? fmtN(amount, 2) : '';
+    const av = document.getElementById('sl-sa-avail');
+    if (av) {
+      av.innerHTML = s
+        ? `<b>${fmtQ(s.qty, s.unit)}</b>${s.count ? ` · ${fmtN(s.count, 0)} piece${s.count === 1 ? '' : 's'}` : ''}`
+        : '<b>Nothing to sell</b><small>No stock of this type.</small>';
+    }
+    const pay = document.getElementById('sl-sa-pay')?.value || 'paid';
+    const recvF = document.getElementById('sl-sa-recv-f');
+    const dueF = document.getElementById('sl-sa-due-f');
+    const acctF = document.getElementById('sl-sa-acct-f');
+    if (recvF) recvF.hidden = pay !== 'partial';
+    if (dueF) dueF.hidden = pay === 'paid';
+    if (acctF) acctF.hidden = pay === 'credit';
+  }
+
+  function renderSalesPane() {
+    fillCustomerSelect('sl-sa-cust');
+    fillPaidFromSelects();
+    renderSaleForm();
+  }
+
+  function openSale(type, opts) {
+    opts = opts || {};
+    activateProductTab('sales');
+    const typeSel = document.getElementById('sl-sa-type');
+    if (typeSel && type) typeSel.value = type;
+    renderSaleForm({ type, key: opts.key, src: opts.src, item: opts.item, reset: true });
+    const review = document.getElementById('sl-sa-review');
+    if (review) review.hidden = true;
+    document.getElementById('sl-sale-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const KIND_LABEL = {
+    raw_tank: 'Raw milk tank (chilled)',
+    past_tank: 'Pasteurized milk tank (chilled)',
+    dairy_store: 'Dairy cold store',
+    meat_store: 'Meat chiller / freezer',
+    other: 'Other store'
+  };
+
+  const STOCK_OP_LABEL = {
+    Receive: 'Stock received',
+    Issue: 'Issued from stock',
+    Transfer: 'Tank / store transfer',
+    Spoilage: 'Spoilage / write-off',
+    Adjust: 'Stock adjustment'
+  };
+
+  function parseStockItemKey(key) {
+    const parts = String(key || '').split('|');
+    if (parts.length < 2) return null;
+    return {
+      productId: +parts[0],
+      warehouseId: +parts[1],
+      batch: parts[2] || ''
+    };
+  }
+
+  function stockItemKey(row) {
+    return `${row.productId}|${row.warehouseId}|${row.batch || ''}`;
+  }
+
+  function productUnitCost(productId) {
+    const p = catalogById(productId);
+    return p ? N(p.defaultPrice) : 0;
+  }
+
+  function bulkMilkQtyAtWarehouse(w, sku) {
+    let q = N(w.litersOrKg);
+    if (q > 0.0001) return q;
+    const tanks = warehousesOfKind(sku === 'MILK-PAST' ? 'past_tank' : 'raw_tank', false);
+    if (tanks.length === 1 && tanks[0].id === w.id) {
+      return sku === 'MILK-PAST' ? N(milk.pastTankLiters) : N(milk.rawTankLiters);
+    }
+    return q;
+  }
+
+  function bulkMilkLabel(productId, chilledFallback) {
+    const p = catalogById(productId);
+    return p?.name || chilledFallback;
+  }
+
+  function acceptsWarehouse(productId, destWhId) {
+    const p = catalogById(productId);
+    const w = warehouseById(destWhId);
+    if (!p || !w || !isActiveWh(w)) return false;
+    const sku = (p.sku || '').toUpperCase();
+    const kind = tankKind(w);
+    if (sku === 'MILK-RAW') return kind === 'raw_tank';
+    if (sku === 'MILK-PAST') return kind === 'past_tank';
+    if (sku === 'MEAT') return kind === 'meat_store';
+    const group = catalogSaleGroup(p);
+    if (group === 'dairy') return kind === 'dairy_store';
+    if (group === 'meat') return kind === 'meat_store';
+    return kind === 'dairy_store' || kind === 'other' || kind === 'meat_store';
+  }
+
+  function balancesAtLocation(locId, includeZero) {
+    const w = warehouseById(locId);
+    if (!w) return [];
+    const kind = tankKind(w);
+    const items = [];
+    if (kind === 'raw_tank') {
+      const pid = catalogId('MILK-RAW');
+      const q = bulkMilkQtyAtWarehouse(w, 'MILK-RAW');
+      if (pid && (includeZero || q > 0.0001)) {
+        items.push({
+          productId: pid,
+          warehouseId: +locId,
+          batch: '',
+          qty: q,
+          unit: 'L',
+          name: bulkMilkLabel(pid, 'Raw milk (chilled)')
+        });
+      }
+    } else if (kind === 'past_tank') {
+      const pid = catalogId('MILK-PAST');
+      const q = bulkMilkQtyAtWarehouse(w, 'MILK-PAST');
+      if (pid && (includeZero || q > 0.0001)) {
+        items.push({
+          productId: pid,
+          warehouseId: +locId,
+          batch: '',
+          qty: q,
+          unit: 'L',
+          name: bulkMilkLabel(pid, 'Pasteurized milk (chilled)')
+        });
+      }
+    } else if (kind === 'dairy_store') {
+      (milk.dairyProducts || []).filter(d => d.warehouseId === +locId).forEach(d => {
+        const q = N(d.qty);
+        if (!includeZero && q <= 0.0001) return;
+        const pid = d.productId || catalogById(d.name)?.id;
+        if (!pid) return;
+        const p = catalogById(pid);
+        items.push({
+          productId: pid,
+          warehouseId: +locId,
+          batch: '',
+          qty: q,
+          unit: d.unit || p?.unit || 'units',
+          name: p?.name || d.name || 'Product'
+        });
+      });
+    } else if (kind === 'meat_store') {
+      const pid = catalogId('MEAT');
+      if (pid) {
+        (page.slaughters || []).forEach(s => {
+          const q = N(s.carcassKg);
+          if (!includeZero && q <= 0.0001) return;
+          items.push({
+            productId: pid,
+            warehouseId: +locId,
+            batch: String(s.id),
+            qty: q,
+            unit: 'kg',
+            name: `Whole carcass · ${s.tag || 'Carcass'}`
+          });
+        });
+      }
+    }
+    return items;
+  }
+
+  function allStockBalanceRows(includeZero) {
+    const rows = [];
+    (page.warehouses || []).filter(w => isActiveWh(w) || includeZero).forEach(w => {
+      balancesAtLocation(w.id, includeZero).forEach(r => rows.push(r));
+    });
+    return rows;
+  }
+
+  function fillStockItemSelect(selId, locId, allowZero) {
+    const items = balancesAtLocation(locId, allowZero);
+    const html = items.length
+      ? items.map(r =>
+        `<option value="${esc(stockItemKey(r))}">${esc(r.name)}${r.batch ? ` · ${esc(r.batch)}` : ''} — ${fmtQ(r.qty, r.unit)}</option>`
+      ).join('')
+      : '<option value="">Nothing in this location</option>';
+    setSelectHtml(selId, html);
+  }
+
+  function tfTargets() {
+    const k = parseStockItemKey(document.getElementById('sl-tf-item')?.value);
+    const unitEl = document.getElementById('sl-tf-unit');
+    if (!k?.productId) {
+      if (unitEl) unitEl.textContent = '';
+      setSelectHtml('sl-tf-to', '<option value="">Choose what to move first</option>');
+      return;
+    }
+    const p = catalogById(k.productId);
+    if (unitEl) unitEl.textContent = p?.unit || 'L';
+    const fromLoc = k.warehouseId;
+    const dests = (page.warehouses || []).filter(w =>
+      isActiveWh(w) && String(w.id) !== String(fromLoc) && acceptsWarehouse(k.productId, w.id)
+    );
+    const html = dests.length
+      ? dests.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')
+      : '<option value="">No other compatible location</option>';
+    setSelectHtml('sl-tf-to', html);
+  }
+
+  function adjPreview() {
+    const k = parseStockItemKey(document.getElementById('sl-adj-item')?.value);
+    const u = document.getElementById('sl-adj-unit');
+    if (!u) return;
+    if (!k?.productId) { u.textContent = ''; return; }
+    const p = catalogById(k.productId);
+    u.textContent = p?.unit || 'units';
+  }
+
+  function isMeatMovement(m) {
+    const sku = (m.productSku || '').toUpperCase();
+    if (sku === 'MEAT') return true;
+    const name = (m.product || '').toLowerCase();
+    return name.includes('carcass') || name.includes('meat');
+  }
+
+  function ledgerRows() {
+    const from = document.getElementById('sl-mv-from')?.value;
+    const to = document.getElementById('sl-mv-to')?.value;
+    const type = document.getElementById('sl-mv-type')?.value;
+    const grp = document.getElementById('sl-mv-group')?.value;
+    return (page.movements || []).filter(m => {
+      if (from && String(m.dateDisplay) < from) return false;
+      if (to && String(m.dateDisplay) > to) return false;
+      if (type && m.type !== type) return false;
+      if (grp === 'milk' && !isMilkRelatedMovement(m)) return false;
+      if (grp === 'meat' && !isMeatMovement(m)) return false;
+      return true;
+    }).sort((a, b) => String(b.dateDisplay).localeCompare(String(a.dateDisplay)));
+  }
+
+  function renderLedger() {
+    const typeSel = document.getElementById('sl-mv-type');
+    if (typeSel && typeSel.options.length < 2) {
+      typeSel.innerHTML = '<option value="">All operations</option>' +
+        Object.entries(STOCK_OP_LABEL).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+    }
+    const tb = document.getElementById('sl-mv-rows');
+    if (!tb) return;
+    const rows = ledgerRows();
+    tb.innerHTML = rows.length
+      ? rows.slice(0, 200).map(m =>
+        `<tr><td>${esc(m.dateDisplay)}</td><td><b>${esc(STOCK_OP_LABEL[m.type] || m.type)}</b></td><td>${describeMovement(m)}</td><td class="hide-sm">—</td><td></td></tr>`
+      ).join('') + (rows.length > 200 ? '<tr><td colspan="5" class="empty">Showing 200 of ' + rows.length + '. Narrow the dates or export CSV.</td></tr>' : '')
+      : '<tr><td colspan="5" class="empty">No movements for this filter.</td></tr>';
+  }
+
+  function exportStockLedgerCsv() {
+    const rows = [['Date', 'Operation', 'Product', 'Warehouse', 'To warehouse', 'Qty', 'Notes']];
+    ledgerRows().forEach(m => {
+      rows.push([
+        m.dateDisplay,
+        STOCK_OP_LABEL[m.type] || m.type,
+        m.product,
+        m.warehouse,
+        m.toWarehouse || '',
+        m.qty,
+        m.notes || ''
+      ]);
+    });
+    const csv = rows.map(r => r.map(c => {
+      const s = String(c ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'stock-movements-' + today() + '.csv';
+    a.click();
+  }
+
+  function renderRecon() {
+    const el = document.getElementById('sl-recon');
+    if (!el) return;
+    const neg = allStockBalanceRows(false).filter(r => r.qty < -0.0005);
+    const moves = page.movements || [];
+    const sales = page.sales || [];
+    const ok = !neg.length;
+    el.innerHTML = `<div class="sl-recon ${ok ? 'ok' : 'bad'}"><b>${ok ? '✓ Stock levels look consistent' : '⚠ Items need checking'}</b>
+      <ul>
+        <li>${moves.length} stock movement${moves.length === 1 ? '' : 's'} in the ledger (latest ${Math.min(moves.length, 120)} loaded on this page).</li>
+        <li>${neg.length ? `<b class="sl-bad">${neg.length} location${neg.length === 1 ? '' : 's'} below zero</b> — post a “Stock count correction” after a physical count.` : 'No location is below zero based on current balances.'}</li>
+        <li>${sales.length} product sale${sales.length === 1 ? '' : 's'} this month on the sales register.</li>
+      </ul></div>`;
+  }
+
+  function renderLocationRows() {
+    const lr = document.getElementById('sl-loc-rows');
+    if (!lr) return;
+    const defRaw = defaultRawTankId();
+    lr.innerHTML = (page.warehouses || []).map(w => {
+      const k = tankKind(w);
+      const off = w.isActive === false;
+      const isDef = k === 'raw_tank' && String(w.id) === defRaw;
+      const meta = tankMetaGet(w.id);
+      const cap = meta.capacity != null ? meta.capacity : (w.capacity != null ? w.capacity : '');
+      const temp = meta.targetTempC != null ? meta.targetTempC : (w.targetTempC != null ? w.targetTempC : '');
+      const site = meta.site != null ? meta.site : 'Farm';
+      return `<tr class="${off ? 'sl-muted' : ''}"><td><b>${esc(w.name)}</b>${isDef ? ' <span class="chip chip-milk">milking goes here</span>' : ''}${off ? ' <span class="chip chip-exp">inactive</span>' : ''}<div class="name">${esc(site)}</div></td><td>${esc(KIND_LABEL[k] || k)}</td><td class="num-cell">${cap === '' ? '—' : fmtN(cap)}</td><td class="num-cell">${temp === '' ? '—' : esc(String(temp)) + '°C'}</td><td style="white-space:nowrap">${k === 'raw_tank' && !isDef && !off ? `<button type="button" class="btn btn-ghost btn-sm" data-sl-defraw="${w.id}">Use for milking</button>` : ''}<button type="button" class="btn btn-ghost btn-sm" data-sl-togloc="${w.id}">${off ? 'Enable' : 'Disable'}</button></td></tr>`;
+    }).join('') || '<tr><td colspan="5" class="empty">No tanks or stores yet.</td></tr>';
+  }
+
+  function renderStockPane() {
+    try {
+    document.querySelectorAll('.prod-pane[data-ppane="stock"] [data-sl-form]').forEach(p => { p.hidden = false; });
+    const g = document.getElementById('sl-stock-groups');
+    if (g) {
+      const tanks = (page.warehouses || []).filter(w => isRawTank(w) || isPastTank(w));
+      const tankRows = tanks.map(w => {
+        const q = isRawTank(w)
+          ? bulkMilkQtyAtWarehouse(w, 'MILK-RAW')
+          : bulkMilkQtyAtWarehouse(w, 'MILK-PAST');
+        if (w.isActive === false && Math.abs(q) < 0.0005) return '';
+        const k = tankKind(w);
+        const cost = productUnitCost(k === 'raw_tank' ? catalogId('MILK-RAW') : catalogId('MILK-PAST'));
+        const val = q * cost;
+        const cap = N(w.capacity);
+        const fill = cap > 0 ? pct(q, cap) : '—';
+        return `<tr><td><b>${esc(w.name)}</b>${w.isActive === false ? ' <span class="chip chip-exp">inactive</span>' : ''}</td><td>${esc(KIND_LABEL[k] || k)}</td><td class="num-cell"><b class="${q < -0.001 ? 'sl-bad' : ''}">${fmtQ(q, 'L')}</b></td><td class="num-cell hide-sm">${q > 0.0005 && cost > 0 ? rs(cost) + '/L' : '—'}</td><td class="num-cell hide-sm">${val > 0 ? rs(val) : '—'}</td><td class="num-cell hide-sm">${fill}</td></tr>`;
+      }).join('');
+      const prodRows = allStockBalanceRows(false)
+        .filter(r => {
+          const w = warehouseById(r.warehouseId);
+          return w && !isRawTank(w) && !isPastTank(w);
+        })
+        .sort((a, b) => whName(a.warehouseId).localeCompare(whName(b.warehouseId)) || a.name.localeCompare(b.name));
+      const totalV = prodRows.reduce((n, r) => n + r.qty * productUnitCost(r.productId), 0)
+        + tanks.reduce((n, w) => {
+          const q = isRawTank(w)
+            ? bulkMilkQtyAtWarehouse(w, 'MILK-RAW')
+            : bulkMilkQtyAtWarehouse(w, 'MILK-PAST');
+          const pid = isRawTank(w) ? catalogId('MILK-RAW') : catalogId('MILK-PAST');
+          return n + q * productUnitCost(pid);
+        }, 0);
+      const prodHtml = prodRows.map(r => {
+        const cost = productUnitCost(r.productId);
+        const val = r.qty * cost;
+        return `<tr><td>${esc(whName(r.warehouseId))}</td><td><b>${esc(r.name)}</b>${r.batch ? `<div class="name">${esc(r.batch)}</div>` : ''}</td><td class="num-cell"><b class="${r.qty < -0.001 ? 'sl-bad' : ''}">${fmtQ(r.qty, r.unit)}</b></td><td class="num-cell hide-sm">${cost > 0 ? rs(cost) + '/' + esc(r.unit) : '—'}</td><td class="num-cell hide-sm">${val > 0 ? rs(val) : '—'}</td></tr>`;
+      }).join('');
+      g.innerHTML = `<div class="panel"><div class="panel-head"><h2>Milk tanks</h2><span class="sub">litres · raw and pasteurized are never mixed</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Tank</th><th>Type</th><th class="num-cell">In tank</th><th class="num-cell hide-sm">Cost</th><th class="num-cell hide-sm">Value</th><th class="num-cell hide-sm">Full</th></tr></thead><tbody>${tankRows || '<tr><td colspan="6" class="empty">No tanks.</td></tr>'}</tbody></table></div></div>
+        <div class="panel"><div class="panel-head"><h2>Products, carcasses &amp; cuts</h2><span class="sub">each in its own unit · stock value at cost ${rs(totalV)}</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Store</th><th>Item</th><th class="num-cell">On hand</th><th class="num-cell hide-sm">Cost</th><th class="num-cell hide-sm">Value</th></tr></thead><tbody>${prodHtml || '<tr><td colspan="5" class="empty">No finished products or meat in stock.</td></tr>'}</tbody></table></div></div>`;
+    }
+    const locAll = (page.warehouses || []).filter(w => isActiveWh(w)).map(w =>
+      `<option value="${w.id}">${esc(w.name)}</option>`
+    ).join('');
+    const locOpts = locAll || '<option value="">No locations</option>';
+    const defLoc = defaultRawTankId()
+      || String((page.warehouses || []).find(w => isActiveWh(w))?.id || '');
+    setSelectHtml('sl-tf-from', locOpts, defLoc);
+    setSelectHtml('sl-adj-loc', locOpts, defLoc);
+    const fromLoc = document.getElementById('sl-tf-from')?.value;
+    const adjLoc = document.getElementById('sl-adj-loc')?.value;
+    fillStockItemSelect('sl-tf-item', fromLoc, false);
+    fillStockItemSelect('sl-adj-item', adjLoc, true);
+    tfTargets();
+    adjPreview();
+    ['sl-tf-date', 'sl-adj-date'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el.value) el.value = today();
+    });
+    renderLocationRows();
+    renderLedger();
+    renderRecon();
+    const locPanel = document.getElementById('sl-locations');
+    if (locPanel && (page.warehouses || []).length) locPanel.hidden = false;
+    } catch (err) {
+      console.error('renderStockPane failed', err);
+    }
+  }
+
+  async function addLocationFromForm() {
+    const name = document.getElementById('sl-loc-name')?.value?.trim();
+    const kind = document.getElementById('sl-loc-kind')?.value || 'other';
+    if (!name) { alert('Enter a name.'); return; }
+    if ((page.warehouses || []).some(x => String(x.name).toLowerCase() === name.toLowerCase())) {
+      alert('A location with this name already exists.');
+      return;
+    }
+    await post('/Products/SaveWarehouse', {
+      name,
+      location: kind,
+      isActive: true
+    });
+    reload();
   }
 
   function renderPasteurize(preferredSrc, preferredDst) {
@@ -593,8 +1260,8 @@
   }
 
   async function quickAddTankKind(kind) {
-    const labels = { raw_tank: 'raw milk tank', past_tank: 'pasteurized milk tank', dairy_store: 'cold store' };
-    const prefixes = { raw_tank: 'Raw Milk Tank ', past_tank: 'Pasteurized Milk Tank ', dairy_store: 'Cold Store ' };
+    const labels = { raw_tank: 'raw milk tank', past_tank: 'pasteurized milk tank', dairy_store: 'cold store', meat_store: 'meat chiller / freezer' };
+    const prefixes = { raw_tank: 'Raw Milk Tank ', past_tank: 'Pasteurized Milk Tank ', dairy_store: 'Cold Store ', meat_store: 'Meat chiller ' };
     const n = warehousesOfKind(kind, true).length + 1;
     const label = labels[kind] || 'store';
     const name = (prompt(`Name of the new ${label}:`, (prefixes[kind] || 'Store ') + n) || '').trim();
@@ -756,9 +1423,11 @@
   function refreshGoatDatalist() {
     const dl = document.getElementById('sl-mg-goat-tags');
     if (!dl) return;
-    dl.innerHTML = (page.herdGoats || []).map(g =>
-      `<option value="${esc(g.tag)}">${esc(`${g.breed || ''} · ${g.status || ''}`.trim())}</option>`
-    ).join('');
+    dl.innerHTML = (page.herdGoats || [])
+      .filter(g => String(g.gender || '').toLowerCase() !== 'male')
+      .map(g =>
+        `<option value="${esc(g.tag)}">${esc(`${g.breed || ''} · ${g.status || ''}`.trim())}</option>`
+      ).join('');
   }
 
   function ensureMilkingGoatRows() {
@@ -874,6 +1543,19 @@
     reload();
   }
 
+  async function quickAddMeatStore() {
+    const n = warehousesOfKind('meat_store', true).length + 1;
+    const name = (prompt('Name of the new meat chiller / freezer:', `Meat chiller ${n}`) || '').trim();
+    if (!name) { fillMeatFormSelects(); return; }
+    if ((page.warehouses || []).some(x => String(x.name).toLowerCase() === name.toLowerCase())) {
+      alert('That name is already used.');
+      fillMeatFormSelects();
+      return;
+    }
+    await post('/Products/SaveWarehouse', { name, location: 'meat_store' });
+    reload();
+  }
+
   async function quickAddDairyProduct() {
     const name = (prompt('Product name (e.g. Pasteurized milk · 1 L):') || '').trim();
     if (!name) { renderMake(); return; }
@@ -917,6 +1599,17 @@
       const x = t.id || '';
       const v = t.value;
 
+      if (t.matches?.('select[data-custom-product-dropdown]') && v === '__addnew__') {
+        e.stopImmediatePropagation();
+        await addProductDropdownValue(t);
+        return;
+      }
+      if (v === '__addproduct' && t.tagName === 'SELECT') {
+        e.stopImmediatePropagation();
+        openProductSetup('');
+        t.value = '';
+        return;
+      }
       if (v === '__manage') {
         t.value = t.options[0]?.value || '';
         setMilkSub('tanks');
@@ -938,6 +1631,15 @@
       if (v === '__add_dairy_store') {
         e.stopImmediatePropagation();
         await quickAddDairyStore();
+        return;
+      }
+      if (v === '__add_meat_store') {
+        e.stopImmediatePropagation();
+        await quickAddMeatStore();
+        return;
+      }
+      if (x === 'sl-sg-date') {
+        sgLookup();
         return;
       }
       if (x === 'sl-mk-prod' && v === '__add') {
@@ -1017,6 +1719,97 @@
       }
       if (x === 'mp-date') renderMilking();
       if (x === 'mp-warehouse' || x.startsWith('sl-mg') || t.closest('#sl-mg-breed-rows,#sl-mg-goat-rows')) mgSummary();
+      if ((x === 'sl-sa-cust' || x === 'cp-client') && v === '__add') {
+        e.stopImmediatePropagation();
+        const name = (prompt('Customer name:') || '').trim();
+        if (!name) { t.value = ''; return; }
+        try {
+          const data = await postJson('/Finance/SaveBusinessCustomer', { name });
+          page.customers = [...(page.customers || []), { id: data.id, name }];
+          fillCustomerSelect('sl-sa-cust');
+          fillCustomerSelect('cp-client');
+          t.value = String(data.id);
+        } catch (err) {
+          alert(err.message || 'Could not add customer. Add them on Accounting → Sales & receivables.');
+          t.value = '';
+        }
+        if (x === 'sl-sa-cust') saleSourceChanged(true);
+        return;
+      }
+      if (x === 'pr-product') {
+        if (v === '__addproduct') {
+          e.stopImmediatePropagation();
+          openProductSetup('');
+          t.value = '';
+          return;
+        }
+        if (pricingEditingProductId != null) return;
+        loadPricingEditorFromProduct();
+        return;
+      }
+      if (x === 'rp-product' || x === 'cp-product') {
+        if (v === '__addproduct') {
+          e.stopImmediatePropagation();
+          openProductSetup('');
+          t.value = '';
+        }
+        return;
+      }
+      if (x === 'sl-sa-type') {
+        const review = document.getElementById('sl-sa-review');
+        if (review) review.hidden = true;
+        const rateEl = document.getElementById('sl-sa-rate');
+        if (rateEl) { delete rateEl.dataset.touched; rateEl.value = ''; }
+        const qtyEl = document.getElementById('sl-sa-qty');
+        if (qtyEl) qtyEl.value = '';
+        renderSaleForm({ type: v, reset: true });
+        return;
+      }
+      if (x === 'sl-sa-prod') {
+        const review = document.getElementById('sl-sa-review');
+        if (review) review.hidden = true;
+        const rateEl = document.getElementById('sl-sa-rate');
+        if (rateEl) delete rateEl.dataset.touched;
+        renderSaleForm({});
+        saleSourceChanged(true);
+        return;
+      }
+      if (x === 'sl-sa-src' || x === 'sl-sa-cust') {
+        const review = document.getElementById('sl-sa-review');
+        if (review) review.hidden = true;
+        if (x === 'sl-sa-cust') {
+          const rateEl = document.getElementById('sl-sa-rate');
+          if (rateEl) delete rateEl.dataset.touched;
+        }
+        saleSourceChanged(true);
+        return;
+      }
+      if (x === 'sl-sa-basis' || x === 'sl-sa-pay' || x === 'sl-sa-date') {
+        const review = document.getElementById('sl-sa-review');
+        if (review) review.hidden = true;
+        saleAvail();
+      }
+      if (x === 'sl-tf-from') {
+        fillStockItemSelect('sl-tf-item', v, false);
+        tfTargets();
+        return;
+      }
+      if (x === 'sl-tf-item') {
+        tfTargets();
+        return;
+      }
+      if (x === 'sl-adj-loc') {
+        fillStockItemSelect('sl-adj-item', v, true);
+        adjPreview();
+        return;
+      }
+      if (x === 'sl-adj-item') {
+        adjPreview();
+        return;
+      }
+      if (['sl-mv-from', 'sl-mv-to', 'sl-mv-type', 'sl-mv-group'].includes(x)) {
+        renderLedger();
+      }
     }, true);
 
     root.addEventListener('input', e => {
@@ -1026,6 +1819,14 @@
       if (t.id === 'sl-mvm-qty') mvPreview();
       if (t.id?.startsWith('sl-mk-')) mkPreview();
       if (t.id?.startsWith('sl-sp2-')) spoilPreview();
+      if (t.id === 'sl-sg-tag') sgLookup();
+      if (t.id === 'sl-sg-acost') t.dataset.touched = '1';
+      if (t.id === 'sl-sa-rate') t.dataset.touched = '1';
+      if (['sl-sa-qty', 'sl-sa-rate', 'sl-sa-recv', 'sl-sa-count'].includes(t.id)) {
+        const review = document.getElementById('sl-sa-review');
+        if (review) review.hidden = true;
+        saleAvail();
+      }
     });
 
     root.addEventListener('click', async e => {
@@ -1160,14 +1961,15 @@
 
   /* Meat operation tabs */
   function setMeatForm(name) {
-    document.querySelectorAll('.sl-actions [data-sl-action]').forEach(b => b.classList.toggle('active', b.dataset.slAction === name));
-    document.querySelectorAll('[data-sl-form]').forEach(p => { p.hidden = p.dataset.slForm !== name; });
+    document.querySelectorAll('.prod-pane[data-ppane="meat"] .sl-actions [data-sl-action]').forEach(b => {
+      b.classList.toggle('active', b.dataset.slAction === name);
+    });
+    const meatPane = document.querySelector('.prod-pane[data-ppane="meat"]');
+    if (!meatPane) return;
+    meatPane.querySelectorAll('[data-sl-form]').forEach(p => { p.hidden = p.dataset.slForm !== name; });
   }
   document.querySelectorAll('.sl-actions [data-sl-action]').forEach(btn => {
     btn.addEventListener('click', () => setMeatForm(btn.dataset.slAction));
-  });
-  document.querySelectorAll('.sl-actions [data-sl-sell]').forEach(btn => {
-    btn.addEventListener('click', () => document.querySelector('.prod-tab[data-ptab="sales"]')?.click());
   });
   setMeatForm('slaughter');
 
@@ -1186,11 +1988,19 @@
       renderMove();
       renderMake();
       renderSpoil();
+      fillMeatFormSelects();
+      renderSalesPane();
+      renderStockPane();
+      renderBreedPerformance();
+      renderTransportPane();
+      renderCostAllocationPane();
+      renderPricingPane();
+      renderCatalogPane();
+      refreshProductCustomDropdowns();
     } catch (err) {
       console.error('Products page init failed', err);
     }
   }
-  bootProductsPage();
 
   const bpMonth = document.getElementById('bp-month');
   if (bpMonth && page.month) bpMonth.value = page.month;
@@ -1198,18 +2008,480 @@
   function fillCustomerSelect(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.innerHTML = '<option value="">Walk-in / retail</option>' +
-      (page.customers || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    const prev = el.value;
+    const lead = id === 'cp-client'
+      ? '<option value="">Select client…</option>'
+      : '<option value="">Walk-in / retail</option>';
+    el.innerHTML = lead +
+      (page.customers || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('') +
+      ((id === 'sl-sa-cust' || id === 'cp-client') ? '<option value="__add">＋ Add new customer…</option>' : '');
+    if (prev && [...el.options].some(o => o.value === prev)) el.value = prev;
   }
   fillCustomerSelect('sl-sa-cust');
   fillCustomerSelect('cp-client');
 
-  function fillProductSelect(id) {
+  function pricingForProduct(productId) {
+    return (page.productPricing || []).find(x => x.productId === +productId) || null;
+  }
+
+  function landedUnitCostPricing(productId) {
+    const x = pricingForProduct(productId);
+    if (!x) return 0;
+    return N(x.base) + N(x.packaging) + N(x.transport) + N(x.storage) + N(x.other);
+  }
+
+  function defaultSellPrice(productId) {
+    const x = pricingForProduct(productId);
+    const p = catalogById(productId);
+    if (x && N(x.sell) > 0) return N(x.sell);
+    return p ? N(p.defaultPrice) : 0;
+  }
+
+  function clientRateForSale(clientId, productId) {
+    const row = (page.clientPrices || []).find(x => x.clientId === +clientId && x.productId === +productId);
+    return row && N(row.rate) > 0 ? N(row.rate) : defaultSellPrice(productId);
+  }
+
+  function routeUnitCost(route) {
+    return route && N(route.qty) > 0 ? N(route.cost) / N(route.qty) : 0;
+  }
+
+  let pricingEditingProductId = null;
+
+  function hasStoredPricingProfile(productId) {
+    return !!(page.productPricing || []).some(x => x.productId === +productId);
+  }
+
+  function setProductPricingEditMode(editing) {
+    const cancelBtn = document.getElementById('cancelProductPricing');
+    if (cancelBtn) cancelBtn.style.display = editing ? '' : 'none';
+  }
+
+  function resetProductPricingForm() {
+    pricingEditingProductId = null;
+    const title = document.getElementById('productPricingFormTitle');
+    const saveBtn = document.getElementById('saveProductPricing');
+    if (title) title.textContent = 'Product cost & default selling price';
+    if (saveBtn) saveBtn.textContent = '+ Save pricing';
+    const prod = document.getElementById('pr-product');
+    if (prod) prod.disabled = false;
+    const deleteBtn = document.getElementById('deleteProductPricing');
+    if (deleteBtn) deleteBtn.style.display = 'none';
+    ['pr-base', 'pr-pack', 'pr-transport', 'pr-storage', 'pr-other', 'pr-sell'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.querySelectorAll('#productPricingRows tr.pricing-row.editing').forEach(r => r.classList.remove('editing'));
+    setProductPricingEditMode(false);
+    updatePricingPreview();
+  }
+
+  function loadPricingEditorFromProduct() {
+    const pidRaw = document.getElementById('pr-product')?.value;
+    if (!pidRaw || pidRaw.startsWith('__')) return;
+    const x = pricingForProduct(+pidRaw) || {};
+    const set = (id, v) => {
+      const e = document.getElementById(id);
+      if (e && document.activeElement !== e) e.value = (v === 0 || v) ? v : '';
+    };
+    set('pr-base', x.base);
+    set('pr-pack', x.packaging);
+    set('pr-transport', x.transport);
+    set('pr-storage', x.storage);
+    set('pr-other', x.other);
+    set('pr-sell', N(x.sell) > 0 ? x.sell : defaultSellPrice(+pidRaw));
+    updatePricingPreview();
+  }
+
+  function fillProductPricingForm(productId) {
+    const p = catalogById(productId);
+    if (!p) return;
+    pricingEditingProductId = productId;
+    const title = document.getElementById('productPricingFormTitle');
+    const saveBtn = document.getElementById('saveProductPricing');
+    if (title) title.textContent = 'Edit product pricing';
+    if (saveBtn) saveBtn.textContent = 'Save';
+    fillPricingProductSelect('pr-product');
+    const prod = document.getElementById('pr-product');
+    if (prod) {
+      prod.value = String(productId);
+      prod.disabled = true;
+    }
+    loadPricingEditorFromProduct();
+    const deleteBtn = document.getElementById('deleteProductPricing');
+    if (deleteBtn) deleteBtn.style.display = hasStoredPricingProfile(productId) ? '' : 'none';
+    setProductPricingEditMode(true);
+    document.querySelectorAll('#productPricingRows tr.pricing-row.editing').forEach(r => r.classList.remove('editing'));
+    const row = document.querySelector(`#productPricingRows tr[data-pricing-product-id="${productId}"]`);
+    if (row) {
+      row.classList.add('editing');
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    document.getElementById('productPricingFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function loadProductPricingForEdit(productId) {
+    fillProductPricingForm(productId);
+  }
+
+  function readProductPricingPayload() {
+    const pidRaw = document.getElementById('pr-product')?.value;
+    if (!pidRaw || pidRaw.startsWith('__')) throw new Error('Select a product.');
+    const productId = pricingEditingProductId != null ? pricingEditingProductId : +pidRaw;
+    return {
+      productId,
+      base: N(document.getElementById('pr-base')?.value),
+      packaging: N(document.getElementById('pr-pack')?.value),
+      transport: N(document.getElementById('pr-transport')?.value),
+      storage: N(document.getElementById('pr-storage')?.value),
+      other: N(document.getElementById('pr-other')?.value),
+      sell: N(document.getElementById('pr-sell')?.value)
+    };
+  }
+
+  function fillPricingProductSelect(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.innerHTML = (page.catalog || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    const prev = el.value;
+    const wasDisabled = el.disabled;
+    const opts = catalogActiveOnly().map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    el.innerHTML = (opts || '<option value="">No products yet</option>') +
+      '<option value="__addproduct">＋ Add new product…</option>';
+    if (prev && [...el.options].some(o => o.value === prev)) el.value = prev;
+    if (id === 'pr-product') el.disabled = wasDisabled;
   }
-  ['pr-product', 'rp-product', 'cp-product', 'ca-product', 'sl-sa-prod'].forEach(fillProductSelect);
+
+  function updateRoutePreview() {
+    const q = N(document.getElementById('rp-qty')?.value);
+    const c = N(document.getElementById('rp-cost')?.value);
+    const el = document.getElementById('rp-unit');
+    if (el) el.textContent = rs(q > 0 ? c / q : 0) + ' / unit';
+  }
+
+  function renderPricingPane() {
+    fillPricingProductSelect('pr-product');
+    fillPricingProductSelect('rp-product');
+    fillPricingProductSelect('cp-product');
+    fillCustomerSelect('cp-client');
+
+    const rows = document.getElementById('productPricingRows');
+    if (rows) {
+      rows.innerHTML = (page.catalog || []).map(p => {
+        const x = pricingForProduct(p.id) || {};
+        const cost = landedUnitCostPricing(p.id);
+        const sell = defaultSellPrice(p.id);
+        const editing = pricingEditingProductId === p.id ? ' editing' : '';
+        return `<tr class="pricing-row${editing}" data-pricing-product-id="${p.id}" title="Click to edit"><td><b>${esc(p.name)}</b></td><td class="num-cell">${rs(x.base || 0)}</td><td class="num-cell hide-sm">${rs(x.packaging || 0)}</td><td class="num-cell hide-sm">${rs(x.transport || 0)}</td><td class="num-cell hide-sm">${rs(x.storage || 0)}</td><td class="num-cell"><b>${rs(cost)}</b></td><td class="num-cell">${rs(sell)}</td><td class="num-cell"><b>${rs(sell - cost)}</b></td></tr>`;
+      }).join('') || '<tr><td colspan="8" class="empty">No products configured.</td></tr>';
+    }
+
+    const routes = page.deliveryRoutes || [];
+    const routeBody = document.getElementById('routePricingRows');
+    if (routeBody) {
+      routeBody.innerHTML = routes.map(r => {
+        const u = routeUnitCost(r);
+        const base = landedUnitCostPricing(r.productId);
+        return `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.productName || '')}</td><td class="num-cell">${fmtN(r.qty)}</td><td class="num-cell">${rs(r.cost)}</td><td class="num-cell"><b>${rs(u)}</b></td><td class="num-cell hide-sm">${rs(base)}</td><td class="num-cell"><b>${rs(base + u)}</b></td><td><button type="button" class="del" data-del-route="${r.id}" title="Delete">×</button></td></tr>`;
+      }).join('') || '<tr><td colspan="8" class="empty">No delivery routes saved yet.</td></tr>';
+    }
+
+    const clientBody = document.getElementById('clientPricingRows');
+    if (clientBody) {
+      clientBody.innerHTML = (page.clientPrices || []).map(x => {
+        return `<tr><td><b>${esc(x.clientName || 'Unknown')}</b></td><td>${esc(x.productName || '')}</td><td class="num-cell"><b>${rs(x.rate)}</b></td><td class="num-cell hide-sm">${rs(defaultSellPrice(x.productId))}</td><td><button type="button" class="del" data-del-client-price="${x.id}" title="Delete">×</button></td></tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty">No special client prices yet.</td></tr>';
+    }
+
+    updateRoutePreview();
+    if (pricingEditingProductId != null) {
+      const prod = document.getElementById('pr-product');
+      if (prod) {
+        prod.value = String(pricingEditingProductId);
+        prod.disabled = true;
+      }
+      loadPricingEditorFromProduct();
+    } else {
+      loadPricingEditorFromProduct();
+    }
+  }
+
+  function refreshProductCustomDropdowns() {
+    document.querySelectorAll('#view-milk select[data-custom-product-dropdown]').forEach(sel => {
+      const key = sel.dataset.customProductDropdown;
+      if (!key) return;
+      const current = sel.value;
+      const add = sel.querySelector('option[value="__addnew__"]');
+      (productDropdownOptions[key] || []).forEach(v => {
+        if (![...sel.options].some(o => o.value === v)) {
+          const o = document.createElement('option');
+          o.value = v;
+          o.textContent = v;
+          if (add) sel.insertBefore(o, add);
+          else sel.appendChild(o);
+        }
+      });
+      if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    });
+  }
+
+  async function addProductDropdownValue(sel) {
+    const key = sel.dataset.customProductDropdown;
+    if (!key) return;
+    const labels = {
+      costTypes: 'cost type',
+      shipmentTypes: 'shipment type',
+      units: 'unit',
+      categories: 'product category',
+      warehouseTypes: 'warehouse type'
+    };
+    const name = (prompt('Enter new ' + (labels[key] || 'option') + ':') || '').trim();
+    if (!name) { sel.selectedIndex = 0; return; }
+    productDropdownOptions[key] = productDropdownOptions[key] || [];
+    if (!productDropdownOptions[key].some(x => String(x).toLowerCase() === name.toLowerCase())) {
+      productDropdownOptions[key].push(name);
+    }
+    try {
+      await postJson('/Products/SaveProductDropdownOptions', productDropdownOptions);
+    } catch (err) {
+      alert(err.message || 'Could not save custom option.');
+      return;
+    }
+    refreshProductCustomDropdowns();
+    sel.value = name;
+  }
+
+  let catalogEditingId = null;
+
+  function isSystemCatalogSku(sku) {
+    const s = (sku || '').toUpperCase();
+    return s === 'MILK-RAW' || s === 'MILK-PAST' || s === 'MEAT';
+  }
+
+  function ensureCatalogSelectOption(sel, value) {
+    if (!sel || value == null || value === '' || String(value).startsWith('__')) return;
+    const v = String(value);
+    if ([...sel.options].some(o => o.value === v || o.textContent === v)) return;
+    const add = sel.querySelector('option[value="__addnew__"]');
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    if (add) sel.insertBefore(opt, add);
+    else sel.appendChild(opt);
+  }
+
+  function setCatalogEditMode(editing) {
+    const cancelBtn = document.getElementById('cancelProductCatalog');
+    const deleteBtn = document.getElementById('deleteProductCatalog');
+    if (cancelBtn) cancelBtn.style.display = editing ? '' : 'none';
+    if (deleteBtn) deleteBtn.style.display = editing ? '' : 'none';
+  }
+
+  function resetCatalogForm() {
+    catalogEditingId = null;
+    const title = document.getElementById('catalogFormTitle');
+    const saveBtn = document.getElementById('addProductCatalog');
+    if (title) title.textContent = 'Add product / pack size';
+    if (saveBtn) saveBtn.textContent = '+ Add product';
+    const cat = document.getElementById('pc-category');
+    if (cat) cat.value = 'dairy';
+    const meat = document.getElementById('v221-meat-catalog-type');
+    if (meat) meat.style.display = 'none';
+    ['pc-name', 'pc-pack', 'pc-price', 'pc-sku'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const unit = document.getElementById('pc-unit');
+    if (unit) unit.value = 'Pack';
+    const treat = document.getElementById('pc-treatment');
+    if (treat) treat.value = 'other';
+    const meatType = document.getElementById('v221-pc-meat-type');
+    if (meatType) meatType.value = 'cuts';
+    const sku = document.getElementById('pc-sku');
+    if (sku) sku.disabled = false;
+    document.querySelectorAll('#productCatalogRows tr.catalog-row.editing').forEach(r => r.classList.remove('editing'));
+    setCatalogEditMode(false);
+  }
+
+  function fillCatalogForm(p) {
+    if (!p) return;
+    catalogEditingId = p.id;
+    const title = document.getElementById('catalogFormTitle');
+    const saveBtn = document.getElementById('addProductCatalog');
+    if (title) title.textContent = 'Edit product';
+    if (saveBtn) saveBtn.textContent = 'Save';
+    const cat = document.getElementById('pc-category');
+    const category = p.category || 'other';
+    ensureCatalogSelectOption(cat, category);
+    if (cat) cat.value = category;
+    const meat = document.getElementById('v221-meat-catalog-type');
+    if (meat) meat.style.display = category === 'meat' ? '' : 'none';
+    const unitEl = document.getElementById('pc-unit');
+    ensureCatalogSelectOption(unitEl, p.unit);
+    if (unitEl) unitEl.value = p.unit || 'L';
+    document.getElementById('pc-name').value = p.name || '';
+    document.getElementById('pc-pack').value = p.pack || '';
+    document.getElementById('pc-price').value = p.defaultPrice ?? '';
+    document.getElementById('pc-sku').value = p.sku || '';
+    document.getElementById('pc-sku').disabled = isSystemCatalogSku(p.sku);
+    const treat = document.getElementById('pc-treatment');
+    if (treat) treat.value = p.milkTreatment || 'other';
+    const meatType = document.getElementById('v221-pc-meat-type');
+    if (meatType && p.meatType) meatType.value = p.meatType;
+    const deleteBtn = document.getElementById('deleteProductCatalog');
+    if (deleteBtn) deleteBtn.style.display = isSystemCatalogSku(p.sku) ? 'none' : '';
+    setCatalogEditMode(true);
+    document.querySelectorAll('#productCatalogRows tr.catalog-row.editing').forEach(r => r.classList.remove('editing'));
+    const row = document.querySelector(`#productCatalogRows tr[data-catalog-id="${p.id}"]`);
+    if (row) {
+      row.classList.add('editing');
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    document.getElementById('catalogFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function loadCatalogForEdit(id) {
+    fillCatalogForm(catalogById(id));
+  }
+
+  function readCatalogFormPayload() {
+    let category = document.getElementById('pc-category')?.value || 'other';
+    if (category.startsWith('__')) throw new Error('Choose a category.');
+    let unit = document.getElementById('pc-unit')?.value || 'L';
+    if (unit.startsWith('__')) throw new Error('Choose a stock unit.');
+    const name = document.getElementById('pc-name')?.value?.trim() || '';
+    if (!name) throw new Error('Enter a product name.');
+    const pack = document.getElementById('pc-pack')?.value?.trim() || '';
+    const meatType = category === 'meat'
+      ? (document.getElementById('v221-pc-meat-type')?.value || 'cuts')
+      : null;
+    const skuRaw = document.getElementById('pc-sku')?.value?.trim();
+    const sku = skuRaw || name.replace(/\s+/g, '-').toUpperCase().slice(0, 24);
+    return {
+      id: catalogEditingId || undefined,
+      sku,
+      name,
+      category,
+      pack,
+      unit,
+      defaultPrice: N(document.getElementById('pc-price')?.value),
+      milkTreatment: document.getElementById('pc-treatment')?.value || null,
+      meatType
+    };
+  }
+
+  function openProductSetup(category) {
+    activateProductTab('catalog');
+    resetCatalogForm();
+    setTimeout(() => {
+      const c = document.getElementById('pc-category');
+      if (c && category && [...c.options].some(o => o.value === category)) c.value = category;
+      const meat = document.getElementById('v221-meat-catalog-type');
+      if (meat) meat.style.display = c?.value === 'meat' ? '' : 'none';
+      document.getElementById('pc-name')?.focus();
+    }, 60);
+  }
+
+  function renderCatalogPane() {
+    const meat = document.getElementById('v221-meat-catalog-type');
+    const catSel = document.getElementById('pc-category');
+    if (meat && catSel) meat.style.display = catSel.value === 'meat' ? '' : 'none';
+
+    const body = document.getElementById('productCatalogRows');
+    if (body) {
+      body.innerHTML = (page.catalog || []).map(p => {
+        const active = p.isActive !== false;
+        const editing = catalogEditingId === p.id ? ' editing' : '';
+        return `<tr class="catalog-row${editing}" data-catalog-id="${p.id}" title="Click to edit"><td><span class="chip">${esc(catalogCategoryLabel(p.category))}</span></td><td><b>${esc(p.name)}</b></td><td>${esc(p.pack || '—')}</td><td>${esc(p.unit || 'Unit')}</td><td class="num-cell">${rs(p.defaultPrice)}</td><td class="hide-sm">${esc(p.sku || '—')}</td><td><span class="chip ${active ? 'chip-milk' : 'chip-exp'}">${active ? 'Active' : 'Inactive'}</span></td><td><button type="button" class="btn btn-ghost btn-sm" data-toggle-product="${p.id}">${active ? 'Disable' : 'Enable'}</button></td></tr>`;
+      }).join('') || '<tr><td colspan="8" class="empty">No products in catalogue yet.</td></tr>';
+    }
+    refreshProductCustomDropdowns();
+  }
+
+  function fillCaProductSelect() {
+    const el = document.getElementById('ca-product');
+    if (!el) return;
+    const prev = el.value;
+    const opts = (page.catalog || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    el.innerHTML = '<option value="">— optional —</option>' + opts +
+      '<option value="__addproduct">＋ Add new product…</option>';
+    if (prev && [...el.options].some(o => o.value === prev)) el.value = prev;
+  }
+
+  function resolveProductIdForCostAllocation(scope, productId, ref) {
+    if (productId) return productId;
+    const r = (ref || '').trim();
+    if (!r) return null;
+    if (scope === 'shipment' || scope === 'batch') {
+      const move = (page.movements || []).find(x => String(x.id) === r);
+      if (move?.productId) return +move.productId;
+      const tp = (page.transportShipments || []).find(x =>
+        String(x.id) === r || (x.dispatchRef || '').toLowerCase() === r.toLowerCase());
+      if (tp?.productId) return +tp.productId;
+    }
+    return null;
+  }
+
+  function allocatedCostForProduct(productId) {
+    return (page.costAllocations || [])
+      .filter(c => c.productId === productId)
+      .reduce((s, c) => s + N(c.amount), 0);
+  }
+
+  function onHandQtyForProduct(productId) {
+    return allStockBalanceRows(false)
+      .filter(r => r.productId === productId)
+      .reduce((s, r) => s + N(r.qty), 0);
+  }
+
+  function directBatchCostForProduct(productId) {
+    const p = catalogById(productId);
+    if (!p) return 0;
+    if ((p.sku || '').toUpperCase() === 'MEAT') {
+      return (page.slaughters || []).reduce((s, sl) => s + N(sl.saleAmount), 0);
+    }
+    return 0;
+  }
+
+  function costScopeLabel(scope) {
+    const map = {
+      general: 'General farm / overhead',
+      product: 'Product',
+      batch: 'Production batch',
+      shipment: 'Dispatch / transfer'
+    };
+    return map[scope] || scope;
+  }
+
+  function renderCostAllocationPane() {
+    const d = document.getElementById('ca-date');
+    if (d && !d.value) d.value = today();
+    fillCaProductSelect();
+    const rows = [...(page.costAllocations || [])].sort((a, b) =>
+      String(b.dateDisplay).localeCompare(String(a.dateDisplay))
+    );
+    const cr = document.getElementById('costAllocationRows');
+    if (cr) {
+      cr.innerHTML = rows.slice(0, 40).map(c => {
+        const prodLabel = c.productName || c.ref || (c.scope === 'general' ? 'General' : '—');
+        const cpu = N(c.qty) > 0 ? rs(N(c.amount) / N(c.qty)) : '—';
+        return `<tr><td>${esc(c.dateDisplay)}</td><td>${esc(c.costType)}</td><td>${esc(costScopeLabel(c.scope))}</td><td class="hide-sm">${esc(prodLabel)}</td><td class="num-cell"><b>${rs(c.amount)}</b></td><td class="num-cell hide-sm">${cpu}</td><td class="hide-sm">${esc(c.note || '')}</td><td><button type="button" class="del" data-del-cost="${c.id}" title="Delete">×</button></td></tr>`;
+      }).join('') || '<tr><td colspan="8" class="empty">No allocated operating/logistics costs yet.</td></tr>';
+    }
+    const lr = document.getElementById('landedCostRows');
+    if (lr) {
+      lr.innerHTML = (page.catalog || []).map(p => {
+        const made = onHandQtyForProduct(p.id);
+        const direct = directBatchCostForProduct(p.id);
+        const alloc = allocatedCostForProduct(p.id);
+        const denom = made > 0.0005 ? made : 0;
+        const unit = denom ? (direct + alloc) / denom : 0;
+        const sell = N(p.defaultPrice);
+        const margin = sell - unit;
+        return `<tr><td><b>${esc(p.name)}</b></td><td class="num-cell">${fmtN(made)}</td><td class="num-cell">${rs(direct)}</td><td class="num-cell">${rs(alloc)}</td><td class="num-cell"><b>${rs(unit)}</b></td><td class="num-cell">${rs(sell)}</td><td class="num-cell"><b>${rs(margin)}</b></td></tr>`;
+      }).join('') || '<tr><td colspan="7" class="empty">No products in catalogue yet.</td></tr>';
+    }
+    refreshProductCustomDropdowns();
+  }
 
   const MILK_OP_LABEL = {
     Receive: 'Milk received',
@@ -1324,25 +2596,11 @@
   document.getElementById('mp-report-breed')?.addEventListener('change', renderMilkBreedReport);
   renderMilkRecords();
 
-  const catRows = document.getElementById('productCatalogRows');
-  if (catRows) {
-    catRows.innerHTML = (page.catalog || []).map(c =>
-      `<tr><td>—</td><td><b>${esc(c.name)}</b></td><td>—</td><td>${esc(c.unit)}</td><td class="num-cell">${rs(c.defaultPrice)}</td><td class="hide-sm">${esc(c.sku)}</td><td>Active</td><td></td></tr>`
-    ).join('') || '<tr><td colspan="8" class="empty">No products in catalogue yet.</td></tr>';
-  }
-
   const salesRows = document.getElementById('sl-sales-rows');
   if (salesRows) {
     salesRows.innerHTML = (page.sales || []).map(s =>
       `<tr><td>${esc(s.dateDisplay)}</td><td>—</td><td>${esc(s.customer || 'Cash')}</td><td>${esc(s.productName)}</td><td class="num-cell">${s.qty}</td><td class="num-cell hide-sm">—</td><td class="num-cell">${rs(s.amount)}</td><td class="num-cell hide-sm">—</td><td class="num-cell hide-sm">—</td><td>${s.isCredit ? 'Credit' : 'Paid'}</td><td></td></tr>`
     ).join('') || '<tr><td colspan="11" class="empty">No sales this month yet.</td></tr>';
-  }
-
-  const mvRows = document.getElementById('sl-mv-rows');
-  if (mvRows) {
-    mvRows.innerHTML = (page.movements || []).map(m =>
-      `<tr><td>${esc(m.dateDisplay)}</td><td><b>${esc(m.type)}</b></td><td>${describeMovement(m)}</td><td class="hide-sm"></td><td></td></tr>`
-    ).join('') || '<tr><td colspan="5" class="empty">No stock movements recorded yet.</td></tr>';
   }
 
   const carcassRows = document.getElementById('sl-carcass-rows');
@@ -1352,40 +2610,209 @@
     ).join('') || '<tr><td colspan="8" class="empty">No carcasses in stock yet.</td></tr>';
   }
 
-  /* Breed performance (simplified) */
+  let breedPerfRows = [];
+
+  function getBpMonth() {
+    const el = document.getElementById('bp-month');
+    if (el && !el.value) el.value = page.month || today().slice(0, 7);
+    return el?.value || page.month || today().slice(0, 7);
+  }
+
+  function breedPerfNames() {
+    const names = new Set(['Beetal', 'Makhee Cheeni', 'Mixed']);
+    (page.herdGoats || []).forEach(g => { if (g.breed) names.add(g.breed); });
+    (page.analyticsMilkingSessions || []).forEach(s => { if (s.breed) names.add(s.breed); });
+    (page.analyticsLegacyMilk || []).forEach(m => { if (m.breed) names.add(m.breed); });
+    (page.analyticsGoatSales || []).forEach(s => { if (s.breed) names.add(s.breed); });
+    (page.analyticsSlaughters || []).forEach(s => { if (s.breed) names.add(s.breed); });
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }
+
+  function inBpMonth(dateStr, month) {
+    return String(dateStr || '').startsWith(month);
+  }
+
+  function getBreedPerfRows() {
+    const month = getBpMonth();
+    const filter = document.getElementById('bp-breed')?.value || '';
+    const mode = document.getElementById('bp-mode')?.value || 'milk';
+    const names = breedPerfNames().filter(b => !filter || b === filter);
+    return names.map(breed => {
+      const sessions = (page.analyticsMilkingSessions || []).filter(s =>
+        (s.breed || 'Mixed') === breed && inBpMonth(s.dateDisplay, month)
+      );
+      const legacy = (page.analyticsLegacyMilk || []).filter(m =>
+        (m.breed || 'Mixed') === breed && inBpMonth(m.dateDisplay, month)
+      );
+      const milkLitres = sessions.reduce((n, s) => n + Math.max(0, N(s.liters) - N(s.rejectedLiters)), 0)
+        + legacy.reduce((n, m) => n + N(m.liters), 0);
+      const goatSessions = sessions.length + legacy.length;
+      const sold = (page.analyticsGoatSales || []).filter(s =>
+        (s.breed || '') === breed && inBpMonth(s.dateDisplay, month)
+      );
+      const salesKg = sold.reduce((n, s) => n + N(s.weightKg), 0);
+      const revenue = sold.reduce((n, s) => n + N(s.price), 0);
+      const cost = sold.reduce((n, s) => n + N(s.cost), 0);
+      const carcasses = (page.analyticsSlaughters || []).filter(s =>
+        (s.breed || '') === breed && inBpMonth(s.dateDisplay, month)
+      );
+      const carcassKg = carcasses.reduce((n, s) => n + N(s.carcassKg), 0);
+      const carcassLiveKg = carcasses.reduce((n, s) => n + N(s.liveWeightKg), 0);
+      return {
+        breed,
+        milkLitres,
+        goatSessions,
+        avg: goatSessions ? milkLitres / goatSessions : null,
+        head: sold.length,
+        salesKg,
+        revenue,
+        cost,
+        margin: revenue - cost,
+        carcasses: carcasses.length,
+        carcassKg,
+        carcassLiveKg
+      };
+    }).filter(r => mode === 'milk' ? r.milkLitres > 0.0005 : r.head > 0 || r.carcasses > 0);
+  }
+
+  function bpKpi(label, value) {
+    return `<div class="panel" style="padding:15px"><div class="sub">${esc(label)}</div><div style="font-size:22px;font-weight:800">${esc(value)}</div></div>`;
+  }
+
   function renderBreedPerformance() {
-    const kpis = document.getElementById('bp-kpis');
-    const table = document.getElementById('bp-table');
-    if (!kpis && !table) return;
-    const byBreed = {};
-    (page.sessions || []).forEach(s => {
-      const b = s.breed || 'Mixed';
-      byBreed[b] = (byBreed[b] || 0) + Math.max(0, (s.liters || 0) - (s.rejectedLiters || 0));
-    });
-    const breeds = Object.entries(byBreed).sort((a, b) => b[1] - a[1]);
-    if (kpis) {
-      kpis.innerHTML = breeds.slice(0, 4).map(([b, l]) =>
-        `<div class="product-mini-kpi"><span>${esc(b)}</span><b>${l.toFixed(1)} L</b></div>`
-      ).join('') || '<div class="product-mini-kpi"><span>Milk</span><b>0 L</b></div>';
+    const pane = document.getElementById('breedPerformancePane');
+    if (!pane) return;
+    const month = getBpMonth();
+    const mode = document.getElementById('bp-mode')?.value || 'milk';
+    const sel = document.getElementById('bp-breed');
+    if (sel) {
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">All breeds</option>' +
+        breedPerfNames().map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
+      if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
     }
+    const rows = getBreedPerfRows();
+    breedPerfRows = rows;
+    const total = key => rows.reduce((n, r) => n + N(r[key]), 0);
+    const kpis = document.getElementById('bp-kpis');
+    if (kpis) {
+      kpis.innerHTML = mode === 'milk'
+        ? [
+          bpKpi('Milk collected', `${fmtN(total('milkLitres'))} L`),
+          bpKpi('Breed pools / entries', `${fmtN(rows.length, 0)} breeds`),
+          bpKpi('Milking records', fmtN(total('goatSessions'), 0)),
+          bpKpi('Average L per record', total('goatSessions') ? `${fmtN(total('milkLitres') / total('goatSessions'))} L` : '—')
+        ].join('')
+        : [
+          bpKpi('Live goats sold', fmtN(total('head'), 0)),
+          bpKpi('Recorded sale revenue', rs(total('revenue'))),
+          bpKpi('Carcass intake', `${fmtN(total('carcassKg'))} kg`),
+          bpKpi('Recorded sale margin*', rs(total('margin')))
+        ].join('');
+    }
+    const key = mode === 'milk' ? 'milkLitres' : 'carcassKg';
+    const max = Math.max(1, ...rows.map(r => N(r[key])));
+    const chartTitle = document.getElementById('bp-chart-title');
+    if (chartTitle) {
+      chartTitle.textContent = mode === 'milk'
+        ? `Milk collected by breed — ${month}`
+        : `Carcass intake by breed — ${month}`;
+    }
+    const chart = document.getElementById('bp-chart');
+    if (chart) {
+      chart.innerHTML = rows.length
+        ? rows.map(r =>
+          `<div style="display:grid;grid-template-columns:minmax(100px,160px) 1fr 95px;gap:12px;align-items:center;margin:13px 0"><strong>${esc(r.breed)}</strong><div style="height:23px;background:var(--green-tint,#e8f2e9);border-radius:6px;overflow:hidden"><div style="width:${Math.min(100, 100 * N(r[key]) / max)}%;height:100%;background:${mode === 'milk' ? '#2f6b3d' : '#b86a37'};border-radius:6px"></div></div><b style="text-align:right">${fmtN(r[key])} ${mode === 'milk' ? 'L' : 'kg'}</b></div>`
+        ).join('')
+        : `<div class="empty">No recorded ${mode === 'milk' ? 'breed-specific milk' : 'breed-linked carcass'} data for this month. Start recording to populate the chart.</div>`;
+    }
+    const head = mode === 'milk'
+      ? ['Breed', 'Milk (L)', 'Milking records', 'L per record']
+      : ['Breed', 'Live goats sold', 'Live sale kg*', 'Revenue (Rs)', 'Recorded cost (Rs)', 'Margin (Rs)*', 'Carcasses', 'Carcass kg', 'Carcass yield*'];
+    const cells = r => mode === 'milk'
+      ? [r.breed, fmtN(r.milkLitres), r.goatSessions ? fmtN(r.goatSessions, 0) : '—', r.avg == null ? '—' : fmtN(r.avg)]
+      : [r.breed, fmtN(r.head, 0), r.salesKg ? fmtN(r.salesKg) : '—', fmtN(r.revenue), fmtN(r.cost), fmtN(r.margin), fmtN(r.carcasses, 0), fmtN(r.carcassKg), r.carcassLiveKg ? fmtN(r.carcassKg / r.carcassLiveKg * 100, 1) + '%' : '—'];
+    const table = document.getElementById('bp-table');
     if (table) {
-      table.innerHTML = `<table class="tbl"><thead><tr><th>Breed</th><th class="num-cell">Usable milk (L)</th></tr></thead><tbody>${
-        breeds.map(([b, l]) => `<tr><td><b>${esc(b)}</b></td><td class="num-cell">${l.toFixed(1)}</td></tr>`).join('') ||
-        '<tr><td colspan="2" class="empty">No breed data for this month.</td></tr>'
+      table.innerHTML = `<table class="tbl"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
+        rows.length
+          ? rows.map(r => `<tr>${cells(r).map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')
+          : `<tr><td colspan="${head.length}">No records yet for ${esc(month)}.</td></tr>`
       }</tbody></table>`;
     }
+    const meth = document.getElementById('bp-methodology');
+    if (meth) {
+      meth.innerHTML = mode === 'milk'
+        ? '<b>Milk methodology:</b> Uses milking sessions and legacy single-line milk entries from the database, filtered by month and breed. Each saved session or legacy line counts as one record. Milk already flows into stock through normal milking saves.'
+        : '<b>Meat methodology:</b> Live goat sales from the herd module and carcass intake from slaughter records. Carcass breed comes from the linked goat; records without a breed are excluded. *Margin is sale price minus recorded purchase cost only, not full lifetime cost.';
+    }
   }
-  renderBreedPerformance();
 
-  /* Transport cost preview */
+  ['bp-month', 'bp-breed', 'bp-mode'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', renderBreedPerformance);
+  });
+
+  function thisCalendarMonth() {
+    return today().slice(0, 7);
+  }
+
+  function renderTransportPane() {
+    const td = document.getElementById('tp-date');
+    if (td && !td.value) td.value = today();
+    fillTransportAccountSelect();
+    updateTpPreview();
+    const arr = [...(page.transportShipments || [])].sort((a, b) =>
+      String(b.dateDisplay).localeCompare(String(a.dateDisplay))
+    );
+    const month = thisCalendarMonth();
+    const mm = arr.filter(x => String(x.dateDisplay || '').startsWith(month));
+    const cost = mm.reduce((s, x) => s + N(x.cost), 0);
+    const qty = mm.reduce((s, x) => s + N(x.qty), 0);
+    const k = document.getElementById('transportKpis');
+    if (k) {
+      k.innerHTML = `<div class="product-mini-kpi"><span>Shipments this month</span><b>${mm.length}</b></div>
+        <div class="product-mini-kpi"><span>Transport cost</span><b>${rs(cost)}</b></div>
+        <div class="product-mini-kpi"><span>Total quantity moved</span><b>${fmtN(qty, 0)}</b></div>`;
+    }
+    const rows = document.getElementById('transportRows');
+    if (rows) {
+      rows.innerHTML = arr.slice(0, 80).map(x => {
+        const route = `${esc(x.fromLocation || 'Farm')} → ${esc(x.toLocation || '—')}`;
+        const cpu = N(x.qty) > 0 ? rs(N(x.cost) / N(x.qty)) + ' / ' + esc(x.unit) : '—';
+        return `<tr><td>${esc(x.dateDisplay)}</td><td><b>${esc(x.shipmentType)}</b></td><td class="num-cell">${fmtN(x.qty)} ${esc(x.unit)}</td><td>${route}</td><td class="num-cell"><b>${rs(x.cost)}</b></td><td class="num-cell">${cpu}</td><td class="hide-sm">${esc(x.transporter || '')}</td><td><button type="button" class="del" data-del-tp="${x.id}" title="Delete">×</button></td></tr>`;
+      }).join('') || '<tr><td colspan="8" class="empty">No transportation records yet.</td></tr>';
+    }
+    refreshProductCustomDropdowns();
+  }
+
   function updateTpPreview() {
-    const qty = +document.getElementById('tp-qty')?.value || 0;
-    const cost = +document.getElementById('tp-cost')?.value || 0;
+    const type = document.getElementById('tp-type')?.value || 'Milk';
+    const qty = N(document.getElementById('tp-qty')?.value);
+    const cost = N(document.getElementById('tp-cost')?.value);
+    const unit = document.getElementById('tp-unit')?.value || 'L';
     const el = document.getElementById('tp-cost-preview');
     if (!el) return;
-    if (qty > 0 && cost >= 0) el.innerHTML = `<strong>${rs(cost / qty)}</strong> per unit (${qty} units, ${rs(cost)} total)`;
+    el.classList.toggle('milk', type === 'Milk');
+    el.classList.toggle('meat', type === 'Meat');
+    el.innerHTML = qty > 0
+      ? `Transport cost: <strong style="margin:0 5px">${rs(cost / qty)}</strong> per ${esc(unit)} · ${fmtN(qty)} ${esc(unit)} × ${rs(cost / qty)} = ${rs(cost)}`
+      : 'Enter quantity and transport cost — the system will calculate Rs/L, Rs/kg or Rs/item automatically.';
   }
-  ['tp-qty', 'tp-cost'].forEach(id => document.getElementById(id)?.addEventListener('input', updateTpPreview));
+
+  function onTpTypeChanged() {
+    const t = document.getElementById('tp-type')?.value;
+    const u = document.getElementById('tp-unit');
+    if (!u || !t || t.startsWith('__')) return;
+    if (t === 'Milk') u.value = 'L';
+    else if (t === 'Meat') u.value = 'kg';
+    else if (t === 'Dairy Products') u.value = 'items';
+    updateTpPreview();
+  }
+
+  ['tp-qty', 'tp-cost', 'tp-unit'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updateTpPreview);
+  });
+  document.getElementById('tp-type')?.addEventListener('change', onTpTypeChanged);
 
   /* Pricing margin preview */
   function updatePricingPreview() {
@@ -1406,6 +2833,36 @@
   }
   ['pr-base', 'pr-pack', 'pr-transport', 'pr-storage', 'pr-other', 'pr-sell'].forEach(id =>
     document.getElementById(id)?.addEventListener('input', updatePricingPreview));
+  ['rp-qty', 'rp-cost'].forEach(id =>
+    document.getElementById(id)?.addEventListener('input', updateRoutePreview));
+
+  document.getElementById('routePricingRows')?.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-del-route]');
+    if (!btn) return;
+    const id = +btn.dataset.delRoute;
+    if (!id) return;
+    if (!confirm('Delete this delivery route?')) return;
+    try {
+      await postJson('/Products/DeleteDeliveryRoute', { id });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not delete route.');
+    }
+  });
+
+  document.getElementById('clientPricingRows')?.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-del-client-price]');
+    if (!btn) return;
+    const id = +btn.dataset.delClientPrice;
+    if (!id) return;
+    if (!confirm('Delete this client-specific rate?')) return;
+    try {
+      await postJson('/Products/DeleteClientProductPrice', { id });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not delete client rate.');
+    }
+  });
 
   /* Save: milking session (total + breed rows summed) */
   document.getElementById('sl-mg-save')?.addEventListener('click', async () => {
@@ -1458,21 +2915,75 @@
   });
 
   document.getElementById('addProductCatalog')?.addEventListener('click', async () => {
-    const name = document.getElementById('pc-name')?.value?.trim();
-    if (!name) { alert('Enter a product name.'); return; }
-    await post('/Products/SaveCatalog', {
-      sku: document.getElementById('pc-sku')?.value?.trim() || name.replace(/\s+/g, '-').toUpperCase().slice(0, 24),
-      name,
-      unit: document.getElementById('pc-unit')?.value || 'L',
-      defaultPrice: +document.getElementById('pc-price')?.value || 0
-    });
-    reload();
+    try {
+      const payload = readCatalogFormPayload();
+      await postJson('/Products/SaveCatalog', payload);
+      resetCatalogForm();
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save product.');
+    }
+  });
+
+  document.getElementById('cancelProductCatalog')?.addEventListener('click', () => resetCatalogForm());
+
+  document.getElementById('deleteProductCatalog')?.addEventListener('click', async () => {
+    if (!catalogEditingId) return;
+    const p = catalogById(catalogEditingId);
+    if (!p || isSystemCatalogSku(p.sku)) return;
+    if (!confirm(`Delete “${p.name}” from the catalogue? This cannot be undone.`)) return;
+    try {
+      await postJson('/Products/DeleteCatalog', { id: catalogEditingId });
+      resetCatalogForm();
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not delete product.');
+    }
+  });
+
+  document.getElementById('productCatalogRows')?.addEventListener('click', async e => {
+    const toggleBtn = e.target.closest('[data-toggle-product]');
+    if (toggleBtn) {
+      e.stopPropagation();
+      const id = +toggleBtn.dataset.toggleProduct;
+      const p = catalogById(id);
+      if (!p) return;
+      const nextActive = p.isActive === false;
+      try {
+        await postJson('/Products/SaveCatalog', {
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          category: p.category || 'other',
+          pack: p.pack || null,
+          unit: p.unit || 'L',
+          defaultPrice: p.defaultPrice,
+          milkTreatment: p.milkTreatment || null,
+          meatType: p.meatType || null,
+          isActive: nextActive
+        });
+        reload();
+      } catch (err) {
+        alert(err.message || 'Could not update product status.');
+      }
+      return;
+    }
+    const row = e.target.closest('tr[data-catalog-id]');
+    if (row) loadCatalogForEdit(+row.dataset.catalogId);
   });
 
   document.getElementById('sl-sg-save')?.addEventListener('click', async () => {
+    const tag = document.getElementById('sl-sg-tag')?.value || '';
+    const g = findGoatByTag(tag);
+    const store = document.getElementById('sl-sg-store')?.value;
+    if (store && store.startsWith('__')) {
+      alert('Choose the meat chiller / freezer.');
+      return;
+    }
     await post('/Products/SaveSlaughter', {
       date: document.getElementById('sl-sg-date')?.value || today(),
-      tagText: document.getElementById('sl-sg-tag')?.value || '',
+      goatId: g ? g.id : null,
+      tagText: tag,
       carcassKg: +document.getElementById('sl-sg-kg')?.value || 0,
       saleAmount: 0,
       liveWeightKg: +document.getElementById('sl-sg-live')?.value || 0
@@ -1483,26 +2994,29 @@
   document.getElementById('sl-sa-check')?.addEventListener('click', () => {
     const qty = +document.getElementById('sl-sa-qty')?.value || 0;
     const rate = +document.getElementById('sl-sa-rate')?.value || 0;
-    const amt = qty * rate;
+    const basis = document.getElementById('sl-sa-basis')?.value || 'unit';
+    const amt = basis === 'fixed' ? rate : qty * rate;
+    const src = currentSaleSource();
+    const type = document.getElementById('sl-sa-type')?.value || 'other';
+    const typeLabels = { raw: 'Raw milk', past: 'Pasteurized milk', dairy: 'Dairy product', whole: 'Whole carcass', half: 'Half carcass', cut: 'Meat cuts', other: 'Product' };
     const review = document.getElementById('sl-sa-review');
     if (!review) return;
     review.hidden = false;
-    review.innerHTML = `<div class="sl-review"><h3>Review sale</h3><dl><dt>Quantity</dt><dd>${qty}</dd><dt>Rate</dt><dd>${rs(rate)}</dd><dt>Amount</dt><dd><b>${rs(amt)}</b></dd></dl><div class="sl-review-act"><button type="button" class="btn btn-green" id="sl-sa-post">Post sale</button><button type="button" class="btn btn-ghost" id="sl-sa-cancel-review">Back</button></div></div>`;
+    review.innerHTML = `<div class="sl-review"><h3>Review sale</h3><dl><dt>Item</dt><dd>${esc(typeLabels[type] || 'Sale')}${src ? ` · ${esc(src.label)}` : ''}</dd><dt>Quantity</dt><dd>${qty}${src?.unit ? ' ' + esc(src.unit) : ''}</dd><dt>Rate</dt><dd>${rs(rate)}</dd><dt>Amount</dt><dd><b>${rs(amt)}</b></dd></dl><div class="sl-review-act"><button type="button" class="btn btn-green" id="sl-sa-post">Post sale</button><button type="button" class="btn btn-ghost" id="sl-sa-cancel-review">Back</button></div></div>`;
     document.getElementById('sl-sa-cancel-review')?.addEventListener('click', () => { review.hidden = true; });
     document.getElementById('sl-sa-post')?.addEventListener('click', async () => {
       const cust = document.getElementById('sl-sa-cust')?.value;
       const pay = document.getElementById('sl-sa-pay')?.value;
       const isCredit = pay === 'credit' && cust;
-      const type = document.getElementById('sl-sa-type')?.value || 'other';
-      const typeLabels = { raw: 'Raw milk', past: 'Pasteurized milk', dairy: 'Dairy product', whole: 'Whole carcass', half: 'Half carcass', cut: 'Meat cuts', other: 'Product' };
-      const productId = document.getElementById('sl-sa-prod')?.value;
+      const prodVal = document.getElementById('sl-sa-prod')?.value;
+      const productId = src?.productId || (prodVal && !String(prodVal).startsWith('__') ? +prodVal : null);
       const res = await fetch('/Products/SaveSale', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date: document.getElementById('sl-sa-date')?.value || today(),
-          productId: productId ? +productId : null,
-          customerId: cust ? +cust : null,
+          productId: productId || null,
+          customerId: cust && cust !== '__add' ? +cust : null,
           productName: typeLabels[type] || 'Sale',
           qty, rate, isCredit: !!isCredit
         })
@@ -1654,37 +3168,63 @@
   });
 
   document.getElementById('sl-tf-save')?.addEventListener('click', async () => {
-    const pid = page.catalog?.[0]?.id;
-    const wid = page.warehouses?.[0]?.id;
-    if (!pid || !wid) { alert('Add a product and warehouse in Product Setup first.'); return; }
-    await post('/Products/SaveStockMovement', {
-      date: document.getElementById('sl-tf-date')?.value || today(),
-      type: 'Transfer',
-      productId: pid,
-      warehouseId: wid,
-      qty: +document.getElementById('sl-tf-qty')?.value || 0,
-      unitCost: 0,
-      notes: document.getElementById('sl-tf-note')?.value || ''
-    });
-    reload();
+    const k = parseStockItemKey(document.getElementById('sl-tf-item')?.value);
+    const toWh = +document.getElementById('sl-tf-to')?.value;
+    const qty = N(document.getElementById('sl-tf-qty')?.value);
+    const date = document.getElementById('sl-tf-date')?.value || today();
+    const note = document.getElementById('sl-tf-note')?.value?.trim() || '';
+    if (!k?.productId) { alert('Choose what to move.'); return; }
+    if (!toWh) { alert('Choose where it goes.'); return; }
+    if (!(qty > 0)) { alert('Enter the quantity to move.'); return; }
+    const batchNote = k.batch ? `Batch/carcass ${k.batch}` : '';
+    const notes = [batchNote, note].filter(Boolean).join(' · ') || null;
+    try {
+      await postJson('/Products/SaveStockMovement', {
+        date,
+        type: 'Transfer',
+        productId: k.productId,
+        warehouseId: k.warehouseId,
+        toWarehouseId: toWh,
+        qty,
+        unitCost: productUnitCost(k.productId),
+        notes
+      });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save transfer.');
+    }
   });
 
   document.getElementById('sl-adj-save')?.addEventListener('click', async () => {
-    const pid = page.catalog?.[0]?.id;
-    const wid = page.warehouses?.[0]?.id;
-    if (!pid || !wid) { alert('Add a product and warehouse first.'); return; }
+    const k = parseStockItemKey(document.getElementById('sl-adj-item')?.value);
     const dir = document.getElementById('sl-adj-dir')?.value;
-    await post('/Products/SaveStockMovement', {
-      date: document.getElementById('sl-adj-date')?.value || today(),
-      type: dir === 'in' ? 'Receive' : 'Spoilage',
-      productId: pid,
-      warehouseId: wid,
-      qty: +document.getElementById('sl-adj-qty')?.value || 0,
-      unitCost: 0,
-      notes: document.getElementById('sl-adj-note')?.value || ''
-    });
-    reload();
+    const qty = N(document.getElementById('sl-adj-qty')?.value);
+    const reason = document.getElementById('sl-adj-reason')?.value || '';
+    const date = document.getElementById('sl-adj-date')?.value || today();
+    const note = document.getElementById('sl-adj-note')?.value?.trim() || '';
+    if (!k?.productId) { alert('Choose the item.'); return; }
+    if (!(qty > 0)) { alert('Enter the quantity.'); return; }
+    if (!note && reason === 'Other') { alert('Explain the adjustment in the note.'); return; }
+    const cost = productUnitCost(k.productId);
+    const notes = [reason, k.batch ? `Batch/carcass ${k.batch}` : '', note].filter(Boolean).join(' · ');
+    try {
+      await postJson('/Products/SaveStockMovement', {
+        date,
+        type: dir === 'in' ? 'Receive' : 'Spoilage',
+        productId: k.productId,
+        warehouseId: k.warehouseId,
+        qty,
+        unitCost: dir === 'in' ? cost : 0,
+        notes
+      });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save adjustment.');
+    }
   });
+
+  document.getElementById('sl-mv-csv')?.addEventListener('click', () => exportStockLedgerCsv());
+  document.getElementById('sl-loc-add')?.addEventListener('click', () => addLocationFromForm());
 
   const salesKpis = document.getElementById('sl-sales-kpis');
   if (salesKpis) {
@@ -1695,25 +3235,194 @@
       <div class="sl-kpi"><span>Customers</span><b>${(page.customers || []).length}</b></div>`;
   }
 
-  document.getElementById('addTransportShipment')?.addEventListener('click', () =>
-    alert('Transport shipments will post to Finance in the next update. Use Accounting → Expenses for now.'));
+  document.getElementById('addTransportShipment')?.addEventListener('click', async () => {
+    const typeEl = document.getElementById('tp-type');
+    let type = typeEl?.value || 'Milk';
+    if (type.startsWith('__')) { alert('Choose a shipment type.'); return; }
+    let unit = document.getElementById('tp-unit')?.value || 'L';
+    if (unit.startsWith('__')) { alert('Choose a unit.'); return; }
+    const date = document.getElementById('tp-date')?.value || today();
+    const qty = N(document.getElementById('tp-qty')?.value);
+    const to = document.getElementById('tp-to')?.value?.trim();
+    const cost = N(document.getElementById('tp-cost')?.value);
+    if (!date || !(qty > 0) || !to || cost < 0) {
+      alert('Enter date, total quantity and destination.');
+      return;
+    }
+    const acct = document.getElementById('tp-account')?.value;
+    try {
+      await postJson('/Products/SaveTransportShipment', {
+        date,
+        shipmentType: type,
+        qty,
+        unit,
+        fromLocation: document.getElementById('tp-from')?.value?.trim() || 'Farm',
+        toLocation: to,
+        cost,
+        transporter: document.getElementById('tp-transporter')?.value?.trim() || null,
+        dispatchRef: document.getElementById('tp-ref')?.value?.trim() || null,
+        note: document.getElementById('tp-note')?.value?.trim() || null,
+        paidFromAccountId: acct ? +acct : null
+      });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save transport shipment.');
+    }
+  });
 
-  document.getElementById('addCostAllocation')?.addEventListener('click', () =>
-    alert('Cost allocation will link to Finance expenses in the next update.'));
+  document.getElementById('transportRows')?.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-del-tp]');
+    if (!btn) return;
+    const id = +btn.dataset.delTp;
+    if (!id) return;
+    if (!confirm('Delete this transportation record and its linked Finance expense?')) return;
+    try {
+      await postJson('/Products/DeleteTransportShipment', { id });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not delete shipment.');
+    }
+  });
 
-  document.getElementById('saveProductPricing')?.addEventListener('click', () =>
-    alert('Pricing profiles will be saved to the catalogue in the next update. Set default price under Product Setup for now.'));
+  document.getElementById('addCostAllocation')?.addEventListener('click', async () => {
+    let type = document.getElementById('ca-type')?.value || '';
+    if (type.startsWith('__')) { alert('Choose a cost type.'); return; }
+    const date = document.getElementById('ca-date')?.value || today();
+    const amount = N(document.getElementById('ca-amount')?.value);
+    const scope = document.getElementById('ca-scope')?.value || 'general';
+    const pidRaw = document.getElementById('ca-product')?.value;
+    let productId = pidRaw && !pidRaw.startsWith('__') ? +pidRaw : null;
+    const ref = document.getElementById('ca-ref')?.value?.trim() || null;
+    productId = resolveProductIdForCostAllocation(scope, productId, ref);
+    const qty = N(document.getElementById('ca-qty')?.value);
+    const note = document.getElementById('ca-note')?.value?.trim() || null;
+    if (!date || !(amount > 0)) { alert('Enter date and amount.'); return; }
+    if (scope === 'product' && !productId) { alert('Choose the product for this allocation.'); return; }
+    try {
+      await postJson('/Products/SaveProductCostAllocation', {
+        date,
+        costType: type,
+        amount,
+        scope,
+        productId,
+        ref,
+        qty,
+        note
+      });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save cost allocation.');
+    }
+  });
 
-  document.getElementById('saveRoutePricing')?.addEventListener('click', () => alert('Route pricing — coming soon.'));
-  document.getElementById('saveClientPrice')?.addEventListener('click', () => alert('Client-specific rates — coming soon.'));
+  document.getElementById('costAllocationRows')?.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-del-cost]');
+    if (!btn) return;
+    const id = +btn.dataset.delCost;
+    if (!id) return;
+    if (!confirm('Delete this allocated cost and its linked Finance expense?')) return;
+    try {
+      await postJson('/Products/DeleteProductCostAllocation', { id });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not delete allocation.');
+    }
+  });
+
+  document.getElementById('saveProductPricing')?.addEventListener('click', async () => {
+    try {
+      const payload = readProductPricingPayload();
+      await postJson('/Products/SaveProductPricing', payload);
+      resetProductPricingForm();
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save pricing.');
+    }
+  });
+
+  document.getElementById('cancelProductPricing')?.addEventListener('click', () => resetProductPricingForm());
+
+  document.getElementById('deleteProductPricing')?.addEventListener('click', async () => {
+    if (!pricingEditingProductId) return;
+    const p = catalogById(pricingEditingProductId);
+    if (!hasStoredPricingProfile(pricingEditingProductId)) return;
+    if (!confirm(`Remove saved pricing profile for “${p?.name || 'this product'}”? Catalog default price is kept.`)) return;
+    try {
+      await postJson('/Products/DeleteProductPricing', { productId: pricingEditingProductId });
+      resetProductPricingForm();
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not delete pricing profile.');
+    }
+  });
+
+  document.getElementById('productPricingRows')?.addEventListener('click', e => {
+    const row = e.target.closest('tr[data-pricing-product-id]');
+    if (row) loadProductPricingForEdit(+row.dataset.pricingProductId);
+  });
+
+  document.getElementById('saveRoutePricing')?.addEventListener('click', async () => {
+    const name = document.getElementById('rp-name')?.value?.trim() || '';
+    const pidRaw = document.getElementById('rp-product')?.value;
+    const qty = N(document.getElementById('rp-qty')?.value);
+    const cost = N(document.getElementById('rp-cost')?.value);
+    if (!name || !pidRaw || pidRaw.startsWith('__') || !(qty > 0) || cost < 0) {
+      alert('Enter destination/route, product, shipment quantity and transport cost.');
+      return;
+    }
+    try {
+      await postJson('/Products/SaveDeliveryRoute', {
+        name,
+        productId: +pidRaw,
+        qty,
+        cost
+      });
+      document.getElementById('rp-name').value = '';
+      document.getElementById('rp-qty').value = '';
+      document.getElementById('rp-cost').value = '';
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save route.');
+    }
+  });
+
+  document.getElementById('saveClientPrice')?.addEventListener('click', async () => {
+    const cidRaw = document.getElementById('cp-client')?.value;
+    const pidRaw = document.getElementById('cp-product')?.value;
+    const rate = N(document.getElementById('cp-rate')?.value);
+    if (!cidRaw || cidRaw === '__add' || !pidRaw || pidRaw.startsWith('__') || !(rate > 0)) {
+      alert('Select client, product and special rate.');
+      return;
+    }
+    try {
+      await postJson('/Products/SaveClientProductPrice', {
+        clientId: +cidRaw,
+        productId: +pidRaw,
+        rate
+      });
+      document.getElementById('cp-rate').value = '';
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save client rate.');
+    }
+  });
 
   document.getElementById('bp-export')?.addEventListener('click', () => {
-    const rows = [['Breed', 'Liters']];
-    (page.sessions || []).forEach(s => rows.push([s.breed, String(Math.max(0, s.liters - s.rejectedLiters))]));
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const mode = document.getElementById('bp-mode')?.value || 'milk';
+    const columns = mode === 'milk'
+      ? ['breed', 'milkLitres', 'goatSessions', 'avg']
+      : ['breed', 'head', 'salesKg', 'revenue', 'cost', 'margin', 'carcasses', 'carcassKg'];
+    const csv = [columns.join(','), ...breedPerfRows.map(r =>
+      columns.map(k => {
+        const s = String(r[k] ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(',')
+    )].join('\r\n');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'breed-performance.csv';
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `breed-${mode}-${getBpMonth()}.csv`;
     a.click();
   });
+
+  bootProductsPage();
 })();

@@ -141,3 +141,59 @@ public class SupplierPayableConfiguration : IEntityTypeConfiguration<SupplierPay
         builder.Property(x => x.PaidAmount).HasPrecision(18, 2);
     }
 }
+
+public class ProductCatalogItemConfiguration : IEntityTypeConfiguration<ProductCatalogItem>
+{
+    public void Configure(EntityTypeBuilder<ProductCatalogItem> builder)
+    {
+        builder.ToTable("ProductCatalogItems");
+        builder.Property(x => x.Sku).HasMaxLength(64).IsRequired();
+        builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.Category).HasMaxLength(64);
+        builder.Property(x => x.PackSize).HasMaxLength(64);
+        builder.Property(x => x.Unit).HasMaxLength(32);
+        builder.Property(x => x.MilkTreatment).HasMaxLength(64);
+        builder.Property(x => x.MeatType).HasMaxLength(32);
+        builder.Property(x => x.DefaultPrice).HasPrecision(18, 2);
+    }
+}
+
+public class ProductPricingProfileConfiguration : IEntityTypeConfiguration<ProductPricingProfile>
+{
+    public void Configure(EntityTypeBuilder<ProductPricingProfile> builder)
+    {
+        builder.ToTable("ProductPricingProfiles");
+        builder.Property(x => x.BaseCost).HasPrecision(18, 2);
+        builder.Property(x => x.PackagingCost).HasPrecision(18, 2);
+        builder.Property(x => x.TransportCost).HasPrecision(18, 2);
+        builder.Property(x => x.StorageCost).HasPrecision(18, 2);
+        builder.Property(x => x.OtherCost).HasPrecision(18, 2);
+        builder.Property(x => x.SellPrice).HasPrecision(18, 2);
+        builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => x.ProductId).IsUnique();
+    }
+}
+
+public class DeliveryRoutePricingConfiguration : IEntityTypeConfiguration<DeliveryRoutePricing>
+{
+    public void Configure(EntityTypeBuilder<DeliveryRoutePricing> builder)
+    {
+        builder.ToTable("DeliveryRoutePricings");
+        builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.TypicalQty).HasPrecision(18, 3);
+        builder.Property(x => x.TransportCost).HasPrecision(18, 2);
+        builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class ClientProductPriceConfiguration : IEntityTypeConfiguration<ClientProductPrice>
+{
+    public void Configure(EntityTypeBuilder<ClientProductPrice> builder)
+    {
+        builder.ToTable("ClientProductPrices");
+        builder.Property(x => x.Rate).HasPrecision(18, 2);
+        builder.HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new { x.CustomerId, x.ProductId }).IsUnique();
+    }
+}

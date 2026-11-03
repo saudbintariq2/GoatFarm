@@ -10,4 +10,5 @@ public static class AppSettingKeys
     public const string BreedingSeason = "BreedingSeason";
     public const string BreedingGroups = "BreedingGroups";
     public const string ProductMilkingSessions = "ProductMilkingSessions";
+    public const string ProductDropdownOptions = "ProductDropdownOptions";
 }

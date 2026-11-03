@@ -204,8 +204,13 @@ public class ProductCatalogItem : BaseEntity
 {
     public string Sku { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    /// <summary>dairy | meat | other (or user-added category value)</summary>
+    public string Category { get; set; } = "other";
+    public string? PackSize { get; set; }
     public string Unit { get; set; } = "L";
     public decimal DefaultPrice { get; set; }
+    public string? MilkTreatment { get; set; }
+    public string? MeatType { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -251,6 +256,73 @@ public class SlaughterRecord : BaseEntity
     public decimal CarcassKg { get; set; }
     public decimal SaleAmount { get; set; }
     public string? Notes { get; set; }
+}
+
+public class ProductCostAllocation : BaseEntity
+{
+    public DateOnly Date { get; set; }
+    public string CostType { get; set; } = "";
+    public decimal Amount { get; set; }
+    /// <summary>general | product | batch | shipment</summary>
+    public string Scope { get; set; } = "general";
+    public int? ProductId { get; set; }
+    public string? Ref { get; set; }
+    public decimal Qty { get; set; }
+    public string? Note { get; set; }
+    public int? ExpenseId { get; set; }
+    public string? SourceType { get; set; }
+    public int? SourceId { get; set; }
+}
+
+public class TransportShipment : BaseEntity
+{
+    public DateOnly Date { get; set; }
+    public string ShipmentType { get; set; } = "Milk";
+    public decimal Qty { get; set; }
+    public string Unit { get; set; } = "L";
+    public string FromLocation { get; set; } = "Farm";
+    public string ToLocation { get; set; } = "";
+    public decimal Cost { get; set; }
+    public decimal CostPerUnit { get; set; }
+    public string? Transporter { get; set; }
+    public string DispatchRef { get; set; } = "";
+    public string? Note { get; set; }
+    public int? PaidFromAccountId { get; set; }
+    public int? ExpenseId { get; set; }
+    public int? LedgerTransactionId { get; set; }
+}
+
+/// <summary>Per-product planning cost profile; does not post Finance expenses.</summary>
+public class ProductPricingProfile : BaseEntity
+{
+    public int ProductId { get; set; }
+    public ProductCatalogItem Product { get; set; } = null!;
+    public decimal BaseCost { get; set; }
+    public decimal PackagingCost { get; set; }
+    public decimal TransportCost { get; set; }
+    public decimal StorageCost { get; set; }
+    public decimal OtherCost { get; set; }
+    public decimal SellPrice { get; set; }
+}
+
+/// <summary>Destination/route shipment planning cost; analytical only.</summary>
+public class DeliveryRoutePricing : BaseEntity
+{
+    public string Name { get; set; } = "";
+    public int ProductId { get; set; }
+    public ProductCatalogItem Product { get; set; } = null!;
+    public decimal TypicalQty { get; set; }
+    public decimal TransportCost { get; set; }
+}
+
+/// <summary>Customer-specific product selling rate.</summary>
+public class ClientProductPrice : BaseEntity
+{
+    public int CustomerId { get; set; }
+    public BusinessCustomer Customer { get; set; } = null!;
+    public int ProductId { get; set; }
+    public ProductCatalogItem Product { get; set; } = null!;
+    public decimal Rate { get; set; }
 }
 
 public class ProductSale : BaseEntity

@@ -27,6 +27,13 @@
 
 .transport-cost-preview{min-height:42px;display:flex;align-items:center;padding:10px 12px;border:1px solid #d7e3dc;border-radius:10px;background:#f4f8f5;color:#365849;font-weight:700}.transport-cost-preview strong{font-size:16px;color:#173f32}.transport-cost-preview.meat{background:#fff7f4;border-color:#ead7ce}.transport-cost-preview.milk{background:#f3f8ff;border-color:#d6e3f2}
 
+#view-milk .tbl tr.catalog-row{cursor:pointer}
+#view-milk .tbl tr.catalog-row.editing{background:var(--green-tint,#e8f4ed);outline:2px solid var(--green,#2f6b45);outline-offset:-2px}
+#catalogFormPanel .goat-form-actions{margin-top:14px}
+#productPricingFormPanel .goat-form-actions{margin-top:14px}
+#view-milk .tbl tr.pricing-row{cursor:pointer}
+#view-milk .tbl tr.pricing-row.editing{background:var(--green-tint,#e8f4ed);outline:2px solid var(--green,#2f6b45);outline-offset:-2px}
+
 .products-flow-note{margin:12px 0 18px;padding:12px 14px;border:1px solid #e3dccb;border-radius:14px;background:#fffdf8;color:#625f56;font-size:13px;line-height:1.5}.products-flow-note strong{color:#173d2b}.products-clarity-badge{display:inline-block;padding:4px 9px;border-radius:999px;background:#eef5ec;color:#31543e;font-weight:700;font-size:11px;margin-right:6px}
 
 /* V232 Products: milk line, meat line, sales, stock — scoped to #view-milk */

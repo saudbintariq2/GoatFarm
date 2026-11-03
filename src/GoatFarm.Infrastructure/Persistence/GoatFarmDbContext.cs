@@ -65,6 +65,11 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     public DbSet<MilkingSession> MilkingSessions => Set<MilkingSession>();
     public DbSet<SlaughterRecord> SlaughterRecords => Set<SlaughterRecord>();
     public DbSet<ProductSale> ProductSales => Set<ProductSale>();
+    public DbSet<TransportShipment> TransportShipments => Set<TransportShipment>();
+    public DbSet<ProductCostAllocation> ProductCostAllocations => Set<ProductCostAllocation>();
+    public DbSet<ProductPricingProfile> ProductPricingProfiles => Set<ProductPricingProfile>();
+    public DbSet<DeliveryRoutePricing> DeliveryRoutePricings => Set<DeliveryRoutePricing>();
+    public DbSet<ClientProductPrice> ClientProductPrices => Set<ClientProductPrice>();
     public DbSet<GoatTreatment> GoatTreatments => Set<GoatTreatment>();
     public DbSet<CustomFeedingGroup> CustomFeedingGroups => Set<CustomFeedingGroup>();
 

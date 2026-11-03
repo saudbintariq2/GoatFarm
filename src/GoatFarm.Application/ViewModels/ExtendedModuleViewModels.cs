@@ -419,6 +419,148 @@ public class ProductsPageViewModel
     public IReadOnlyList<ProductMilkingGoatRowViewModel> HerdGoats { get; set; } = [];
     public IReadOnlyList<MoneyAccountRowViewModel> MoneyAccounts { get; set; } = [];
     public IReadOnlyList<MilkLegacyRowViewModel> LegacyMilkEntries { get; set; } = [];
+    /// <summary>All milking sessions for breed performance (client filters by month).</summary>
+    public IReadOnlyList<MilkingSessionRowViewModel> AnalyticsMilkingSessions { get; set; } = [];
+    /// <summary>Legacy single-line milk entries for breed performance.</summary>
+    public IReadOnlyList<MilkLegacyRowViewModel> AnalyticsLegacyMilk { get; set; } = [];
+    public IReadOnlyList<SlaughterRowViewModel> AnalyticsSlaughters { get; set; } = [];
+    public IReadOnlyList<BreedPerformanceGoatSaleRowViewModel> AnalyticsGoatSales { get; set; } = [];
+    public IReadOnlyList<TransportShipmentRowViewModel> TransportShipments { get; set; } = [];
+    public IReadOnlyList<ProductCostAllocationRowViewModel> CostAllocations { get; set; } = [];
+    /// <summary>User-added Product tab dropdown values (costTypes, shipmentTypes, units, etc.).</summary>
+    public Dictionary<string, List<string>> ProductDropdownOptions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyList<ProductPricingRowViewModel> ProductPricing { get; set; } = [];
+    public IReadOnlyList<DeliveryRouteRowViewModel> DeliveryRoutes { get; set; } = [];
+    public IReadOnlyList<ClientProductPriceRowViewModel> ClientPrices { get; set; } = [];
+}
+
+public class ProductPricingRowViewModel
+{
+    public int ProductId { get; set; }
+    public decimal Base { get; set; }
+    public decimal Packaging { get; set; }
+    public decimal Transport { get; set; }
+    public decimal Storage { get; set; }
+    public decimal Other { get; set; }
+    public decimal Sell { get; set; }
+}
+
+public class SaveProductPricingViewModel
+{
+    public int ProductId { get; set; }
+    public decimal Base { get; set; }
+    public decimal Packaging { get; set; }
+    public decimal Transport { get; set; }
+    public decimal Storage { get; set; }
+    public decimal Other { get; set; }
+    public decimal Sell { get; set; }
+}
+
+public class DeliveryRouteRowViewModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public int ProductId { get; set; }
+    public string? ProductName { get; set; }
+    public decimal Qty { get; set; }
+    public decimal Cost { get; set; }
+}
+
+public class SaveDeliveryRouteViewModel
+{
+    public string Name { get; set; } = "";
+    public int ProductId { get; set; }
+    public decimal Qty { get; set; }
+    public decimal Cost { get; set; }
+}
+
+public class ClientProductPriceRowViewModel
+{
+    public int Id { get; set; }
+    public int ClientId { get; set; }
+    public string? ClientName { get; set; }
+    public int ProductId { get; set; }
+    public string? ProductName { get; set; }
+    public decimal Rate { get; set; }
+}
+
+public class SaveClientProductPriceViewModel
+{
+    public int ClientId { get; set; }
+    public int ProductId { get; set; }
+    public decimal Rate { get; set; }
+}
+
+public class ProductCostAllocationRowViewModel
+{
+    public int Id { get; set; }
+    public string DateDisplay { get; set; } = "";
+    public string CostType { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string Scope { get; set; } = "";
+    public int? ProductId { get; set; }
+    public string? ProductName { get; set; }
+    public string? Ref { get; set; }
+    public decimal Qty { get; set; }
+    public string? Note { get; set; }
+}
+
+public class SaveProductCostAllocationViewModel
+{
+    public DateOnly Date { get; set; }
+    public string CostType { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string Scope { get; set; } = "general";
+    public int? ProductId { get; set; }
+    public string? Ref { get; set; }
+    public decimal Qty { get; set; }
+    public string? Note { get; set; }
+}
+
+public class TransportShipmentRowViewModel
+{
+    public int Id { get; set; }
+    public string DateDisplay { get; set; } = "";
+    public string ShipmentType { get; set; } = "";
+    public decimal Qty { get; set; }
+    public string Unit { get; set; } = "";
+    public string FromLocation { get; set; } = "";
+    public string ToLocation { get; set; } = "";
+    public decimal Cost { get; set; }
+    public decimal CostPerUnit { get; set; }
+    public string? Transporter { get; set; }
+    public string DispatchRef { get; set; } = "";
+    public string? Note { get; set; }
+}
+
+public class DeleteTransportShipmentRequest
+{
+    public int Id { get; set; }
+}
+
+public class SaveTransportShipmentViewModel
+{
+    public DateOnly Date { get; set; }
+    public string ShipmentType { get; set; } = "Milk";
+    public decimal Qty { get; set; }
+    public string Unit { get; set; } = "L";
+    public string? FromLocation { get; set; }
+    public string ToLocation { get; set; } = "";
+    public decimal Cost { get; set; }
+    public string? Transporter { get; set; }
+    public string? DispatchRef { get; set; }
+    public string? Note { get; set; }
+    public int? PaidFromAccountId { get; set; }
+}
+
+public class BreedPerformanceGoatSaleRowViewModel
+{
+    public string DateDisplay { get; set; } = "";
+    public string Breed { get; set; } = "";
+    public string Tag { get; set; } = "";
+    public decimal Price { get; set; }
+    public decimal? WeightKg { get; set; }
+    public decimal Cost { get; set; }
 }
 
 public class ProductMilkingGoatRowViewModel
@@ -431,6 +573,8 @@ public class ProductMilkingGoatRowViewModel
     /// <summary>Lowercase key, e.g. milking, pregnant (matches prototype herd status).</summary>
     public string StatusKey { get; set; } = "";
     public string Status { get; set; } = "";
+    public decimal PurchasePrice { get; set; }
+    public decimal LiveWeightKg { get; set; }
 }
 
 public class ProductCustomerRowViewModel
@@ -444,8 +588,13 @@ public class ProductCatalogRowViewModel
     public int Id { get; set; }
     public string Sku { get; set; } = "";
     public string Name { get; set; } = "";
+    public string Category { get; set; } = "other";
+    public string? Pack { get; set; }
     public string Unit { get; set; } = "";
     public decimal DefaultPrice { get; set; }
+    public string? MilkTreatment { get; set; }
+    public string? MeatType { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public class WarehouseRowViewModel
@@ -498,6 +647,7 @@ public class ProductsMeatDashboardViewModel
 public class StockMovementRowViewModel
 {
     public int Id { get; set; }
+    public int ProductId { get; set; }
     public string DateDisplay { get; set; } = "";
     public string Type { get; set; } = "";
     public string Product { get; set; } = "";
@@ -532,6 +682,8 @@ public class SlaughterRowViewModel
     public int Id { get; set; }
     public string DateDisplay { get; set; } = "";
     public string Tag { get; set; } = "";
+    public string Breed { get; set; } = "";
+    public decimal LiveWeightKg { get; set; }
     public decimal CarcassKg { get; set; }
     public decimal SaleAmount { get; set; }
 }
@@ -552,8 +704,13 @@ public class SaveProductCatalogViewModel
     public int? Id { get; set; }
     [Required] public string Sku { get; set; } = "";
     [Required] public string Name { get; set; } = "";
+    public string? Category { get; set; }
+    public string? Pack { get; set; }
     public string Unit { get; set; } = "L";
     public decimal DefaultPrice { get; set; }
+    public string? MilkTreatment { get; set; }
+    public string? MeatType { get; set; }
+    public bool? IsActive { get; set; }
 }
 
 public class SaveWarehouseViewModel

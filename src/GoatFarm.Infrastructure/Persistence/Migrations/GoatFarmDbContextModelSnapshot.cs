@@ -359,6 +359,40 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.ToTable("BusinessCustomers");
                 });
 
+            modelBuilder.Entity("GoatFarm.Domain.Entities.ClientProductPrice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("CustomerId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("ClientProductPrices", (string)null);
+                });
+
             modelBuilder.Entity("GoatFarm.Domain.Entities.CustomFeedingGroup", b =>
                 {
                     b.Property<int>("Id")
@@ -482,6 +516,43 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.HasIndex("Date");
 
                     b.ToTable("DeathRecords", (string)null);
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.DeliveryRoutePricing", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TransportCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TypicalQty")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("DeliveryRoutePricings", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.Employee", b =>
@@ -1647,25 +1718,100 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("DefaultPrice")
-                        .HasColumnType("numeric");
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("MeatType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("MilkTreatment")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("PackSize")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Sku")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Unit")
                         .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProductCatalogItems", (string)null);
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.ProductCostAllocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("CostType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ExpenseId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Qty")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Ref")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("SourceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceType")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedDate")
@@ -1673,7 +1819,56 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ProductCatalogItems");
+                    b.ToTable("ProductCostAllocations");
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.ProductPricingProfile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("BaseCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("OtherCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("PackagingCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("SellPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("StorageCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TransportCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique();
+
+                    b.ToTable("ProductPricingProfiles", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.ProductSale", b =>
@@ -2260,6 +2455,72 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.ToTable("TradeStores");
                 });
 
+            modelBuilder.Entity("GoatFarm.Domain.Entities.TransportShipment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Cost")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("CostPerUnit")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DispatchRef")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ExpenseId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FromLocation")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("LedgerTransactionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("PaidFromAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Qty")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("ShipmentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ToLocation")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Transporter")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TransportShipments");
+                });
+
             modelBuilder.Entity("GoatFarm.Domain.Entities.VaccinationHistory", b =>
                 {
                     b.Property<int>("Id")
@@ -2638,6 +2899,25 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Navigation("Doe");
                 });
 
+            modelBuilder.Entity("GoatFarm.Domain.Entities.ClientProductPrice", b =>
+                {
+                    b.HasOne("GoatFarm.Domain.Entities.BusinessCustomer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GoatFarm.Domain.Entities.ProductCatalogItem", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("GoatFarm.Domain.Entities.CustomerInvoice", b =>
                 {
                     b.HasOne("GoatFarm.Domain.Entities.BusinessCustomer", "Customer")
@@ -2647,6 +2927,17 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.DeliveryRoutePricing", b =>
+                {
+                    b.HasOne("GoatFarm.Domain.Entities.ProductCatalogItem", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.FarmTask", b =>
@@ -2803,6 +3094,17 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
 
                     b.Navigation("CounterAccount");
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.ProductPricingProfile", b =>
+                {
+                    b.HasOne("GoatFarm.Domain.Entities.ProductCatalogItem", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.ProductSale", b =>
