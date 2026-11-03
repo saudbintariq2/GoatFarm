@@ -36,6 +36,7 @@ public interface ITradingService
     Task EnsureSeededAsync(CancellationToken cancellationToken = default);
     Task<object> SaveEntryAsync(SaveTradeEntryViewModel model, CancellationToken cancellationToken = default);
     Task<bool> DeleteEntryAsync(int id, CancellationToken cancellationToken = default);
+    Task<bool> CancelEntryAsync(int id, string? reason, CancellationToken cancellationToken = default);
     Task<object> SaveMasterAsync(SaveTradeMasterViewModel model, CancellationToken cancellationToken = default);
 }
 

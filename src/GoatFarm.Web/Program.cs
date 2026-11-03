@@ -47,7 +47,7 @@ builder.Services.AddAntiforgery(options =>
     options.HeaderName = "X-CSRF-TOKEN";
 });
 
-builder.Services.AddControllersWithViews(options =>
+var mvcBuilder = builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add<FarmPermissionFilter>();
     options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
@@ -57,6 +57,9 @@ builder.Services.AddControllersWithViews(options =>
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
+
+if (builder.Environment.IsDevelopment())
+    mvcBuilder.AddRazorRuntimeCompilation();
 
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -124,6 +127,21 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 
 app.UseStaticFiles();
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var ct = context.Response.ContentType;
+        if (ct != null
+            && ct.StartsWith("text/html", StringComparison.OrdinalIgnoreCase)
+            && !ct.Contains("charset", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.ContentType = ct + "; charset=utf-8";
+        }
+        return Task.CompletedTask;
+    });
+    await next();
+});
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();

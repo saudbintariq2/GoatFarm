@@ -63,14 +63,25 @@ public class TradingController : Controller
     }
 
     [HttpDelete]
-    public async Task<IActionResult> DeleteEntry(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeleteEntry(int id, CancellationToken cancellationToken) =>
+        await CancelEntry(new CancelTradeEntryViewModel { Id = id }, cancellationToken);
+
+    [HttpPost]
+    public async Task<IActionResult> CancelEntry([FromBody] CancelTradeEntryViewModel model, CancellationToken cancellationToken)
     {
         var pending = await ApprovalGate.GuardDeleteAsync(this, User, _approvalService, _permissionService,
-            FarmTabs.Trading, "TradeEntry", id, cancellationToken);
+            FarmTabs.Trading, "TradeEntry", model.Id, cancellationToken);
         if (pending is not null) return pending;
-        var ok = await _trading.DeleteEntryAsync(id, cancellationToken);
-        if (ok)
-            await _audit.LogAsync(FarmTabs.Trading, AuditAction.Delete, $"Cancelled trade entry #{id}", UserId, UserDisplay, cancellationToken: cancellationToken);
-        return ok ? Ok(new { success = true }) : NotFound();
+        try
+        {
+            var ok = await _trading.CancelEntryAsync(model.Id, model.Reason, cancellationToken);
+            if (ok)
+                await _audit.LogAsync(FarmTabs.Trading, AuditAction.Delete, $"Cancelled trade entry #{model.Id}", UserId, UserDisplay, cancellationToken: cancellationToken);
+            return ok ? Ok(new { success = true }) : NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }

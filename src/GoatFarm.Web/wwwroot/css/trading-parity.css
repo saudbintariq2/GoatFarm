@@ -1,0 +1,152 @@
+#view-trade .td-nav button{font:inherit;font-size:13.5px;font-weight:700;border:0;background:none;color:var(--ink-soft);border-radius:10px;padding:9px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;min-height:40px}
+#view-trade .td-nav button:hover{background:#f3f6f0;color:var(--ink)}
+#view-trade .td-nav button.active{background:var(--green);color:#fff}
+#view-trade .td-nav button:focus-visible,#view-trade .td-seg button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+#view-trade [hidden]{display:none!important}
+#view-trade .td-pane{scroll-margin-top:70px}
+#view-trade .td-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;align-items:end}
+#view-trade .td-grid .field{min-width:0}
+#view-trade .td-grid .field input,#view-trade .td-grid .field select{width:100%;min-width:0}
+#view-trade .td-span-2{grid-column:span 2}
+#view-trade .td-span-3{grid-column:1/-1}
+#view-trade .td-inline{display:flex;gap:6px}
+#view-trade .td-inline input{flex:1}
+#view-trade .td-sum{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,.7fr) minmax(0,1.6fr);gap:10px;margin:14px 0;padding:12px 14px;border-radius:12px;background:#f4f7f1;border:1px solid var(--line)}
+#view-trade .td-sum:empty{display:none}
+#view-trade .td-sum>div{display:flex;flex-direction:column;min-width:0}
+#view-trade .td-sum span{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
+#view-trade .td-sum b{font-size:19px;font-variant-numeric:tabular-nums}
+#view-trade .td-sum small{font-size:12px;color:var(--ink-soft);line-height:1.4}
+#view-trade .td-sum small b{font-size:12.5px}
+#view-trade .td-sum-main{background:#fff;border-radius:10px;padding:6px 10px;border:1px solid var(--line);grid-column:-2/-1}
+#view-trade .td-sum-main:only-child{grid-column:1/-1}
+#view-trade .td-sum-main>b{font-size:22px;color:var(--green-dark)}
+#view-trade .td-submit{margin:14px 0 4px}
+#view-trade .td-submit .btn{min-width:200px;min-height:42px}
+#view-trade .td-hint,#view-trade .td-small{font-size:12.5px;color:var(--ink-soft);line-height:1.5;margin-top:8px}
+#view-trade .td-bad{color:var(--red)!important}
+#view-trade .td-muted{color:var(--ink-soft);font-weight:500}
+#view-trade .td-seg{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+#view-trade .td-seg button{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:#fff;padding:8px 13px;border-radius:999px;cursor:pointer;color:var(--ink-soft);min-height:38px}
+#view-trade .td-seg button.active{background:var(--green-tint);color:var(--green-dark);border-color:var(--green)}
+#view-trade .td-period{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+#view-trade .td-period .field{min-width:160px}
+#view-trade .td-quick{display:flex;gap:6px;flex-wrap:wrap}
+#view-trade .td-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#view-trade .td-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+#view-trade .td-fin{min-width:0!important}
+#view-trade .td-fin td{padding:8px 10px}
+#view-trade .td-fin .td-ind{padding-left:24px;color:var(--ink-soft)}
+#view-trade .td-row-in td,#view-trade .td-row-sub td{border-top:1px solid var(--line)}
+#view-trade .td-row-sub td{background:#f6f8f4}
+#view-trade .td-row-good td{background:var(--green-tint);font-size:15px}
+#view-trade .td-row-bad td{background:var(--red-tint);font-size:15px}
+#view-trade .td-cb-sel{margin-left:auto;min-width:180px}
+#view-trade .td-cancel td{opacity:.55}
+#view-trade .td-card{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:4px;background:#fff}
+#view-trade .td-card.off{opacity:.6}
+#view-trade .td-card-top{display:flex;gap:8px;align-items:center}
+#view-trade .td-card small{color:var(--ink-soft);font-size:12px}
+#view-trade .td-card-act{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+#view-trade .td-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+#view-trade .td-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px;font-size:13px;background:#fff}
+#view-trade .td-chip.off{opacity:.5}
+#view-trade .td-chip button{border:0;background:none;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:8px;color:var(--ink-soft)}
+#view-trade .td-chip button:hover{background:#f3f6f0}
+#view-trade .table-wrap{width:100%;overflow-x:auto}
+@media (max-width:1100px){#view-trade .td-three{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:1000px){
+  #view-trade .td-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #view-trade .td-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #view-trade .td-two{grid-template-columns:minmax(0,1fr)}
+  #view-trade .td-sum{grid-template-columns:1fr 1fr}
+  #view-trade .td-sum-main{grid-column:1/-1}
+}
+@media (max-width:640px){
+  #view-trade .td-nav{position:static;overflow-x:auto;flex-wrap:nowrap}
+  #view-trade .td-nav button{white-space:nowrap;flex:0 0 auto}
+  #view-trade .td-grid{grid-template-columns:minmax(0,1fr)}
+  #view-trade .td-span-2{grid-column:auto}
+  #view-trade .td-kpi b{font-size:18px}
+  #view-trade .td-submit .btn{width:100%}
+  #view-trade .td-cb-sel{margin-left:0;width:100%}
+}
+#view-trade .td-fin{width:100%;table-layout:fixed}
+#view-trade .td-fin td{white-space:normal;overflow-wrap:anywhere}
+#view-trade .td-fin td.num-cell{width:42%;white-space:nowrap}
+#view-trade .td-inline select.td-basis{flex:0 1 auto;width:auto;min-width:0}
+#view-trade .td-inline input{min-width:90px}
+#view-trade .td-stock-hero{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,2fr);gap:14px;margin:0 0 14px}
+#view-trade .td-stock-now{background:var(--green-dark,#234F2D);color:#fff;border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:4px}
+#view-trade .td-stock-now>span{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;opacity:.8}
+#view-trade .td-stock-now b{font-size:38px;line-height:1.1;font-variant-numeric:tabular-nums}
+#view-trade .td-stock-now b small{font-size:16px;font-weight:600;opacity:.8}
+#view-trade .td-stock-now>b+span{font-size:15px;font-weight:700;opacity:.9}
+#view-trade .td-stock-now small{font-size:12.5px;opacity:.85}
+#view-trade .td-stock-eq{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px}
+#view-trade .td-stock-eq>div{flex:1 1 110px;border-radius:12px;background:#f6f8f4;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+#view-trade .td-stock-eq span{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
+#view-trade .td-stock-eq b{font-size:22px;font-variant-numeric:tabular-nums}
+#view-trade .td-stock-eq small{font-size:12px;color:var(--ink-soft)}
+#view-trade .td-stock-eq .td-eq-total{background:var(--green-tint);border:1px solid var(--green)}
+#view-trade .td-stock-eq .td-eq-total b{color:var(--green-dark)}
+#view-trade .td-godowns{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+#view-trade .td-godowns>div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column}
+#view-trade .td-godowns span{font-size:12px;color:var(--ink-soft)}
+#view-trade .td-in{color:var(--green-dark);font-weight:700}
+#view-trade .td-out{color:#8a4a1c;font-weight:700}
+@media (max-width:900px){#view-trade .td-stock-hero{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){#view-trade .td-stock-now b{font-size:30px}#view-trade .td-stock-eq>div{flex:1 1 40%}}
+
+/* V239: cash & bank cards, suppliers & customers, setup guide, add/edit form */
+#view-trade .td-accts-row{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+#view-trade .td-acct-card{flex:1 1 200px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:1px;background:#f8faf6;min-width:0}
+#view-trade .td-acct-card.bank{background:#f2f6fb;border-color:#d5e0ee}
+#view-trade .td-acct-card span{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--ink-soft)}
+#view-trade .td-acct-card b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-trade .td-acct-card strong{font-size:20px;font-variant-numeric:tabular-nums}
+#view-trade .panel-head .td-head-btn{margin-left:auto}
+#view-trade .td-search{width:100%;margin:0 0 10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:14px}
+#view-trade .td-prow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 8px;background:#fff}
+#view-trade .td-prow.off{opacity:.55}
+#view-trade .td-prow.sel{border-color:var(--green);box-shadow:0 0 0 2px var(--green-tint)}
+#view-trade .td-prow-main{display:flex;flex-direction:column;min-width:0}
+#view-trade .td-prow-main b{font-size:15px}
+#view-trade .td-prow small{font-size:12px;color:var(--ink-soft);line-height:1.4}
+#view-trade .td-prow-bal{text-align:right;display:flex;flex-direction:column}
+#view-trade .td-prow-bal b{font-size:18px;font-variant-numeric:tabular-nums}
+#view-trade .td-owe{color:#8a4a1c}
+#view-trade .td-due{color:var(--green-dark)}
+#view-trade .td-ok{color:var(--green-dark)!important;font-weight:700}
+#view-trade .td-prow-act{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#view-trade .td-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+#view-trade .td-step{display:flex;gap:10px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;min-width:0}
+#view-trade .td-step>i{flex:0 0 28px;height:28px;border-radius:50%;background:#eef2ea;color:var(--ink-soft);font-style:normal;font-weight:800;display:flex;align-items:center;justify-content:center}
+#view-trade .td-step.done>i{background:var(--green);color:#fff}
+#view-trade .td-step>div{display:flex;flex-direction:column;gap:4px;min-width:0;align-items:flex-start}
+#view-trade .td-step span{font-size:12.5px;color:var(--ink-soft);line-height:1.45}
+#view-trade .td-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+#view-trade .td-flow>div{background:#f4f7f1;border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:2px}
+#view-trade .td-flow span{font-size:12px;color:var(--ink-soft);line-height:1.4}
+#view-trade .td-card-top{flex-wrap:wrap}
+#view-trade .td-card-big{margin-left:auto;font-variant-numeric:tabular-nums;font-size:15px}
+#view-trade .td-dlg{position:fixed;inset:0;background:rgba(20,30,20,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
+#view-trade .td-dlg-box{background:#fff;border-radius:16px;width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+#view-trade .td-dlg-box h3{margin:0 0 4px;font-size:19px}
+#view-trade .td-dlg-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}
+#view-trade .td-dlg-grid .td-span-2{grid-column:1/-1}
+#view-trade .td-dlg-err{min-height:1em;margin:10px 0 0;font-size:13px;font-weight:700}
+#view-trade .td-dlg-act{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+#view-trade .td-dlg-act .btn{min-height:42px;min-width:110px}
+#view-trade .td-f-per{align-self:center;font-size:13px;color:var(--ink-soft);white-space:nowrap}
+#view-trade .td-check{display:flex;gap:8px;align-items:center;font-size:13.5px}
+body.td-dlg-open{overflow:hidden}
+@media (max-width:1000px){#view-trade .td-steps,#view-trade .td-flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){#view-trade .td-steps,#view-trade .td-flow,#view-trade .td-dlg-grid{grid-template-columns:minmax(0,1fr)}#view-trade .td-dlg{align-items:flex-end;padding:0}#view-trade .td-dlg-box{border-radius:16px 16px 0 0;max-height:92vh}#view-trade .td-dlg-act .btn{flex:1}}
+#view-trade .field{display:flex;flex-direction:column;gap:5px}
+#view-trade .field label{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
+#view-trade .field input,#view-trade .field select,#view-trade .td-search{
+  font-family:inherit;font-size:14px;padding:9px 10px;width:100%;box-sizing:border-box;min-height:44px;
+  border:1px solid var(--line);border-radius:12px;background:#f8fafc;color:var(--ink)}
+#view-trade .field input:focus,#view-trade .field select:focus,#view-trade .td-search:focus{
+  outline:none;border-color:var(--green);background:#fff;box-shadow:0 0 0 3px rgba(64,145,108,.15)}

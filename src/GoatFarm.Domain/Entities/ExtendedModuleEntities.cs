@@ -35,12 +35,14 @@ public class TradeItem : BaseEntity
     public string Unit { get; set; } = "kg";
     public string? UnitNote { get; set; }
     public decimal DefaultPrice { get; set; }
+    public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
 public class TradeStore : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
+    public string? Place { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -49,6 +51,7 @@ public class TradeAccount : BaseEntity
     public string Name { get; set; } = string.Empty;
     public TradeAccountType Type { get; set; }
     public decimal OpeningBalance { get; set; }
+    public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -78,6 +81,8 @@ public class TradeEntry : BaseEntity
     public TradeStore? Store { get; set; }
     public int? ToStoreId { get; set; }
     public TradeStore? ToStore { get; set; }
+    public int? ToAccountId { get; set; }
+    public TradeAccount? ToAccount { get; set; }
     public int? PartyId { get; set; }
     public TradeParty? Party { get; set; }
     public int? AccountId { get; set; }
@@ -87,8 +92,17 @@ public class TradeEntry : BaseEntity
     public decimal Qty { get; set; }
     public decimal Rate { get; set; }
     public decimal Amount { get; set; }
+    public decimal Freight { get; set; }
+    public decimal Labour { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal ReceivedAmount { get; set; }
+    public string? BillNo { get; set; }
+    public string? LossReason { get; set; }
+    public string? PaymentMode { get; set; }
+    public DateOnly? DueDate { get; set; }
     public string? Notes { get; set; }
     public bool IsCancelled { get; set; }
+    public string? CancelReason { get; set; }
 }
 
 public class FarmProject : BaseEntity

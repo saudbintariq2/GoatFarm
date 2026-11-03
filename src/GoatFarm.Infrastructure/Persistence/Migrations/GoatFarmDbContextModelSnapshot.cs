@@ -2296,6 +2296,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("OpeningBalance")
                         .HasColumnType("numeric");
 
@@ -2325,6 +2328,14 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<string>("BillNo")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<int?>("CategoryId")
                         .HasColumnType("integer");
 
@@ -2334,18 +2345,41 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Freight")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<bool>("IsCancelled")
                         .HasColumnType("boolean");
 
                     b.Property<int?>("ItemId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("Labour")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("LossReason")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<decimal>("PaidAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<int?>("PartyId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PaymentMode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<decimal>("Qty")
                         .HasPrecision(18, 3)
@@ -2355,7 +2389,14 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<decimal>("ReceivedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<int?>("StoreId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ToAccountId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("ToStoreId")
@@ -2380,6 +2421,8 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.HasIndex("PartyId");
 
                     b.HasIndex("StoreId");
+
+                    b.HasIndex("ToAccountId");
 
                     b.HasIndex("ToStoreId");
 
@@ -2434,6 +2477,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
 
                     b.Property<string>("Unit")
                         .IsRequired()
@@ -2505,6 +2551,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Place")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedDate")
@@ -3255,6 +3304,11 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StoreId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("GoatFarm.Domain.Entities.TradeAccount", "ToAccount")
+                        .WithMany()
+                        .HasForeignKey("ToAccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GoatFarm.Domain.Entities.TradeStore", "ToStore")
                         .WithMany()
                         .HasForeignKey("ToStoreId")
@@ -3269,6 +3323,8 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Navigation("Party");
 
                     b.Navigation("Store");
+
+                    b.Navigation("ToAccount");
 
                     b.Navigation("ToStore");
                 });

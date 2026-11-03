@@ -174,6 +174,7 @@ public static class FarmPermissionMap
             ["Trading.SaveMaster"] = (FarmTabs.Trading, FarmActions.Edit),
             ["Trading.SaveEntry"] = (FarmTabs.Trading, FarmActions.Add),
             ["Trading.DeleteEntry"] = (FarmTabs.Trading, FarmActions.Delete),
+            ["Trading.CancelEntry"] = (FarmTabs.Trading, FarmActions.Delete),
 
             ["Products.GetData"] = (FarmTabs.Products, FarmActions.View),
             ["Products.SaveCatalog"] = (FarmTabs.Products, FarmActions.Edit),

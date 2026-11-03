@@ -69,6 +69,7 @@ public class TradingPageViewModel
     public IReadOnlyList<TradeMasterRowViewModel> Parties { get; set; } = [];
     public IReadOnlyList<TradeMasterRowViewModel> Categories { get; set; } = [];
     public IReadOnlyList<TradeEntryRowViewModel> Entries { get; set; } = [];
+    public IReadOnlyList<object> TradeRecs { get; set; } = [];
 }
 
 public class TradePeriodPnLRowViewModel
@@ -116,7 +117,13 @@ public class SaveTradeMasterViewModel
     [Required, MaxLength(200)] public string Name { get; set; } = "";
     public string? Unit { get; set; }
     public string? Type { get; set; }
+    public string? Notes { get; set; }
+    public string? Role { get; set; }
+    public string? Phone { get; set; }
+    public string? Place { get; set; }
     public decimal OpeningBalance { get; set; }
+    public decimal DefaultPrice { get; set; }
+    public string? UnitNote { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -128,13 +135,30 @@ public class SaveTradeEntryViewModel
     public int? ItemId { get; set; }
     public int? StoreId { get; set; }
     public int? ToStoreId { get; set; }
+    public int? ToAccountId { get; set; }
     public int? PartyId { get; set; }
     public int? AccountId { get; set; }
     public int? CategoryId { get; set; }
     public decimal Qty { get; set; }
     public decimal Rate { get; set; }
     public decimal Amount { get; set; }
+    public decimal Freight { get; set; }
+    public decimal Labour { get; set; }
+    public decimal Paid { get; set; }
+    public decimal Received { get; set; }
+    public string? Payment { get; set; }
+    public string? BillNo { get; set; }
+    public string? Reason { get; set; }
+    public string? Party { get; set; }
+    public DateOnly? DueDate { get; set; }
     public string? Notes { get; set; }
+    public string? CancelReason { get; set; }
+}
+
+public class CancelTradeEntryViewModel
+{
+    public int Id { get; set; }
+    public string? Reason { get; set; }
 }
 
 }

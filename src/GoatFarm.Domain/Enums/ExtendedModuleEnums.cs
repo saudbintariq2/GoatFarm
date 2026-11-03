@@ -39,7 +39,11 @@ public enum TradeEntryType
     Expense = 2,
     PaymentIn = 3,
     PaymentOut = 4,
-    Transfer = 5
+    Transfer = 5,
+    Loss = 6,
+    Capital = 7,
+    Drawing = 8,
+    AccountTransfer = 9
 }
 
 public enum MoneyAccountKind

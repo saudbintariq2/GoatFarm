@@ -1,133 +1,167 @@
-@model GoatFarm.Application.ViewModels.Trading.TradingPageViewModel
-@using GoatFarm.Application.Common
+﻿@model GoatFarm.Application.ViewModels.Trading.TradingPageViewModel
+@using System.Text.Json
+@section Head {
+    <link rel="stylesheet" href="~/css/products.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/trading-parity.css" asp-append-version="true" />
+}
 
-<div class="note"><b>Separate books:</b> Trading never posts to farm Accounting. Track godowns, cash/bank, buy/sell and expenses here.</div>
+<div id="view-trade">
+<div class="td-banner"><b>Separate business.</b> Buying and reselling (moongphali bhoosa and other goods) has its own stock, its own cash and its own profit &amp; loss here. Nothing on this page goes into the goat farm's Accounting.</div>
+<div class="td-kpis" id="td-kpis"></div>
+<nav class="td-nav" role="tablist" aria-label="Trading">
+  <button type="button" role="tab" data-td-tab="stock">Stock</button>
+  <button type="button" role="tab" data-td-tab="buy">Buy</button>
+  <button type="button" role="tab" data-td-tab="sell">Sell</button>
+  <button type="button" role="tab" data-td-tab="loss">Loss / own use</button>
+  <button type="button" role="tab" data-td-tab="money">Money</button>
+  <button type="button" role="tab" data-td-tab="parties">Suppliers &amp; customers</button>
+  <button type="button" role="tab" data-td-tab="accounts">Accounts</button>
+  <button type="button" role="tab" data-td-tab="register">Register</button>
+  <button type="button" role="tab" data-td-tab="setup">Items &amp; setup</button>
+</nav>
 
-<div class="filterbar" style="margin-bottom:14px">
-    <div class="field"><label class="hide-sm">Month</label><input type="month" id="tradeMonth" value="@Model.Month"></div>
+<section class="td-pane" data-td-pane="stock" hidden>
+<div class="panel"><div class="panel-body td-period">
+<div class="field"><label for="td-k-item">Item</label><select id="td-k-item"></select></div>
+<div class="field"><label for="td-k-store">Godown</label><select id="td-k-store"></select></div>
+<div class="td-quick"><button type="button" class="btn btn-green btn-sm" data-td-tab="buy">+ Buy (stock in)</button><button type="button" class="btn btn-ghost btn-sm" data-td-tab="sell">Sell (stock out)</button><button type="button" class="btn btn-ghost btn-sm" data-td-tab="loss">Loss / own use</button></div>
+</div></div>
+<div id="td-k-cards"></div>
+<div class="panel"><div class="panel-head"><h2>Stock book</h2><span class="sub">every kg in and out | balance after each entry</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Entry</th><th>Party / reason</th><th>Godown</th><th class="num-cell">In (kg)</th><th class="num-cell">Out (kg)</th><th class="num-cell">Balance</th></tr></thead><tbody id="td-k-book"></tbody></table></div></div>
+</section>
+
+<section class="panel td-pane" data-td-pane="buy" hidden>
+<div class="panel-head"><h2>Buy</h2><span class="sub">adds to the godown | payment comes from a trading cash/bank account</span></div>
+<div class="panel-body">
+<div class="td-grid">
+<div class="field"><label for="td-b-date">Date</label><input type="date" id="td-b-date"></div>
+<div class="field"><label for="td-b-item">Item</label><select id="td-b-item" class="td-item-sel"></select></div>
+<div class="field"><label for="td-b-party">Bought from</label><select id="td-b-party"></select></div>
+<div class="field"><label for="td-b-store">Godown</label><select id="td-b-store" class="td-store-sel"></select></div>
+<div class="field"><label for="td-b-qty">Quantity (<span class="td-unit" data-for="td-b-item">kg</span>)</label><input type="number" id="td-b-qty" min="0" step="0.01" inputmode="decimal"></div>
+<div class="field td-span-2"><label for="td-b-rate">Rate (Rs)</label><div class="td-inline"><input type="number" id="td-b-rate" min="0" step="0.01" inputmode="decimal"><select id="td-b-basis" class="td-basis" aria-label="Rate is per"><option value="maund">per maund (40 kg)</option><option value="ton">per ton (25 maund = 1,000 kg)</option><option value="kg">per kg</option></select></div></div>
+<div class="field"><label for="td-b-freight">Kiraya / transport (Rs)</label><input type="number" id="td-b-freight" min="0" step="1"></div>
+<div class="field"><label for="td-b-labour">Loading / labour (Rs)</label><input type="number" id="td-b-labour" min="0" step="1"></div>
+<div class="field"><label for="td-b-pay">Payment for the goods</label><select id="td-b-pay"><option value="paid">Paid in full</option><option value="partial">Part paid</option><option value="credit">On credit (pay later)</option></select></div>
+<div class="field" id="td-b-paid-f" hidden><label for="td-b-paid">Paid now for the goods (Rs)</label><input type="number" id="td-b-paid" min="0" step="1"></div>
+<div class="field" id="td-b-acct-f"><label for="td-b-acct">Paid from</label><select id="td-b-acct" class="td-acct-sel"></select></div>
+<div class="field" id="td-b-due-f" hidden><label for="td-b-due">Pay by</label><input type="date" id="td-b-due"></div>
+<div class="field td-span-2"><label for="td-b-note">Note</label><input id="td-b-note" placeholder="vehicle no., quality, moisture..."></div>
 </div>
+<div class="td-sum" id="td-b-sum"></div>
+<div class="td-submit"><button class="btn btn-green" id="td-b-save" data-needs="trade:create">Save purchase</button></div>
+<p class="td-hint">Kiraya and labour are paid on the spot and added to the cost of the goods. Anything not paid for the goods is added to what you owe that supplier (see Suppliers &amp; customers).</p>
+</div></section>
 
-<div class="fin3">
-    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.StockValue)</div><div class="k">Stock value (est.)</div></div>
-    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.CashBalance)</div><div class="k">Money accounts</div></div>
-    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.MonthSales)</div><div class="k">Sales this month</div></div>
-    <div class="fincard"><div class="v">@DisplayHelper.FormatRs(Model.MonthProfit)</div><div class="k">P&amp;L this month</div></div>
+<section class="panel td-pane" data-td-pane="sell" hidden>
+<div class="panel-head"><h2>Sell</h2><span class="sub">takes from the godown | money goes into a trading cash/bank account</span></div>
+<div class="panel-body">
+<div class="td-grid">
+<div class="field"><label for="td-s-date">Date</label><input type="date" id="td-s-date"></div>
+<div class="field"><label for="td-s-item">Item</label><select id="td-s-item" class="td-item-sel"></select></div>
+<div class="field"><label for="td-s-party">Sold to</label><select id="td-s-party"></select></div>
+<div class="field"><label for="td-s-store">From godown</label><select id="td-s-store"></select></div>
+<div class="field"><label for="td-s-qty">Quantity (<span class="td-unit" data-for="td-s-item">kg</span>)</label><div class="td-inline"><input type="number" id="td-s-qty" min="0" step="0.01" inputmode="decimal"><button type="button" class="btn btn-ghost btn-sm" id="td-s-all">All</button></div></div>
+<div class="field td-span-2"><label for="td-s-rate">Rate (Rs)</label><div class="td-inline"><input type="number" id="td-s-rate" min="0" step="0.01" inputmode="decimal"><select id="td-s-basis" class="td-basis" aria-label="Rate is per"><option value="maund">per maund (40 kg)</option><option value="ton">per ton (25 maund = 1,000 kg)</option><option value="kg">per kg</option></select></div></div>
+<div class="field"><label for="td-s-freight">Delivery cost you pay (Rs)</label><input type="number" id="td-s-freight" min="0" step="1" placeholder="0 if buyer collects"></div>
+<div class="field"><label for="td-s-pay">Payment</label><select id="td-s-pay"><option value="paid">Paid in full</option><option value="partial">Part paid</option><option value="credit">On credit</option></select></div>
+<div class="field" id="td-s-recv-f" hidden><label for="td-s-recv">Received now (Rs)</label><input type="number" id="td-s-recv" min="0" step="1"></div>
+<div class="field" id="td-s-acct-f"><label for="td-s-acct">Received into</label><select id="td-s-acct" class="td-acct-sel"></select></div>
+<div class="field" id="td-s-due-f" hidden><label for="td-s-due">Due date</label><input type="date" id="td-s-due"></div>
+<div class="field"><label for="td-s-inv">Bill no.</label><input id="td-s-inv"></div>
+<div class="field td-span-2"><label for="td-s-note">Note</label><input id="td-s-note" placeholder="vehicle, village..."></div>
 </div>
+<div class="td-sum" id="td-s-sum"></div>
+<div class="td-submit"><button class="btn btn-green" id="td-s-save" data-needs="trade:create">Save sale</button></div>
+</div></section>
 
-<div class="tabs" id="trade-tabs">
-    <button type="button" class="tab active" data-trade-tab="entries">Entries</button>
-    <button type="button" class="tab" data-trade-tab="buy">Buy</button>
-    <button type="button" class="tab" data-trade-tab="sell">Sell</button>
-    <button type="button" class="tab" data-trade-tab="transfer">Transfer</button>
-    <button type="button" class="tab" data-trade-tab="expense">Expense</button>
-    <button type="button" class="tab" data-trade-tab="pnl">P&amp;L</button>
-    <button type="button" class="tab" data-trade-tab="parties">Parties</button>
-    <button type="button" class="tab" data-trade-tab="masters">Setup</button>
+<section class="panel td-pane" data-td-pane="loss" hidden>
+<div class="panel-head"><h2>Loss, spoilage or own use</h2><span class="sub">keeps the godown stock equal to what is really there</span></div>
+<div class="panel-body">
+<div class="td-grid">
+<div class="field"><label for="td-l-date">Date</label><input type="date" id="td-l-date"></div>
+<div class="field"><label for="td-l-item">Item</label><select id="td-l-item" class="td-item-sel"></select></div>
+<div class="field"><label for="td-l-store">Godown</label><select id="td-l-store" class="td-store-sel"></select></div>
+<div class="field"><label for="td-l-reason">What happened</label><select id="td-l-reason"><option value="dry">Weight loss (dried out)</option><option value="spoil">Spoiled / got wet</option><option value="farm">Given to our goat farm</option><option value="count-">Count: less than recorded</option><option value="count+">Count: more than recorded</option></select></div>
+<div class="field"><label for="td-l-qty">Quantity (<span class="td-unit" data-for="td-l-item">kg</span>)</label><input type="number" id="td-l-qty" min="0" step="0.01" inputmode="decimal"></div>
+<div class="field td-span-3"><label for="td-l-note">Note</label><input id="td-l-note"></div>
 </div>
+<div class="td-sum" id="td-l-sum"></div>
+<div class="td-submit"><button class="btn btn-green" id="td-l-save" data-needs="trade:create">Save</button></div>
+<p class="td-hint">The cost of what is lost counts as a loss in Trading's profit &amp; loss. If you give bhoosa to the goat farm, it leaves trading stock here. If the farm should show it as feed, enter it in Feed &amp; stock too.</p>
+</div></section>
 
-<div class="panel" data-trade-pane="entries">
-    <div class="panel-head"><h2>Recent entries</h2></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Detail</th><th class="num-cell">Qty</th><th class="num-cell">Amount</th><th></th></tr></thead>
-        <tbody id="tradeEntryRows">
-        @foreach (var e in Model.Entries)
-        {
-            <tr data-id="@e.Id"><td>@e.DateDisplay</td><td>@e.Type</td><td>@e.Label</td><td class="num-cell">@e.Qty</td><td class="num-cell">@DisplayHelper.FormatRs(e.Amount)</td>
-                <td><button type="button" class="btn btn-ghost btn-sm trade-del" data-id="@e.Id">Cancel</button></td></tr>
-        }
-        </tbody></table>
-    </div>
+<section class="panel td-pane" data-td-pane="money" hidden>
+<div class="panel-head"><h2>Money</h2><span class="sub">payments, receipts, expenses and capital for the trading business only</span></div>
+<div class="panel-body">
+<div class="td-accts-row" id="td-m-accts"></div>
+<div class="td-seg" role="radiogroup" aria-label="Money type">
+  <button type="button" data-td-mtype="pay">Pay a supplier</button>
+  <button type="button" data-td-mtype="receive">Receive from a customer</button>
+  <button type="button" data-td-mtype="expense">Trading expense</button>
+  <button type="button" data-td-mtype="capital">Money put in</button>
+  <button type="button" data-td-mtype="drawing">Money taken out</button>
+  <button type="button" data-td-mtype="transfer">Move between accounts</button>
 </div>
-
-<div class="panel" data-trade-pane="buy" hidden>
-    <div class="panel-head"><h2>Record purchase</h2></div>
-    <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
-            <div class="field"><label>Date</label><input type="date" id="tb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label>Item</label><select id="tb-item">@foreach(var i in Model.Items){<option value="@i.Id">@i.Name</option>}</select></div>
-            <div class="field"><label>Godown</label><select id="tb-store">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
-            <div class="field"><label>Account</label><select id="tb-account">@foreach(var a in Model.Accounts){<option value="@a.Id">@a.Name</option>}</select></div>
-            <div class="field"><label>Qty</label><input type="number" id="tb-qty" min="0" step="0.01"></div>
-            <div class="field"><label>Rate</label><input type="number" id="tb-rate" min="0" step="0.01"></div>
-            <div class="field"><label>Notes</label><input id="tb-note"></div>
-        </div>
-        <button type="button" class="btn btn-green" id="tb-save">Save purchase</button>
-    </div>
+<div class="td-grid">
+<div class="field"><label for="td-m-date">Date</label><input type="date" id="td-m-date"></div>
+<div class="field" id="td-m-party-f"><label for="td-m-party" id="td-m-party-l">Supplier</label><select id="td-m-party"></select></div>
+<div class="field" id="td-m-who-f" hidden><label for="td-m-who" id="td-m-who-l">Name</label><input id="td-m-who" autocomplete="off"></div>
+<div class="field" id="td-m-cat-f" hidden><label for="td-m-cat">Expense type</label><select id="td-m-cat"></select></div>
+<div class="field"><label for="td-m-amt">Amount (Rs)</label><input type="number" id="td-m-amt" min="0" step="1" inputmode="decimal"></div>
+<div class="field"><label for="td-m-acct" id="td-m-acct-l">Paid from</label><select id="td-m-acct" class="td-acct-sel"></select></div>
+<div class="field" id="td-m-to-f" hidden><label for="td-m-to">Into</label><select id="td-m-to" class="td-acct-sel"></select></div>
+<div class="field td-span-2"><label for="td-m-note">Note</label><input id="td-m-note"></div>
 </div>
+<div class="td-sum" id="td-m-sum"></div>
+<div class="td-submit"><button class="btn btn-green" id="td-m-save" data-needs="trade:create">Save</button></div>
+</div></section>
 
-<div class="panel" data-trade-pane="sell" hidden>
-    <div class="panel-head"><h2>Record sale</h2></div>
-    <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
-            <div class="field"><label>Date</label><input type="date" id="ts-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label>Item</label><select id="ts-item">@foreach(var i in Model.Items){<option value="@i.Id">@i.Name</option>}</select></div>
-            <div class="field"><label>Godown</label><select id="ts-store">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
-            <div class="field"><label>Account</label><select id="ts-account">@foreach(var a in Model.Accounts){<option value="@a.Id">@a.Name</option>}</select></div>
-            <div class="field"><label>Qty</label><input type="number" id="ts-qty" min="0" step="0.01"></div>
-            <div class="field"><label>Rate</label><input type="number" id="ts-rate" min="0" step="0.01"></div>
-        </div>
-        <button type="button" class="btn btn-green" id="ts-save">Save sale</button>
-    </div>
+<section class="td-pane" data-td-pane="parties" hidden>
+<div class="td-two">
+<div class="panel"><div class="panel-head"><h2>Suppliers</h2><span class="sub" id="td-p-sup-sub">people you buy from</span><button type="button" class="btn btn-green btn-sm td-head-btn" data-td-new="supplier">+ Add supplier</button></div><div class="panel-body"><input type="search" class="td-search" data-td-search="supplier" placeholder="Search name, phone or village" aria-label="Search suppliers"><div id="td-p-sup"></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Customers</h2><span class="sub" id="td-p-cus-sub">people you sell to</span><button type="button" class="btn btn-green btn-sm td-head-btn" data-td-new="customer">+ Add customer</button></div><div class="panel-body"><input type="search" class="td-search" data-td-search="customer" placeholder="Search name, phone or village" aria-label="Search customers"><div id="td-p-cus"></div></div></div>
 </div>
+<div class="panel" id="td-stmt-p" hidden><div class="panel-head"><h2 id="td-stmt-h">Statement</h2><span class="sub" id="td-stmt-sub"></span><button type="button" class="btn btn-ghost btn-sm td-head-btn" id="td-stmt-close">Close</button></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>What</th><th class="num-cell" id="td-stmt-c1">Bought</th><th class="num-cell" id="td-stmt-c2">Paid</th><th class="num-cell">Balance</th></tr></thead><tbody id="td-stmt"></tbody></table></div></div>
+</section>
 
-<div class="panel" data-trade-pane="transfer" hidden>
-    <div class="panel-head"><h2>Transfer between godowns</h2></div>
-    <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
-            <div class="field"><label>Date</label><input type="date" id="tt-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label>Item</label><select id="tt-item">@foreach(var i in Model.Items){<option value="@i.Id">@i.Name</option>}</select></div>
-            <div class="field"><label>From godown</label><select id="tt-from">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
-            <div class="field"><label>To godown</label><select id="tt-to">@foreach(var s in Model.Stores){<option value="@s.Id">@s.Name</option>}</select></div>
-            <div class="field"><label>Qty</label><input type="number" id="tt-qty" min="0" step="0.01"></div>
-        </div>
-        <button type="button" class="btn btn-green" id="tt-save">Save transfer</button>
-    </div>
+<section class="td-pane" data-td-pane="accounts" hidden>
+<div class="panel"><div class="panel-body td-period">
+<div class="field"><label for="td-a-from">From</label><input type="date" id="td-a-from"></div>
+<div class="field"><label for="td-a-to">To</label><input type="date" id="td-a-to"></div>
+<div class="td-quick"><button type="button" class="btn btn-ghost btn-sm" data-td-period="month">This month</button><button type="button" class="btn btn-ghost btn-sm" data-td-period="last">Last month</button><button type="button" class="btn btn-ghost btn-sm" data-td-period="year">This year</button><button type="button" class="btn btn-ghost btn-sm" data-td-period="all">Since start</button></div>
+</div></div>
+<div class="td-two">
+<div class="panel"><div class="panel-head"><h2>Profit &amp; loss</h2><span class="sub" id="td-pl-sub"></span></div><div class="panel-body"><table class="tbl td-fin"><tbody id="td-pl"></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h2>What trading owns &amp; owes</h2><span class="sub">today</span></div><div class="panel-body"><table class="tbl td-fin"><tbody id="td-bs"></tbody></table></div></div>
 </div>
+<p class="td-hint">Who owes you and whom you owe: see <button type="button" class="btn btn-ghost btn-sm" data-td-tab="parties">Suppliers &amp; customers</button></p>
+<div class="panel"><div class="panel-head"><h2>Cash book</h2><span class="sub">every rupee in and out of the trading accounts</span><select id="td-cb-acct" class="td-acct-sel td-cb-sel" aria-label="Account"></select></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>What</th><th class="num-cell">In</th><th class="num-cell">Out</th><th class="num-cell">Balance</th></tr></thead><tbody id="td-cb"></tbody></table></div></div>
+</section>
 
-<div class="panel" data-trade-pane="pnl" hidden>
-    <div class="panel-head"><h2>P&amp;L by month</h2><span class="sub">trading books only</span></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Month</th><th class="num-cell">Sales</th><th class="num-cell">Purchases</th><th class="num-cell">Expenses</th><th class="num-cell">Profit</th></tr></thead>
-        <tbody>@foreach(var r in Model.PeriodPnL){<tr><td>@r.Month</td><td class="num-cell">@DisplayHelper.FormatRs(r.Sales)</td><td class="num-cell">@DisplayHelper.FormatRs(r.Buys)</td><td class="num-cell">@DisplayHelper.FormatRs(r.Expenses)</td><td class="num-cell">@DisplayHelper.FormatRs(r.Profit)</td></tr>}</tbody></table>
-    </div>
+<section class="td-pane" data-td-pane="register" hidden>
+<div class="panel"><div class="panel-head"><h2>All entries</h2><span class="sub">newest first | a cancelled entry stays visible</span><select id="td-r-filter" class="td-cb-sel" aria-label="Filter"><option value="">Everything</option><option value="buy">Purchases</option><option value="sell">Sales</option><option value="loss">Loss / own use</option><option value="money">Money</option></select></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Type</th><th>Item / party</th><th class="num-cell">Qty</th><th class="num-cell">Rate</th><th class="num-cell">Amount</th><th class="num-cell hide-sm">Profit</th><th>Status</th><th></th></tr></thead><tbody id="td-reg"></tbody></table></div><div class="panel-body"><button type="button" class="btn btn-ghost btn-sm" id="td-csv">Download CSV</button></div></div>
+</section>
+
+<section class="td-pane" data-td-pane="setup" hidden>
+<div class="panel td-guide"><div class="panel-head"><h2>How Trading works</h2><span class="sub">set this up once - after that you only use Buy, Sell and Money</span></div><div class="panel-body"><div class="td-steps" id="td-guide"></div>
+<div class="td-flow"><div><b>Buy</b><span>stock goes up | money goes out of Cash or Bank, or you owe the supplier</span></div><div><b>Sell</b><span>stock goes down | money comes in, or the customer owes you</span></div><div><b>Money</b><span>pay suppliers, receive from customers, rent and other expenses</span></div><div><b>Accounts</b><span>profit &amp; loss and what trading owns - worked out for you</span></div></div></div></div>
+<div class="td-three">
+<div class="panel" id="td-setup-item"><div class="panel-head"><h2>1. Items</h2><span class="sub">what you buy and resell</span><button type="button" class="btn btn-green btn-sm td-head-btn" data-td-new="item">+ Add</button></div><div class="panel-body"><div id="td-items"></div></div></div>
+<div class="panel" id="td-setup-store"><div class="panel-head"><h2>2. Godowns</h2><span class="sub">where stock is kept</span><button type="button" class="btn btn-green btn-sm td-head-btn" data-td-new="store">+ Add</button></div><div class="panel-body"><div id="td-stores"></div></div></div>
+<div class="panel" id="td-setup-account"><div class="panel-head"><h2>3. Cash in hand &amp; Bank</h2><span class="sub">trading's own money</span><button type="button" class="btn btn-green btn-sm td-head-btn" data-td-new="account">+ Add</button></div><div class="panel-body"><div id="td-accts"></div></div></div>
 </div>
+<div class="panel" id="td-setup-cat"><div class="panel-head"><h2>Expense types</h2><span class="sub">for Money -> Trading expense</span><button type="button" class="btn btn-ghost btn-sm td-head-btn" data-td-new="cat">+ Add</button></div><div class="panel-body"><div id="td-cats"></div></div></div>
+</section>
 
-<div class="panel" data-trade-pane="parties" hidden>
-    <div class="panel-head"><h2>Suppliers &amp; buyers</h2></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Name</th><th>Role</th></tr></thead>
-        <tbody>@foreach(var p in Model.Parties){<tr><td>@p.Name</td><td>@p.Extra</td></tr>}</tbody></table>
-        <div class="add-grid" style="margin-top:12px;grid-template-columns:2fr auto">
-            <div class="field"><label>Party name</label><input id="tp-name"></div>
-            <button type="button" class="btn btn-green" id="tp-save" style="align-self:end">Add party</button>
-        </div>
-    </div>
+<div class="td-dlg" id="td-dlg" hidden role="dialog" aria-modal="true" aria-labelledby="td-dlg-title"><form class="td-dlg-box" id="td-dlg-form" novalidate>
+<h3 id="td-dlg-title"></h3><p class="td-hint" id="td-dlg-help"></p>
+<div class="td-grid td-dlg-grid" id="td-dlg-body"></div>
+<p class="td-dlg-err td-bad" id="td-dlg-err" role="alert"></p>
+<div class="td-dlg-act"><button type="button" class="btn btn-ghost" id="td-dlg-cancel">Cancel</button><button type="submit" class="btn btn-green" id="td-dlg-save">Save</button></div>
+</form></div>
 </div>
-
-<div class="panel" data-trade-pane="expense" hidden>
-    <div class="panel-head"><h2>Record expense</h2></div>
-    <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:repeat(4,1fr)">
-            <div class="field"><label>Date</label><input type="date" id="te-date" value="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label>Category</label><select id="te-cat">@foreach(var c in Model.Categories){<option value="@c.Id">@c.Name</option>}</select></div>
-            <div class="field"><label>Account</label><select id="te-account">@foreach(var a in Model.Accounts){<option value="@a.Id">@a.Name</option>}</select></div>
-            <div class="field"><label>Amount</label><input type="number" id="te-amt" min="0"></div>
-        </div>
-        <button type="button" class="btn btn-green" id="te-save">Save expense</button>
-    </div>
-</div>
-
-<div class="panel" data-trade-pane="masters" hidden>
-    <div class="panel-head"><h2>Quick add item</h2></div>
-    <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:2fr 1fr auto">
-            <div class="field"><label>Name</label><input id="tm-name"></div>
-            <div class="field"><label>Unit</label><input id="tm-unit" value="kg"></div>
-            <button type="button" class="btn btn-green" id="tm-save" style="align-self:end">Add item</button>
-        </div>
-    </div>
-</div>
-
+<script type="application/json" id="trading-page-json">@Html.Raw(JsonSerializer.Serialize(new { tradeRecs = Model.TradeRecs }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))</script>
 @section Scripts {
 <script src="~/js/trading-module.js" asp-append-version="true"></script>
 }
