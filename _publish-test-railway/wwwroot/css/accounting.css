@@ -1,0 +1,542 @@
+/* Accounting (#view-finance) — layout and controls not covered by global .field rules */
+
+#view-finance .tabs {
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  #view-finance #finance-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: thin;
+  }
+  #view-finance #finance-tabs .tab {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+#view-finance .section-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin: 5px 0 12px;
+}
+
+#view-finance .section-intro h2 {
+  margin: 4px 0 3px;
+  font-size: 18px;
+}
+
+#view-finance .section-intro p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+#view-finance .prod-badge {
+  display: inline-block;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  font-weight: 900;
+  color: #1f5a42;
+  background: #e8f4ed;
+  border-radius: 20px;
+  padding: 4px 8px;
+}
+
+#view-finance .prod-badge.sales {
+  color: #6c5723;
+  background: #faf1d8;
+}
+
+#view-finance .finview[hidden] {
+  display: none !important;
+}
+
+#view-finance .dash2 {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  #view-finance .dash2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+#view-finance .stats .stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: default;
+}
+
+#view-finance .stat .k-ico {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+#view-finance .stat .k-body {
+  min-width: 0;
+}
+
+#view-finance .stat .num {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+#view-finance .capop-kpis,
+#view-finance .ar-kpis,
+#view-finance .ap-kpis,
+#view-finance .bank-account-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+#fin-salesar .ar-kpis,
+#fin-salesar .ap-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+#fin-salesar .ar-kpis .stat,
+#fin-salesar .ap-kpis .stat {
+  display: block;
+  min-width: 0;
+  padding: 17px 18px;
+}
+
+#fin-salesar .ar-kpis .stat-label,
+#fin-salesar .ap-kpis .stat-label,
+#fin-salesar .ar-kpis .stat .lbl:first-child,
+#fin-salesar .ap-kpis .stat .lbl:first-child {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: normal;
+  margin-bottom: 7px;
+}
+
+#fin-salesar .ar-kpis .stat-val,
+#fin-salesar .ap-kpis .stat-val,
+#fin-salesar .ar-kpis .stat .num,
+#fin-salesar .ap-kpis .stat .num {
+  font-size: 25px;
+  line-height: 1.1;
+  white-space: nowrap;
+  margin-bottom: 6px;
+}
+
+#fin-salesar .ar-kpis .stat-sub,
+#fin-salesar .ap-kpis .stat-sub {
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+@media (max-width: 1200px) {
+  #fin-salesar .ar-kpis,
+  #fin-salesar .ap-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  #fin-salesar .ar-kpis,
+  #fin-salesar .ap-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+  #fin-salesar .ar-kpis .stat,
+  #fin-salesar .ap-kpis .stat {
+    padding: 12px;
+  }
+  #fin-salesar .ar-kpis .stat-val,
+  #fin-salesar .ap-kpis .stat-val,
+  #fin-salesar .ar-kpis .stat .num,
+  #fin-salesar .ap-kpis .stat .num {
+    font-size: 19px;
+  }
+}
+
+#view-finance .capop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  #view-finance .capop-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+#view-finance .ar-entry-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1.3fr 1fr 1fr 1fr 1fr 1fr 1.35fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+#view-finance .ar-entry-grid .field {
+  min-width: 0;
+}
+
+#view-finance .field.wide {
+  grid-column: span 2;
+}
+
+@media (max-width: 1200px) {
+  #view-finance .ar-entry-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #view-finance .ar-entry-grid .field.wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 600px) {
+  #view-finance .ar-entry-grid,
+  #fin-salesar .add-grid {
+    grid-template-columns: 1fr !important;
+  }
+  #view-finance .ar-entry-grid .field.wide {
+    grid-column: auto;
+  }
+}
+
+#view-finance .filterbar select:not(.field select),
+#view-finance .filterbar > select {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fcfdfb;
+  color: var(--ink);
+  min-width: 120px;
+}
+
+#view-finance .filterbar select:focus,
+#view-finance .filterbar > select:focus {
+  outline: none;
+  border-color: var(--green);
+  background: #fff;
+}
+
+body.farm-pro #view-finance .filterbar select:not(.field select),
+body.farm-pro #view-finance .filterbar > select {
+  background: #f8fafc;
+  border-color: var(--fp-line, var(--line));
+}
+
+body.farm-pro #view-finance .filterbar select:focus,
+body.farm-pro #view-finance .filterbar > select:focus {
+  border-color: var(--fp-accent, var(--green));
+  box-shadow: 0 0 0 3px rgba(64, 145, 108, 0.15);
+}
+
+#view-finance .price-in input#cf-open,
+#view-finance .price-in input#cf-books {
+  width: 100%;
+  min-width: 140px;
+  max-width: 240px;
+  box-sizing: border-box;
+}
+
+/* Standalone inputs (not inside .field) */
+#view-finance .money-account-row > input,
+#view-finance .money-account-row > select,
+#view-finance .profit-partner-row > input:not([type="checkbox"]),
+#view-finance .shareholder-edit-row > input,
+#view-finance .fin-tbl-input,
+#view-finance #fin-budget .tbl input[type="number"],
+#view-finance #fin-salary .tbl input[type="number"] {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fcfdfb;
+  color: var(--ink);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#view-finance .fin-tbl-input,
+#view-finance #fin-budget .tbl input[type="number"],
+#view-finance #fin-salary .tbl input[type="number"] {
+  width: auto;
+  min-width: 96px;
+  max-width: 120px;
+  text-align: right;
+}
+
+#view-finance .money-account-row > input:focus,
+#view-finance .money-account-row > select:focus,
+#view-finance .profit-partner-row > input:not([type="checkbox"]):focus,
+#view-finance .shareholder-edit-row > input:read-only {
+  background: #f0f0ee;
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+#view-finance .shareholder-edit-row > input:focus,
+#view-finance .fin-tbl-input:focus,
+#view-finance #fin-budget .tbl input[type="number"]:focus,
+#view-finance #fin-salary .tbl input[type="number"]:focus {
+  outline: none;
+  border-color: var(--green);
+  background: #fff;
+}
+
+body.farm-pro #view-finance .money-account-row > input,
+body.farm-pro #view-finance .money-account-row > select,
+body.farm-pro #view-finance .profit-partner-row > input:not([type="checkbox"]),
+body.farm-pro #view-finance .shareholder-edit-row > input,
+body.farm-pro #view-finance .fin-tbl-input,
+body.farm-pro #view-finance #fin-budget .tbl input[type="number"],
+body.farm-pro #view-finance #fin-salary .tbl input[type="number"] {
+  background: #f8fafc;
+  border-color: var(--fp-line, var(--line));
+}
+
+#view-finance .bank-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+#fin-bank .bank-account-stats {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+#fin-bank .bank-account-stats .stat {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  min-height: 104px !important;
+  padding: 15px 17px !important;
+}
+
+#fin-bank .bank-entry-grid {
+  grid-template-columns: 1fr 1.2fr 1.2fr 1.5fr 1fr 2fr auto !important;
+}
+
+#fin-bank #bank-tx-note {
+  resize: vertical;
+  min-height: 42px;
+  font-family: inherit;
+}
+
+#fin-bank #bank-tx-person {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  #fin-bank .bank-entry-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+#fin-bank .money-account-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) 110px minmax(140px, 0.9fr) minmax(160px, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+#fin-bank .money-account-row > input,
+#fin-bank .money-account-row > select {
+  min-height: 44px;
+}
+
+#fin-bank .money-account-row .partner-active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  min-width: 0;
+  min-height: 44px;
+}
+
+#fin-bank .money-account-row .partner-active input[type="checkbox"] {
+  width: auto;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#fin-capital .shareholder-manager {
+  margin: 16px 0 4px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #faf9f5;
+}
+
+#fin-capital .shareholder-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+#fin-capital .shareholder-edit-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 1fr auto;
+  gap: 9px;
+  align-items: center;
+  margin: 7px 0;
+}
+
+#fin-capital .shareholder-add {
+  align-items: end;
+}
+
+#fin-capital .shareholder-add .field select,
+#fin-capital .shareholder-add .field input {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  #fin-capital .shareholder-add {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  #fin-capital .shareholder-add {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+#fin-profitshare .profit-partner-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) 130px 100px auto;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+#fin-profitshare .profit-partner-row .partner-active {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+#fin-profitshare .profit-partner-row .partner-active input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+#view-finance .shareholder-manager-head,
+#view-finance .panel-head h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#fin-salary .payroll-stats,
+#fin-capital .shareholder-stats,
+#fin-profitshare .profit-share-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  #fin-capital .shareholder-edit-row {
+    grid-template-columns: 1fr auto;
+  }
+  #fin-capital .shareholder-edit-row .muted {
+    grid-column: 1 / -1;
+  }
+  #fin-profitshare .profit-partner-row {
+    grid-template-columns: 1fr 110px;
+  }
+  #fin-profitshare .partner-active {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  #fin-bank .bank-account-stats {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  #fin-bank .bank-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  #fin-bank .money-account-row {
+    grid-template-columns: 1fr 100px;
+  }
+  #fin-bank .money-account-row .partner-active {
+    grid-column: 1 / -1;
+  }
+  #fin-bank .bank-entry-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 600px) {
+  #view-finance .add-grid:not(.ar-entry-grid):not(.bank-entry-grid),
+  #view-finance .capex-entry,
+  #view-finance .asset-entry {
+    grid-template-columns: 1fr !important;
+  }
+  #view-finance .add-grid .field.wide {
+    grid-column: auto !important;
+  }
+  #fin-capital .shareholder-manager-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  #fin-capital .shareholder-edit-row {
+    grid-template-columns: 1fr;
+  }
+  #fin-profitshare .profit-partner-row {
+    grid-template-columns: 1fr 92px;
+    gap: 7px;
+  }
+  #fin-profitshare .profit-partner-row .btn {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 520px) {
+  #fin-bank .money-account-row {
+    grid-template-columns: 1fr;
+  }
+}

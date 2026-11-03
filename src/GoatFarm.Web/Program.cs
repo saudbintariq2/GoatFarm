@@ -58,8 +58,10 @@ var mvcBuilder = builder.Services.AddControllersWithViews(options =>
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
+#if DEBUG
 if (builder.Environment.IsDevelopment())
     mvcBuilder.AddRazorRuntimeCompilation();
+#endif
 
 builder.Services.AddInfrastructure(builder.Configuration);
 

@@ -1,0 +1,5234 @@
+/* Goat Records — client-side AJAX layer (replaces local JS arrays) */
+(() => {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const method = (init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const url = new URL(input instanceof Request ? input.url : input, location.href);
+    if (method !== 'GET' && method !== 'HEAD' && url.origin === location.origin) {
+      const token = document.querySelector('meta[name="csrf-token"]')?.content;
+      if (token) {
+        const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+        headers.set('X-CSRF-TOKEN', token);
+        init = { ...init, headers };
+      }
+    }
+    return nativeFetch(input, init);
+  };
+})();
+
+const GoatRecords = (() => {
+  const rs = n => 'Rs ' + Math.round(n).toLocaleString('en-US');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const assistantSafePath = p => typeof p == 'string' && /^\/(?:Milk|Products|Finance|Reports|Goat|Breeding|Feed|Vaccine|Tasks|Search)?(?:\?(?:(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)(?:&(?:month|period|from|to|groupBy|filter|tag)=[^#&]*)*)?$/i.test(p) && !p.includes(':') && !p.includes('\\');
+
+  function assistantStripForSpeech(value) {
+    let s = String(value ?? '');
+    s = s.replace(/<[^>]*>/g, ' ');
+    s = s.replace(/&nbsp;/gi, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+    s = s.replace(/<[^>]*>/g, ' ');
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  function assistantSpeechSafe(value) {
+    const s = assistantStripForSpeech(value);
+    if (!s) return '';
+    if (/https?:|javascript:|data:|vbscript:|\/\/|connection ?string|api[_-]?key|\bsecret\b|password\s*=/i.test(s)) return '';
+    return s;
+  }
+
+  function assistantMergeTranscript(current, spoken) {
+    const draft = String(current ?? '');
+    const add = assistantStripForSpeech(spoken);
+    if (!add) return draft;
+    const trimmed = draft.replace(/\s+$/, '');
+    return trimmed ? trimmed + ' ' + add : add;
+  }
+
+  function assistantRecognitionError(code) {
+    const c = String(code || '').toLowerCase();
+    if (c === 'not-allowed' || c === 'service-not-allowed') return 'Microphone access was denied.';
+    if (c === 'audio-capture') return 'No microphone was found.';
+    if (c === 'no-speech') return 'No speech was detected.';
+    if (c === 'network') return 'Speech recognition lost its network connection.';
+    if (c === 'aborted') return '';
+    return 'Speech recognition could not be used.';
+  }
+
+  function assistantSpeechText(blocks) {
+    const maxChars = 1200;
+    const maxSummary = 8;
+    const maxRows = 5;
+    const maxCols = 6;
+    const maxPoints = 8;
+    const maxQs = 4;
+    if (!Array.isArray(blocks)) return '';
+    const parts = [];
+    for (let b = 0; b < blocks.length; b++) {
+      const block = blocks[b];
+      if (!block || typeof block !== 'object') continue;
+      const kind = String(block.kind || '').toLowerCase();
+      const title = assistantSpeechSafe(block.title);
+      const text = assistantSpeechSafe(block.text);
+      if (kind === 'text') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+      } else if (kind === 'summary') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const items = Array.isArray(block.summary && block.summary.items) ? block.summary.items : [];
+        for (let i = 0; i < Math.min(items.length, maxSummary); i++) {
+          const item = items[i];
+          if (!item || typeof item !== 'object') continue;
+          const label = assistantSpeechSafe(item.label);
+          const value = assistantSpeechSafe(item.value);
+          const note = assistantSpeechSafe(item.note);
+          if (label && value) parts.push(label + ', ' + value + '.');
+          else if (value) parts.push(value + '.');
+          else if (label) parts.push(label + '.');
+          if (note) parts.push(note);
+        }
+        if (items.length > maxSummary) parts.push('Additional summary items were omitted.');
+      } else if (kind === 'table') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const cols = Array.isArray(block.table && block.table.columns) ? block.table.columns : [];
+        const rows = Array.isArray(block.table && block.table.rows) ? block.table.rows : [];
+        const colCount = Math.min(cols.length, maxCols);
+        const spokenCols = [];
+        for (let c = 0; c < colCount; c++) {
+          const col = assistantSpeechSafe(cols[c]);
+          if (col) spokenCols.push(col);
+        }
+        if (spokenCols.length) parts.push('Columns: ' + spokenCols.join(', ') + '.');
+        for (let r = 0; r < Math.min(rows.length, maxRows); r++) {
+          const cells = Array.isArray(rows[r]) ? rows[r] : [];
+          const bits = [];
+          for (let c = 0; c < colCount; c++) {
+            const col = assistantSpeechSafe(cols[c]);
+            const cell = assistantSpeechSafe(cells[c]);
+            if (col && cell) bits.push(col + ' ' + cell);
+          }
+          if (bits.length) parts.push('Row ' + (r + 1) + ': ' + bits.join(', ') + '.');
+        }
+        if (rows.length > maxRows || cols.length > maxCols) parts.push('Additional table cells were omitted.');
+      } else if (kind === 'chart') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const points = Array.isArray(block.chart && block.chart.points) ? block.chart.points : [];
+        let spokenPts = 0;
+        for (let i = 0; i < points.length && spokenPts < maxPoints; i++) {
+          const point = points[i];
+          if (!point || !Number.isFinite(Number(point.value))) continue;
+          const label = assistantSpeechSafe(point.label);
+          if (!label) continue;
+          parts.push(label + ', ' + String(point.value) + '.');
+          spokenPts++;
+        }
+        if (points.length > maxPoints) parts.push('Additional chart points were omitted.');
+      } else if (kind === 'navigate') {
+        const path = block.navigation && block.navigation.path;
+        if (!assistantSafePath(path)) continue;
+        const label = assistantSpeechSafe(block.navigation && block.navigation.label);
+        if (label) parts.push(label + '.');
+      } else if (kind === 'clarify') {
+        if (title) parts.push(title);
+        if (text) parts.push(text);
+        const qs = Array.isArray(block.clarification && block.clarification.questions) ? block.clarification.questions : [];
+        for (let i = 0; i < Math.min(qs.length, maxQs); i++) {
+          const q = assistantSpeechSafe(qs[i]);
+          if (q) parts.push(q);
+        }
+        if (qs.length > maxQs) parts.push('Additional questions were omitted.');
+      } else if (kind === 'error') {
+        parts.push(text || title || 'The assistant could not answer.');
+      }
+    }
+    let out = parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (out.length > maxChars) {
+      out = out.slice(0, maxChars);
+      const sp = out.lastIndexOf(' ');
+      if (sp > maxChars * 0.6) out = out.slice(0, sp);
+      out = out.trim() + ' Speech truncated.';
+    }
+    return out;
+  }
+
+  function createAssistantVoice(env) {
+    env = env || {};
+    let rec = null;
+    let recGen = 0;
+    let listening = false;
+    let lastBlocks = null;
+    let speakPref = typeof env.getSpeakPref === 'function' ? !!env.getSpeakPref() : false;
+
+    function synth() {
+      if (env.speechSynthesis) return env.speechSynthesis;
+      try { return window.speechSynthesis; } catch (e) { return null; }
+    }
+
+    function recognitionCtor() {
+      if (env.SpeechRecognition) return env.SpeechRecognition;
+      if (env.webkitSpeechRecognition) return env.webkitSpeechRecognition;
+      try { return window.SpeechRecognition || window.webkitSpeechRecognition || null; } catch (e) { return null; }
+    }
+
+    function supportedInput() { return !!recognitionCtor(); }
+    function supportedOutput() {
+      const s = synth();
+      return !!(s && typeof s.speak === 'function' && typeof s.cancel === 'function');
+    }
+
+    function status(state, message) {
+      if (typeof env.setStatus === 'function') env.setStatus(state, message || '');
+    }
+
+    function stopSpeaking() {
+      const s = synth();
+      try { if (s && typeof s.cancel === 'function') s.cancel(); } catch (e) { /* ignore */ }
+    }
+
+    function stopListening() {
+      recGen += 1;
+      listening = false;
+      const current = rec;
+      rec = null;
+      if (!current) return;
+      try { current.onresult = current.onerror = current.onend = null; } catch (e) { /* ignore */ }
+      try {
+        if (typeof current.abort === 'function') current.abort();
+        else if (typeof current.stop === 'function') current.stop();
+      } catch (e) { /* ignore */ }
+    }
+
+    function startListening() {
+      if (typeof env.isOpen === 'function' && !env.isOpen()) return;
+      const Ctor = recognitionCtor();
+      if (!Ctor) {
+        status('unsupported', 'Voice input is not available in this browser. Type your question instead.');
+        return;
+      }
+      if (listening) {
+        stopListening();
+        status('idle', 'Stopped listening. Edit your question and press Send when ready.');
+        return;
+      }
+      stopSpeaking();
+      stopListening();
+      const myGen = recGen;
+      let recObj;
+      try { recObj = new Ctor(); } catch (e) {
+        status('error', 'Voice input could not start. Type your question instead.');
+        return;
+      }
+      rec = recObj;
+      recObj.continuous = false;
+      recObj.interimResults = true;
+      recObj.lang = env.lang || 'en-US';
+      recObj.onresult = function (event) {
+        if (myGen !== recGen) return;
+        if (typeof env.isOpen === 'function' && !env.isOpen()) return;
+        const list = event && event.results;
+        if (!list) return;
+        let finalText = '';
+        let interim = false;
+        for (let i = 0; i < list.length; i++) {
+          const res = list[i];
+          const t = res && res[0] && res[0].transcript ? String(res[0].transcript) : '';
+          if (res && res.isFinal) finalText += (finalText && t ? ' ' : '') + t;
+          else if (t) interim = true;
+        }
+        if (finalText && typeof env.getInput === 'function' && typeof env.setInput === 'function') {
+          env.setInput(assistantMergeTranscript(env.getInput(), finalText));
+          status('processing', 'Transcription ready. Edit if needed, then press Send.');
+        } else if (interim) {
+          status('listening', 'Listening… Click Stop listening when you are done.');
+        }
+      };
+      recObj.onerror = function (event) {
+        if (myGen !== recGen) return;
+        listening = false;
+        const msg = assistantRecognitionError(event && event.error);
+        if (msg) status('error', msg);
+      };
+      recObj.onend = function () {
+        if (myGen !== recGen) return;
+        listening = false;
+        rec = null;
+        status('idle', typeof env.getInput === 'function' && env.getInput()
+          ? 'Edit your question and press Send when ready.'
+          : 'Ready.');
+      };
+      try {
+        recObj.start();
+        listening = true;
+        status('listening', 'Listening… Click Stop listening when you are done.');
+      } catch (e) {
+        listening = false;
+        rec = null;
+        status('error', 'Voice input could not start. Type your question instead.');
+      }
+    }
+
+    function speakLatest(blocks) {
+      stopListening();
+      if (typeof env.isOpen === 'function' && !env.isOpen()) return;
+      const payload = blocks || lastBlocks;
+      if (!supportedOutput()) {
+        status('unsupported', 'Spoken replies are not available in this browser.');
+        return;
+      }
+      const text = assistantSpeechText(payload);
+      if (!text) {
+        status('idle', 'Nothing to speak.');
+        return;
+      }
+      stopSpeaking();
+      lastBlocks = payload;
+      try {
+        const utterance = typeof env.createUtterance === 'function'
+          ? env.createUtterance(text)
+          : new SpeechSynthesisUtterance(text);
+        utterance.onerror = function (event) {
+          const err = String(event && event.error || '').toLowerCase();
+          if (err === 'canceled' || err === 'interrupted' || err === 'cancelled') return;
+          status('error', 'Spoken reply could not be played.');
+        };
+        synth().speak(utterance);
+        status('idle', 'Speaking the latest reply.');
+      } catch (e) {
+        status('error', 'Spoken reply could not be played.');
+      }
+    }
+
+    function setLastBlocks(blocks) {
+      lastBlocks = Array.isArray(blocks) ? blocks : null;
+      if (speakPref && lastBlocks) speakLatest(lastBlocks);
+    }
+
+    function setSpeakPref(on) {
+      speakPref = !!on;
+      if (typeof env.setSpeakPref === 'function') env.setSpeakPref(speakPref);
+    }
+
+    function onClose() {
+      stopListening();
+      stopSpeaking();
+      status('idle', '');
+    }
+
+    return {
+      startListening, stopListening, speakLatest, stopSpeaking,
+      setLastBlocks, setSpeakPref, onClose,
+      isListening: function () { return listening; },
+      supportedInput, supportedOutput
+    };
+  }
+
+  // Spreadsheet apps execute cells starting with = + - @ TAB CR; plain numbers like -1,250.5 stay numeric.
+  const csvCell = v => { v = String(v ?? ''); if (/^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d,]*(\.\d+)?$/.test(v)) v = "'" + v; return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+
+  let modalDone = null;
+
+  function initModal() {
+    const overlay = document.getElementById('appModal');
+    const input = document.getElementById('appModalInput');
+    const okBtn = document.getElementById('appModalOk');
+    const cancelBtn = document.getElementById('appModalCancel');
+    if (!overlay || !okBtn || !cancelBtn) return;
+
+    function close(result) {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('modal-open');
+      input.classList.remove('show');
+      const done = modalDone;
+      modalDone = null;
+      if (done) done(result);
+    }
+
+    okBtn.addEventListener('click', () => {
+      close(input.classList.contains('show') ? (input.value.trim() || null) : true);
+    });
+    cancelBtn.addEventListener('click', () => {
+      close(input.classList.contains('show') ? null : false);
+    });
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) close(false);
+    });
+    overlay.querySelector('.modal-box')?.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }
+    });
+    document.addEventListener('keydown', e => {
+      if (!overlay.classList.contains('open')) return;
+      if (e.key === 'Escape') close(false);
+    });
+  }
+
+  /** @returns {Promise<boolean|string|null>} */
+  function showModal(message, { prompt = false, defaultValue = '', okText = 'OK', cancelText = 'Cancel', html = false } = {}) {
+    return new Promise(resolve => {
+      const overlay = document.getElementById('appModal');
+      const msg = document.getElementById('appModalMsg');
+      const input = document.getElementById('appModalInput');
+      const okBtn = document.getElementById('appModalOk');
+      const cancelBtn = document.getElementById('appModalCancel');
+      if (!overlay || !msg) { resolve(false); return; }
+
+      if (html) msg.innerHTML = message;
+      else msg.textContent = message;
+      if (okBtn) okBtn.textContent = okText;
+      if (cancelBtn) cancelBtn.textContent = cancelText;
+      modalDone = resolve;
+
+      if (prompt) {
+        input.classList.add('show');
+        input.value = defaultValue;
+        setTimeout(() => input.focus(), 30);
+      } else {
+        input.classList.remove('show');
+        setTimeout(() => okBtn?.focus(), 30);
+      }
+
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('modal-open');
+    });
+  }
+
+  function showConfirm(message, { html = false } = {}) {
+    return showModal(message, { okText: 'Yes', cancelText: 'No', html });
+  }
+
+  function showToast(message, type = 'success') {
+    const host = document.getElementById('toastHost');
+    if (!host) return false;
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = message;
+    host.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => {
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 280);
+    }, 3200);
+    return true;
+  }
+
+  function reloadWithToast(message) {
+    sessionStorage.setItem('goatToast', message);
+    location.reload();
+  }
+
+  function flashStoredToast() {
+    const message = sessionStorage.getItem('goatToast');
+    if (!message) return;
+    sessionStorage.removeItem('goatToast');
+    showToast(message);
+  }
+
+  initModal();
+  flashStoredToast();
+
+  const FarmPerms = {
+    get(tab) {
+      return window.FarmPermissions?.[tab] ?? { view: true, add: true, edit: true, delete: true };
+    },
+    can(tab, action) {
+      const p = this.get(tab);
+      if (action !== 'view' && !p.view) return false;
+      return !!p[action];
+    },
+    hide(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('perm-hidden');
+    },
+    show(id) {
+      document.getElementById(id)?.classList.remove('perm-hidden');
+    },
+    applyForm(tab, { addBtnId, deleteBtnId, rowSelector, extraHideIds = [] }) {
+      const p = this.get(tab);
+      const addBtn = addBtnId ? document.getElementById(addBtnId) : null;
+      const panel = addBtn?.closest('.panel');
+      if (!p.add && !p.edit) {
+        if (!panel) return;
+        if (!panel.querySelector('table.tbl')) { panel.classList.add('perm-hidden'); return; }
+        // View-only: keep the records visible, hide only the entry form.
+        panel.querySelectorAll('.add-grid, .goat-form-actions, .field-comment').forEach(el => el.classList.add('perm-hidden'));
+        addBtn?.classList.add('perm-hidden');
+        if (deleteBtnId) this.hide(deleteBtnId);
+        if (rowSelector) {
+          document.querySelectorAll(rowSelector).forEach(row => {
+            row.style.cursor = 'default';
+            row.classList.remove('health-row', 'milk-row', 'fin-row', 'goat-row');
+          });
+        }
+        return;
+      }
+      if (!p.add) {
+        panel?.querySelector('.add-grid')?.classList.add('perm-hidden');
+        addBtn?.classList.add('perm-hidden');
+      }
+      if (!p.delete && deleteBtnId) this.hide(deleteBtnId);
+      if (!p.edit) {
+        extraHideIds.forEach(id => this.hide(id));
+        if (rowSelector) {
+          document.querySelectorAll(rowSelector).forEach(row => {
+            row.style.cursor = 'default';
+            row.classList.remove('health-row', 'milk-row', 'fin-row', 'goat-row');
+          });
+        }
+      }
+    },
+    revealEditForm(addBtnId) {
+      const addBtn = document.getElementById(addBtnId);
+      const panel = addBtn?.closest('.panel');
+      panel?.classList.remove('perm-hidden');
+      panel?.querySelector('.add-grid')?.classList.remove('perm-hidden');
+      addBtn?.classList.remove('perm-hidden');
+    },
+    guardAddEdit(tab, editing) {
+      return editing ? this.can(tab, 'edit') : this.can(tab, 'add');
+    },
+    readonlyInputs(selector) {
+      document.querySelectorAll(selector).forEach(el => { el.disabled = true; });
+    }
+  };
+
+  async function api(url, options = {}) {
+    const { quiet, ...fetchOptions } = options;
+    const res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(fetchOptions.headers || {}) },
+      credentials: 'same-origin',
+      ...fetchOptions
+    });
+    if (res.redirected && /\/Account\/Login/i.test(res.url)) {
+      const message = 'Your session expired. Sign in again.';
+      if (!quiet) await showModal(message);
+      throw new Error(message);
+    }
+    if (res.status === 202) {
+      const body = await res.json().catch(() => ({}));
+      if (!quiet) showToast(body.message || 'Submitted for manager approval.');
+      return body;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 409 && err.requiresConfirmation && typeof fetchOptions.body === 'string') {
+        if (await showConfirm(err.error + '\n\nSave anyway?')) {
+          const body = { ...JSON.parse(fetchOptions.body), confirmPossibleDuplicate: true, confirmWarnings: true };
+          return api(url, { ...options, body: JSON.stringify(body) });
+        }
+        throw new Error(err.error);
+      }
+      const message = err.error || err.title || Object.values(err.errors || {}).flat?.()[0] ||
+        (res.status === 403 ? 'You do not have permission for this action.' :
+          res.status === 401 ? 'Your session expired. Sign in again.' :
+            res.status === 429 ? 'The assistant is busy. Try again in a moment.' :
+              res.status >= 500 ? 'The assistant could not answer just now.' :
+                'Something went wrong. Please try again.');
+      if (!quiet) await showModal(message);
+      throw new Error(message);
+    }
+    if (res.status === 204) return null;
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('json')) return res.json();
+    const message = 'Could not load data from the server. Try refreshing the page or signing in again.';
+    if (!quiet) await showModal(message);
+    throw new Error(message);
+  }
+
+  function isAddNewLookupLabel(text) {
+    return text === '__add' || /^➕\s*Add new/i.test(String(text || '').trim());
+  }
+
+  function mergeLookupOptions(listKey, list, prefixItems = []) {
+    const clean = (arr) => arr.filter(t => t && !isAddNewLookupLabel(t));
+    const fromApi = clean(list);
+    const extra = clean(prefixItems);
+    if (listKey === 'Lookup.Owners') {
+      const merged = new Set(['Farm', ...extra, ...fromApi]);
+      return ['Farm', ...[...merged].filter(x => x !== 'Farm').sort((a, b) => a.localeCompare(b))];
+    }
+    const seen = new Set();
+    const out = [];
+    for (const t of [...extra, ...fromApi]) {
+      const key = t.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(t);
+    }
+    return out;
+  }
+
+  function setEditableSelectOptions(sel, opts) {
+    const cur = sel.value;
+    const curText = sel.selectedOptions[0]?.text;
+    sel.replaceChildren(...opts.map(t => {
+      const o = document.createElement('option');
+      o.textContent = t;
+      return o;
+    }));
+    const addOpt = document.createElement('option');
+    addOpt.value = '__add';
+    addOpt.textContent = '➕ Add new…';
+    sel.appendChild(addOpt);
+    const pick = cur && cur !== '__add' ? cur : curText;
+    if (pick && pick !== '__add') {
+      const match = [...sel.options].find(o => o.value === pick || o.text === pick);
+      if (match) sel.value = match.value;
+    }
+  }
+
+  async function initEditableDropdown(selectId, listKey, prefixItems = []) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !listKey) return;
+    const fill = async () => {
+      const list = await api('/Lookup/Get?key=' + encodeURIComponent(listKey));
+      setEditableSelectOptions(sel, mergeLookupOptions(listKey, list, prefixItems));
+    };
+    sel.onchange = async () => {
+      if (sel.value !== '__add') return;
+      const name = await showModal('Add a new option to this list:', { prompt: true });
+      if (name?.trim()) {
+        const updated = await api('/Lookup/AddOption', { method: 'POST', body: JSON.stringify({ key: listKey, value: name.trim() }) });
+        setEditableSelectOptions(sel, mergeLookupOptions(listKey, updated, prefixItems));
+        sel.value = name.trim();
+      } else {
+        await fill();
+      }
+    };
+    await fill();
+  }
+
+  function initEditableDropdowns() {
+    document.querySelectorAll('select[data-lookup]').forEach(sel => {
+      initEditableDropdown(sel.id, sel.dataset.lookup);
+    });
+  }
+
+  const selected = new Set();
+
+  function initHerd(opts = {}) {
+    const filter = document.getElementById('filter');
+    if (filter && opts.filter) filter.value = opts.filter;
+
+    let editingId = null;
+
+    function applySourcePriceState() {
+      const p = document.getElementById('f-price');
+      const source = document.getElementById('f-source')?.value;
+      if (!p) return;
+      p.disabled = source === 'Born';
+      if (source === 'Born') p.value = '';
+    }
+
+    function setEditMode(editing) {
+      const cancelBtn = document.getElementById('cancelBtn');
+      const deleteBtn = document.getElementById('deleteBtn');
+      if (cancelBtn) cancelBtn.style.display = editing ? '' : 'none';
+      if (deleteBtn) deleteBtn.style.display = editing ? '' : 'none';
+    }
+
+    function showGoatFormPanel() {
+      const panel = document.getElementById('goatFormPanel');
+      if (panel) panel.style.display = '';
+    }
+
+    function hideGoatFormPanel() {
+      const panel = document.getElementById('goatFormPanel');
+      if (panel) panel.style.display = 'none';
+    }
+
+    function resetGoatForm() {
+      editingId = null;
+      document.getElementById('goatFormTitle').textContent = 'Add a goat';
+      document.getElementById('addBtn').textContent = '+ Add goat';
+      document.getElementById('f-tag').disabled = false;
+      document.getElementById('f-tag').value = '';
+      document.getElementById('f-name').value = '';
+      document.getElementById('f-breed').selectedIndex = 0;
+      document.getElementById('f-gender').value = 'Female';
+      document.getElementById('f-source').value = 'Bought';
+      document.getElementById('f-price').value = '';
+      document.getElementById('f-status').value = 'Kid';
+      document.getElementById('f-date').value = '';
+      document.getElementById('f-note').value = '';
+      setHerdExtras({ owner: 'Farm', healthState: 'Healthy', sireTag: '', damTag: '' });
+      applySourcePriceState();
+      document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
+      setEditMode(false);
+    }
+
+    function enumValue(value, fallback) {
+      return typeof value === 'string' ? value : fallback;
+    }
+
+    const HEALTH_LABEL_BY_STATE = {
+      Healthy: 'Healthy',
+      Sick: 'Sick',
+      UnderTreatment: 'Under treatment',
+      Recovering: 'Recovering',
+      Quarantine: 'Quarantine',
+      Injured: 'Injured',
+      WeakOffFeed: 'Weak / off feed'
+    };
+
+    function healthLabelFromState(state) {
+      if (!state) return 'Healthy';
+      return HEALTH_LABEL_BY_STATE[state] || state;
+    }
+
+    function healthStateFromLabel(label) {
+      const map = {
+        Healthy: 'Healthy',
+        Sick: 'Sick',
+        'Under treatment': 'UnderTreatment',
+        Recovering: 'Recovering',
+        Quarantine: 'Quarantine',
+        Injured: 'Injured',
+        'Weak / off feed': 'WeakOffFeed'
+      };
+      return map[label] || 'Sick';
+    }
+
+    function ensureSelectOption(sel, value) {
+      if (!sel || value == null || value === '') return;
+      const v = String(value);
+      if (v === '__add' || isAddNewLookupLabel(v)) return;
+      if ([...sel.options].some(o => o.value === v || o.text === v)) return;
+      const addOpt = sel.querySelector('option[value="__add"]');
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      if (addOpt) sel.insertBefore(opt, addOpt);
+      else sel.appendChild(opt);
+    }
+
+    function setHerdExtras(goat) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+      const healthLabel = goat.healthDisplay || healthLabelFromState(goat.healthState);
+      ensureSelectOption(document.getElementById('f-health'), healthLabel);
+      set('f-health', healthLabel);
+      const ownerSel = document.getElementById('f-owner');
+      const owner = goat.owner || 'Farm';
+      ensureSelectOption(ownerSel, owner);
+      if (ownerSel) ownerSel.value = owner;
+      const sireSel = document.getElementById('f-sire');
+      const sire = goat.sireTag || '';
+      ensureSelectOption(sireSel, sire);
+      if (sireSel) sireSel.value = sire || '';
+      set('f-dam', goat.damTag);
+    }
+
+    async function loadParentOptions() {
+      const sireSel = document.getElementById('f-sire');
+      const dams = document.getElementById('damOptions');
+      if (!sireSel && !dams) return;
+      try {
+        const opts = await api('/Goat/ParentOptions');
+        if (sireSel) {
+          const cur = sireSel.value;
+          sireSel.innerHTML = '<option value="">— none —</option>' +
+            (opts.sires || []).map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+          if (cur && [...sireSel.options].some(o => o.value === cur)) sireSel.value = cur;
+        }
+        if (dams) {
+          dams.replaceChildren(...(opts.dams || []).map(t => {
+            const o = document.createElement('option');
+            o.value = t;
+            return o;
+          }));
+        }
+      } catch { /* parent options are optional */ }
+    }
+
+    function fillGoatForm(goat) {
+      editingId = goat.id;
+      document.getElementById('addBtn').textContent = 'Save';
+      document.getElementById('f-tag').value = goat.tag || '';
+      document.getElementById('f-tag').disabled = true;
+      document.getElementById('f-name').value = goat.name || '';
+      document.getElementById('f-breed').value = goat.breed || '';
+      document.getElementById('f-gender').value = enumValue(goat.gender, 'Female');
+      const source = enumValue(goat.source, 'Bought');
+      document.getElementById('f-source').value = source;
+      document.getElementById('f-price').value = source === 'Born' ? '' : (goat.purchasePrice ?? '');
+      const statusSel = document.getElementById('f-status');
+      const status = enumValue(goat.status, 'Kid');
+      ensureSelectOption(statusSel, status);
+      if (statusSel) statusSel.value = status;
+      document.getElementById('f-date').value = goat.eventDateDisplay || goat.eventDate || '';
+      document.getElementById('f-note').value = goat.comment || '';
+      setHerdExtras(goat);
+      applySourcePriceState();
+      setEditMode(true);
+      if (!FarmPerms.can('herd', 'add')) FarmPerms.revealEditForm('addBtn');
+    }
+
+    async function openGoatForEdit(goat) {
+      if (!goat?.id || !FarmPerms.can('herd', 'edit')) return;
+      showGoatFormPanel();
+      await loadParentOptions();
+      fillGoatForm(goat);
+      document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
+      const row = document.querySelector(`#rows tr.goat-row[data-id="${goat.id}"]`);
+      if (row) {
+        row.classList.add('editing');
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        document.getElementById('goatFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    async function loadGoatForEdit(row) {
+      if (!FarmPerms.can('herd', 'edit')) return;
+      showGoatFormPanel();
+      await loadParentOptions();
+      fillGoatForm({
+        id: +row.dataset.id,
+        tag: row.dataset.tag,
+        name: row.dataset.name,
+        breed: row.dataset.breed,
+        gender: row.dataset.gender,
+        source: row.dataset.source,
+        purchasePrice: row.dataset.price,
+        status: row.dataset.status,
+        eventDateDisplay: row.dataset.date,
+        dateOfBirthDisplay: row.dataset.dob,
+        dateOfBirthIsEstimated: row.dataset.dobEst === '1',
+        comment: row.dataset.comment,
+        healthState: row.dataset.health,
+        owner: row.dataset.owner,
+        sireTag: row.dataset.sire,
+        damTag: row.dataset.dam
+      });
+      document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+    }
+
+    function normalizeTag(value) {
+      return String(value ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+    }
+
+    function findRowByTag(tag) {
+      const needle = normalizeTag(tag).toLowerCase();
+      if (!needle) return null;
+      for (const row of document.querySelectorAll('#rows tr.goat-row')) {
+        if ((row.dataset.tag || '').toLowerCase() === needle) return row;
+      }
+      return null;
+    }
+
+    async function lookupGoatByTag() {
+      if (editingId) return;
+
+      const tagInput = document.getElementById('f-tag');
+      const tag = normalizeTag(tagInput?.value);
+      if (!tag) {
+        showToast('Enter or scan a tag / RFID ID.', 'error');
+        tagInput?.focus();
+        return;
+      }
+
+      if (!FarmPerms.can('herd', 'edit')) {
+        showToast('You do not have permission to edit goats.', 'error');
+        return;
+      }
+
+      const localRow = findRowByTag(tag);
+      if (localRow) {
+        loadGoatForEdit(localRow);
+        return;
+      }
+
+      tagInput.disabled = true;
+
+      try {
+        const res = await fetch('/Goat/GetByTag?tag=' + encodeURIComponent(tag), {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        });
+
+        if (res.status === 404) {
+          return;
+        }
+
+        if (res.status === 403) {
+          showToast('You do not have permission to look up goats.', 'error');
+          return;
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.error || 'Could not look up that tag.', 'error');
+          return;
+        }
+
+        const goat = await res.json();
+        openGoatForEdit(goat);
+      } catch {
+        showToast('Could not reach the server. Try again.', 'error');
+      } finally {
+        if (!editingId) tagInput.disabled = false;
+        else tagInput.disabled = true;
+      }
+    }
+
+    function herdUrl(filter, page, search = opts.search) {
+      const params = new URLSearchParams();
+      if (filter && filter !== 'all') params.set('filter', filter);
+      if (search) params.set('q', search);
+      if (page && page > 1) params.set('page', page);
+      const q = params.toString();
+      return '/Goat' + (q ? '?' + q : '');
+    }
+
+    function goatPayload() {
+      const source = document.getElementById('f-source').value;
+      return {
+        tag: document.getElementById('f-tag').value.trim(),
+        name: document.getElementById('f-name').value.trim(),
+        comment: document.getElementById('f-note').value.trim() || null,
+        breed: document.getElementById('f-breed').value,
+        gender: document.getElementById('f-gender').value,
+        status: document.getElementById('f-status').value,
+        source,
+        purchasePrice: source === 'Born' ? 0 : (+document.getElementById('f-price').value || 0),
+        eventDate: document.getElementById('f-date').value,
+        dateOfBirth: null,
+        dateOfBirthIsEstimated: false,
+        healthState: healthStateFromLabel(document.getElementById('f-health')?.value || 'Healthy'),
+        owner: document.getElementById('f-owner')?.value || 'Farm',
+        sireTag: (() => {
+          const v = document.getElementById('f-sire')?.value?.trim();
+          return v && v !== '— none —' ? v : null;
+        })(),
+        damTag: document.getElementById('f-dam')?.value.trim() || null
+      };
+    }
+
+    document.getElementById('f-source')?.addEventListener('change', applySourcePriceState);
+
+    document.getElementById('f-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        lookupGoatByTag();
+      }
+    });
+
+    document.getElementById('cancelBtn')?.addEventListener('click', () => {
+      resetGoatForm();
+      hideGoatFormPanel();
+    });
+    document.getElementById('addGoatOpen')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'add')) return;
+      resetGoatForm();
+      await loadParentOptions();
+      showGoatFormPanel();
+      document.getElementById('goatFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('f-tag')?.focus();
+    });
+    document.getElementById('addGoatClose')?.addEventListener('click', () => {
+      resetGoatForm();
+      hideGoatFormPanel();
+    });
+
+    document.getElementById('deleteBtn')?.addEventListener('click', async () => {
+      if (!editingId || !FarmPerms.can('herd', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this goat?');
+      if (!confirmed) return;
+      await api('/Goat/Delete?id=' + editingId, { method: 'DELETE' });
+      reloadWithToast('Goat deleted successfully');
+    });
+
+    document.getElementById('treatRows')?.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-recov]');
+      if (!btn || !FarmPerms.can('herd', 'edit')) return;
+      const id = btn.getAttribute('data-recov');
+      const confirmed = await showConfirm('Mark this animal as recovered?');
+      if (!confirmed) return;
+      await api('/Goat/RecoverTreatment?id=' + encodeURIComponent(id), { method: 'POST' });
+      showToast('Recovered');
+      setTimeout(() => location.reload(), 600);
+    });
+
+    document.getElementById('addBtn')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('herd', !!editingId)) return;
+      const tag = document.getElementById('f-tag').value.trim();
+      const date = document.getElementById('f-date').value;
+      if (!tag) { await showModal('Please enter a Tag / RFID ID'); return; }
+      if (!date) { await showModal('Please pick the date'); return; }
+      const payload = goatPayload();
+      try {
+        if (editingId) {
+          await api('/Goat/Update?id=' + editingId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadWithToast('Goat updated successfully');
+        } else {
+          await api('/Goat/Create', { method: 'POST', body: JSON.stringify(payload) });
+          reloadWithToast('Goat added successfully');
+        }
+      } catch { /* api() already showed the error */ }
+    });
+
+    document.querySelectorAll('#rows tr.goat-row').forEach(row => {
+      row.addEventListener('click', e => {
+        if (!FarmPerms.can('herd', 'edit')) return;
+        if (e.target.closest('input[type=checkbox], a.tag-link, .treebtn, .herd-nextstep, .linkish, .herd-nextstep-wrap, [data-goatcard]')) return;
+        loadGoatForEdit(row);
+      });
+    });
+
+    document.getElementById('rows')?.addEventListener('click', async e => {
+      const wean = e.target.closest('[data-herd-wean]');
+      if (wean) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!FarmPerms.can('herd', 'edit')) return;
+        const id = +wean.getAttribute('data-herd-wean');
+        const tag = wean.getAttribute('data-tag') || '';
+        if (window.GoatCard?.promptWeanFromHerd) {
+          const ok = await window.GoatCard.promptWeanFromHerd({ id, tag });
+          if (ok) reloadWithToast('Kid weaned');
+        } else {
+          const dt = await showModal(`Weaning date for ${tag} (YYYY-MM-DD)`, {
+            prompt: true,
+            defaultValue: new Date().toISOString().slice(0, 10)
+          });
+          if (!dt) return;
+          await api('/Goat/BulkMove', {
+            method: 'POST',
+            body: JSON.stringify({ goatIds: [id], moveTarget: 'k:wean', weanDate: dt })
+          });
+          reloadWithToast('Kid weaned');
+        }
+        return;
+      }
+      const step = e.target.closest('[data-herd-nextstep]');
+      if (!step) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const action = step.getAttribute('data-herd-nextstep');
+      const permTab = step.getAttribute('data-perm-tab') || 'herd';
+      const permAction = step.getAttribute('data-perm-action') || 'edit';
+      if (!FarmPerms.can(permTab, permAction)) {
+        showToast('You do not have permission for this action.', 'error');
+        return;
+      }
+      const id = +step.getAttribute('data-id');
+      const tag = step.getAttribute('data-tag') || '';
+      const kids = step.getAttribute('data-kids') || '';
+      step.disabled = true;
+      try {
+        if (action === 'Wean') {
+          if (window.GoatCard?.promptWeanFromHerd) {
+            const ok = await window.GoatCard.promptWeanFromHerd({ id, tag });
+            if (ok) reloadWithToast('Kid weaned');
+          } else {
+            const dt = await showModal(`Weaning date for ${tag}`, { prompt: true, defaultValue: new Date().toISOString().slice(0, 10) });
+            if (!dt) return;
+            await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: 'k:wean', weanDate: dt }) });
+            reloadWithToast('Kid weaned');
+          }
+        } else if (action === 'Classify') {
+          const pick = await showModal('Classify as: doeling, buckling, or meat?', { prompt: true, defaultValue: 'doeling' });
+          const map = { doeling: 'k:class-doeling', buckling: 'k:class-buckling', meat: 'k:class-meat' };
+          const target = map[String(pick || '').trim().toLowerCase()];
+          if (!target) { await showModal('Enter doeling, buckling, or meat.'); return; }
+          await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: target }) });
+          location.reload();
+        } else if (action === 'Graduate') {
+          await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: 'k:graduate' }) });
+          location.reload();
+        } else if (action === 'DryOff') {
+          await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify({ goatIds: [id], moveTarget: 'br:dryoff' }) });
+          location.reload();
+        } else if (action === 'Scan') {
+          if (window.GoatCard?.runScanFromHerd) {
+            const ok = await window.GoatCard.runScanFromHerd({ id, tag });
+            if (ok) location.reload();
+          } else location.href = '/Breeding?scan=' + encodeURIComponent(tag);
+        } else if (action === 'RecordBirth') {
+          if (window.GoatCard?.open) {
+            const already = window.GoatCard.isOpen?.() && window.GoatCard.currentId?.() === id;
+            if (!already) await window.GoatCard.open({ id });
+            await window.GoatCard.runAction?.('kid');
+          } else {
+            const q = new URLSearchParams({ birth: tag });
+            if (kids) q.set('kids', kids);
+            location.href = '/Breeding?' + q.toString();
+          }
+        }
+      } catch { /* api toast */ }
+      finally { step.disabled = false; }
+    });
+
+    filter?.addEventListener('change', () => {
+      location.href = herdUrl(filter.value, 1);
+    });
+
+    document.getElementById('herdSearchForm')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const term = document.getElementById('herdSearch')?.value.trim() || '';
+      location.href = herdUrl(filter?.value || 'all', 1, term);
+    });
+
+    document.querySelectorAll('#stats .stat').forEach(card => {
+      const go = () => {
+        const f = card.dataset.filter;
+        if (f) location.href = herdUrl(f, 1);
+      };
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    });
+
+    document.getElementById('checkAll')?.addEventListener('change', e => {
+      document.querySelectorAll('#rows input[type=checkbox]').forEach(cb => {
+        cb.checked = e.target.checked;
+        e.target.checked ? selected.add(+cb.dataset.id) : selected.delete(+cb.dataset.id);
+      });
+      renderBulk();
+    });
+
+    document.querySelectorAll('#rows input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        cb.checked ? selected.add(+cb.dataset.id) : selected.delete(+cb.dataset.id);
+        renderBulk();
+        cb.closest('tr')?.classList.toggle('checked', cb.checked);
+      });
+    });
+
+    document.getElementById('moveBtn')?.addEventListener('click', async () => {
+      if (!selected.size || !FarmPerms.can('herd', 'edit')) return;
+      const v = document.getElementById('moveTo').value;
+      const payload = { goatIds: [...selected], moveTarget: v };
+      const defaultDate = new Date().toISOString().slice(0, 10);
+      if (v === 'br:prep') {
+        const dt = await showModal('Target cross date for the selected does (YYYY-MM-DD)', {
+          prompt: true,
+          defaultValue: (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })()
+        });
+        if (!dt) return;
+        payload.prepCrossDate = dt;
+      } else if (v === 'br:cross') {
+        const dt = await showModal('Mating date (YYYY-MM-DD)', { prompt: true, defaultValue: defaultDate });
+        if (!dt) return;
+        const bk = await showModal('Buck tag (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+        payload.matedDate = dt;
+        if (bk) payload.buckTag = bk;
+      } else if (v === 'br:kidded') {
+        const confirmed = await showConfirm('Mark ' + selected.size + ' doe(s) as kidded? They move to Milking.');
+        if (!confirmed) return;
+      } else if (v === 'br:plan') {
+        const dt = await showModal('Planned cross date (YYYY-MM-DD)', { prompt: true, defaultValue: defaultDate });
+        if (!dt) return;
+        payload.nextCrossDate = dt;
+      } else if (v === 'k:wean') {
+        if (window.GoatCard?.promptWeanBulk) {
+          const ok = await window.GoatCard.promptWeanBulk({ goatIds: [...selected] });
+          if (!ok) return;
+          location.reload();
+          return;
+        }
+        const dt = await showModal('Weaning date (YYYY-MM-DD)', { prompt: true, defaultValue: defaultDate });
+        if (!dt) return;
+        payload.weanDate = dt;
+      } else if (v.startsWith('k:class-') || v === 'k:graduate' || v === 'br:dryoff') {
+        const label = document.querySelector('#moveTo option:checked')?.textContent || v;
+        const confirmed = await showConfirm('Apply "' + label + '" to ' + selected.size + ' goat(s)?');
+        if (!confirmed) return;
+      }
+      try {
+        await api('/Goat/BulkMove', { method: 'POST', body: JSON.stringify(payload) });
+        location.reload();
+      } catch { /* api() already showed the error */ }
+    });
+
+    async function uploadHerdCsv(file) {
+      if (!FarmPerms.can('herd', 'add')) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      const res = await fetch('/Goat/ImportCsv', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: token ? { 'X-CSRF-TOKEN': token } : {}
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Import failed', 'error');
+        return;
+      }
+      const msg = `Imported ${data.imported || 0} goat(s).` +
+        (data.errors?.length ? `\n\n${data.errors.slice(0, 8).join('\n')}` : '');
+      await showModal(msg);
+      if (data.imported > 0) location.reload();
+    }
+
+    document.getElementById('herdCsvBtn')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'add')) return;
+      const ok = await showConfirm(
+        'Import goats from CSV?\n\nHeader row must include tag and date. Optional: name, breed, sex, status, price, owner, dam, sire, comment.'
+      );
+      if (ok) document.getElementById('herdCsvFile')?.click();
+    });
+    document.getElementById('herdCsvFile')?.addEventListener('change', e => {
+      const f = e.target.files?.[0];
+      if (f) uploadHerdCsv(f);
+      e.target.value = '';
+    });
+
+    document.getElementById('newGroupBtn')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'add')) return;
+      const name = await showModal('Name the new group', { prompt: true });
+      if (name?.trim()) {
+        await api('/Goat/CreateGroup', { method: 'POST', body: JSON.stringify({ name: name.trim() }) });
+        location.reload();
+      }
+    });
+
+    renderBulk();
+
+    FarmPerms.applyForm('herd', {
+      addBtnId: 'addBtn',
+      deleteBtnId: 'deleteBtn',
+      rowSelector: '#rows tr.goat-row',
+      extraHideIds: ['bulkbar', 'newGroupBtn', 'herdCsvBtn']
+    });
+
+    async function wdFound() {
+      const tag = normalizeTag(document.getElementById('wd-tag')?.value);
+      const el = document.getElementById('wd-found');
+      if (!el) return;
+      if (!tag) { el.textContent = ''; return; }
+      const row = findRowByTag(tag);
+      if (row) {
+        el.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ Found: ${esc(row.dataset.tag)}</span>`;
+        return;
+      }
+      try {
+        const goat = await api('/Goat/GetByTag?tag=' + encodeURIComponent(tag));
+        el.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ Found: ${esc(goat.tag)}</span>`;
+      } catch {
+        el.innerHTML = '<span style="color:#8a261c">No goat with that tag.</span>';
+      }
+    }
+
+    document.getElementById('wd-tag')?.addEventListener('input', wdFound);
+    document.getElementById('addWeight')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'edit')) return;
+      const tag = normalizeTag(document.getElementById('wd-tag')?.value);
+      const kg = +document.getElementById('wd-kg')?.value || 0;
+      const date = document.getElementById('wd-date')?.value || new Date().toISOString().slice(0, 10);
+      if (!tag) { await showModal('Scan or type a valid tag'); return; }
+      if (!kg) { await showModal('Enter the weight in kg'); return; }
+      const result = await api('/Goat/RecordWeight', {
+        method: 'POST',
+        body: JSON.stringify({ tag, kg, date })
+      });
+      const info = document.getElementById('wd-found');
+      if (info) info.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${esc(result.message)}</span>`;
+      document.getElementById('wd-kg').value = '';
+      document.getElementById('wd-tag').value = '';
+      showToast('Weight saved');
+    });
+
+    document.getElementById('addDeath')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('herd', 'edit')) return;
+      const tag = normalizeTag(document.getElementById('wd-tag')?.value);
+      const date = document.getElementById('wd-date')?.value || new Date().toISOString().slice(0, 10);
+      if (!tag) { await showModal('Scan or type a valid tag'); return; }
+      const reason = await showModal('Reason for death (illness, accident, unknown…)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+      const confirmed = await showConfirm(`Record ${tag} as dead on ${date}? It will be removed from the live herd.`);
+      if (!confirmed) return;
+      const result = await api('/Goat/RecordDeath', {
+        method: 'POST',
+        body: JSON.stringify({ tag, date, reason: reason || null })
+      });
+      if (!result.success) {
+        await showModal(result.message || 'Could not record death');
+        return;
+      }
+      const info = document.getElementById('wd-found');
+      if (info) info.innerHTML = `<span style="color:#8a261c;font-weight:700">${esc(result.message)}</span>`;
+      document.getElementById('wd-tag').value = '';
+      showToast('Death recorded');
+      setTimeout(() => location.reload(), 800);
+    });
+
+    if (opts.editGoat && opts.editGoat.id) {
+      openGoatForEdit(opts.editGoat);
+    }
+    initEditableDropdown('f-breed', 'Lookup.Breeds');
+    initEditableDropdown('f-owner', 'Lookup.Owners', opts.ownerSeed || []);
+    initEditableDropdown('f-health', 'Lookup.HealthStates');
+    if (FarmPerms.can('herd', 'add') || FarmPerms.can('herd', 'edit')) loadParentOptions();
+  }
+
+  function renderBulk() {
+    const bar = document.getElementById('bulkbar');
+    const cnt = document.getElementById('selCount');
+    if (bar) bar.classList.toggle('show', selected.size > 0);
+    if (cnt) cnt.textContent = selected.size + ' selected';
+  }
+
+  function bindFeedInputs(onSave) {
+    if (!FarmPerms.can('feed', 'edit')) return;
+    document.querySelectorAll('[data-price]').forEach(inp => {
+      inp.onchange = async () => {
+        await api('/Feed/UpdatePrice', {
+          method: 'POST',
+          body: JSON.stringify({ feedType: inp.dataset.price, price: +inp.value || 0 })
+        });
+        await onSave();
+      };
+    });
+    document.querySelectorAll('[data-mix]').forEach(inp => { inp.onchange = () => onSave(inp); });
+    document.querySelectorAll('[data-plan]').forEach(inp => { inp.onchange = () => onSave(inp); });
+    document.querySelectorAll('[data-fodamt]').forEach(inp => { inp.onchange = () => onSave(inp); });
+  }
+
+  function initFeed() {
+    let editingFeedBuyId = null;
+    let recipeGroup = document.getElementById('masterRecipeSelect')?.value || 'milking';
+    let checkDraft = {};
+    let feedData = null;
+
+    const activeFeedTab = () =>
+      document.querySelector('.feed-subtab.active')?.dataset.feedtab || 'store';
+
+    const feedMonth = () => document.getElementById('feedMonth')?.value || new Date().toISOString().slice(0, 7);
+
+    const showFeedTab = (tab) => {
+      document.querySelectorAll('.feed-subtab').forEach(b =>
+        b.classList.toggle('active', b.dataset.feedtab === tab));
+      document.querySelectorAll('.feedview').forEach(v => { v.style.display = 'none'; });
+      const el = document.getElementById('feed-' + tab);
+      if (el) el.style.display = '';
+    };
+
+    document.querySelectorAll('.feed-subtab').forEach(btn => {
+      btn.addEventListener('click', () => showFeedTab(btn.dataset.feedtab));
+    });
+
+    function fillAccountSelects() {
+      const opts = '<option value="">Select Cash / Bank account...</option>' +
+        (feedData?.moneyAccounts || []).map(a =>
+          `<option value="${esc(a.id)}">${esc(a.name)} · ${rs(a.balance || 0)}</option>`).join('');
+      ['fb-account', 'v182BuyAccount'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const cur = el.value;
+        el.innerHTML = opts;
+        if ([...el.options].some(o => o.value === cur)) el.value = cur;
+      });
+    }
+
+    function purchaseAmount() {
+      return Math.round((+document.getElementById('fb-kg')?.value || 0) * (+document.getElementById('fb-rate')?.value || 0));
+    }
+
+    function syncPaymentFields() {
+      const status = document.getElementById('fb-payment')?.value || 'paid';
+      const paid = document.getElementById('fb-paid');
+      const acct = document.getElementById('fb-account');
+      const due = document.getElementById('fb-due');
+      const total = purchaseAmount();
+      if (!paid || !acct || !due) return;
+      if (status === 'paid') {
+        paid.value = total || '';
+        paid.readOnly = true;
+        acct.disabled = false;
+        due.value = '';
+        due.disabled = true;
+      } else if (status === 'credit') {
+        paid.value = '0';
+        paid.readOnly = true;
+        acct.value = '';
+        acct.disabled = true;
+        due.disabled = false;
+      } else {
+        paid.readOnly = false;
+        acct.disabled = false;
+        due.disabled = false;
+        if (total && +paid.value >= total) paid.value = '';
+      }
+    }
+
+    function syncKidPayFields() {
+      const status = document.getElementById('v182BuyStatus')?.value || 'paid';
+      const paid = document.getElementById('v182BuyPaid');
+      const acct = document.getElementById('v182BuyAccount');
+      const due = document.getElementById('v182BuyDue');
+      const kg = +document.getElementById('v182BuyKg')?.value || 0;
+      const rate = +document.getElementById('v182BuyRate')?.value || 0;
+      const total = Math.round(kg * rate);
+      const totalEl = document.getElementById('v182BuyTotal');
+      if (totalEl) totalEl.value = kg && rate ? total : '';
+      if (!paid || !acct || !due) return;
+      if (status === 'paid') {
+        paid.value = total || '';
+        paid.readOnly = true;
+        acct.disabled = false;
+        due.value = '';
+        due.disabled = true;
+      } else if (status === 'credit') {
+        paid.value = '0';
+        paid.readOnly = true;
+        acct.value = '';
+        acct.disabled = true;
+        due.disabled = false;
+      } else {
+        paid.readOnly = false;
+        acct.disabled = false;
+        due.disabled = false;
+      }
+    }
+
+    function feedUseType(feedType) {
+      const p = (feedData?.allPrices || []).find(x => x.feedType === feedType);
+      return p?.useType === 'direct' ? 'direct' : 'recipe';
+    }
+
+    function syncUseAs() {
+      const feedType = document.getElementById('fb-feed')?.value;
+      const use = document.getElementById('fb-use');
+      if (!use || !feedType || feedType === '__addfeed') return;
+      const fixed = ['fodder', 'fodderdry', 'milkpowder'].includes(feedType);
+      use.disabled = fixed;
+      use.value = feedUseType(feedType);
+    }
+
+    const updateFbTotal = () => {
+      const kg = +document.getElementById('fb-kg')?.value || 0;
+      const rate = +document.getElementById('fb-rate')?.value || 0;
+      const total = document.getElementById('fb-total');
+      if (total) total.value = kg && rate ? Math.round(kg * rate) : '';
+      syncPaymentFields();
+    };
+    document.getElementById('fb-kg')?.addEventListener('input', updateFbTotal);
+    document.getElementById('fb-rate')?.addEventListener('input', updateFbTotal);
+    document.getElementById('fb-payment')?.addEventListener('change', syncPaymentFields);
+    document.getElementById('fb-feed')?.addEventListener('change', async () => {
+      const feedType = document.getElementById('fb-feed')?.value;
+      if (feedType === '__addfeed') {
+        await addNewFeedFromDropdown();
+        return;
+      }
+      const priceInput = feedType ? document.querySelector(`[data-price="${CSS.escape(feedType)}"]`) : null;
+      const rateInput = document.getElementById('fb-rate');
+      if (priceInput && rateInput) rateInput.value = priceInput.value;
+      else if (rateInput) {
+        const p = (feedData?.allPrices || []).find(x => x.feedType === feedType);
+        if (p) rateInput.value = p.pricePerKg;
+      }
+      syncUseAs();
+      updateFbTotal();
+    });
+
+    async function addNewFeedFromDropdown() {
+      const name = await showModal('Name of the new feed', { prompt: true });
+      if (!name) { await reloadFeed(); return; }
+      const pr = await showModal('Price per kg (Rs) for ' + name, { prompt: true, defaultValue: '0' });
+      if (pr === null) { await reloadFeed(); return; }
+      const direct = await showConfirm('Will ' + name + ' be fed separately as a direct/bulk feed (for example Mungphali Bhusa or silage)?\n\nYes = Direct / bulk feed\nNo = Recipe ingredient');
+      const created = await api('/Feed/AddFeedType', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: name, pricePerKg: +pr || 0, useType: direct ? 'direct' : 'recipe' })
+      });
+      await reloadFeed();
+      const sel = document.getElementById('fb-feed');
+      if (sel && created?.feedType) sel.value = created.feedType;
+      const rate = document.getElementById('fb-rate');
+      if (rate) rate.value = created?.pricePerKg ?? (+pr || 0);
+      syncUseAs();
+      updateFbTotal();
+    }
+
+    document.getElementById('feedMonth')?.addEventListener('change', () => reloadFeed());
+
+    const saveMixRecipe = async () => {
+      const recipe = {};
+      document.querySelectorAll('[data-mix]').forEach(inp => { recipe[inp.dataset.mix] = +inp.value || 0; });
+      await api('/Feed/UpdateMixRecipeForStatus', {
+        method: 'POST',
+        body: JSON.stringify({ statusKey: recipeGroup, recipe })
+      });
+      await reloadFeed(recipeGroup);
+    };
+
+    const savePlanField = async (inp) => {
+      const statusKey = inp.dataset.plan;
+      await api('/Feed/UpdatePlan', {
+        method: 'POST',
+        body: JSON.stringify({
+          statusKey,
+          mixKgPerDay: +document.querySelector(`[data-plan="${statusKey}"][data-fld="mix"]`)?.value || 0,
+          fodderKgPerDay: +document.querySelector(`[data-plan="${statusKey}"][data-fld="fodder"]`)?.value || 0,
+          fodderDryKgPerDay: +document.querySelector(`[data-plan="${statusKey}"][data-fld="fodderDry"]`)?.value || 0,
+          medicineCostPerGoatPerMonth: 0
+        })
+      });
+      await reloadFeed();
+    };
+
+    const saveFodderPool = async () => {
+      const items = [...document.querySelectorAll('[data-foditem]')].map(el => ({
+        id: el.dataset.foditem,
+        label: el.dataset.fodlabel,
+        amount: +document.querySelector(`[data-fodamt="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0
+      }));
+      await api('/Feed/UpdateFodderPool', {
+        method: 'POST',
+        body: JSON.stringify({
+          acres: +document.getElementById('fodderAcres')?.value || 0,
+          mode: document.getElementById('fodderMode')?.value || 'share',
+          items
+        })
+      });
+      await reloadFeed();
+    };
+
+    function resetFeedBuyForm() {
+      editingFeedBuyId = null;
+      const addBtn = document.getElementById('addFeedBuy');
+      if (addBtn) addBtn.textContent = '+ Record purchase';
+      document.getElementById('fb-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('fb-kg').value = '';
+      document.getElementById('fb-rate').value = '';
+      document.getElementById('fb-total').value = '';
+      document.getElementById('fb-note').value = '';
+      const paid = document.getElementById('fb-paid'); if (paid) paid.value = '';
+      const sup = document.getElementById('fb-supplier'); if (sup) sup.value = '';
+      const due = document.getElementById('fb-due'); if (due) due.value = '';
+      const pay = document.getElementById('fb-payment'); if (pay) pay.value = 'paid';
+      const alloc = document.getElementById('fb-alloc-months'); if (alloc) alloc.value = '1';
+      document.querySelectorAll('#buyLogRows tr.feed-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      const cancelBtn = document.getElementById('cancelFeedBuyBtn'); if (cancelBtn) cancelBtn.style.display = 'none';
+      const delBtn = document.getElementById('deleteFeedBuyBtn'); if (delBtn) delBtn.style.display = 'none';
+      syncPaymentFields();
+    }
+
+    function loadFeedBuyForEdit(row) {
+      if (!FarmPerms.can('feed', 'edit')) return;
+      editingFeedBuyId = +row.dataset.id;
+      const addBtn = document.getElementById('addFeedBuy');
+      if (addBtn) addBtn.textContent = 'Save purchase';
+      document.getElementById('fb-date').value = row.dataset.date || '';
+      document.getElementById('fb-feed').value = row.dataset.feed || '';
+      document.getElementById('fb-kg').value = row.dataset.kg || '';
+      document.getElementById('fb-rate').value = row.dataset.rate || '';
+      document.getElementById('fb-note').value = row.dataset.comment || '';
+      const use = document.getElementById('fb-use'); if (use) use.value = row.dataset.useas || 'recipe';
+      const pay = document.getElementById('fb-payment'); if (pay) pay.value = row.dataset.payment || 'paid';
+      const paid = document.getElementById('fb-paid'); if (paid) paid.value = row.dataset.paid || '';
+      const acct = document.getElementById('fb-account'); if (acct) acct.value = row.dataset.account || '';
+      const sup = document.getElementById('fb-supplier'); if (sup) sup.value = row.dataset.supplier || '';
+      const due = document.getElementById('fb-due'); if (due) due.value = row.dataset.due || '';
+      const alloc = document.getElementById('fb-alloc-months'); if (alloc) alloc.value = row.dataset.alloc || '1';
+      updateFbTotal();
+      syncPaymentFields();
+      document.querySelectorAll('#buyLogRows tr.feed-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      const cancelBtn = document.getElementById('cancelFeedBuyBtn'); if (cancelBtn) cancelBtn.style.display = '';
+      const delBtn = document.getElementById('deleteFeedBuyBtn'); if (delBtn) delBtn.style.display = '';
+    }
+
+    function renderMix(recipe) {
+      if (!recipe) return;
+      const nameEl = document.getElementById('recipeGroupName');
+      if (nameEl) nameEl.textContent = recipe.statusDisplay;
+      const mrs = document.getElementById('masterRecipeSelect');
+      if (mrs && recipe.statusKey && [...mrs.options].some(o => o.value === recipe.statusKey))
+        mrs.value = recipe.statusKey;
+      const mixList = document.getElementById('mixList');
+      if (!mixList) return;
+      mixList.innerHTML = (recipe.items || []).map(m =>
+        `<div class="ration-row"><div class="rn">${esc(m.displayName)}${m.percent ? ` <span class="breed"> · ${esc(m.percent)}%</span>` : ''}</div>
+          <div class="rin"><input type="number" min="0" step="0.5" data-mix="${esc(m.feedType)}" value="${esc(m.kgInBatch)}"><span class="u">kg</span></div>
+          <div class="rcost">${rs(m.batchCost)}</div></div>`).join('');
+      const res = document.getElementById('mixResult');
+      if (res) {
+        res.innerHTML =
+          `<div class="r"><div class="v">${(+recipe.totalKg || 0).toFixed(1)} kg</div><div class="k">batch size</div></div>
+           <div class="r"><div class="v">${rs(recipe.batchCost || 0)}</div><div class="k">cost of one batch</div></div>
+           <div class="r"><div class="v">${rs(recipe.costPerKg || 0)}</div><div class="k">mix cost per kg</div></div>`;
+      }
+      const cmp = document.getElementById('mixCompare');
+      if (cmp && recipe.allStatusCosts) {
+        cmp.innerHTML = '<b>All recipes:</b> ' + recipe.allStatusCosts.map(c =>
+          `<span style="${c.isActive ? 'color:var(--green-dark);font-weight:700' : 'color:var(--ink-soft)'}">${esc(c.statusDisplay)} ${rs(c.costPerKg)}/kg</span>`).join(' · ');
+      }
+      const bs = document.getElementById('mixBatch');
+      if (bs) {
+        const total = +recipe.totalKg || 0;
+        const match = [...bs.options].find(o => o.value !== 'custom' && Math.abs(+o.value - total) < 0.51);
+        bs.value = match ? match.value : 'custom';
+      }
+      document.querySelectorAll('[data-mix]').forEach(inp => { inp.onchange = () => saveMixRecipe(); });
+    }
+
+    function renderFodderPool(pool) {
+      const box = document.getElementById('fodderInputs');
+      if (!box || !pool) return;
+      box.innerHTML = (pool.items || []).map(it =>
+        `<div class="price-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}">
+          <label>${esc(it.label)} <span class="del feed-foddel" data-delfod="${esc(it.id)}" title="remove" style="font-size:13px">×</span></label>
+          <div class="price-in"><span class="pre">Rs</span>
+          <input type="number" min="0" data-fodamt="${esc(it.id)}" value="${+it.amount || 0}" style="width:110px">
+          <span class="suf">/ year</span></div></div>`).join('') ||
+        '<div class="rule" style="grid-column:1/-1">No cost lines yet — add one below.</div>';
+      const mode = document.getElementById('fodderMode');
+      const acres = document.getElementById('fodderAcres');
+      if (mode) mode.value = pool.mode || 'share';
+      if (acres) acres.value = +pool.acres || 0;
+      const res = document.getElementById('fodderResult');
+      if (res) {
+        res.innerHTML =
+          `<div class="r"><div class="v">${rs(pool.yearlyTotal || 0)}</div><div class="k">fodder land / year</div></div>
+           <div class="r"><div class="v">${rs(pool.dailyTotal || 0)}</div><div class="k">per day for the whole herd</div></div>
+           <div class="r"><div class="v">${pool.averagePerGoatDay ? rs(pool.averagePerGoatDay) : '—'}</div><div class="k">average per goat / day</div></div>`;
+      }
+      const note = document.getElementById('fodderNote');
+      if (note) note.innerHTML = pool.noteHtml || '';
+      document.querySelectorAll('[data-fodamt]').forEach(inp => { inp.onchange = () => saveFodderPool(); });
+      document.querySelectorAll('.feed-foddel').forEach(x => {
+        x.onclick = async e => {
+          e.preventDefault();
+          if (!FarmPerms.can('feed', 'delete')) return;
+          const confirmed = await showConfirm('Remove this fodder cost line?');
+          if (!confirmed) return;
+          await api('/Feed/RemoveFodderPoolItem?itemId=' + encodeURIComponent(x.dataset.delfod), { method: 'DELETE' });
+          await reloadFeed();
+        };
+      });
+    }
+
+    function renderCheckList(rows) {
+      const box = document.getElementById('checkList');
+      if (!box) return;
+      box.innerHTML = (rows || []).map(f => {
+        const book = Math.round((+f.bookKg || 0) * 10) / 10;
+        const v = checkDraft[f.feedType];
+        const diff = (v === undefined || v === '') ? null : (+v - book);
+        const dTxt = diff === null ? '' : (diff === 0 ? 'matches' : (diff > 0 ? '+' : '') + diff.toFixed(1) + ' kg');
+        const dCol = diff === null ? '' : (Math.abs(diff) < 0.05 ? 'color:var(--green-dark)' : diff < 0 ? 'color:#8a261c;font-weight:700' : 'color:var(--amber);font-weight:700');
+        return `<div class="ration-row"><div class="rn">${esc(f.displayName)}
+            <span class="breed">· books say ${book} kg</span></div>
+          <div class="rin"><input type="number" min="0" step="0.5" data-check="${esc(f.feedType)}" value="${v === undefined ? '' : esc(v)}" placeholder="actual"><span class="u">kg</span></div>
+          <div class="rcost" style="${dCol}">${dTxt}</div></div>`;
+      }).join('');
+      box.querySelectorAll('[data-check]').forEach(inp => {
+        inp.oninput = () => { checkDraft[inp.dataset.check] = inp.value; renderCheckList(rows); };
+      });
+    }
+
+    function renderStoreStats(data) {
+      const stats = data.storeStats || {};
+      const cards = [
+        { n: Math.round(stats.totalStockKg || 0).toLocaleString('en-US') + ' kg', l: 'Total stock', col: 'var(--green)' },
+        { n: (stats.dailyUsageKg || 0).toFixed(0) + ' kg/day', l: 'Daily usage', col: 'var(--blue)' },
+        { n: rs(stats.stockValue || 0), l: 'Stock value', col: 'var(--amber)' },
+        { n: stats.lowStockCount || 0, l: 'Low stock', col: (stats.lowStockCount || 0) ? 'var(--red)' : 'var(--green)' }
+      ];
+      const el = document.getElementById('feedStats');
+      if (el) {
+        el.innerHTML = cards.map(c =>
+          `<div class="stat" style="cursor:default"><div class="num" style="font-size:21px">${c.n}</div>
+            <div class="lbl"><span class="dot" style="background:${c.col}"></span>${c.l}</div></div>`).join('');
+      }
+      const low = document.getElementById('lowAlert');
+      if (low) low.innerHTML = '';
+      const auto = document.getElementById('autoInfo');
+      if (auto && data.feedSettings) auto.innerHTML = data.feedSettings.autoInfoHtml || '';
+      const reorder = document.getElementById('reorderNote');
+      if (reorder) {
+        const note = data.reorderNote;
+        if (note && note.daysToMinimum <= 21) {
+          const txt = note.daysToMinimum <= 0
+            ? `<b>${esc(note.displayName)}</b> is already at minimum stock — runs out in ${esc(note.daysUntilEmpty)} days`
+            : `<b>${esc(note.displayName)}</b> reaches minimum stock in ${esc(note.daysToMinimum)} days (runs out in ${esc(note.daysUntilEmpty)})`;
+          reorder.innerHTML = `<div class="note" style="background:${note.isCritical ? 'var(--red-tint)' : 'var(--amber-tint)'};
+            border-color:${note.isCritical ? '#e6b5ad' : '#e9d4a8'};margin:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span style="flex:1">⚠ ${txt}</span>
+            <button type="button" class="btn btn-green btn-sm" id="reorderBtn">Create purchase</button></div>`;
+          document.getElementById('reorderBtn')?.addEventListener('click', () => {
+            const sel = document.getElementById('fb-feed');
+            if (sel) sel.value = note.feedType;
+            const priceInput = document.querySelector(`[data-price="${CSS.escape(note.feedType)}"]`);
+            if (priceInput) document.getElementById('fb-rate').value = priceInput.value;
+            showFeedTab('purchases');
+            document.getElementById('fb-kg')?.focus();
+            document.getElementById('fb-kg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        } else reorder.innerHTML = '';
+      }
+    }
+
+    async function reloadFeed(openRecipeStatus) {
+      if (openRecipeStatus) recipeGroup = openRecipeStatus;
+      const month = feedMonth();
+      const tab = activeFeedTab();
+      const data = await api('/Feed/GetData?month=' + encodeURIComponent(month) + '&tab=' + encodeURIComponent(tab) +
+        (recipeGroup ? '&status=' + encodeURIComponent(recipeGroup) : ''));
+      feedData = data;
+
+      document.getElementById('grandMonth').textContent = rs(data.grandMonthly);
+      document.getElementById('grandDay').textContent = rs(data.grandDaily);
+      document.getElementById('grandHead').textContent = data.grandHeadText || ('for ' + data.totalGoats + ' goats');
+      const perL = document.getElementById('grandPerL');
+      if (perL) perL.textContent = data.feedCostPerLitreText || '— per litre of milk';
+
+      const purchPrices = (data.allPrices || []).filter(p => p.feedType !== 'fodder');
+      document.getElementById('priceGrid').innerHTML = purchPrices.map(p =>
+        `<div class="price-row"><label>${esc(p.displayName)} <span class="del feed-del" data-delfeed="${esc(p.feedType)}" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
+          <input type="number" min="0" data-price="${esc(p.feedType)}" value="${esc(p.pricePerKg)}"><span class="suf">/ kg</span></div></div>`).join('');
+
+      const gp = document.getElementById('groupPlanRows');
+      if (gp) {
+        let tG = 0, tMix = 0, tD = 0, tF = 0, tM = 0;
+        const rows = (data.groupPlans || []).map(row => {
+          tG += row.goatCount; tMix += (+row.mixKgPerDay || 0) * row.goatCount;
+          tD += (+row.dailyCostPerGoat || 0) * row.goatCount;
+          tF += (+row.monthlyTotal || 0); tM += (+row.fodderCostPerGoatPerDay || 0) * row.goatCount;
+          return `<tr><td><span class="chip ${esc(row.statusCssClass)}">${esc(row.statusDisplay)}</span></td>
+            <td class="num-cell">${row.goatCount}</td>
+            <td class="num-cell"><input type="number" min="0" step="0.05" data-plan="${esc(row.statusKey)}" data-fld="mix" value="${esc(row.mixKgPerDay)}"
+              style="width:70px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><input type="number" min="0" step="0.5" data-plan="${row.statusKey}" data-fld="fodder" value="${row.fodderKgPerDay}"
+              style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><input type="number" min="0" step="0.1" data-plan="${row.statusKey}" data-fld="fodderDry" value="${row.fodderDryKgPerDay}"
+              style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
+            <td class="num-cell hide-sm"><span class="breed">${rs(row.fodderCostPerGoatPerDay || 0)}</span></td>
+            <td class="num-cell" style="font-weight:700">${rs(row.dailyCostPerGoat || 0)}</td>
+            <td class="num-cell" style="color:var(--green-dark);font-weight:700">${rs(row.monthlyTotal || 0)}</td>
+            <td>${row.isCustomGroup
+              ? `<select data-fgrecipe="${esc(row.statusKey)}" title="Mix recipe used" style="font-size:12px;padding:4px">${(data.recipeOptions || []).filter(o => o.key !== 'kidstarter').map(o => `<option value="${esc(o.key)}" ${o.key === (row.recipeFrom || 'milking') ? 'selected' : ''}>${esc(o.name)} mix</option>`).join('')}</select> <span class="del" data-fgdel="${esc(row.statusKey)}" title="remove group">×</span>`
+              : `<button type="button" class="btn btn-ghost btn-sm" data-recipe="${esc(row.statusKey)}">Recipe</button>`}</td></tr>`;
+        }).join('');
+        gp.innerHTML = rows + (rows ? `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+          <td class="num-cell" style="font-weight:800">${tG}</td>
+          <td class="num-cell" style="font-weight:800">${tMix.toFixed(1)} kg</td>
+          <td class="num-cell hide-sm"></td><td class="num-cell hide-sm"></td>
+          <td class="num-cell hide-sm" style="font-weight:800">${rs(tM)}</td>
+          <td class="num-cell" style="font-weight:800">${rs(tD)}</td>
+          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(tF)}</td><td></td></tr>` : '');
+        document.querySelectorAll('[data-recipe]').forEach(b => {
+          b.onclick = async () => {
+            recipeGroup = b.dataset.recipe;
+            showFeedTab('recipes');
+            await reloadFeed(recipeGroup);
+            document.getElementById('recipePanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          };
+        });
+        document.querySelectorAll('[data-fgrecipe]').forEach(sel => {
+          sel.onchange = async () => {
+            await api('/Feed/UpdatePlan', {
+              method: 'POST',
+              body: JSON.stringify({
+                statusKey: sel.dataset.fgrecipe,
+                mixKgPerDay: +document.querySelector(`[data-plan="${CSS.escape(sel.dataset.fgrecipe)}"][data-fld="mix"]`)?.value || 0,
+                fodderKgPerDay: +document.querySelector(`[data-plan="${CSS.escape(sel.dataset.fgrecipe)}"][data-fld="fodder"]`)?.value || 0,
+                fodderDryKgPerDay: +document.querySelector(`[data-plan="${CSS.escape(sel.dataset.fgrecipe)}"][data-fld="fodderDry"]`)?.value || 0,
+                recipeFrom: sel.value
+              })
+            });
+            await reloadFeed();
+          };
+        });
+        document.querySelectorAll('[data-fgdel]').forEach(x => {
+          x.onclick = async e => {
+            e.preventDefault();
+            if (!FarmPerms.can('feed', 'delete')) return;
+            const confirmed = await showConfirm('Delete this feeding group? Animals in it go back to their normal status plan.');
+            if (!confirmed) return;
+            const key = x.dataset.fgdel || '';
+            const id = key.startsWith('fg:') ? key.slice(3) : key;
+            await api('/Feed/DeleteFeedingGroup?id=' + encodeURIComponent(id), { method: 'DELETE' });
+            await reloadFeed();
+          };
+        });
+      }
+      renderDirectFeedPlans(data);
+      const pfm = document.getElementById('planFodderMode');
+      if (pfm) pfm.innerHTML = data.planFodderModeHtml || '';
+
+      let buyHtml = (data.buyingList || []).map(b =>
+        `<tr><td>${esc(b.displayName)}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : ''}</td>
+          <td class="num-cell hide-sm">${b.kgPerDay.toFixed(1)}</td>
+          <td class="num-cell">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
+          <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>' : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
+      if (buyHtml && data.buyingListTotalKg) {
+        buyHtml += `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL TO BUY</td>
+          <td class="num-cell hide-sm"></td>
+          <td class="num-cell" style="font-weight:800">${Math.round(data.buyingListTotalKg).toLocaleString('en-US')} kg</td>
+          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(data.buyingListTotalCost || 0)}</td></tr>`;
+      }
+      document.getElementById('buyRows').innerHTML = buyHtml ||
+        '<tr><td colspan="4" class="empty">Set your mix recipe and group amounts first.</td></tr>';
+
+      const feedOpts = purchPrices.map(p => `<option value="${esc(p.feedType)}">${esc(p.displayName)}</option>`).join('')
+        + '<option value="__addfeed">➕ Add new feed…</option>';
+      const fbFeed = document.getElementById('fb-feed');
+      const curFeed = fbFeed?.value;
+      if (fbFeed) {
+        fbFeed.innerHTML = feedOpts;
+        if ([...fbFeed.options].some(o => o.value === curFeed)) fbFeed.value = curFeed;
+        syncUseAs();
+      }
+
+      const mrs = document.getElementById('masterRecipeSelect');
+      if (mrs) {
+        mrs.innerHTML = (data.recipeOptions || []).map(o =>
+          `<option value="${esc(o.key)}">${esc(o.name)}</option>`).join('');
+        if (data.activeRecipeStatusKey) recipeGroup = data.activeRecipeStatusKey;
+        if ([...mrs.options].some(o => o.value === recipeGroup)) mrs.value = recipeGroup;
+      }
+
+      fillAccountSelects();
+
+      document.getElementById('buyLogRows').innerHTML = (data.feedPurchases?.length ? data.feedPurchases.map(b => {
+        const pay = b.paymentStatus || ((+b.paidAmount || 0) > 0 ? 'paid' : 'credit');
+        const payTxt = pay + ((+b.paidAmount || 0) < (+b.amount || 0) ? ' · ' + rs(+b.paidAmount || 0) + ' paid' : '');
+        const alloc = Math.max(1, +b.allocationMonths || 1);
+        return `<tr class="feed-buy-row" data-id="${esc(b.id)}" data-date="${esc(b.dateDisplay)}" data-feed="${esc(b.feedType)}"
+          data-kg="${esc(b.kg)}" data-rate="${esc(b.ratePerKg)}" data-comment="${esc(b.comment)}"
+          data-useas="${esc(b.useAs || 'recipe')}" data-payment="${esc(pay)}" data-paid="${esc(b.paidAmount)}"
+          data-account="${esc(b.accountId || '')}" data-supplier="${esc(b.supplier)}" data-due="${esc(b.dueDateDisplay || '')}"
+          data-alloc="${esc(alloc)}">
+          <td><span class="breed">${esc(b.dateDisplay)}</span></td><td>${esc(b.feedDisplayName)}</td>
+          <td class="num-cell">${(+b.kg).toFixed(1)} kg</td><td class="num-cell hide-sm">Rs ${esc(b.ratePerKg)}</td>
+          <td class="num-cell">${rs(b.amount)}</td>
+          <td class="hide-sm"><span class="breed">${esc(b.supplier || '—')}</span></td>
+          <td class="hide-sm"><span class="breed">${esc(payTxt)}</span></td>
+          <td class="hide-sm"><span class="breed">${esc(b.accountName || '—')}</span></td>
+          <td class="hide-sm"><span class="breed">${alloc} mo · ${rs(b.allocationPerMonth || (b.amount / alloc))}/mo</span></td>
+          <td class="hide-sm">${b.comment ? `<span class="name">${esc(b.comment)}</span>` : ''}</td>
+          <td></td></tr>`;
+      }).join('') :
+        '<tr class="feed-buy-empty"><td colspan="11" class="empty">No feed purchases logged this month.</td></tr>');
+
+      document.querySelectorAll('#buyLogRows tr.feed-buy-row').forEach(row => {
+        row.addEventListener('click', () => loadFeedBuyForEdit(row));
+      });
+
+      renderFodderPool(data.fodderPool);
+      renderStoreStats(data);
+      renderStock(data.stock);
+      renderCheckList(data.stockCheckRows);
+      if (data.activeRecipe) renderMix(data.activeRecipe);
+      renderKidDiet(data.kidMilkDiet);
+
+      bindFeedInputs(async (inp) => {
+        if (inp?.dataset?.mix) await saveMixRecipe();
+        else if (inp?.dataset?.plan) await savePlanField(inp);
+        else if (inp?.dataset?.fodamt !== undefined) await saveFodderPool();
+        else await reloadFeed();
+      });
+      bindFeedDeleteButtons();
+    }
+
+    function renderStock(stock) {
+      const stockEl = document.getElementById('stockRows');
+      if (!stockEl || !stock) return;
+      stockEl.innerHTML = stock.map(s =>
+        `<tr><td>${esc(s.displayName)}${s.isLowStock ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
+          <td class="num-cell hide-sm"><span class="breed">${Math.round(s.purchasedKg || 0).toLocaleString('en-US')} kg</span></td>
+          <td class="num-cell hide-sm"><span class="breed">${Math.round(s.usedKg || 0).toLocaleString('en-US')} kg</span></td>
+          <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${esc(s.feedType)}" value="${esc(s.stockKg)}"
+            style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
+          <td class="num-cell">${(+s.kgPerDay).toFixed(1)} kg</td>
+          <td class="num-cell" style="${esc(s.daysLeftColor)}">${esc(s.daysLeftText)}</td>
+          <td class="num-cell hide-sm">${rs(s.avgCostPerKg || 0)}</td>
+          <td class="num-cell hide-sm"><span class="chip ${esc(s.statusCssClass || '')}">${esc(s.statusText || '—')}</span></td></tr>`).join('');
+      bindStockInputs();
+    }
+
+    function renderDirectFeedPlans(data) {
+      const box = document.getElementById('directFeedPlanBox');
+      if (!box) return;
+      const dfs = data.directFeeds || [];
+      const groups = data.groupPlans || [];
+      if (!dfs.length) { box.innerHTML = ''; return; }
+      box.innerHTML = `<div class="note" style="margin:0 0 10px"><b>Direct / bulk feeds</b> — use this for items such as Mungphali Bhusa, silage or another feed bought in bulk and fed separately. Enter kg per goat per day; stock and animal cost follow automatically.</div>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Group</th>${dfs.map(f => `<th class="num-cell">${esc(f.displayName)}<div class="name">kg/goat/day</div></th>`).join('')}</tr></thead>
+        <tbody>${groups.map(row => `<tr><td><span class="chip ${esc(row.statusCssClass)}">${esc(row.statusDisplay)}</span></td>${dfs.map(f => {
+          const v = (row.directKg && row.directKg[f.feedType]) || 0;
+          return `<td class="num-cell"><input type="number" min="0" step="0.05" data-direct-st="${esc(row.statusKey)}" data-direct-k="${esc(f.feedType)}" value="${esc(v)}"
+            style="width:86px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>`;
+        }).join('')}</tr>`).join('')}</tbody></table></div>`;
+      box.querySelectorAll('[data-direct-st]').forEach(inp => {
+        inp.onchange = async () => {
+          await api('/Feed/UpdateDirectPlan', {
+            method: 'POST',
+            body: JSON.stringify({
+              groupKey: inp.dataset.directSt,
+              feedType: inp.dataset.directK,
+              kgPerGoatPerDay: +inp.value || 0
+            })
+          });
+          await reloadFeed();
+        };
+      });
+    }
+
+    function kidStarterBatchKg() {
+      const sel = document.getElementById('v185BatchKg');
+      if (!sel) return 100;
+      return sel.value === 'custom' ? Math.max(1, +document.getElementById('v185CustomKg')?.value || 100) : (+sel.value || 100);
+    }
+
+    function renderKidMonths(months) {
+      const box = document.getElementById('v182Months');
+      if (!box || !months) return;
+      box.innerHTML = months.map((m, i) => `<div class="v182-month"><h3>${esc(m.name)}</h3><div class="v182-age">${m.from === 0 ? 'Birth' : m.from + ' days'} → ${m.to} days</div>
+        <div class="field"><label>Powder milk g/day</label><input data-v182="powderG" data-i="${i}" type="number" min="0" value="${esc(m.powderG)}"></div>
+        <div class="field"><label>Mother milk ml/day (optional)</label><input data-v182="motherMilkMl" data-i="${i}" type="number" min="0" value="${esc(m.motherMilkMl)}"></div>
+        <div class="field"><label>Kid starter mix g/day</label><input data-v182="mixG" data-i="${i}" type="number" min="0" value="${esc(m.mixG)}"></div>
+        <div class="field"><label>Green fodder g/day</label><input data-v182="greenG" data-i="${i}" type="number" min="0" value="${esc(m.greenG)}"></div>
+        <div class="field"><label>Dry fodder g/day</label><input data-v182="dryG" data-i="${i}" type="number" min="0" value="${esc(m.dryG)}"></div></div>`).join('');
+      box.querySelectorAll('[data-v182]').forEach(el => {
+        el.oninput = () => {
+          const msg = document.getElementById('v189SaveMsg');
+          if (msg) { msg.textContent = 'Unsaved changes — press Save Monthly Kid Diet.'; msg.style.fontWeight = '700'; }
+        };
+      });
+    }
+
+    function renderKidStarter(recipe) {
+      const box = document.getElementById('v183StarterRecipe');
+      if (!box) return;
+      if (!recipe?.items?.length) {
+        box.innerHTML = '<div class="muted">Feed ingredients will appear here from your Feed Store.</div>';
+        return;
+      }
+      const batch = kidStarterBatchKg();
+      const total = +recipe.totalKg || 0;
+      const factor = total > 0 ? batch / total : 1;
+      box.innerHTML = '<div class="table-wrap"><table class="tbl"><thead><tr><th>Ingredient</th><th class="num-cell">Quantity in batch (kg)</th><th class="num-cell">Current rate/kg</th><th class="num-cell">Ingredient cost</th></tr></thead><tbody>' +
+        recipe.items.map(m => {
+          const kg = (+m.kgInBatch || 0) * factor;
+          const rate = (feedData?.allPrices || []).find(p => p.feedType === m.feedType)?.pricePerKg || 0;
+          return `<tr><td>${esc(m.displayName)}</td><td class="num-cell"><input data-v183recipe="${esc(m.feedType)}" type="number" min="0" step="0.1" value="${kg ? kg.toFixed(2) : 0}"></td><td class="num-cell">${rs(rate)}</td><td class="num-cell">${rs(kg * rate)}</td></tr>`;
+        }).join('') + '</tbody></table></div>';
+      box.querySelectorAll('[data-v183recipe]').forEach(el => {
+        el.onchange = async () => {
+          const recipeMap = {};
+          box.querySelectorAll('[data-v183recipe]').forEach(inp => { recipeMap[inp.dataset.v183recipe] = +inp.value || 0; });
+          await api('/Feed/UpdateMixRecipeForStatus', {
+            method: 'POST',
+            body: JSON.stringify({ statusKey: 'kidstarter', recipe: recipeMap })
+          });
+          await reloadFeed(recipeGroup);
+        };
+      });
+      const tot = document.getElementById('v183StarterRecipeTotal');
+      if (tot) {
+        const entered = recipe.items.reduce((a, m) => a + (+m.kgInBatch || 0) * factor, 0);
+        const cost = recipe.items.reduce((a, m) => {
+          const kg = (+m.kgInBatch || 0) * factor;
+          const rate = (feedData?.allPrices || []).find(p => p.feedType === m.feedType)?.pricePerKg || 0;
+          return a + kg * rate;
+        }, 0);
+        const costKg = entered > 0 ? cost / entered : 0;
+        tot.innerHTML = `Target batch: <b>${batch.toFixed(0)} kg</b> &nbsp; | &nbsp; Ingredients entered: <b>${entered.toFixed(2)} kg</b>${entered && Math.abs(entered - batch) > 0.05 ? ' <span style="color:#a65b00">— adjust ingredients to ' + batch.toFixed(0) + ' kg</span>' : ''} &nbsp; | &nbsp; Total batch cost: <b>${rs(cost)}</b> &nbsp; | &nbsp; Starter cost: <b>${rs(costKg)}/kg</b>`;
+      }
+    }
+
+    function renderKidDiet(diet) {
+      if (!diet) return;
+      const q = id => document.getElementById(id);
+      if (q('v182Un')) q('v182Un').textContent = diet.unweanedKids || 0;
+      if (q('v182Pow')) q('v182Pow').textContent = Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US') + ' g';
+      if (q('v182Stock')) q('v182Stock').textContent = (+diet.powderStockKg || 0).toFixed(1) + ' kg';
+      const as = q('v188AutoStatus');
+      if (as) {
+        as.innerHTML = diet.autoStartDate
+          ? `<b>Automatic daily recording: ON</b> · Started ${esc(diet.autoStartDate)} · Recorded through ${esc(diet.lastAutoDate || 'not yet')}. Missed days are caught up when the software opens.`
+          : `<b>Automatic daily recording:</b> Enter Month 1–3 amounts and press <b>Save Monthly Kid Diet</b> to start.`;
+      }
+      const req = q('v182Req');
+      if (req) {
+        const c = diet.counts || [0, 0, 0];
+        req.innerHTML = `<b>Today's requirement:</b> ${c[0] || 0} kid(s) Month 1 · ${c[1] || 0} Month 2 · ${c[2] || 0} Month 3 &nbsp; | &nbsp; Powder milk <b>${Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US')} g/day</b> (${(+diet.powderTodayKg || 0).toFixed(2)} kg) · Mother milk ${(+diet.motherTodayL || 0).toFixed(2)} L · Starter mix ${(+diet.mixTodayKg || 0).toFixed(2)} kg · Green ${(+diet.greenTodayKg || 0).toFixed(2)} kg · Dry ${(+diet.dryTodayKg || 0).toFixed(2)} kg`;
+      }
+      const logs = q('v182Logs');
+      if (logs) {
+        logs.innerHTML = (diet.logs || []).length
+          ? diet.logs.map(x => `<tr><td>${esc(x.date)}</td><td>${x.kids}</td><td>${Math.round((+x.powder || 0) * 1000).toLocaleString('en-US')} g</td><td>${(+x.mother || 0).toFixed(2)} L</td><td>${(+x.mix || 0).toFixed(2)} kg</td><td>${(+x.green || 0).toFixed(2)} kg</td><td>${(+x.dry || 0).toFixed(2)} kg</td></tr>`).join('')
+          : '<tr><td colspan="7" class="empty">No kid milk feeding recorded yet.</td></tr>';
+      }
+      renderKidMonths(diet.months);
+      renderKidStarter(diet.starterRecipe);
+      const rate = (feedData?.allPrices || []).find(p => p.feedType === 'milkpowder')?.pricePerKg;
+      const rateEl = q('v182BuyRate');
+      if (rate && rateEl && !rateEl.value) rateEl.value = rate;
+      const dateEl = q('v182BuyDate');
+      if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+      syncKidPayFields();
+    }
+
+    function bindStockInputs() {
+      if (!FarmPerms.can('feed', 'edit')) {
+        document.querySelectorAll('[data-stock]').forEach(inp => { inp.disabled = true; });
+        return;
+      }
+      document.querySelectorAll('[data-stock]').forEach(inp => {
+        inp.onchange = async () => {
+          await api('/Feed/UpdateStock', {
+            method: 'POST',
+            body: JSON.stringify({ feedType: inp.dataset.stock, stockKg: +inp.value || 0 })
+          });
+          await reloadFeed();
+        };
+      });
+    }
+
+    function bindFeedDeleteButtons() {
+      document.querySelectorAll('.feed-del').forEach(x => {
+        x.onclick = async e => {
+          e.preventDefault();
+          if (!FarmPerms.can('feed', 'delete')) return;
+          const feedType = x.dataset.delfeed;
+          const label = x.closest('.price-row')?.querySelector('label')?.textContent?.replace('×', '').trim() || feedType;
+          const confirmed = await showConfirm('Remove "' + label + '" from the feed list?');
+          if (!confirmed) return;
+          await api('/Feed/DeleteFeedType?feedType=' + encodeURIComponent(feedType), { method: 'DELETE' });
+          sessionStorage.setItem('goatToast', 'Feed type removed');
+          await reloadFeed();
+          flashStoredToast();
+        };
+      });
+    }
+
+    document.getElementById('cancelFeedBuyBtn')?.addEventListener('click', resetFeedBuyForm);
+    document.getElementById('deleteFeedBuyBtn')?.addEventListener('click', async () => {
+      if (!editingFeedBuyId || !FarmPerms.can('feed', 'delete')) return;
+      const confirmed = await showConfirm('Delete this feed purchase?');
+      if (!confirmed) return;
+      await api('/Feed/DeletePurchase?id=' + editingFeedBuyId, { method: 'DELETE' });
+      resetFeedBuyForm();
+      sessionStorage.setItem('goatToast', 'Feed purchase deleted');
+      await reloadFeed();
+      flashStoredToast();
+    });
+
+    document.getElementById('addFeedBuy')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('feed', !!editingFeedBuyId)) return;
+      const date = document.getElementById('fb-date').value;
+      const feedType = document.getElementById('fb-feed').value;
+      const kg = +document.getElementById('fb-kg').value || 0;
+      const ratePerKg = +document.getElementById('fb-rate').value || 0;
+      if (!date || !feedType || feedType === '__addfeed' || !kg || !ratePerKg) {
+        await showModal('Enter date, feed, qty and rate'); return;
+      }
+      const amount = Math.round(kg * ratePerKg);
+      const status = document.getElementById('fb-payment')?.value || 'paid';
+      let paidAmount = status === 'paid' ? amount : status === 'credit' ? 0 : (+document.getElementById('fb-paid')?.value || 0);
+      paidAmount = Math.max(0, Math.min(amount, paidAmount));
+      const accountId = document.getElementById('fb-account')?.value;
+      if (paidAmount > 0 && !accountId) {
+        await showModal('Select Paid from: Cash in Hand or a Bank account.');
+        return;
+      }
+      const payload = {
+        date, feedType, kg, ratePerKg,
+        comment: document.getElementById('fb-note').value.trim() || null,
+        useAs: document.getElementById('fb-use')?.value || 'recipe',
+        paymentStatus: status,
+        paidAmount,
+        accountId: accountId ? +accountId : null,
+        supplier: document.getElementById('fb-supplier')?.value.trim() || 'Feed supplier',
+        dueDate: document.getElementById('fb-due')?.value || null,
+        allocationMonths: +document.getElementById('fb-alloc-months')?.value || 1
+      };
+      if (editingFeedBuyId) {
+        await api('/Feed/UpdatePurchase?id=' + editingFeedBuyId, { method: 'PUT', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Feed purchase updated');
+      } else {
+        await api('/Feed/AddPurchase', { method: 'POST', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Feed purchase added');
+      }
+      resetFeedBuyForm();
+      await reloadFeed();
+      flashStoredToast();
+    });
+
+    document.getElementById('addFeedType')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'add')) return;
+      const displayName = document.getElementById('nf-name').value.trim();
+      const pricePerKg = +document.getElementById('nf-price').value || 0;
+      const useType = document.getElementById('nf-use')?.value || 'recipe';
+      if (!displayName) { await showModal('Enter feed name'); return; }
+      await api('/Feed/AddFeedType', { method: 'POST', body: JSON.stringify({ displayName, pricePerKg, useType }) });
+      document.getElementById('nf-name').value = '';
+      document.getElementById('nf-price').value = '';
+      sessionStorage.setItem('goatToast', 'Feed type added');
+      await reloadFeed();
+      flashStoredToast();
+    });
+
+    document.getElementById('jumpPurchase')?.addEventListener('click', () => {
+      showFeedTab('purchases');
+      document.getElementById('fb-kg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('fb-kg')?.focus();
+    });
+    document.getElementById('jumpCheck')?.addEventListener('click', () => {
+      showFeedTab('store');
+      document.getElementById('checkList')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    document.getElementById('closeRecipe')?.addEventListener('click', () => {
+      document.getElementById('recipePanel').style.display = 'none';
+    });
+    document.getElementById('scaleBatch')?.addEventListener('click', async () => {
+      const recipe = await api('/Feed/GetMixRecipe?status=' + encodeURIComponent(recipeGroup));
+      const v = document.getElementById('mixBatch')?.value;
+      let target = v === 'custom' ? +(prompt('Batch size in kg?', String(Math.round(recipe.totalKg || 0))) || 0) : +v;
+      if (!target || target <= 0) return;
+      const cur = +recipe.totalKg || 0;
+      if (cur <= 0) { await showModal('Add some ingredients first, then scale.'); return; }
+      const factor = target / cur;
+      const scaled = {};
+      (recipe.items || []).forEach(m => { scaled[m.feedType] = Math.round((+m.kgInBatch || 0) * factor * 100) / 100; });
+      await api('/Feed/UpdateMixRecipeForStatus', {
+        method: 'POST',
+        body: JSON.stringify({ statusKey: recipeGroup, recipe: scaled })
+      });
+      await reloadFeed(recipeGroup);
+    });
+    document.getElementById('fodderMode')?.addEventListener('change', () => saveFodderPool());
+    document.getElementById('fodderAcres')?.addEventListener('change', () => saveFodderPool());
+    document.getElementById('addFodderLine')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'add')) return;
+      const label = document.getElementById('nf-fodname')?.value.trim();
+      const amount = +document.getElementById('nf-fodamt')?.value || 0;
+      if (!label) { await showModal('Enter a cost name'); return; }
+      try {
+        await api('/Feed/AddFodderPoolItem', { method: 'POST', body: JSON.stringify({ label, amount }) });
+        document.getElementById('nf-fodname').value = '';
+        document.getElementById('nf-fodamt').value = '';
+        await reloadFeed();
+      } catch (e) {
+        await showModal(e.message || 'Could not add cost line');
+      }
+    });
+    document.getElementById('fillCheck')?.addEventListener('click', () => {
+      checkDraft = {};
+      (feedData?.stockCheckRows || []).forEach(f => {
+        checkDraft[f.feedType] = Math.round((+f.bookKg || 0) * 10) / 10;
+      });
+      renderCheckList(feedData?.stockCheckRows);
+      const msg = document.getElementById('checkMsg');
+      if (msg) msg.innerHTML = '<span class="breed">Filled with the app\'s figures — change any that differ from your actual count.</span>';
+    });
+    document.getElementById('saveCheck')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'edit')) return;
+      const counts = {};
+      Object.entries(checkDraft).forEach(([k, v]) => {
+        if (v !== '' && v !== undefined) counts[k] = +v || 0;
+      });
+      if (!Object.keys(counts).length) { await showModal('Type what you actually counted in the store.'); return; }
+      const result = await api('/Feed/SaveStockCheck', { method: 'POST', body: JSON.stringify({ counts }) });
+      checkDraft = {};
+      const msg = document.getElementById('checkMsg');
+      if (msg) {
+        msg.innerHTML = `<span style="color:var(--green-dark);font-weight:700">${esc(result.message)}</span>` +
+          (result.detailHtml ? ` ${result.detailHtml}` : '');
+      }
+      await reloadFeed();
+    });
+
+    document.getElementById('masterRecipeSelect')?.addEventListener('change', async e => {
+      recipeGroup = e.target.value;
+      await reloadFeed(recipeGroup);
+    });
+    document.getElementById('fgAdd')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'add')) return;
+      const name = await showModal('Group name (e.g. High-yield milkers)', { prompt: true });
+      if (!name) return;
+      try {
+        await api('/Feed/AddFeedingGroup', { method: 'POST', body: JSON.stringify({ name, recipeFrom: 'milking' }) });
+        await showModal('"' + name + '" added with the same ration as Milking to start. Change the kg in the Feeding Plan, then move animals into it from Herd → Move to.');
+        await reloadFeed();
+      } catch { /* shown */ }
+    });
+    document.getElementById('v189SaveMonthlyDiet')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'edit')) return;
+      const months = (feedData?.kidMilkDiet?.months || []).map((m, i) => ({
+        name: m.name, from: m.from, to: m.to,
+        powderG: +document.querySelector(`[data-v182="powderG"][data-i="${i}"]`)?.value || 0,
+        motherMilkMl: +document.querySelector(`[data-v182="motherMilkMl"][data-i="${i}"]`)?.value || 0,
+        mixG: +document.querySelector(`[data-v182="mixG"][data-i="${i}"]`)?.value || 0,
+        greenG: +document.querySelector(`[data-v182="greenG"][data-i="${i}"]`)?.value || 0,
+        dryG: +document.querySelector(`[data-v182="dryG"][data-i="${i}"]`)?.value || 0
+      }));
+      const saved = await api('/Feed/SaveKidMilkDiet', { method: 'POST', body: JSON.stringify({ months }) });
+      const msg = document.getElementById('v189SaveMsg');
+      if (msg) {
+        msg.textContent = '✓ Diet saved — automatic daily recording active from ' + (saved.autoStartDate || '') + '.';
+        msg.style.fontWeight = '700';
+      }
+      await reloadFeed();
+    });
+    document.getElementById('v184OpenMasterRecipe')?.addEventListener('click', async () => {
+      recipeGroup = 'kidstarter';
+      showFeedTab('recipes');
+      await reloadFeed('kidstarter');
+      document.getElementById('recipePanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    document.getElementById('v185BatchKg')?.addEventListener('change', () => {
+      const wrap = document.getElementById('v185CustomWrap');
+      if (wrap) wrap.style.display = document.getElementById('v185BatchKg').value === 'custom' ? 'block' : 'none';
+      renderKidStarter(feedData?.kidMilkDiet?.starterRecipe);
+    });
+    document.getElementById('v185CustomKg')?.addEventListener('change', () => renderKidStarter(feedData?.kidMilkDiet?.starterRecipe));
+    ['v182BuyKg', 'v182BuyRate'].forEach(id => document.getElementById(id)?.addEventListener('input', syncKidPayFields));
+    document.getElementById('v182BuyStatus')?.addEventListener('change', syncKidPayFields);
+    document.getElementById('v182BuyBtn')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('feed', false)) return;
+      const date = document.getElementById('v182BuyDate')?.value;
+      const kg = +document.getElementById('v182BuyKg')?.value || 0;
+      const ratePerKg = +document.getElementById('v182BuyRate')?.value || 0;
+      if (!date || !kg || !ratePerKg) { await showModal('Enter date, quantity and rate.'); return; }
+      const amount = Math.round(kg * ratePerKg);
+      const status = document.getElementById('v182BuyStatus')?.value || 'paid';
+      let paidAmount = status === 'paid' ? amount : status === 'credit' ? 0 : (+document.getElementById('v182BuyPaid')?.value || 0);
+      paidAmount = Math.max(0, Math.min(amount, paidAmount));
+      const accountId = document.getElementById('v182BuyAccount')?.value;
+      if (paidAmount > 0 && !accountId) { await showModal('Select Paid from account.'); return; }
+      await api('/Feed/AddPurchase', {
+        method: 'POST',
+        body: JSON.stringify({
+          date, feedType: 'milkpowder', kg, ratePerKg,
+          comment: 'Kid Milk Diet purchase',
+          useAs: 'recipe',
+          paymentStatus: status,
+          paidAmount,
+          accountId: accountId ? +accountId : null,
+          supplier: document.getElementById('v182BuySupplier')?.value.trim() || 'Milk powder supplier',
+          dueDate: document.getElementById('v182BuyDue')?.value || null,
+          allocationMonths: 1
+        })
+      });
+      ['v182BuyKg', 'v182BuyPaid', 'v182BuySupplier', 'v182BuyDue'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      const st = document.getElementById('v182BuyStatus'); if (st) st.value = 'paid';
+      sessionStorage.setItem('goatToast', 'Powder milk purchase added');
+      await reloadFeed();
+      flashStoredToast();
+    });
+
+    if (!FarmPerms.can('feed', 'edit')) {
+      FarmPerms.readonlyInputs('[data-price], [data-mix], [data-plan], [data-stock], [data-check], [data-fodamt], #feedMonth, #fb-date, #fb-feed, #fb-use, #fb-kg, #fb-rate, #fb-note, #fb-payment, #fb-paid, #fb-account, #fb-supplier, #fb-due, #nf-name, #nf-price, #nf-use, #nf-fodname, #nf-fodamt, #fodderMode, #fodderAcres, #masterRecipeSelect, #v182BuyDate, #v182BuyKg, #v182BuyRate, #v182BuyStatus, #v182BuyPaid, #v182BuyAccount, #v182BuySupplier, #v182BuyDue');
+      FarmPerms.hide('addFeedType');
+      FarmPerms.hide('addFeedBuy');
+      FarmPerms.hide('addFodderLine');
+      FarmPerms.hide('saveCheck');
+      FarmPerms.hide('fillCheck');
+      FarmPerms.hide('fgAdd');
+      FarmPerms.hide('v189SaveMonthlyDiet');
+      FarmPerms.hide('v182BuyBtn');
+    } else {
+      bindStockInputs();
+    }
+    FarmPerms.applyForm('feed', { addBtnId: 'addFeedBuy', deleteBtnId: 'deleteFeedBuyBtn', rowSelector: '#buyLogRows tr.feed-buy-row' });
+    syncPaymentFields();
+    syncKidPayFields();
+    reloadFeed();
+  }
+
+  function initBreeding() {
+    if (window.BreedingPage?.init) {
+      window.BreedingPage.init();
+      return;
+    }
+    const $ = id => document.getElementById(id);
+    const normalizeTag = v => String(v ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+    const today = () => new Date().toISOString().slice(0, 10);
+    const newRequestId = () => (crypto.randomUUID ? crypto.randomUUID() :
+      ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)));
+
+    async function lookupTag(inId, outId) {
+      const val = normalizeTag($(inId)?.value);
+      const out = $(outId);
+      if (!out) return;
+      if (!val) { out.textContent = ''; return; }
+      try {
+        const res = await fetch('/Breeding/LookupTag?tag=' + encodeURIComponent(val), {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        });
+        if (!res.ok) {
+          out.innerHTML = '<span style="color:#8a261c;font-weight:700">No goat with that tag</span>';
+          return;
+        }
+        const g = await res.json();
+        out.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${esc(g.tag)}${g.name ? ' · ' + esc(g.name) : ''} · ${esc(g.status)}${esc(g.extra || '')}</span>`;
+      } catch {
+        out.textContent = '';
+      }
+    }
+
+    ['bp-tag', 'bc-tag', 'us-tag'].forEach(id => {
+      $(id)?.addEventListener('input', () => lookupTag(id, id.replace('-tag', '-found')));
+    });
+    $('bp-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('bp-date')?.focus(); }
+    });
+    $('bc-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('bc-buck')?.focus(); }
+    });
+    $('us-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('addUs')?.focus(); }
+    });
+
+    function renderCrossCheck(result) {
+      const box = $('bc-check');
+      if (!box) return;
+      const list = (items, cls) => items?.length
+        ? `<ul class="${cls}">${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : '';
+      box.innerHTML = result.canCross && !result.warnings?.length
+        ? `<div class="cross-ok">✓ ${esc(result.doeTag)} can be crossed${result.buckTag ? ' with ' + esc(result.buckTag) : ''}.</div>${list(result.notes, 'cross-notes')}`
+        : list(result.errors, 'cross-errors') + list(result.warnings, 'cross-warnings') + list(result.notes, 'cross-notes');
+    }
+
+    async function checkCross() {
+      const tag = normalizeTag($('bc-tag')?.value);
+      if (!tag) { $('bc-check').textContent = ''; return null; }
+      const params = new URLSearchParams({ tag });
+      const buck = $('bc-buck')?.value.trim();
+      if (buck) params.set('buckTag', buck);
+      const date = $('bc-date')?.value;
+      if (date) params.set('date', date);
+      const result = await api('/Breeding/CheckCross?' + params.toString());
+      renderCrossCheck(result);
+      return result;
+    }
+
+    $('checkCross')?.addEventListener('click', () => checkCross().catch(() => {}));
+    $('bc-buck')?.addEventListener('change', () => checkCross().catch(() => {}));
+
+    document.querySelectorAll('[data-cross]').forEach(b => {
+      b.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'add')) return;
+        const dt = await showModal(`Mating date for ${b.dataset.tag} (YYYY-MM-DD)`, { prompt: true, defaultValue: today() });
+        if (!dt) return;
+        const bk = await showModal('Buck tag (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+        try {
+          await api('/Breeding/CrossFromPrep?id=' + b.dataset.cross, {
+            method: 'POST',
+            body: JSON.stringify({ date: dt, buckTag: bk || null, tag: '' })
+          });
+          reloadWithToast('Cross recorded — waiting for scan');
+        } catch { /* shown */ }
+      });
+    });
+
+    document.querySelectorAll('[data-unprep]').forEach(x => {
+      x.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'delete')) return;
+        try {
+          await api('/Breeding/RemovePrep?id=' + x.dataset.unprep, { method: 'DELETE' });
+          reloadWithToast('Removed from cross prep');
+        } catch { /* shown */ }
+      });
+    });
+
+    document.querySelectorAll('[data-uncross]').forEach(x => {
+      x.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'delete')) return;
+        if (!await showConfirm('Remove this cross? It is kept in her breeding history as cancelled.')) return;
+        try {
+          await api('/Breeding/RemoveCross?id=' + x.dataset.uncross, { method: 'DELETE' });
+          reloadWithToast('Cross removed');
+        } catch { /* shown */ }
+      });
+    });
+
+    document.querySelectorAll('[data-scan]').forEach(b => {
+      b.addEventListener('click', () => {
+        const input = $('us-tag');
+        if (!input) return;
+        input.value = b.dataset.scan;
+        lookupTag('us-tag', 'us-found');
+        $('scanSection')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        $('us-result')?.focus();
+      });
+    });
+
+    document.querySelectorAll('[data-abort]').forEach(b => {
+      b.addEventListener('click', async () => {
+        if (!FarmPerms.can('breeding', 'edit')) return;
+        const tag = b.dataset.abort;
+        const dt = await showModal(`Date ${tag} lost the pregnancy (YYYY-MM-DD)`, { prompt: true, defaultValue: today() });
+        if (!dt) return;
+        const notes = await showModal('Notes (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+        try {
+          await api('/Breeding/RecordAbortion', { method: 'POST', body: JSON.stringify({ tag, date: dt, notes: notes || null }) });
+          reloadWithToast('Pregnancy loss recorded');
+        } catch { /* shown */ }
+      });
+    });
+
+    $('addPrep')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'add')) return;
+      const tag = normalizeTag($('bp-tag')?.value);
+      const date = $('bp-date')?.value;
+      if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
+      if (!date) { await showModal('Pick a target cross date'); return; }
+      try {
+        await api('/Breeding/RecordPrep', { method: 'POST', body: JSON.stringify({ tag, date }) });
+        reloadWithToast('Doe added for cross prep');
+      } catch { /* shown */ }
+    });
+
+    $('addCross')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'add')) return;
+      const tag = normalizeTag($('bc-tag')?.value);
+      const date = $('bc-date')?.value;
+      if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
+      if (!date) { await showModal('Pick the mating date'); return; }
+      try {
+        await api('/Breeding/RecordCross', {
+          method: 'POST',
+          body: JSON.stringify({ tag, date, buckTag: $('bc-buck')?.value.trim() || null })
+        });
+        reloadWithToast('Cross recorded — waiting for scan');
+      } catch { /* shown */ }
+    });
+
+    $('addUs')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'edit')) return;
+      const tag = normalizeTag($('us-tag')?.value);
+      const kidsCount = +$('us-result')?.value;
+      const date = $('us-date')?.value || null;
+      if (!tag) { await showModal('Scan or type a valid doe tag'); return; }
+      if (kidsCount === 0 && !await showConfirm('This doe is NOT pregnant — close this cross as empty?')) return;
+      try {
+        await api('/Breeding/RecordUltrasound', { method: 'POST', body: JSON.stringify({ tag, kidsCount, date }) });
+        reloadWithToast(kidsCount === 0 ? 'Recorded as empty' : 'Pregnancy confirmed');
+      } catch { /* shown */ }
+    });
+
+    let birthRequestId = null;
+
+    function renderKidRows() {
+      const body = $('kb-kids');
+      if (!body) return;
+      const count = +$('kb-live').value || 0;
+      const existing = [...body.querySelectorAll('tr')].map(tr => ({
+        gender: tr.querySelector('[data-k=gender]').value,
+        tag: tr.querySelector('[data-k=tag]').value,
+        name: tr.querySelector('[data-k=name]').value,
+        weight: tr.querySelector('[data-k=weight]').value
+      }));
+      body.replaceChildren();
+      for (let i = 0; i < count; i++) {
+        const prev = existing[i] || { gender: 'Female', tag: '', name: '', weight: '' };
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i + 1}</td>
+          <td><select data-k="gender" aria-label="Kid ${i + 1} gender"><option value="Female">Female</option><option value="Male">Male</option></select></td>
+          <td><input data-k="tag" maxlength="50" autocomplete="off" aria-label="Kid ${i + 1} tag"></td>
+          <td><input data-k="name" maxlength="100" aria-label="Kid ${i + 1} name"></td>
+          <td class="num-cell"><input data-k="weight" type="number" min="0" max="20" step="0.1" aria-label="Kid ${i + 1} weight"></td>`;
+        tr.querySelector('[data-k=gender]').value = prev.gender;
+        tr.querySelector('[data-k=tag]').value = prev.tag;
+        tr.querySelector('[data-k=name]').value = prev.name;
+        tr.querySelector('[data-k=weight]').value = prev.weight;
+        body.appendChild(tr);
+      }
+    }
+
+    function openBirth(tag, kids) {
+      if (!FarmPerms.can('breeding', 'add')) return;
+      birthRequestId = newRequestId();
+      $('kb-doe').value = tag || '';
+      $('kb-date').value = today();
+      $('kb-live').value = String(Math.min(Math.max(+kids || 1, 0), 6));
+      $('kb-still').value = '0';
+      $('kb-ease').value = 'Normal';
+      $('kb-notes').value = '';
+      $('kb-kids').replaceChildren();
+      renderKidRows();
+      $('birthPanel').classList.remove('perm-hidden');
+      $('birthPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    document.querySelectorAll('[data-birth]').forEach(b => {
+      b.addEventListener('click', () => openBirth(b.dataset.birth, b.dataset.kids));
+    });
+    $('kb-live')?.addEventListener('change', renderKidRows);
+    $('kb-cancel')?.addEventListener('click', () => {
+      birthRequestId = null;
+      $('birthPanel').classList.add('perm-hidden');
+    });
+
+    $('kb-save')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('breeding', 'add') || !birthRequestId) return;
+      const doeTag = normalizeTag($('kb-doe').value);
+      if (!doeTag) { await showModal('Enter the doe tag'); return; }
+      const kids = [...$('kb-kids').querySelectorAll('tr')].map(tr => ({
+        gender: tr.querySelector('[data-k=gender]').value,
+        tag: tr.querySelector('[data-k=tag]').value.trim() || null,
+        name: tr.querySelector('[data-k=name]').value.trim() || null,
+        weightKg: tr.querySelector('[data-k=weight]').value ? +tr.querySelector('[data-k=weight]').value : null
+      }));
+      const stillborn = +$('kb-still').value || 0;
+      if (!kids.length && !stillborn) { await showModal('Add at least one kid (live or stillborn).'); return; }
+      const btn = $('kb-save');
+      btn.disabled = true;
+      try {
+        const result = await api('/Breeding/RecordBirth', {
+          method: 'POST',
+          body: JSON.stringify({
+            clientRequestId: birthRequestId,
+            doeTag,
+            kiddingDate: $('kb-date').value,
+            ease: $('kb-ease').value,
+            stillborn,
+            notes: $('kb-notes').value.trim() || null,
+            kids
+          })
+        });
+        const temp = (result.kids || []).filter(k => k.isTemporaryTag).map(k => k.tag);
+        reloadWithToast(result.alreadyRecorded
+          ? 'This birth was already saved'
+          : `Birth recorded — ${result.kids.length} kid(s) added${temp.length ? ' (temporary tags: ' + temp.join(', ') + ')' : ''}`);
+      } catch {
+        btn.disabled = false;
+      }
+    });
+
+    FarmPerms.applyForm('breeding', {
+      addBtnId: 'addPrep',
+      extraHideIds: ['addUs']
+    });
+    if (!FarmPerms.can('breeding', 'add')) {
+      ['addCross', 'checkCross'].forEach(id => FarmPerms.hide(id));
+      document.querySelectorAll('[data-cross],[data-birth]').forEach(b => b.classList.add('perm-hidden'));
+    }
+    if (!FarmPerms.can('breeding', 'edit')) {
+      FarmPerms.hide('addUs');
+      document.querySelectorAll('[data-abort],[data-scan]').forEach(b => b.classList.add('perm-hidden'));
+    }
+    if (!FarmPerms.can('breeding', 'delete')) {
+      document.querySelectorAll('[data-unprep],[data-uncross]').forEach(b => b.classList.add('perm-hidden'));
+    }
+
+    const params = new URLSearchParams(location.search);
+    const birthTag = params.get('birth');
+    const scanTag = params.get('scan');
+    if (birthTag) openBirth(birthTag, params.get('kids') || '1');
+    else if (scanTag) {
+      const input = $('us-tag');
+      if (input) {
+        input.value = scanTag;
+        lookupTag('us-tag', 'us-found');
+        $('scanSection')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+
+  function initMilk() {
+    let editingProdId = null;
+    let editingSaleId = null;
+    let editingWasteId = null;
+
+    function reloadMilkWithToast(message, { resetProd, resetSale, resetWaste } = {}) {
+      const params = new URLSearchParams(window.location.search || '');
+      if (resetProd) params.set('prodPage', '1');
+      if (resetSale) params.set('salePage', '1');
+      if (resetWaste) params.set('wastePage', '1');
+      const q = params.toString();
+      sessionStorage.setItem('goatToast', message);
+      location.href = '/Milk' + (q ? '?' + q : '');
+    }
+
+    const milkAmt = () => {
+      const l = +document.getElementById('s-liters').value || 0;
+      const r = +document.getElementById('s-rate').value || 0;
+      document.getElementById('s-amt').value = l && r ? Math.round(l * r) : '';
+    };
+    document.getElementById('s-liters')?.addEventListener('input', milkAmt);
+    document.getElementById('s-rate')?.addEventListener('input', milkAmt);
+
+    function setProdEditMode(editing) {
+      document.getElementById('cancelProdBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteProdBtn').style.display = editing ? '' : 'none';
+    }
+
+    function setSaleEditMode(editing) {
+      document.getElementById('cancelSaleBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteSaleBtn').style.display = editing ? '' : 'none';
+    }
+
+    function setWasteEditMode(editing) {
+      document.getElementById('cancelWasteBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteWasteBtn').style.display = editing ? '' : 'none';
+    }
+
+    function resetProdForm() {
+      editingProdId = null;
+      document.getElementById('prodFormTitle').textContent = 'Milk collected';
+      document.getElementById('addProd').textContent = '+ Add';
+      document.getElementById('p-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('p-breed').selectedIndex = 0;
+      document.getElementById('p-liters').value = '';
+      document.getElementById('p-note').value = '';
+      document.querySelectorAll('#prodRows tr.milk-prod-row.editing').forEach(r => r.classList.remove('editing'));
+      setProdEditMode(false);
+    }
+
+    function resetSaleForm() {
+      editingSaleId = null;
+      document.getElementById('saleFormTitle').textContent = 'Milk sold';
+      document.getElementById('addSale').textContent = '+ Add';
+      document.getElementById('s-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('s-liters').value = '';
+      document.getElementById('s-rate').value = '';
+      document.getElementById('s-amt').value = '';
+      document.getElementById('s-note').value = '';
+      document.querySelectorAll('#saleRows tr.milk-sale-row.editing').forEach(r => r.classList.remove('editing'));
+      setSaleEditMode(false);
+    }
+
+    function resetWasteForm() {
+      editingWasteId = null;
+      document.getElementById('wasteFormTitle').textContent = 'Milk waste';
+      document.getElementById('addWaste').textContent = '+ Add';
+      document.getElementById('w-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('w-liters').value = '';
+      document.getElementById('w-notes').value = '';
+      document.querySelectorAll('#wasteRows tr.milk-waste-row.editing').forEach(r => r.classList.remove('editing'));
+      setWasteEditMode(false);
+    }
+
+    function loadProdForEdit(row) {
+      if (!FarmPerms.can('milk', 'edit')) return;
+      editingProdId = +row.dataset.id;
+      document.getElementById('prodFormTitle').textContent = 'Edit milk collected';
+      document.getElementById('addProd').textContent = 'Save';
+      document.getElementById('p-date').value = row.dataset.date || '';
+      document.getElementById('p-breed').value = row.dataset.breed || '';
+      document.getElementById('p-liters').value = row.dataset.liters || '';
+      document.getElementById('p-note').value = row.dataset.comment || '';
+      document.querySelectorAll('#prodRows tr.milk-prod-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setProdEditMode(true);
+      if (!FarmPerms.can('milk', 'add')) FarmPerms.revealEditForm('addProd');
+      document.getElementById('p-liters').focus();
+    }
+
+    function loadSaleForEdit(row) {
+      if (!FarmPerms.can('milk', 'edit')) return;
+      editingSaleId = +row.dataset.id;
+      document.getElementById('saleFormTitle').textContent = 'Edit milk sold';
+      document.getElementById('addSale').textContent = 'Save';
+      document.getElementById('s-date').value = row.dataset.date || '';
+      document.getElementById('s-liters').value = row.dataset.liters || '';
+      document.getElementById('s-rate').value = row.dataset.rate || '';
+      milkAmt();
+      document.getElementById('s-note').value = row.dataset.comment || '';
+      document.querySelectorAll('#saleRows tr.milk-sale-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setSaleEditMode(true);
+      if (!FarmPerms.can('milk', 'add')) FarmPerms.revealEditForm('addSale');
+      document.getElementById('s-liters').focus();
+    }
+
+    function loadWasteForEdit(row) {
+      if (!FarmPerms.can('milk', 'edit')) return;
+      editingWasteId = +row.dataset.id;
+      document.getElementById('wasteFormTitle').textContent = 'Edit milk waste';
+      document.getElementById('addWaste').textContent = 'Save';
+      document.getElementById('w-date').value = row.dataset.date || '';
+      document.getElementById('w-liters').value = row.dataset.liters || '';
+      document.getElementById('w-notes').value = row.dataset.notes || '';
+      document.querySelectorAll('#wasteRows tr.milk-waste-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setWasteEditMode(true);
+      if (!FarmPerms.can('milk', 'add')) FarmPerms.revealEditForm('addWaste');
+      document.getElementById('w-liters').focus();
+    }
+
+    document.getElementById('cancelProdBtn')?.addEventListener('click', resetProdForm);
+    document.getElementById('cancelSaleBtn')?.addEventListener('click', resetSaleForm);
+    document.getElementById('cancelWasteBtn')?.addEventListener('click', resetWasteForm);
+
+    document.getElementById('deleteProdBtn')?.addEventListener('click', async () => {
+      if (!editingProdId || !FarmPerms.can('milk', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      await api('/Milk/DeleteProduction?id=' + editingProdId, { method: 'DELETE' });
+      reloadMilkWithToast('Milk collection deleted successfully');
+    });
+
+    document.getElementById('deleteSaleBtn')?.addEventListener('click', async () => {
+      if (!editingSaleId || !FarmPerms.can('milk', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      await api('/Milk/DeleteSale?id=' + editingSaleId, { method: 'DELETE' });
+      reloadMilkWithToast('Milk sale deleted successfully');
+    });
+
+    document.getElementById('deleteWasteBtn')?.addEventListener('click', async () => {
+      if (!editingWasteId || !FarmPerms.can('milk', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      await api('/Milk/DeleteWaste?id=' + editingWasteId, { method: 'DELETE' });
+      reloadMilkWithToast('Milk waste deleted successfully');
+    });
+
+    document.getElementById('addProd')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('milk', !!editingProdId)) return;
+      const date = document.getElementById('p-date').value;
+      const liters = +document.getElementById('p-liters').value || 0;
+      if (!date || !liters) { await showModal('Enter date and litres'); return; }
+      const payload = {
+        date,
+        breed: document.getElementById('p-breed').value,
+        liters,
+        comment: document.getElementById('p-note').value.trim() || null
+      };
+      if (editingProdId) {
+        await api('/Milk/UpdateProduction?id=' + editingProdId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadMilkWithToast('Milk collection updated successfully');
+      } else {
+        await api('/Milk/AddProduction', { method: 'POST', body: JSON.stringify(payload) });
+        reloadMilkWithToast('Milk collection added successfully', { resetProd: true });
+      }
+    });
+
+    document.getElementById('addSale')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('milk', !!editingSaleId)) return;
+      const date = document.getElementById('s-date').value;
+      const liters = +document.getElementById('s-liters').value || 0;
+      const rate = +document.getElementById('s-rate').value || 0;
+      if (!date || !liters || !rate) { await showModal('Enter date, litres and rate'); return; }
+      const payload = {
+        date, liters, rate,
+        comment: document.getElementById('s-note').value.trim() || null
+      };
+      if (editingSaleId) {
+        await api('/Milk/UpdateSale?id=' + editingSaleId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadMilkWithToast('Milk sale updated successfully');
+      } else {
+        await api('/Milk/AddSale', { method: 'POST', body: JSON.stringify(payload) });
+        reloadMilkWithToast('Milk sale added successfully', { resetSale: true });
+      }
+    });
+
+    document.getElementById('addWaste')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('milk', !!editingWasteId)) return;
+      const date = document.getElementById('w-date').value;
+      const liters = +document.getElementById('w-liters').value || 0;
+      if (!date || !liters) { await showModal('Enter date and litres'); return; }
+      const notes = document.getElementById('w-notes').value.trim();
+      const payload = { date, liters, notes: notes || null };
+      if (editingWasteId) {
+        await api('/Milk/UpdateWaste?id=' + editingWasteId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadMilkWithToast('Milk waste updated successfully');
+      } else {
+        await api('/Milk/AddWaste', { method: 'POST', body: JSON.stringify(payload) });
+        reloadMilkWithToast('Milk waste added successfully', { resetWaste: true });
+      }
+    });
+
+    document.querySelectorAll('#prodRows tr.milk-prod-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('milk', 'edit')) loadProdForEdit(row); });
+    });
+    document.querySelectorAll('#saleRows tr.milk-sale-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('milk', 'edit')) loadSaleForEdit(row); });
+    });
+    document.querySelectorAll('#wasteRows tr.milk-waste-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('milk', 'edit')) loadWasteForEdit(row); });
+    });
+
+    [
+      ['addProd', 'deleteProdBtn', '#prodRows tr.milk-prod-row'],
+      ['addSale', 'deleteSaleBtn', '#saleRows tr.milk-sale-row'],
+      ['addWaste', 'deleteWasteBtn', '#wasteRows tr.milk-waste-row']
+    ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
+      FarmPerms.applyForm('milk', { addBtnId, deleteBtnId, rowSelector });
+    });
+    initEditableDropdown('p-breed', 'Lookup.Breeds', ['Mixed']);
+  }
+
+  function initFinance() {
+    let editingAssetId = null;
+    let editingIncomeId = null;
+    let editingExpenseId = null;
+    let editingOwnerId = null;
+    let editingRecurId = null;
+    let editingEmpId = null;
+
+    function financeUrl(date) {
+      const month = date ? date.slice(0, 7) : (document.getElementById('finMonth')?.value || '');
+      return '/Finance' + (month ? '?month=' + encodeURIComponent(month) : '');
+    }
+
+    function reloadFinanceWithToast(message, date) {
+      sessionStorage.setItem('goatToast', message);
+      location.href = financeUrl(date);
+    }
+
+    document.getElementById('finMonth')?.addEventListener('change', e => {
+      const tab = document.querySelector('#finance-tabs .tab.active')?.dataset.fintab || 'overview';
+      location.href = '/Finance?month=' + encodeURIComponent(e.target.value) + '&tab=' + encodeURIComponent(tab);
+    });
+
+    function setAssetEditMode(editing) {
+      document.getElementById('cancelAssetBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteAssetBtn').style.display = editing ? '' : 'none';
+    }
+
+    function setIncomeEditMode(editing) {
+      document.getElementById('cancelIncomeBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteIncomeBtn').style.display = editing ? '' : 'none';
+    }
+
+    function setExpenseEditMode(editing) {
+      document.getElementById('cancelExpenseBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteExpenseBtn').style.display = editing ? '' : 'none';
+    }
+
+    function setOwnerEditMode(editing) {
+      document.getElementById('cancelOwnerBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteOwnerBtn').style.display = editing ? '' : 'none';
+    }
+
+    function resetAssetForm() {
+      editingAssetId = null;
+      document.getElementById('assetFormTitle').textContent = 'Capital — what the farm owns';
+      document.getElementById('addAsset').textContent = '+ Add';
+      document.getElementById('a-name').value = '';
+      document.getElementById('a-type').selectedIndex = 0;
+      document.getElementById('a-cost').value = '';
+      document.getElementById('a-comment').value = '';
+      document.querySelectorAll('#assetRows tr.fin-asset-row.editing').forEach(r => r.classList.remove('editing'));
+      setAssetEditMode(false);
+    }
+
+    function resetIncomeForm() {
+      editingIncomeId = null;
+      document.getElementById('incomeFormTitle').textContent = 'Cash received';
+      document.getElementById('addIncome').textContent = '+ Add';
+      document.getElementById('i-type').selectedIndex = 0;
+      document.getElementById('i-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('i-amt').value = '';
+      document.getElementById('i-comment').value = '';
+      const incomeAccount = document.getElementById('i-account');
+      if (incomeAccount) incomeAccount.value = '';
+      document.querySelectorAll('#incomeRows tr.fin-income-row.editing').forEach(r => r.classList.remove('editing'));
+      setIncomeEditMode(false);
+    }
+
+    function resetExpenseForm() {
+      editingExpenseId = null;
+      document.getElementById('expenseFormTitle').textContent = 'Running costs';
+      document.getElementById('addExpense').textContent = '+ Add';
+      document.getElementById('e-type').querySelectorAll('option[data-retired]').forEach(o => o.remove());
+      document.getElementById('e-type').selectedIndex = 0;
+      document.getElementById('e-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('e-amt').value = '';
+      document.getElementById('e-comment').value = '';
+      const expenseAccount = document.getElementById('e-account');
+      if (expenseAccount) expenseAccount.value = '';
+      document.querySelectorAll('#expenseRows tr.fin-expense-row.editing').forEach(r => r.classList.remove('editing'));
+      setExpenseEditMode(false);
+    }
+
+    function setRecurEditMode(editing) {
+      document.getElementById('cancelRecurBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteRecurBtn').style.display = editing ? '' : 'none';
+    }
+
+    function resetRecurForm() {
+      editingRecurId = null;
+      document.getElementById('recurFormTitle').textContent = 'Fixed & recurring costs';
+      document.getElementById('addRecur').textContent = '+ Add';
+      document.getElementById('rc-name').value = '';
+      document.getElementById('rc-amt').value = '';
+      document.getElementById('rc-period').selectedIndex = 0;
+      document.querySelectorAll('#recurRows tr.fin-recur-row.editing').forEach(r => r.classList.remove('editing'));
+      setRecurEditMode(false);
+    }
+
+    function resetOwnerForm() {
+      editingOwnerId = null;
+      document.getElementById('ownerFormTitle').textContent = 'Owner investment — money you put in';
+      document.getElementById('addOwner').textContent = '+ Add';
+      document.getElementById('o-note').value = '';
+      document.getElementById('o-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('o-amt').value = '';
+      const ownerAccount = document.getElementById('o-account');
+      if (ownerAccount) ownerAccount.value = '';
+      const fundingType = document.getElementById('o-funding-type');
+      if (fundingType) fundingType.value = 'topup';
+      document.querySelectorAll('#ownerRows tr.fin-owner-row.editing').forEach(r => r.classList.remove('editing'));
+      setOwnerEditMode(false);
+    }
+
+    function loadAssetForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingAssetId = +row.dataset.id;
+      document.getElementById('assetFormTitle').textContent = 'Edit asset';
+      document.getElementById('addAsset').textContent = 'Save';
+      document.getElementById('a-name').value = row.dataset.name || '';
+      document.getElementById('a-type').value = row.dataset.type || '';
+      document.getElementById('a-cost').value = row.dataset.cost || '';
+      document.getElementById('a-comment').value = row.dataset.comment || '';
+      document.querySelectorAll('#assetRows tr.fin-asset-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setAssetEditMode(true);
+      if (!FarmPerms.can('finance', 'add')) FarmPerms.revealEditForm('addAsset');
+      document.getElementById('a-name').focus();
+    }
+
+    function loadIncomeForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingIncomeId = +row.dataset.id;
+      document.getElementById('incomeFormTitle').textContent = 'Edit cash received';
+      document.getElementById('addIncome').textContent = 'Save';
+      document.getElementById('i-type').value = row.dataset.type || '';
+      document.getElementById('i-date').value = row.dataset.date || '';
+      document.getElementById('i-amt').value = row.dataset.amount || '';
+      document.getElementById('i-comment').value = row.dataset.comment || '';
+      const incomeAccount = document.getElementById('i-account');
+      if (incomeAccount) incomeAccount.value = row.dataset.account || '';
+      document.querySelectorAll('#incomeRows tr.fin-income-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setIncomeEditMode(true);
+      if (!FarmPerms.can('finance', 'add')) FarmPerms.revealEditForm('addIncome');
+      document.getElementById('i-amt').focus();
+    }
+
+    function loadExpenseForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingExpenseId = +row.dataset.id;
+      document.getElementById('expenseFormTitle').textContent = 'Edit running cost';
+      document.getElementById('addExpense').textContent = 'Save';
+      const typeSel = document.getElementById('e-type');
+      const rowType = row.dataset.type || '';
+      if (rowType && ![...typeSel.options].some(o => o.value === rowType)) {
+        // Retired type (e.g. salary advance): show it as-is so editing never silently changes it; saving it is rejected.
+        typeSel.querySelectorAll('option[data-retired]').forEach(o => o.remove());
+        const opt = new Option(rowType + ' (no longer accepted)', rowType);
+        opt.dataset.retired = '1';
+        typeSel.add(opt);
+      }
+      typeSel.value = rowType;
+      document.getElementById('e-date').value = row.dataset.date || '';
+      document.getElementById('e-amt').value = row.dataset.amount || '';
+      document.getElementById('e-comment').value = row.dataset.comment || '';
+      const expenseAccount = document.getElementById('e-account');
+      if (expenseAccount) expenseAccount.value = row.dataset.account || '';
+      document.querySelectorAll('#expenseRows tr.fin-expense-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setExpenseEditMode(true);
+      if (!FarmPerms.can('finance', 'add')) FarmPerms.revealEditForm('addExpense');
+      document.getElementById('e-amt').focus();
+    }
+
+    function loadOwnerForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingOwnerId = +row.dataset.id;
+      document.getElementById('ownerFormTitle').textContent = 'Edit owner investment';
+      document.getElementById('addOwner').textContent = 'Save';
+      document.getElementById('o-note').value = row.dataset.note || '';
+      document.getElementById('o-date').value = row.dataset.date || '';
+      document.getElementById('o-amt').value = row.dataset.amount || '';
+      const ownerSel = document.getElementById('o-owner');
+      if (ownerSel && row.dataset.shareholder) ownerSel.value = row.dataset.shareholder;
+      const fundingType = document.getElementById('o-funding-type');
+      if (fundingType && row.dataset.funding) fundingType.value = row.dataset.funding;
+      const ownerAccount = document.getElementById('o-account');
+      if (ownerAccount) ownerAccount.value = row.dataset.account || '';
+      document.querySelectorAll('#ownerRows tr.fin-owner-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setOwnerEditMode(true);
+      if (!FarmPerms.can('finance', 'add')) FarmPerms.revealEditForm('addOwner');
+      document.getElementById('o-amt').focus();
+    }
+
+    function loadRecurForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingRecurId = +row.dataset.id;
+      document.getElementById('recurFormTitle').textContent = 'Edit recurring cost';
+      document.getElementById('addRecur').textContent = 'Save';
+      document.getElementById('rc-name').value = row.dataset.name || '';
+      document.getElementById('rc-amt').value = row.dataset.amount || '';
+      document.getElementById('rc-period').value = row.dataset.period || 'month';
+      document.querySelectorAll('#recurRows tr.fin-recur-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setRecurEditMode(true);
+      if (!FarmPerms.can('finance', 'add')) FarmPerms.revealEditForm('addRecur');
+      document.getElementById('rc-name').focus();
+    }
+
+    document.getElementById('cancelAssetBtn')?.addEventListener('click', resetAssetForm);
+    document.getElementById('cancelIncomeBtn')?.addEventListener('click', resetIncomeForm);
+    document.getElementById('cancelExpenseBtn')?.addEventListener('click', resetExpenseForm);
+    document.getElementById('cancelOwnerBtn')?.addEventListener('click', resetOwnerForm);
+    document.getElementById('cancelRecurBtn')?.addEventListener('click', resetRecurForm);
+
+    document.getElementById('deleteAssetBtn')?.addEventListener('click', async () => {
+      if (!editingAssetId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      await api('/Finance/DeleteAsset?id=' + editingAssetId, { method: 'DELETE' });
+      reloadWithToast('Asset deleted successfully');
+    });
+
+    document.getElementById('deleteIncomeBtn')?.addEventListener('click', async () => {
+      if (!editingIncomeId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      const date = document.getElementById('i-date').value;
+      await api('/Finance/DeleteIncome?id=' + editingIncomeId, { method: 'DELETE' });
+      reloadFinanceWithToast('Cash received deleted successfully', date);
+    });
+
+    document.getElementById('deleteExpenseBtn')?.addEventListener('click', async () => {
+      if (!editingExpenseId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      const date = document.getElementById('e-date').value;
+      await api('/Finance/DeleteExpense?id=' + editingExpenseId, { method: 'DELETE' });
+      reloadFinanceWithToast('Running cost deleted successfully', date);
+    });
+
+    document.getElementById('deleteOwnerBtn')?.addEventListener('click', async () => {
+      if (!editingOwnerId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      const date = document.getElementById('o-date').value;
+      await api('/Finance/DeleteOwnerInvestment?id=' + editingOwnerId, { method: 'DELETE' });
+      reloadFinanceWithToast('Owner investment deleted successfully', date);
+    });
+
+    document.getElementById('deleteRecurBtn')?.addEventListener('click', async () => {
+      if (!editingRecurId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Delete this recurring cost?');
+      if (!confirmed) return;
+      await api('/Finance/DeleteRecurringCost?id=' + editingRecurId, { method: 'DELETE' });
+      reloadFinanceWithToast('Recurring cost deleted successfully');
+    });
+
+    document.getElementById('addAsset')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingAssetId)) return;
+      const name = document.getElementById('a-name').value.trim();
+      const cost = +document.getElementById('a-cost').value || 0;
+      if (!name || !cost) { await showModal('Enter asset name and cost'); return; }
+      const payload = {
+        name,
+        type: document.getElementById('a-type').value,
+        cost,
+        comment: document.getElementById('a-comment').value.trim() || null
+      };
+      if (editingAssetId) {
+        await api('/Finance/UpdateAsset?id=' + editingAssetId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadWithToast('Asset updated successfully');
+      } else {
+        await api('/Finance/AddAsset', { method: 'POST', body: JSON.stringify(payload) });
+        reloadWithToast('Asset added successfully');
+      }
+    });
+
+    document.getElementById('addIncome')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingIncomeId)) return;
+      const amt = +document.getElementById('i-amt').value || 0;
+      const date = document.getElementById('i-date').value;
+      if (!amt || !date) { await showModal('Enter date and amount'); return; }
+      const payload = {
+        type: document.getElementById('i-type').value,
+        amount: amt,
+        date,
+        comment: document.getElementById('i-comment').value.trim() || null,
+        accountId: +document.getElementById('i-account')?.value || null
+      };
+      try {
+        if (editingIncomeId) {
+          await api('/Finance/UpdateIncome?id=' + editingIncomeId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Cash received updated successfully', date);
+        } else {
+          await api('/Finance/AddIncome', { method: 'POST', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Cash received added successfully', date);
+        }
+      } catch { /* api() already showed the error */ }
+    });
+
+    document.getElementById('addExpense')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingExpenseId)) return;
+      const amt = +document.getElementById('e-amt').value || 0;
+      const date = document.getElementById('e-date').value;
+      if (!amt || !date) { await showModal('Enter date and amount'); return; }
+      const payload = {
+        type: document.getElementById('e-type').value,
+        amount: amt,
+        date,
+        comment: document.getElementById('e-comment').value.trim() || null,
+        accountId: +document.getElementById('e-account')?.value || null
+      };
+      try {
+        if (editingExpenseId) {
+          await api('/Finance/UpdateExpense?id=' + editingExpenseId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Running cost updated successfully', date);
+        } else {
+          await api('/Finance/AddExpense', { method: 'POST', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Running cost added successfully', date);
+        }
+      } catch { /* api() already showed the error */ }
+    });
+
+    document.getElementById('addOwner')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingOwnerId)) return;
+      const amt = +document.getElementById('o-amt').value || 0;
+      const date = document.getElementById('o-date').value;
+      const note = document.getElementById('o-note').value.trim();
+      if (!amt || !date) { await showModal('Enter date and amount'); return; }
+      if (!note) { await showModal('Enter a note'); return; }
+      const payload = {
+        note,
+        amount: amt,
+        date,
+        shareholder: document.getElementById('o-owner')?.value || null,
+        fundingType: document.getElementById('o-funding-type')?.value || null,
+        accountId: +document.getElementById('o-account')?.value || null
+      };
+      if (editingOwnerId) {
+        await api('/Finance/UpdateOwnerInvestment?id=' + editingOwnerId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Owner investment updated successfully', date);
+      } else {
+        await api('/Finance/AddOwnerInvestment', { method: 'POST', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Owner investment added successfully', date);
+      }
+    });
+
+    function resetEmpForm() {
+      editingEmpId = null;
+      document.getElementById('empFormTitle').textContent = 'Employees & salaries';
+      document.getElementById('addEmp').textContent = '+ Add';
+      document.getElementById('emp-name').value = '';
+      document.getElementById('emp-role').value = '';
+      document.getElementById('emp-salary').value = '';
+      document.querySelectorAll('#empRows tr.fin-emp-row.editing').forEach(r => r.classList.remove('editing'));
+      document.getElementById('cancelEmpBtn').style.display = 'none';
+      document.getElementById('deleteEmpBtn').style.display = 'none';
+    }
+
+    function loadEmpForEdit(row) {
+      if (!FarmPerms.can('finance', 'edit')) return;
+      editingEmpId = +row.dataset.id;
+      document.getElementById('empFormTitle').textContent = 'Edit employee';
+      document.getElementById('addEmp').textContent = 'Save';
+      document.getElementById('emp-name').value = row.dataset.name || '';
+      document.getElementById('emp-role').value = row.dataset.role || '';
+      document.getElementById('emp-salary').value = row.dataset.salary || '';
+      document.querySelectorAll('#empRows tr.fin-emp-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      document.getElementById('cancelEmpBtn').style.display = '';
+      document.getElementById('deleteEmpBtn').style.display = '';
+    }
+
+    document.getElementById('cancelEmpBtn')?.addEventListener('click', resetEmpForm);
+    document.getElementById('deleteEmpBtn')?.addEventListener('click', async () => {
+      if (!editingEmpId || !FarmPerms.can('finance', 'delete')) return;
+      const confirmed = await showConfirm('Remove this employee?');
+      if (!confirmed) return;
+      await api('/Finance/DeleteEmployee?id=' + editingEmpId, { method: 'DELETE' });
+      reloadFinanceWithToast('Employee removed');
+    });
+
+    document.getElementById('addEmp')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingEmpId)) return;
+      const name = document.getElementById('emp-name').value.trim();
+      const monthlySalary = +document.getElementById('emp-salary').value || 0;
+      if (!name) { await showModal('Enter employee name'); return; }
+      const payload = {
+        name,
+        role: document.getElementById('emp-role').value.trim() || null,
+        monthlySalary
+      };
+      if (editingEmpId) {
+        await api('/Finance/UpdateEmployee?id=' + editingEmpId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Employee updated');
+      } else {
+        await api('/Finance/AddEmployee', { method: 'POST', body: JSON.stringify(payload) });
+        reloadFinanceWithToast('Employee added');
+      }
+    });
+
+    document.querySelectorAll('[data-empsal]').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        if (!FarmPerms.can('finance', 'edit')) return;
+        const id = inp.dataset.empsal;
+        const row = document.querySelector(`#empRows tr.fin-emp-row[data-id="${id}"]`);
+        if (!row) return;
+        await api('/Finance/UpdateEmployee?id=' + id, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: row.dataset.name,
+            role: row.dataset.role || null,
+            monthlySalary: +inp.value || 0
+          })
+        });
+        reloadFinanceWithToast('Salary updated');
+      });
+    });
+
+    document.querySelectorAll('#empRows tr.fin-emp-row').forEach(row => {
+      row.addEventListener('click', e => {
+        if (e.target.matches('[data-empsal]')) return;
+        loadEmpForEdit(row);
+      });
+    });
+
+    document.getElementById('addRecur')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', !!editingRecurId)) return;
+      const name = document.getElementById('rc-name').value.trim();
+      const amount = +document.getElementById('rc-amt').value || 0;
+      if (!name || !amount) { await showModal('Enter name and amount'); return; }
+      const payload = {
+        name,
+        amount,
+        period: document.getElementById('rc-period').value
+      };
+      try {
+        if (editingRecurId) {
+          await api('/Finance/UpdateRecurringCost?id=' + editingRecurId, { method: 'PUT', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Recurring cost updated successfully');
+        } else {
+          await api('/Finance/AddRecurringCost', { method: 'POST', body: JSON.stringify(payload) });
+          reloadFinanceWithToast('Recurring cost added successfully');
+        }
+      } catch { /* api() already showed the error */ }
+    });
+
+    document.querySelectorAll('#assetRows tr.fin-asset-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadAssetForEdit(row); });
+    });
+    document.querySelectorAll('#incomeRows tr.fin-income-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadIncomeForEdit(row); });
+    });
+    document.querySelectorAll('#expenseRows tr.fin-expense-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadExpenseForEdit(row); });
+    });
+    document.querySelectorAll('#ownerRows tr.fin-owner-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadOwnerForEdit(row); });
+    });
+    document.querySelectorAll('#recurRows tr.fin-recur-row').forEach(row => {
+      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadRecurForEdit(row); });
+    });
+
+    [
+      ['addAsset', 'deleteAssetBtn', '#assetRows tr.fin-asset-row'],
+      ['addIncome', 'deleteIncomeBtn', '#incomeRows tr.fin-income-row'],
+      ['addExpense', 'deleteExpenseBtn', '#expenseRows tr.fin-expense-row'],
+      ['addOwner', 'deleteOwnerBtn', '#ownerRows tr.fin-owner-row'],
+      ['addRecur', 'deleteRecurBtn', '#recurRows tr.fin-recur-row'],
+      ['addEmp', 'deleteEmpBtn', '#empRows tr.fin-emp-row']
+    ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
+      FarmPerms.applyForm('finance', { addBtnId, deleteBtnId, rowSelector });
+    });
+
+    document.getElementById('addFundingShareholder')?.addEventListener('click', async () => {
+      const name = await showModal('New shareholder name:', { prompt: true });
+      if (!name?.trim()) return;
+      await api('/Lookup/AddOption', { method: 'POST', body: JSON.stringify({ key: 'Lookup.FundingShareholders', value: name.trim() }) });
+      reloadWithToast('Shareholder added');
+    });
+    initEditableDropdowns();
+  }
+
+  function initHealth() {
+    let editingRemId = null;
+    let editingVaccId = null;
+    let editingHist = null;
+    let editingVaccBuyId = null;
+    let healthData = { moneyAccounts: [] };
+    try {
+      const raw = document.getElementById('health-page-json')?.textContent;
+      if (raw) healthData = JSON.parse(raw);
+    } catch (e) { /* keep empty accounts */ }
+
+    function fillVaccAccountSelect() {
+      const el = document.getElementById('vb-account');
+      if (!el) return;
+      const cur = el.value;
+      const opts = '<option value="">Select Cash / Bank account...</option>' +
+        (healthData.moneyAccounts || []).map(a =>
+          `<option value="${esc(a.id)}">${esc(a.name)} · ${rs(a.balance || 0)}</option>`).join('');
+      el.innerHTML = opts;
+      if ([...el.options].some(o => o.value === cur)) el.value = cur;
+    }
+
+    function syncVaccPayFields() {
+      const status = document.getElementById('vb-payment')?.value || 'paid';
+      const paid = document.getElementById('vb-paid');
+      const acct = document.getElementById('vb-account');
+      const due = document.getElementById('vb-due');
+      const amt = +document.getElementById('vb-amt')?.value || 0;
+      if (!paid || !acct || !due) return;
+      if (status === 'paid') {
+        paid.value = amt || '';
+        paid.readOnly = true;
+        acct.disabled = false;
+        due.value = '';
+        due.disabled = true;
+      } else if (status === 'credit') {
+        paid.value = '0';
+        paid.readOnly = true;
+        acct.value = '';
+        acct.disabled = true;
+        due.disabled = false;
+      } else {
+        paid.readOnly = false;
+        acct.disabled = false;
+        due.disabled = false;
+        if (amt && +paid.value >= amt) paid.value = '';
+      }
+    }
+
+    const vaccBuyMonth = () => document.getElementById('vbMonth')?.value || new Date().toISOString().slice(0, 7);
+
+    function vaccBuyUrl() {
+      const params = new URLSearchParams();
+      params.set('month', vaccBuyMonth());
+      const remind = new URLSearchParams(window.location.search || '').get('remindDays');
+      if (remind) params.set('remindDays', remind);
+      return '/Vaccine?' + params.toString();
+    }
+
+    function reloadHealthWithToast(message) {
+      sessionStorage.setItem('goatToast', message);
+      location.href = '/Vaccine' + (window.location.search || '');
+    }
+
+    function applyVaccRuleLabel() {
+      const type = document.getElementById('v-type')?.value;
+      const label = document.getElementById('v-vlabel');
+      const val = document.getElementById('v-val');
+      if (!label || !val) return;
+      label.textContent = type === 'Age' ? 'Days' : 'Months';
+      val.placeholder = type === 'Age' ? '30' : '12';
+    }
+
+    document.getElementById('v-type')?.addEventListener('change', applyVaccRuleLabel);
+
+    function setRemEditMode(editing) {
+      document.getElementById('cancelRemBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteRemBtn').style.display = editing ? '' : 'none';
+      document.getElementById('r-relative-wrap').style.display = editing ? 'none' : '';
+      document.getElementById('r-unit-wrap').style.display = editing ? 'none' : '';
+      document.getElementById('r-date-wrap').style.display = editing ? '' : 'none';
+    }
+
+    function setVaccEditMode(editing) {
+      document.getElementById('cancelVaccBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteVaccBtn').style.display = editing ? '' : 'none';
+    }
+
+    function resetRemForm() {
+      editingRemId = null;
+      document.getElementById('remFormTitle').textContent = 'My reminders';
+      document.getElementById('addReminder').textContent = '+ Add';
+      document.getElementById('r-note').value = '';
+      document.getElementById('r-scope').value = 'None';
+      document.getElementById('r-num').value = '';
+      document.getElementById('r-unit').value = '30';
+      document.getElementById('r-date').value = '';
+      document.querySelectorAll('#reminderRows tr.reminder-row.editing').forEach(r => r.classList.remove('editing'));
+      setRemEditMode(false);
+    }
+
+    function resetVaccForm() {
+      editingVaccId = null;
+      document.getElementById('vaccFormTitle').textContent = 'Vaccine schedule';
+      document.getElementById('addVacc').textContent = '+ Add';
+      document.getElementById('v-name').value = '';
+      document.getElementById('v-scope').value = 'All';
+      document.getElementById('v-type').value = 'Age';
+      document.getElementById('v-val').value = '';
+      const note = document.getElementById('v-note');
+      if (note) note.value = '';
+      applyVaccRuleLabel();
+      document.querySelectorAll('#vaccRows tr.vacc-row.editing').forEach(r => r.classList.remove('editing'));
+      setVaccEditMode(false);
+    }
+
+    function resetHistForm() {
+      editingHist = null;
+      document.getElementById('histFormTitle').textContent = 'Recent vaccinations';
+      document.getElementById('h-date').value = '';
+      document.getElementById('h-vaccine').value = '';
+      document.getElementById('h-count').value = '';
+      document.getElementById('histForm').style.display = 'none';
+      document.getElementById('histActions').style.display = 'none';
+      document.querySelectorAll('#vaccLogRows tr.hist-row.editing').forEach(r => r.classList.remove('editing'));
+    }
+
+    function resetVaccBuyForm() {
+      editingVaccBuyId = null;
+      document.getElementById('vaccBuyFormTitle').textContent = 'Vaccines bought';
+      document.getElementById('addVaccBuy').textContent = '+ Add';
+      document.getElementById('vb-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('vb-qty').value = '';
+      document.getElementById('vb-amt').value = '';
+      document.getElementById('vb-note').value = '';
+      const paid = document.getElementById('vb-paid'); if (paid) paid.value = '';
+      const sup = document.getElementById('vb-supplier'); if (sup) sup.value = '';
+      const due = document.getElementById('vb-due'); if (due) due.value = '';
+      const pay = document.getElementById('vb-payment'); if (pay) pay.value = 'paid';
+      document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      document.getElementById('cancelVaccBuyBtn').style.display = 'none';
+      document.getElementById('deleteVaccBuyBtn').style.display = 'none';
+      syncVaccPayFields();
+    }
+
+    function loadVaccBuyForEdit(row) {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      editingVaccBuyId = +row.dataset.id;
+      document.getElementById('vaccBuyFormTitle').textContent = 'Edit vaccine purchase';
+      document.getElementById('addVaccBuy').textContent = 'Save';
+      document.getElementById('vb-date').value = row.dataset.date || '';
+      document.getElementById('vb-name').value = row.dataset.name || '';
+      document.getElementById('vb-qty').value = row.dataset.qty || '';
+      document.getElementById('vb-unit').value = row.dataset.unit || '';
+      document.getElementById('vb-amt').value = row.dataset.amount || '';
+      document.getElementById('vb-note').value = row.dataset.comment || '';
+      const pay = document.getElementById('vb-payment'); if (pay) pay.value = row.dataset.payment || 'paid';
+      const paid = document.getElementById('vb-paid'); if (paid) paid.value = row.dataset.paid || '';
+      const acct = document.getElementById('vb-account'); if (acct) acct.value = row.dataset.account || '';
+      const sup = document.getElementById('vb-supplier'); if (sup) sup.value = row.dataset.supplier || '';
+      const due = document.getElementById('vb-due'); if (due) due.value = row.dataset.due || '';
+      document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      document.getElementById('cancelVaccBuyBtn').style.display = '';
+      document.getElementById('deleteVaccBuyBtn').style.display = '';
+      syncVaccPayFields();
+    }
+
+    function loadRemForEdit(row) {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      editingRemId = +row.dataset.id;
+      document.getElementById('remFormTitle').textContent = 'Edit reminder';
+      document.getElementById('addReminder').textContent = 'Save';
+      document.getElementById('r-note').value = row.dataset.title || '';
+      document.getElementById('r-scope').value = row.dataset.scope || 'None';
+      document.getElementById('r-date').value = row.dataset.date || '';
+      document.querySelectorAll('#reminderRows tr.reminder-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setRemEditMode(true);
+      if (!FarmPerms.can('vaccines', 'add')) FarmPerms.revealEditForm('addReminder');
+      resetHistForm();
+      resetVaccForm();
+      document.getElementById('r-note').focus();
+    }
+
+    function loadVaccForEdit(row) {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      editingVaccId = +row.dataset.id;
+      document.getElementById('vaccFormTitle').textContent = 'Edit vaccine';
+      document.getElementById('addVacc').textContent = 'Save';
+      document.getElementById('v-name').value = row.dataset.name || '';
+      document.getElementById('v-scope').value = row.dataset.scope || 'All';
+      document.getElementById('v-type').value = row.dataset.ruleType || 'Age';
+      document.getElementById('v-val').value = row.dataset.value || '';
+      const note = document.getElementById('v-note');
+      if (note) note.value = row.dataset.note || '';
+      applyVaccRuleLabel();
+      document.querySelectorAll('#vaccRows tr.vacc-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setVaccEditMode(true);
+      if (!FarmPerms.can('vaccines', 'add')) FarmPerms.revealEditForm('addVacc');
+      resetHistForm();
+      resetRemForm();
+      document.getElementById('v-name').focus();
+    }
+
+    function loadHistForEdit(row) {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      editingHist = {
+        vaccineId: +row.dataset.vaccineId,
+        date: row.dataset.date || '',
+        vaccineName: row.dataset.vaccineName || '',
+        goatCount: row.dataset.goatCount || ''
+      };
+      document.getElementById('histFormTitle').textContent = 'Edit vaccination record';
+      document.getElementById('h-date').value = editingHist.date;
+      document.getElementById('h-vaccine').value = editingHist.vaccineName;
+      document.getElementById('h-count').value = editingHist.goatCount;
+      document.getElementById('histForm').style.display = '';
+      document.getElementById('histActions').style.display = '';
+      document.querySelectorAll('#vaccLogRows tr.hist-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      resetRemForm();
+      resetVaccForm();
+      document.getElementById('h-date').focus();
+    }
+
+    document.getElementById('cancelRemBtn')?.addEventListener('click', resetRemForm);
+    document.getElementById('cancelVaccBtn')?.addEventListener('click', resetVaccForm);
+    document.getElementById('cancelHistBtn')?.addEventListener('click', resetHistForm);
+    document.getElementById('cancelVaccBuyBtn')?.addEventListener('click', resetVaccBuyForm);
+
+    document.getElementById('vbMonth')?.addEventListener('change', () => {
+      location.href = vaccBuyUrl();
+    });
+
+    document.getElementById('deleteVaccBuyBtn')?.addEventListener('click', async () => {
+      if (!editingVaccBuyId || !FarmPerms.can('vaccines', 'delete')) return;
+      const confirmed = await showConfirm('Delete this vaccine purchase?');
+      if (!confirmed) return;
+      await api('/Vaccine/DeletePurchase?id=' + editingVaccBuyId, { method: 'DELETE' });
+      sessionStorage.setItem('goatToast', 'Vaccine purchase deleted');
+      location.href = vaccBuyUrl();
+    });
+
+    document.getElementById('deleteRemBtn')?.addEventListener('click', async () => {
+      if (!editingRemId || !FarmPerms.can('vaccines', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      await api('/Reminder/Delete?id=' + editingRemId, { method: 'DELETE' });
+      reloadHealthWithToast('Reminder deleted successfully');
+    });
+
+    document.getElementById('deleteVaccBtn')?.addEventListener('click', async () => {
+      if (!editingVaccId || !FarmPerms.can('vaccines', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      await api('/Vaccine/Delete?id=' + editingVaccId, { method: 'DELETE' });
+      reloadHealthWithToast('Vaccine deleted successfully');
+    });
+
+    document.getElementById('deleteHistBtn')?.addEventListener('click', async () => {
+      if (!editingHist || !FarmPerms.can('vaccines', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this entry?');
+      if (!confirmed) return;
+      await api('/Vaccine/DeleteHistoryBatch?vaccineId=' + editingHist.vaccineId + '&date=' + editingHist.date, { method: 'DELETE' });
+      reloadHealthWithToast('Vaccination record deleted successfully');
+    });
+
+    document.getElementById('addReminder')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('vaccines', !!editingRemId)) return;
+      const title = document.getElementById('r-note').value.trim();
+      if (!title) { await showModal('Enter a reminder'); return; }
+      if (editingRemId) {
+        const date = document.getElementById('r-date').value;
+        if (!date) { await showModal('Pick a date'); return; }
+        await api('/Reminder/Update?id=' + editingRemId, {
+          method: 'PUT',
+          body: JSON.stringify({ title, scope: document.getElementById('r-scope').value, reminderDate: date })
+        });
+        reloadHealthWithToast('Reminder updated successfully');
+      } else {
+        const n = +document.getElementById('r-num').value || 0;
+        if (!n) { await showModal('Enter how many months/weeks/days'); return; }
+        await api('/Reminder/Create', {
+          method: 'POST',
+          body: JSON.stringify({
+            title,
+            scope: document.getElementById('r-scope').value,
+            number: n,
+            unitDays: +document.getElementById('r-unit').value
+          })
+        });
+        reloadHealthWithToast('Reminder added successfully');
+      }
+    });
+
+    document.getElementById('addVacc')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('vaccines', !!editingVaccId)) return;
+      const name = document.getElementById('v-name').value.trim();
+      const val = +document.getElementById('v-val').value || 0;
+      if (!name || name === '__add' || !val) { await showModal('Enter a vaccine name and a number'); return; }
+      const payload = {
+        name,
+        scope: document.getElementById('v-scope').value,
+        ruleType: document.getElementById('v-type').value,
+        value: val,
+        note: document.getElementById('v-note')?.value.trim() || null
+      };
+      if (editingVaccId) {
+        await api('/Vaccine/Update?id=' + editingVaccId, { method: 'PUT', body: JSON.stringify(payload) });
+        reloadHealthWithToast('Vaccine updated successfully');
+      } else {
+        await api('/Vaccine/Add', { method: 'POST', body: JSON.stringify(payload) });
+        reloadHealthWithToast('Vaccine added successfully');
+      }
+    });
+
+    document.getElementById('addVaccBuy')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('vaccines', !!editingVaccBuyId)) return;
+      const date = document.getElementById('vb-date').value;
+      const name = document.getElementById('vb-name').value;
+      const qty = +document.getElementById('vb-qty').value || 0;
+      const unit = document.getElementById('vb-unit').value;
+      const amount = +document.getElementById('vb-amt').value || 0;
+      if (!date || !name || name === '__add' || !unit || !amount) {
+        await showModal('Enter date, vaccine name and amount');
+        return;
+      }
+      const status = document.getElementById('vb-payment')?.value || 'paid';
+      let paid = status === 'paid' ? amount : status === 'credit' ? 0 : (+document.getElementById('vb-paid')?.value || 0);
+      paid = Math.max(0, Math.min(amount, paid));
+      const accountId = document.getElementById('vb-account')?.value;
+      if (paid > 0 && !accountId) {
+        await showModal('Select Paid from: Cash in Hand or a Bank account.');
+        return;
+      }
+      const payload = {
+        date, name, qty, unit, amount,
+        comment: document.getElementById('vb-note').value.trim() || null,
+        paymentStatus: status,
+        paidAmount: paid,
+        accountId: accountId ? +accountId : null,
+        supplier: document.getElementById('vb-supplier')?.value.trim() || null,
+        dueDate: document.getElementById('vb-due')?.value || null
+      };
+      if (editingVaccBuyId) {
+        await api('/Vaccine/UpdatePurchase?id=' + editingVaccBuyId, { method: 'PUT', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Vaccine purchase updated');
+      } else {
+        await api('/Vaccine/AddPurchase', { method: 'POST', body: JSON.stringify(payload) });
+        sessionStorage.setItem('goatToast', 'Vaccine purchase added');
+      }
+      location.href = vaccBuyUrl();
+    });
+
+    document.getElementById('saveHistBtn')?.addEventListener('click', async () => {
+      if (!editingHist || !FarmPerms.can('vaccines', 'edit')) return;
+      const newDate = document.getElementById('h-date').value;
+      if (!newDate) { await showModal('Pick a date'); return; }
+      await api('/Vaccine/UpdateHistoryBatch', {
+        method: 'PUT',
+        body: JSON.stringify({
+          vaccineId: editingHist.vaccineId,
+          date: editingHist.date,
+          newDate
+        })
+      });
+      reloadHealthWithToast('Vaccination record updated successfully');
+    });
+
+    document.getElementById('remindWin')?.addEventListener('change', async e => {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      await api('/Vaccine/SetReminderWindow', {
+        method: 'POST',
+        body: JSON.stringify({ days: +e.target.value || 30 })
+      });
+      reloadHealthWithToast('Reminder window updated');
+    });
+
+    document.getElementById('giveVacc')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      const vaccineId = +document.getElementById('gv-vacc')?.value;
+      const target = document.getElementById('gv-group')?.value || 'all';
+      const date = document.getElementById('gv-date')?.value || new Date().toISOString().slice(0, 10);
+      if (!vaccineId) { await showModal('Select a vaccine'); return; }
+      const result = await api('/Vaccine/GiveToGroup', {
+        method: 'POST',
+        body: JSON.stringify({ vaccineId, target, date })
+      });
+      const info = document.getElementById('gv-info');
+      if (info) {
+        if (result.count > 0) {
+          info.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ Recorded for ${result.count} goat(s).</span>`;
+        } else {
+          info.textContent = 'No goats in that group.';
+        }
+      }
+      reloadHealthWithToast('Vaccination recorded');
+    });
+
+    document.querySelectorAll('[data-dovacc]').forEach(b => b.onclick = async () => {
+      if (!FarmPerms.can('vaccines', 'edit')) return;
+      await api('/Vaccine/MarkDone?vaccineId=' + b.dataset.dovacc, { method: 'POST' });
+      reloadHealthWithToast('Vaccination marked done');
+    });
+
+    document.querySelectorAll('#reminderRows tr.reminder-row').forEach(row => {
+      row.addEventListener('click', () => loadRemForEdit(row));
+    });
+    document.querySelectorAll('#vaccRows tr.vacc-row').forEach(row => {
+      row.addEventListener('click', () => loadVaccForEdit(row));
+    });
+    document.querySelectorAll('#vaccLogRows tr.hist-row').forEach(row => {
+      row.addEventListener('click', () => loadHistForEdit(row));
+    });
+    document.querySelectorAll('#vaccBuyRows tr.vacc-buy-row').forEach(row => {
+      row.addEventListener('click', () => loadVaccBuyForEdit(row));
+    });
+
+    [
+      ['addReminder', 'deleteRemBtn', '#reminderRows tr.reminder-row'],
+      ['addVacc', 'deleteVaccBtn', '#vaccRows tr.vacc-row'],
+      ['addVaccBuy', 'deleteVaccBuyBtn', '#vaccBuyRows tr.vacc-buy-row']
+    ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
+      FarmPerms.applyForm('vaccines', { addBtnId, deleteBtnId, rowSelector });
+    });
+    initEditableDropdown('v-name', 'Lookup.VaccineNames');
+    initEditableDropdown('vb-name', 'Lookup.VaccineNames');
+    initEditableDropdown('vb-unit', 'Lookup.VaccineUnits');
+    fillVaccAccountSelect();
+    document.getElementById('vb-payment')?.addEventListener('change', syncVaccPayFields);
+    document.getElementById('vb-amt')?.addEventListener('input', () => {
+      const status = document.getElementById('vb-payment')?.value || 'paid';
+      if (status === 'paid') syncVaccPayFields();
+    });
+    syncVaccPayFields();
+    if (!FarmPerms.can('vaccines', 'edit')) {
+      FarmPerms.readonlyInputs('#remindWin');
+      document.querySelectorAll('[data-dovacc]').forEach(b => b.classList.add('perm-hidden'));
+      FarmPerms.hide('histForm');
+      FarmPerms.hide('histActions');
+      FarmPerms.hide('deleteHistBtn');
+      FarmPerms.hide('saveHistBtn');
+      FarmPerms.hide('cancelHistBtn');
+    } else if (!FarmPerms.can('vaccines', 'delete')) {
+      FarmPerms.hide('deleteHistBtn');
+    }
+  }
+
+  function initSearch(opts = {}) {
+    const form = document.getElementById('search-form');
+    const panelEl = document.getElementById('search-panel');
+    const input = document.getElementById('search-tag');
+    const btn = document.getElementById('search-btn');
+    const statusEl = document.getElementById('search-status');
+    const resultsEl = document.getElementById('search-results');
+    if (!input || !resultsEl) return;
+
+    function setStatus(msg, isError = false) {
+      if (!statusEl) return;
+      statusEl.textContent = msg || '';
+      statusEl.classList.toggle('error', isError);
+    }
+
+    function setLoading(loading) {
+      panelEl?.classList.toggle('is-loading', loading);
+      if (btn) btn.disabled = loading;
+      if (input) input.disabled = loading;
+      if (loading) {
+        setStatus('');
+        resultsEl.innerHTML = `
+          <div class="search-results-loading" role="status" aria-live="polite">
+            <div class="search-loading-spinner" aria-hidden="true"></div>
+            <span>Loading goat profile…</span>
+          </div>`;
+      }
+    }
+
+    function waitForPaint() {
+      return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+
+    function searchTagLink(tag) {
+      return '/Search?tag=' + encodeURIComponent(tag || '');
+    }
+
+    function renderProfile(data) {
+      const g = data.goat || {};
+      const nameLine = g.name ? `<div class="name">${esc(g.name)}</div>` : '';
+      const groupLine = g.groupName ? esc(g.groupName) : '—';
+      const gender = g.gender === 'Male' ? 'Male' : 'Female';
+      const source = g.source === 'Born' ? 'Born on farm' : 'Bought';
+      const isFemaleDoe = gender === 'Female' && g.statusKey !== 'kid';
+      const herdLink = FarmPerms.can('herd', 'edit')
+        ? `<a class="btn btn-ghost" href="/Goat?editId=${encodeURIComponent(g.id || '')}">Edit in Herd</a>`
+        : '';
+      const heroActions = `<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+          <a class="btn btn-green" href="#" data-goatcard="${esc(g.id)}">Open goat card</a>${herdLink}</div>`;
+
+      let archivedLine = '';
+      if (g.isArchived) {
+        archivedLine = `<div class="note" style="margin-top:10px">Record closed — ${esc(g.archivedReason || 'archived')}${g.archivedDateDisplay ? ' on ' + esc(g.archivedDateDisplay) : ''}.</div>`;
+      }
+      const kidStageLine = g.kidStageLine
+        ? `<div class="name" style="color:${esc(g.kidStageColor || 'var(--ink-soft)')};font-weight:700;margin-top:6px">${esc(g.kidStageLine)}</div>`
+        : '';
+      const breedingHintLine = g.breedingHint
+        ? `<div class="breed" style="color:${esc(g.breedingHintColor || 'var(--ink-soft)')};font-weight:600;margin-top:4px">${esc(g.breedingHint)}</div>`
+        : '';
+
+      const metaExtra = [];
+      metaExtra.push(`<div class="search-meta-item">Health<b>${esc(g.healthDisplay || '—')}</b></div>`);
+      if (g.feedingGroupName) metaExtra.push(`<div class="search-meta-item">Feed group<b>${esc(g.feedingGroupName)}</b></div>`);
+      if (g.sireTag || g.damTag) {
+        const sire = g.sireTag ? '♂ ' + esc(g.sireTag) : '—';
+        const dam = g.damTag ? '♀ ' + esc(g.damTag) : '—';
+        metaExtra.push(`<div class="search-meta-item">Parents<b>${sire} · ${dam}</b></div>`);
+      }
+      if (g.owner) metaExtra.push(`<div class="search-meta-item">Owner<b>${esc(g.owner)}</b></div>`);
+      if (data.latestWeightKg != null) metaExtra.push(`<div class="search-meta-item">Latest weight<b>${(+data.latestWeightKg).toFixed(1)} kg</b></div>`);
+      if (data.latestBcsScore != null) {
+        const bcsTail = data.latestBcsDateDisplay ? ` (${esc(data.latestBcsDateDisplay)})` : '';
+        metaExtra.push(`<div class="search-meta-item">Body condition<b>${esc(data.latestBcsScore)}/5${bcsTail}</b></div>`);
+      }
+      if (g.matedDateDisplay) {
+        const buck = g.buckTag ? ' · ' + esc(g.buckTag) : '';
+        metaExtra.push(`<div class="search-meta-item">Last cross<b>${esc(g.matedDateDisplay)}${buck}</b></div>`);
+      }
+      if (g.kidsCount != null) {
+        const us = g.ultrasoundDateDisplay ? ' · ' + esc(g.ultrasoundDateDisplay) : '';
+        metaExtra.push(`<div class="search-meta-item">Scan<b>${esc(g.kidsCount)} kid(s)${us}</b></div>`);
+      }
+      const commentLine = g.comment ? `<div class="breed" style="margin-top:10px"><b>Note:</b> ${esc(g.comment)}</div>` : '';
+
+      const siblings = data.siblings || [];
+      let siblingsPanel = '';
+      if (siblings.length) {
+        siblingsPanel = `<div class="panel"><div class="panel-head"><h2>Siblings</h2></div><div class="panel-body">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${siblings.map(s =>
+          `<span style="background:var(--green-tint);border-radius:8px;padding:4px 9px;font-size:13px">
+            <a href="${searchTagLink(s.tag)}" class="tag tag-link">${esc(s.tag)}</a>
+            <span class="breed">${s.gender === 'Male' ? '♂' : '♀'} ${esc(s.birthDateDisplay)}${s.twin ? ' · twin' : ''}</span></span>`).join('')}
+          </div></div></div>`;
+      }
+
+      const kiddings = data.kiddings || [];
+      let breedingRecordPanel = '';
+      if (isFemaleDoe) {
+        const liveKids = kiddings.reduce((a, k) => a + (k.liveKids || 0), 0);
+        const kiddingsTable = kiddings.length
+          ? `<table class="tbl"><thead><tr><th>Date</th><th>Sire</th><th class="num-cell">Alive</th><th class="num-cell">Stillborn</th></tr></thead><tbody>
+            ${kiddings.map(k => {
+            const sireCell = k.sireGoatId && k.sireTag
+              ? `<a class="tag tag-link" href="${searchTagLink(k.sireTag)}">${esc(k.sireTag)}</a>`
+              : esc(k.sireTag || '—');
+            return `<tr><td>${esc(k.dateDisplay)}</td><td>${sireCell}</td><td class="num-cell">${k.liveKids}</td><td class="num-cell">${k.stillborn || 0}</td></tr>`;
+          }).join('')}
+            </tbody></table>`
+          : '<div class="search-empty">No kiddings recorded yet.</div>';
+        breedingRecordPanel = `<div class="panel"><div class="panel-head"><h2>Breeding record</h2></div><div class="panel-body">
+          <div class="breed" style="margin-bottom:8px">${kiddings.length} birth(s) · ${liveKids} kids born alive · ${data.emptyScanCount || 0} empty scan(s) · ${data.abortionCount || 0} abortion(s)</div>
+          ${kiddingsTable}</div></div>`;
+      } else if (gender === 'Male') {
+        breedingRecordPanel = `<div class="panel"><div class="panel-head"><h2>As a sire</h2></div><div class="panel-body">
+          <div class="breed">${data.siredKidsCount || 0} kid(s) sired on this farm.</div></div></div>`;
+      }
+
+      const weights = data.weights || [];
+      let weightsPanel = '';
+      if (weights.length) {
+        weightsPanel = `<div class="panel"><div class="panel-head"><h2>Weight history</h2></div><div class="panel-body">
+          <table class="tbl"><thead><tr><th>Date</th><th class="num-cell">kg</th></tr></thead><tbody>
+          ${weights.map(w => `<tr><td>${esc(w.dateDisplay)}</td><td class="num-cell">${(+w.kg).toFixed(1)}</td></tr>`).join('')}
+          </tbody></table></div></div>`;
+      }
+
+      const pedigree = data.pedigree || [];
+      let pedigreePanel = '';
+      if (pedigree.length > 1) {
+        pedigreePanel = `<div class="panel" id="family-tree"><div class="panel-head"><h2>Family tree</h2><span class="sub">ancestors (up to 4 generations)</span></div><div class="panel-body">
+          <table class="tbl"><thead><tr><th>Gen</th><th>Tag</th><th class="hide-sm">Sire</th><th class="hide-sm">Dam</th></tr></thead><tbody>
+          ${pedigree.map(p => {
+            let tagCell;
+            if (p.generation === 0) tagCell = `<span class="tag">${esc(p.tag)}</span>`;
+            else if (p.searchTag) tagCell = `<a class="tag tag-link" href="${searchTagLink(p.searchTag)}">${esc(p.tag)}</a>`;
+            else tagCell = esc(p.tag);
+            return `<tr><td>${p.generation}</td><td>${tagCell}</td><td class="hide-sm">${esc(p.sireTag || '—')}</td><td class="hide-sm">${esc(p.damTag || '—')}</td></tr>`;
+          }).join('')}
+          </tbody></table></div></div>`;
+      }
+
+      const breedingHistory = data.breedingHistory || [];
+      let breedingHistoryPanel = '';
+      if (breedingHistory.length) {
+        breedingHistoryPanel = `<div class="panel"><div class="panel-head"><h2>Breeding history</h2></div><div class="panel-body">
+          <table class="tbl"><thead><tr><th>Mated</th><th>Buck</th><th>Outcome</th></tr></thead><tbody>
+          ${breedingHistory.map(b => `<tr><td>${esc(b.matedDisplay || b.matedDate)}</td><td>${esc(b.buckTag || '—')}</td><td>${esc(b.outcome)}</td></tr>`).join('')}
+          </tbody></table></div></div>`;
+      }
+
+      const treatments = data.treatments || [];
+      const treatmentsHtml = treatments.length
+        ? `<table class="tbl"><thead><tr><th>Start</th><th>End</th><th>Problem</th><th class="hide-sm">Medicine</th><th class="num-cell hide-sm">Cost</th><th>Status</th></tr></thead><tbody>
+          ${treatments.map(t => `<tr><td>${esc(t.startDateDisplay)}</td><td>${esc(t.endDateDisplay)}</td><td>${esc(t.diagnosis)}</td>
+            <td class="hide-sm">${esc(t.medicine)}</td><td class="num-cell hide-sm">${t.cost > 0 ? rs(t.cost) : '—'}</td>
+            <td><span class="chip ${t.isActive ? 'chip-exp' : 'chip-milk'}">${t.isActive ? 'Active' : 'Ended'}</span></td></tr>`).join('')}
+          </tbody></table>`
+        : '<div class="search-empty">No treatments recorded for this goat.</div>';
+
+      const history = data.vaccinationHistory || [];
+      const historyHtml = history.length
+        ? `<table class="tbl"><thead><tr><th>Date</th><th>Vaccine</th><th class="hide-sm">Scope</th></tr></thead><tbody>
+          ${history.map(h => `<tr><td>${esc(h.dateDisplay)}</td><td>${esc(h.vaccineName)}</td><td class="hide-sm">${esc(h.scopeDisplay)}</td></tr>`).join('')}
+          </tbody></table>`
+        : '<div class="search-empty">No vaccinations recorded yet for this goat.</div>';
+
+      const schedule = data.vaccineSchedule || [];
+      const scheduleHtml = schedule.length
+        ? `<table class="tbl"><thead><tr><th>Vaccine</th><th>Rule</th><th>Status</th><th class="hide-sm">Last</th><th class="hide-sm">Next</th></tr></thead><tbody>
+          ${schedule.map(v => `<tr><td>${esc(v.vaccineName)}</td><td class="hide-sm">${esc(v.ruleDisplay)}</td>
+            <td><span class="chip ${esc(v.statusCss)}">${esc(v.status)}</span></td>
+            <td class="hide-sm">${esc(v.lastDate || '—')}</td><td class="hide-sm">${esc(v.dueDate || '—')}</td></tr>`).join('')}
+          </tbody></table>`
+        : '<div class="search-empty">No vaccines apply to this goat\'s status.</div>';
+
+      const plan = data.feedPlan;
+      let feedHtml = '<div class="search-empty">No feed plan set for this status.</div>';
+      if (plan) {
+        const rationRows = [];
+        if ((plan.mixKgPerDay || 0) > 0) {
+          rationRows.push(`<tr><td>Mix (concentrate)</td><td class="num-cell">${(+plan.mixKgPerDay).toFixed(2)} kg</td><td class="num-cell hide-sm">${rs(plan.dailyFeedCost)}</td></tr>`);
+        }
+        if ((plan.fodderKgPerDay || 0) > 0) {
+          rationRows.push(`<tr><td>Green fodder (own)</td><td class="num-cell">${(+plan.fodderKgPerDay).toFixed(1)} kg</td><td class="num-cell hide-sm"><span class="breed">not costed</span></td></tr>`);
+        }
+        feedHtml = `<div class="note" style="margin-bottom:12px">Based on the <b>${esc(plan.statusDisplay)}</b> feed plan (farm-level ration per goat).</div>
+          <table class="tbl"><thead><tr><th>Feed</th><th class="num-cell">Daily</th><th class="num-cell hide-sm">Cost/day</th></tr></thead><tbody>
+          ${rationRows.join('') || '<tr><td colspan="3" class="search-empty">No rations configured.</td></tr>'}
+          </tbody></table>
+          <div style="margin-top:12px;font-size:14px">
+            <span><b>Daily feed:</b> ${rs(plan.dailyFeedCost)}</span> ·
+            <span><b>Medicine/mo:</b> ${rs(plan.medicineCostPerGoatPerMonth)}</span> ·
+            <span><b>Est. monthly:</b> ${rs(plan.monthlyTotalCost)}</span>
+          </div>`;
+      }
+
+      const reminders = data.reminders || [];
+      const reminderHtml = reminders.length
+        ? `<ul style="margin:0;padding-left:18px;line-height:1.7">
+          ${reminders.map(r => `<li><span style="color:${esc(r.whenColor)};font-weight:600">${esc(r.whenDisplay)}</span> — ${esc(r.title)}${r.scopeDisplay ? ` <span class="breed">(${esc(r.scopeDisplay)})</span>` : ''} <span class="breed">· ${esc(r.dateDisplay)}</span></li>`).join('')}
+          </ul>`
+        : '<div class="search-empty">No reminders for this goat.</div>';
+
+      resultsEl.innerHTML = `
+        <div class="panel">
+          <div class="panel-body">
+            <div class="search-hero">
+              <div class="search-hero-main">
+                <h2><a href="#" class="tag" data-goatcard="${esc(g.id)}">${esc(g.tag)}</a></h2>
+                ${nameLine}
+                <span class="chip ${esc(g.statusCssClass)}">${esc(g.statusDisplay)}</span>
+                ${archivedLine}${kidStageLine}${breedingHintLine}
+                <div class="search-hero-meta">
+                  <div class="search-meta-item">Breed<b>${esc(g.breed)}</b></div>
+                  <div class="search-meta-item">Gender<b>${esc(gender)}</b></div>
+                  <div class="search-meta-item">Age<b>${esc(g.ageLabel)}</b></div>
+                  <div class="search-meta-item">Group<b>${groupLine}</b></div>
+                  ${metaExtra.join('')}
+                  <div class="search-meta-item">Source<b>${esc(source)}</b></div>
+                  <div class="search-meta-item">Price<b>${esc(g.priceDisplay)}</b></div>
+                  <div class="search-meta-item">${g.source === 'Born' ? 'Born' : 'Bought on'}<b>${esc(g.eventDateDisplay)}</b></div>
+                  ${g.dateOfBirthDisplay ? `<div class="search-meta-item">Date of birth<b>${esc(g.dateOfBirthDisplay)}${g.dateOfBirthIsEstimated ? ' (estimated)' : ''}</b></div>` : ''}
+                </div>
+                ${commentLine}
+              </div>
+              ${heroActions}
+            </div>
+          </div>
+        </div>
+        ${siblingsPanel}${breedingRecordPanel}${weightsPanel}${pedigreePanel}${breedingHistoryPanel}
+        <div class="panel"><div class="panel-head"><h2>Treatment history</h2></div><div class="panel-body">${treatmentsHtml}</div></div>
+        <div class="panel"><div class="panel-head"><h2>Vaccine schedule</h2></div><div class="panel-body">${scheduleHtml}</div></div>
+        <div class="panel"><div class="panel-head"><h2>Vaccination history</h2></div><div class="panel-body">${historyHtml}</div></div>
+        <div class="panel"><div class="panel-head"><h2>Feed plan</h2></div><div class="panel-body">${feedHtml}</div></div>
+        <div class="panel"><div class="panel-head"><h2>Reminders</h2></div><div class="panel-body">${reminderHtml}</div></div>
+        <div class="note">Milk production is tracked at farm level on the Milk tab, not per individual goat.</div>`;
+    }
+
+    async function runSearch() {
+      const tag = input.value.trim();
+      if (!tag) {
+        setStatus('Enter or scan a tag / RFID ID.', true);
+        resultsEl.innerHTML = '';
+        input.focus();
+        return;
+      }
+
+      setLoading(true);
+      await waitForPaint();
+
+      try {
+        const url = '/Search/Lookup?tag=' + encodeURIComponent(tag);
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        });
+
+        if (res.status === 404 || res.status === 400) {
+          const err = await res.json().catch(() => ({}));
+          setLoading(false);
+          setStatus(err.error || 'Goat not found.', true);
+          resultsEl.innerHTML = '';
+          return;
+        }
+
+        if (res.status === 403) {
+          setLoading(false);
+          setStatus('You do not have permission to search.', true);
+          resultsEl.innerHTML = '';
+          return;
+        }
+
+        if (!res.ok) {
+          setLoading(false);
+          setStatus('Something went wrong. Please try again.', true);
+          resultsEl.innerHTML = '';
+          return;
+        }
+
+        const data = await res.json();
+        setLoading(false);
+        setStatus('');
+        renderProfile(data);
+        if (history.replaceState) {
+          const next = '/Search?tag=' + encodeURIComponent(tag);
+          if (location.pathname + location.search !== next) history.replaceState(null, '', next);
+        }
+        input.select();
+      } catch {
+        setLoading(false);
+        setStatus('Could not reach the server. Try again or press Search for a full page reload.', true);
+        resultsEl.innerHTML = '';
+      }
+    }
+
+    form?.addEventListener('submit', e => {
+      e.preventDefault();
+      runSearch();
+    });
+    btn?.addEventListener('click', e => {
+      e.preventDefault();
+      runSearch();
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); runSearch(); }
+    });
+
+    input.focus();
+    if (opts.initialTag && String(opts.initialTag).trim() && !opts.hasServerProfile) runSearch();
+  }
+
+  function initSettings() {
+    let editingUserId = null;
+    const rolePermissions = window.RolePermissions || {};
+
+    function reloadSettingsWithToast(message) {
+      sessionStorage.setItem('goatToast', message);
+      location.href = '/Settings';
+    }
+
+    function setUserPermPanelEnabled(customEnabled) {
+      const wrap = document.getElementById('userPermTableWrap');
+      if (wrap) wrap.classList.toggle('disabled', !customEnabled);
+    }
+
+    function applyUserPermCheckboxes(permissions) {
+      const role = document.getElementById('u-role')?.value || '';
+      const isAdmin = role === 'Admin';
+      document.querySelectorAll('.user-perm-cb').forEach(cb => {
+        const tab = cb.dataset.tab;
+        const action = cb.dataset.action;
+        const perm = permissions?.[tab] || {};
+        if (cb.dataset.settingsTab === 'true' && isAdmin) {
+          cb.checked = true;
+          cb.disabled = true;
+          cb.dataset.permLocked = 'true';
+          return;
+        }
+        delete cb.dataset.permLocked;
+        cb.disabled = false;
+        cb.checked = !!perm[action];
+      });
+      document.querySelectorAll('.user-perm-cb[data-action="view"]').forEach(cb => {
+        const tab = cb.dataset.tab;
+        const enabled = cb.checked;
+        document.querySelectorAll(`.user-perm-cb[data-tab="${tab}"]`).forEach(other => {
+          if (other.dataset.action === 'view' || other.dataset.permLocked === 'true') return;
+          other.disabled = !enabled;
+          if (!enabled) other.checked = false;
+        });
+      });
+    }
+
+    function collectUserPermissions() {
+      const permissions = {};
+      document.querySelectorAll('.user-perm-cb').forEach(cb => {
+        const tab = cb.dataset.tab;
+        const action = cb.dataset.action;
+        if (!permissions[tab]) permissions[tab] = { view: false, add: false, edit: false, delete: false };
+        if (cb.checked) permissions[tab][action] = true;
+      });
+      Object.values(permissions).forEach(p => {
+        if (p.add || p.edit || p.delete) p.view = true;
+      });
+      return permissions;
+    }
+
+    function copyRolePermissionsToUser() {
+      const role = document.getElementById('u-role')?.value || 'Staff';
+      applyUserPermCheckboxes(rolePermissions[role] || {});
+    }
+
+    async function loadUserPermissions(userId) {
+      const data = await api('/Settings/GetUserPermissions?id=' + encodeURIComponent(userId));
+      document.getElementById('u-use-role-perms').checked = data.usesRolePermissions;
+      setUserPermPanelEnabled(!data.usesRolePermissions);
+      applyUserPermCheckboxes(data.permissions || {});
+    }
+
+    async function saveUserPermissions(userId) {
+      const usesRolePermissions = document.getElementById('u-use-role-perms')?.checked ?? true;
+      await api('/Settings/SaveUserPermissions?id=' + encodeURIComponent(userId), {
+        method: 'PUT',
+        body: JSON.stringify({
+          usesRolePermissions,
+          permissions: usesRolePermissions ? {} : collectUserPermissions()
+        })
+      });
+    }
+
+    function setUserEditMode(editing) {
+      document.getElementById('cancelUserBtn').style.display = editing ? '' : 'none';
+      document.getElementById('deleteUserBtn').style.display = editing ? '' : 'none';
+      const editExtra = document.getElementById('u-edit-extra');
+      if (editExtra) editExtra.hidden = !editing;
+      document.getElementById('u-password-wrap').style.display = editing ? 'none' : '';
+      document.getElementById('userPermPanel').style.display = editing ? '' : 'none';
+      document.getElementById('userFormGrid')?.classList.toggle('is-editing', editing);
+      document.getElementById('u-email').disabled = editing;
+    }
+
+    function resetUserForm() {
+      editingUserId = null;
+      document.getElementById('userFormTitle').textContent = 'Users';
+      document.getElementById('addUser').textContent = '+ Add user';
+      document.getElementById('u-name').value = '';
+      document.getElementById('u-email').value = '';
+      document.getElementById('u-email').disabled = false;
+      document.getElementById('u-password').value = '';
+      document.getElementById('u-role').selectedIndex = 0;
+      document.getElementById('u-locked').checked = false;
+      document.getElementById('u-reset-password').value = '';
+      document.getElementById('u-use-role-perms').checked = true;
+      setUserPermPanelEnabled(false);
+      document.querySelectorAll('#userRows tr.user-row.editing').forEach(r => r.classList.remove('editing'));
+      setUserEditMode(false);
+    }
+
+    async function loadUserForEdit(row) {
+      if (!FarmPerms.can('settings', 'edit')) return;
+      editingUserId = row.dataset.id;
+      document.getElementById('userFormTitle').textContent = 'Edit user';
+      document.getElementById('addUser').textContent = 'Save';
+      document.getElementById('u-name').value = row.dataset.name || '';
+      document.getElementById('u-email').value = row.dataset.email || '';
+      document.getElementById('u-role').value = row.dataset.role || 'Staff';
+      document.getElementById('u-locked').checked = row.dataset.locked === 'true';
+      document.getElementById('u-password').value = '';
+      document.getElementById('u-reset-password').value = '';
+      document.querySelectorAll('#userRows tr.user-row.editing').forEach(r => r.classList.remove('editing'));
+      row.classList.add('editing');
+      setUserEditMode(true);
+      if (!FarmPerms.can('settings', 'add')) FarmPerms.revealEditForm('addUser');
+      await loadUserPermissions(editingUserId);
+      document.getElementById('u-name').focus();
+    }
+
+    document.getElementById('cancelUserBtn')?.addEventListener('click', resetUserForm);
+
+    document.getElementById('deleteUserBtn')?.addEventListener('click', async () => {
+      if (!editingUserId || !FarmPerms.can('settings', 'delete')) return;
+      const confirmed = await showConfirm('Do you want to delete this user?');
+      if (!confirmed) return;
+      await api('/Settings/DeleteUser?id=' + encodeURIComponent(editingUserId), { method: 'DELETE' });
+      reloadSettingsWithToast('User deleted successfully');
+    });
+
+    document.getElementById('resetPasswordBtn')?.addEventListener('click', async () => {
+      if (!editingUserId || !FarmPerms.can('settings', 'edit')) return;
+      const newPassword = document.getElementById('u-reset-password').value;
+      if (!newPassword) { await showModal('Enter a new password'); return; }
+      await api('/Settings/ResetPassword?id=' + encodeURIComponent(editingUserId), {
+        method: 'POST',
+        body: JSON.stringify({ newPassword })
+      });
+      document.getElementById('u-reset-password').value = '';
+      reloadSettingsWithToast('Password reset successfully');
+    });
+
+    document.getElementById('addUser')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('settings', !!editingUserId)) return;
+      const fullName = document.getElementById('u-name').value.trim();
+      const role = document.getElementById('u-role').value;
+      if (!fullName) { await showModal('Enter full name'); return; }
+      if (editingUserId) {
+        await api('/Settings/UpdateUser?id=' + encodeURIComponent(editingUserId), {
+          method: 'PUT',
+          body: JSON.stringify({
+            fullName,
+            role,
+            isLocked: document.getElementById('u-locked').checked
+          })
+        });
+        await saveUserPermissions(editingUserId);
+        reloadSettingsWithToast('User updated successfully');
+      } else {
+        const email = document.getElementById('u-email').value.trim();
+        const password = document.getElementById('u-password').value;
+        if (!email) { await showModal('Enter email'); return; }
+        if (!password) { await showModal('Enter password'); return; }
+        await api('/Settings/CreateUser', {
+          method: 'POST',
+          body: JSON.stringify({ fullName, email, password, role })
+        });
+        reloadSettingsWithToast('User added successfully');
+      }
+    });
+
+    document.getElementById('savePermissions')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('settings', 'edit')) return;
+      const permissions = {};
+      document.querySelectorAll('.perm-cb').forEach(cb => {
+        const role = cb.dataset.role;
+        const tab = cb.dataset.tab;
+        const action = cb.dataset.action;
+        if (!permissions[role]) permissions[role] = {};
+        if (!permissions[role][tab]) permissions[role][tab] = { view: false, add: false, edit: false, delete: false };
+        if (cb.checked) permissions[role][tab][action] = true;
+      });
+      Object.values(permissions).forEach(tabs => {
+        Object.values(tabs).forEach(p => {
+          if (p.add || p.edit || p.delete) p.view = true;
+        });
+      });
+      await api('/Settings/SaveRolePermissions', {
+        method: 'PUT',
+        body: JSON.stringify({ permissions })
+      });
+      reloadSettingsWithToast('Permissions saved successfully');
+    });
+
+    document.getElementById('savePolicy')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('settings', 'edit')) return;
+      await api('/Settings/SavePasswordPolicy', {
+        method: 'PUT',
+        body: JSON.stringify({
+          requiredLength: +document.getElementById('pp-length').value || 8,
+          requireDigit: document.getElementById('pp-digit').checked,
+          requireLowercase: document.getElementById('pp-lower').checked,
+          requireUppercase: document.getElementById('pp-upper').checked,
+          requireNonAlphanumeric: document.getElementById('pp-symbol').checked
+        })
+      });
+      reloadSettingsWithToast('Password policy saved successfully');
+    });
+
+    document.getElementById('copyRolePermsBtn')?.addEventListener('click', () => {
+      document.getElementById('u-use-role-perms').checked = false;
+      setUserPermPanelEnabled(true);
+      copyRolePermissionsToUser();
+    });
+
+    document.getElementById('u-use-role-perms')?.addEventListener('change', e => {
+      setUserPermPanelEnabled(!e.target.checked);
+      if (e.target.checked) copyRolePermissionsToUser();
+    });
+
+    document.getElementById('u-role')?.addEventListener('change', () => {
+      if (!document.getElementById('u-use-role-perms')?.checked) copyRolePermissionsToUser();
+      else applyUserPermCheckboxes(rolePermissions[document.getElementById('u-role')?.value || 'Staff'] || {});
+    });
+
+    document.querySelectorAll('.user-perm-cb[data-action="view"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const tab = cb.dataset.tab;
+        document.querySelectorAll(`.user-perm-cb[data-tab="${tab}"]`).forEach(other => {
+          if (other.dataset.action === 'view' || other.dataset.permLocked === 'true') return;
+          other.disabled = !cb.checked;
+          if (!cb.checked) other.checked = false;
+        });
+      });
+    });
+
+    document.querySelectorAll('#userRows tr.user-row').forEach(row => {
+      row.addEventListener('click', () => loadUserForEdit(row));
+    });
+
+    FarmPerms.applyForm('settings', {
+      addBtnId: 'addUser',
+      deleteBtnId: 'deleteUserBtn',
+      rowSelector: '#userRows tr.user-row'
+    });
+    if (!FarmPerms.can('settings', 'edit')) {
+      FarmPerms.readonlyInputs('#permissionsPanel input:not([disabled]), #policyPanel input');
+      FarmPerms.hide('savePermissions');
+      FarmPerms.hide('savePolicy');
+      FarmPerms.hide('resetPasswordBtn');
+    }
+    if (!FarmPerms.can('settings', 'add') && !FarmPerms.can('settings', 'edit')) {
+      FarmPerms.hide('userFormGrid');
+      FarmPerms.hide('userFormActions');
+    }
+
+    document.querySelectorAll('.perm-cb[data-action="view"]').forEach(cb => {
+      const syncRow = () => {
+        const role = cb.dataset.role;
+        const tab = cb.dataset.tab;
+        document.querySelectorAll(`.perm-cb[data-role="${role}"][data-tab="${tab}"]`).forEach(other => {
+          if (other.dataset.action === 'view' || other.dataset.permLocked === 'true') return;
+          other.disabled = !cb.checked;
+          if (!cb.checked) other.checked = false;
+        });
+      };
+      cb.addEventListener('change', syncRow);
+      syncRow();
+    });
+  }
+
+  function repKpiHtml(k) {
+    return `<div class="price-row" style="background:#FCFDFB;border:1px solid var(--line);border-radius:12px;padding:12px 14px">
+      <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;${k.color ? 'color:' + esc(k.color) : ''}">${esc(k.value)}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--ink-soft)">${esc(k.label)}</div>
+      ${k.sub ? `<div style="font-size:11px;color:var(--ink-soft);opacity:.8;margin-top:2px">${esc(k.sub)}</div>` : ''}</div>`;
+  }
+
+  function repDashKpiHtml(k) {
+    const dot = k.dotColor ? `<span class="dot" style="background:${esc(k.dotColor)}"></span>` : '';
+    return `<div class="stat" style="cursor:default"><div class="num" style="font-size:19px">${esc(k.value)}</div>
+      <div class="lbl">${dot}${esc(k.label)}</div></div>`;
+  }
+
+  function showRepTab(tabKey) {
+    if (!tabKey) return;
+    document.querySelectorAll('.rep-subtab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.reptab === tabKey);
+    });
+    document.querySelectorAll('.repview').forEach(view => { view.style.display = 'none'; });
+    const panel = document.getElementById('rep-' + tabKey);
+    if (panel) panel.style.display = 'block';
+  }
+
+  function renderReportsData(d) {
+    if (!d) return;
+    try {
+    const pre = d.preRevenue;
+    const fin = d.finance || {};
+
+    const repRange = document.getElementById('rep-range');
+    if (repRange) repRange.textContent = d.rangeLabel + ' · ' + d.monthCount + ' month' + (d.monthCount === 1 ? '' : 's');
+    document.getElementById('rep-note').innerHTML = d.noteHtml || '';
+
+    const dash = d.dashboard || {};
+    document.getElementById('dashKpi').innerHTML = (dash.kpis || []).map(repDashKpiHtml).join('');
+    document.getElementById('dashRatios').innerHTML = (dash.ratios || []).map(repKpiHtml).join('');
+
+    window.__trend = null;
+    if (!d.financeHidden) {
+    const th = document.getElementById('trendHead');
+    const ts = document.getElementById('trendSub');
+    const mh = document.getElementById('repMonthHead');
+    if (th) th.textContent = d.trendHeadLabel || 'Month';
+    if (ts) ts.textContent = d.trendSubLabel || 'by month';
+    if (mh) mh.textContent = d.trendLastColumnLabel || 'Net';
+
+    const trendRows = dash.trendRows || [];
+    const tRows = trendRows.map(r => {
+      const last = pre
+        ? `<td class="num-cell" style="color:#8a5b13">${rs(r.ownerInvestment)}</td>`
+        : `<td class="num-cell" style="font-weight:700;color:${r.net < 0 ? '#8a261c' : 'var(--green-dark)'}">${(r.net < 0 ? '– ' : '') + rs(Math.abs(r.net))}</td>`;
+      return `<tr><td><b>${esc(r.key)}</b></td>
+        <td class="num-cell hide-sm" style="color:var(--green-dark)">${rs(r.income)}</td>
+        <td class="num-cell" style="color:#8a261c">${rs(r.expense)}</td>${last}</tr>`;
+    }).join('');
+    const tNet = dash.trendTotalNet ?? 0;
+    const tPut = dash.trendTotalOwner ?? 0;
+    const totalLast = pre
+      ? `<td class="num-cell" style="font-weight:800;color:#8a5b13">${rs(tPut)}</td>`
+      : `<td class="num-cell" style="font-weight:800;color:${tNet < 0 ? '#8a261c' : 'var(--green-dark)'}">${(tNet < 0 ? '– ' : '') + rs(Math.abs(tNet))}</td>`;
+    document.getElementById('repMonthRows').innerHTML = (tRows ||
+      `<tr><td colspan="4" class="empty">Nothing recorded in this period.</td></tr>`) +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell hide-sm" style="font-weight:800">${rs(dash.trendTotalIncome || 0)}</td>
+        <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(dash.trendTotalExpense || 0)}</td>${totalLast}</tr>`;
+    window.__trend = { keys: trendRows.map(r => r.key), bucket: Object.fromEntries(trendRows.map(r => [r.key, { inc: r.income, out: r.expense, put: r.ownerInvestment }])), gmode: d.groupBy, label: d.trendHeadLabel };
+    }
+
+    const dashAlerts = dash.alerts || [];
+    // a.html is built server-side with every user value HTML-encoded (ReportsService.Alert).
+    const alertHtml = a => `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><span style="color:${esc(a.color)};font-weight:800">●</span> ${a.html}</div>`;
+    document.getElementById('alertList').innerHTML = dashAlerts.length
+      ? dashAlerts.map(alertHtml).join('') + (d.alerts?.items?.length > dashAlerts.length ? `<div class="rule" style="padding-top:10px">+${d.alerts.items.length - dashAlerts.length} more in the Alerts tab</div>` : '')
+      : `<div class="alldone">✓ Nothing needs attention right now.</div>`;
+    document.getElementById('alertListFull').innerHTML = (d.alerts?.items?.length ? d.alerts.items.map(alertHtml).join('') : `<div class="alldone">✓ Nothing needs attention right now.</div>`);
+
+    const herd = d.herd || {};
+    document.getElementById('repHerdMove').innerHTML = (herd.movement || []).map((r, i, arr) =>
+      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td style="${r.isTotal ? 'font-weight:800' : ''}">${esc(r.label)}</td>
+        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : '700'}">${esc(r.count)}</td></tr>`).join('');
+    document.getElementById('repHerdRows').innerHTML = (herd.composition || []).map(r =>
+      `<tr${r.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${r.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${esc(r.statusCssClass)}">${esc(r.statusDisplay)}</span>`}</td>
+        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : '700'}">${r.count}</td>
+        <td class="hide-sm barcell">${r.isTotal ? '' : `<div class="bar" style="width:${Math.max(2, r.sharePercent)}%"></div>`}</td>
+        <td class="num-cell hide-sm">${r.isTotal ? '' : `<span class="breed">${r.sharePercent}%</span>`}</td>
+        <td class="num-cell" style="font-weight:${r.isTotal ? '800' : ''}">${rs(r.value)}</td></tr>`).join('');
+    document.getElementById('repAgeGrid').innerHTML = (herd.ageSexBreed || []).map(repKpiHtml).join('');
+    document.getElementById('repHerdChg').innerHTML = (herd.changes?.length ? herd.changes.map(c =>
+      `<tr><td><span class="breed">${esc(c.date)}</span></td><td><span class="tag">${esc(c.tag)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(c.breed)}</span></td><td>${c.eventHtml}</td>
+        <td class="num-cell">${esc(c.valueDisplay)}</td></tr>`).join('') : `<tr><td colspan="5" class="empty">No herd changes in this period.</td></tr>`);
+
+    const br = d.breeding || {};
+    document.getElementById('repBreedGrid').innerHTML = (br.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repBreedNote').innerHTML = br.noteHtml || '';
+    document.getElementById('repLitter').innerHTML = (br.litter || []).map(r =>
+      `<tr><td>${esc(r.label)}</td><td class="num-cell" style="font-weight:700">${esc(r.does)}</td>
+        <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(2, r.barPercent)}%"></div></td>
+        <td class="num-cell">${r.kids}</td></tr>`).join('') +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell" style="font-weight:800">${br.litterTotalDoes || 0}</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800">${br.litterTotalKids || 0}</td></tr>`;
+    document.getElementById('repDueRows').innerHTML = (br.kiddingCalendar?.length ? br.kiddingCalendar.map(g =>
+      `<tr><td><span class="tag">${esc(g.tag)}</span></td><td class="hide-sm"><span class="breed">${esc(g.matedDate)}</span></td>
+        <td>${esc(g.kidsDisplay)}</td><td><b>${esc(g.dueDate)}</b></td>
+        <td class="num-cell" style="font-weight:700;color:${esc(g.dueInColor)}">${esc(g.dueInText)}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No confirmed pregnancies.</td></tr>`);
+    document.getElementById('repEmptyRows').innerHTML = (br.emptyScans?.length ? br.emptyScans.map(e =>
+      `<tr><td><span class="tag">${esc(e.tag)}</span></td><td class="hide-sm"><span class="breed">${esc(e.matedDate)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(e.buckTag)}</span></td><td><span class="breed">${esc(e.scanDate)}</span></td>
+        <td class="num-cell" style="${e.highlight ? 'color:#8a261c;font-weight:700' : ''}">${esc(e.times)}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No empty scans recorded.</td></tr>`);
+
+    const gr = d.growth || {};
+    document.getElementById('repGrowthKpi').innerHTML = (gr.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repGrowthNote').innerHTML = gr.noteHtml || '';
+    document.getElementById('repWeightRows').innerHTML = (gr.weights?.length ? gr.weights.map(w =>
+      `<tr><td><span class="tag">${esc(w.tag)}</span></td><td class="hide-sm"><span class="breed">${esc(w.ageLabel)}</span></td>
+        <td class="num-cell hide-sm"><span class="breed">${w.firstKg != null ? esc(w.firstKg) + ' kg' : '—'}</span></td>
+        <td class="num-cell" style="font-weight:700">${esc(w.latestKg)} kg</td>
+        <td class="num-cell" style="${w.underperforming ? 'color:#8a261c;font-weight:700' : ''}">${esc(w.dailyGainDisplay)}</td>
+        <td class="num-cell hide-sm"><span class="breed">${esc(w.readings)}</span></td></tr>`).join('') :
+      `<tr><td colspan="6" class="empty">No weights recorded yet.</td></tr>`);
+
+    const fd = d.feed || {};
+    document.getElementById('repFeedKpi').innerHTML = (fd.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repFeedStock').innerHTML = (fd.stock || []).map(f =>
+      `<tr><td>${esc(f.name)}${f.isLow ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
+        <td class="num-cell hide-sm"><span class="breed">${Math.round(f.purchasedKg).toLocaleString('en-US')}</span></td>
+        <td class="num-cell hide-sm"><span class="breed">${Math.round(f.consumedKg).toLocaleString('en-US')}</span></td>
+        <td class="num-cell" style="font-weight:700">${(Math.round(f.stockKg * 10) / 10).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm">${(+f.dailyUseKg).toFixed(1)}</td>
+        <td class="num-cell" style="${f.daysLeft != null && f.daysLeft < 7 ? 'color:#8a261c;font-weight:700' : ''}">${f.daysLeft == null ? '—' : f.daysLeft + ' d'}</td>
+        <td class="num-cell hide-sm"><span class="breed">Rs ${Math.round(f.avgCostPerKg)}</span></td>
+        <td class="num-cell">${rs(f.stockValue)}</td></tr>`).join('');
+    document.getElementById('repFeedGrp').innerHTML = (fd.costByGroup || []).map(x =>
+      `<tr${x.isTotal ? ' style="background:var(--green-tint)"' : ''}><td>${x.isTotal ? '<b>TOTAL</b>' : `<span class="chip ${esc(x.statusCssClass)}">${esc(x.statusDisplay)}</span>`}</td>
+        <td class="num-cell" style="font-weight:${x.isTotal ? '800' : ''}">${x.goatCount}</td>
+        <td class="num-cell">${x.isTotal ? '' : rs(x.costPerGoatDay)}</td>
+        <td class="num-cell" style="color:var(--green-dark);font-weight:${x.isTotal ? '800' : '700'}">${rs(x.costPerMonth)}</td>
+        <td class="num-cell hide-sm">${x.isTotal ? '' : `<span class="breed">${x.sharePercent}%</span>`}</td></tr>`).join('');
+    document.getElementById('repFeedBuy').innerHTML = (fd.purchases?.length ? fd.purchases.map(b =>
+      `<tr><td>${esc(b.feedName)}</td><td class="num-cell">${Math.round(b.kg).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm"><span class="breed">Rs ${b.kg ? Math.round(b.avgRate) : 0}</span></td>
+        <td class="num-cell" style="color:var(--green-dark)">${rs(b.amount)}</td></tr>`).join('') +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell" style="font-weight:800">${Math.round(fd.purchasesTotalKg || 0).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm"></td><td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(fd.purchasesTotalAmount || 0)}</td></tr>` :
+      `<tr><td colspan="4" class="empty">No feed bought in this period.</td></tr>`);
+
+    const hl = d.health || {};
+    document.getElementById('repHealthKpi').innerHTML = (hl.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repVaccRows').innerHTML = (hl.vaccination?.length ? hl.vaccination.map(v =>
+      `<tr><td><b>${esc(v.name)}</b><div class="name">${esc(v.ruleLabel)}</div></td>
+        <td class="hide-sm"><span class="scopechip">${esc(v.scopeLabel)}</span></td>
+        <td class="num-cell">${esc(v.done)}</td>
+        <td class="num-cell" style="${v.dueNow ? 'color:#8a261c;font-weight:700' : ''}">${esc(v.dueNow)}</td>
+        <td class="num-cell hide-sm">${esc(v.comingUp)}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No vaccines set up.</td></tr>`);
+    document.getElementById('repDeathRows').innerHTML = (hl.deaths?.length ? hl.deaths.map(x =>
+      `<tr><td><span class="breed">${esc(x.date)}</span></td><td><span class="tag">${esc(x.tag)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(x.ageLabel)}</span></td><td>${esc(x.reason)}</td>
+        <td class="num-cell" style="color:#8a261c">${x.valueLost != null ? rs(x.valueLost) : '—'}</td></tr>`).join('') +
+      `<tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL</td>
+        <td class="num-cell" style="font-weight:800">${hl.deaths.length}</td><td class="hide-sm"></td><td></td>
+        <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(hl.deathsTotalValue || 0)}</td></tr>` :
+      `<tr><td colspan="5" class="empty">No deaths recorded in this period. Good.</td></tr>`);
+
+    if (!d.financeHidden) {
+    document.getElementById('rep-expense').textContent = rs(fin.totalExpense || 0);
+    document.getElementById('rep-owner').textContent = rs(fin.totalOwnerInvestment || 0);
+    document.getElementById('rep-income').textContent = rs(fin.totalIncome || 0);
+    document.getElementById('rep-profit-lbl').textContent = fin.profitLabel || 'Net profit';
+    const pv = document.getElementById('rep-profit-val');
+    pv.textContent = (pre && fin.profitLabel === 'Still to fund' ? '– ' : (fin.profitIsNegative ? '– ' : '')) + rs(fin.profit || 0);
+    pv.style.color = pre ? (fin.profitLabel === 'Still to fund' ? 'var(--amber)' : 'var(--green-dark)') : (fin.profitIsNegative ? '#8a261c' : 'var(--green-dark)');
+
+    const expTot = fin.totalExpense || 0;
+    const incTot = fin.totalIncome || 0;
+    const ownTot = fin.totalOwnerInvestment || 0;
+    const eRows = fin.expenseCategories || [];
+    const eMax = eRows.length ? Math.max(...eRows.map(x => x.amount)) : 1;
+    document.getElementById('repExpRows').innerHTML = (eRows.length ? eRows.map(row =>
+      `<tr><td><b>${esc(row.name)}</b><div class="name">${esc(row.percent)}% of costs${esc(row.extra)}</div></td>
+        <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(4, Math.round(row.amount / eMax * 100))}%;background:var(--red)"></div></td>
+        <td class="num-cell" style="color:#8a261c">${rs(row.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="3" class="empty">No costs in this period.</td></tr>`) +
+      `<tr style="background:var(--red-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800;color:#8a261c">${rs(expTot)}</td></tr>`;
+
+    const iRows = fin.incomeSources || [];
+    const iMax = iRows.length ? Math.max(...iRows.map(x => x.amount)) : 1;
+    document.getElementById('repIncRows').innerHTML = (iRows.length ? iRows.map(row =>
+      `<tr><td><b>${esc(row.name)}</b><div class="name">${esc(row.percent)}% of income${esc(row.extra)}</div></td>
+        <td class="hide-sm barcell"><div class="bar" style="width:${Math.max(4, Math.round(row.amount / iMax * 100))}%"></div></td>
+        <td class="num-cell" style="color:var(--green-dark)">${rs(row.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="3" class="empty">No income in this period.</td></tr>`) +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(incTot)}</td></tr>`;
+
+    const ownList = fin.ownerRows || [];
+    document.getElementById('repOwnRows').innerHTML = (ownList.length ? ownList.map(o =>
+      `<tr><td><span class="breed">${esc(o.date)}</span></td><td><b>${esc(o.note || 'Investment')}</b></td>
+        <td class="num-cell" style="color:#8a5b13">${rs(o.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="3" class="empty">No money added in this period.</td></tr>`) +
+      `<tr style="background:var(--amber-tint)"><td style="font-weight:800">TOTAL PUT IN</td><td></td>
+        <td class="num-cell" style="font-weight:800;color:#8a5b13">${rs(ownTot)}</td></tr>`;
+
+    document.getElementById('repExpList').innerHTML = (fin.expenseEntries?.length ? fin.expenseEntries.map(e =>
+      `<tr><td><span class="breed">${esc(e.date)}</span></td><td><span class="chip chip-exp">${esc(e.type)}</span></td>
+        <td class="hide-sm"><span class="breed">${esc(e.comment)}</span></td><td class="num-cell">${rs(e.amount)}</td></tr>`).join('') :
+      `<tr><td colspan="4" class="empty">You haven't added any cost entries in this period.</td></tr>`);
+
+    document.getElementById('repDayRows').innerHTML = (fin.dayRows?.length ? fin.dayRows.map(r =>
+      `<tr><td><b>${esc(r.date)}</b></td><td class="hide-sm"><span class="breed">${esc(r.summary)}</span></td>
+        <td class="num-cell hide-sm" style="color:var(--green-dark)">${r.income > 0 ? rs(r.income) : '—'}</td>
+        <td class="num-cell" style="color:#8a261c">${r.expense > 0 ? rs(r.expense) : '—'}</td>
+        <td class="num-cell" style="color:#8a5b13">${r.ownerInvestment > 0 ? rs(r.ownerInvestment) : '—'}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">Nothing recorded in this period.</td></tr>`);
+    document.getElementById('repDayNote').textContent = fin.dayNote || '';
+
+    const pr = d.profitability || {};
+    document.getElementById('repProfitKpi').innerHTML = (pr.unitEconomics || []).map(repKpiHtml).join('');
+    document.getElementById('repProfitNote').innerHTML = pr.noteHtml || '';
+    document.getElementById('repMilkKpi').innerHTML = (pr.milkEconomics || []).map(repKpiHtml).join('');
+    document.getElementById('repMilkRows').innerHTML = (pr.milkByMonth?.length ? pr.milkByMonth.map(m =>
+      `<tr><td><b>${esc(m.month)}</b></td><td class="num-cell">${Math.round(m.collectedLiters).toLocaleString('en-US')} L</td>
+        <td class="num-cell">${Math.round(m.soldLiters).toLocaleString('en-US')} L</td>
+        <td class="num-cell hide-sm"><span class="breed">${m.avgRate != null ? 'Rs ' + Math.round(m.avgRate) : '—'}</span></td>
+        <td class="num-cell" style="color:var(--green-dark)">${rs(m.income)}</td></tr>`).join('') :
+      `<tr><td colspan="5" class="empty">No milk recorded in this period.</td></tr>`);
+    }
+
+    const inv = d.inventory || {};
+    document.getElementById('repInvKpi').innerHTML = (inv.kpis || []).map(repKpiHtml).join('');
+    document.getElementById('repInvFeed').innerHTML = (inv.feedStock || []).map(f =>
+      `<tr><td>${esc(f.name)}</td><td class="num-cell" style="font-weight:700">${(Math.round(f.quantityKg * 10) / 10).toLocaleString('en-US')} kg</td>
+        <td class="num-cell hide-sm"><span class="breed">Rs ${esc(f.ratePerKg)}</span></td>
+        <td class="num-cell">${rs(f.value)}</td><td class="num-cell">${f.statusHtml}</td></tr>`).join('') +
+      `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td><td class="num-cell"></td>
+        <td class="num-cell hide-sm"></td><td class="num-cell" style="font-weight:800">${rs(inv.feedStockTotalValue || 0)}</td><td></td></tr>`;
+    const invAssets = document.getElementById('repInvAssets');
+    if (invAssets) invAssets.innerHTML = (inv.assets?.length ? inv.assets.map(a =>
+      `<tr><td>${esc(a.name)}${a.note ? `<div class="name">${esc(a.note)}</div>` : ''}</td>
+        <td class="hide-sm"><span class="chip chip-cap">${esc(a.type)}</span></td>
+        <td class="num-cell">${rs(a.value)}</td></tr>`).join('') +
+      `<tr style="background:var(--blue-tint)"><td style="font-weight:800">TOTAL</td><td class="hide-sm"></td>
+        <td class="num-cell" style="font-weight:800">${rs(inv.assetsTotalValue || 0)}</td></tr>` :
+      `<tr><td colspan="3" class="empty">No assets recorded.</td></tr>`);
+
+    const capex = d.capexOpex || {};
+    const repCapexKpi = document.getElementById('repCapexKpi');
+    if (repCapexKpi) {
+      repCapexKpi.innerHTML = [
+        { v: capex.capexTotal, k: 'CAPEX (period)' },
+        { v: capex.opexTotal, k: 'OPEX (period)' }
+      ].map(x => `<div class="fincard"><div class="v">${rs(x.v || 0)}</div><div class="k">${esc(x.k)}</div></div>`).join('');
+    }
+    const repCapexRows = document.getElementById('repCapexRows');
+    if (repCapexRows) {
+      repCapexRows.innerHTML = (capex.capexRows?.length ? capex.capexRows.map(r =>
+        `<tr><td><b>${esc(r.label)}</b></td><td class="hide-sm"><span class="breed">${esc(r.sub || '')}</span></td><td class="num-cell">${rs(r.amount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">No capital spend in this period.</td></tr>`);
+    }
+    const repOpexRows = document.getElementById('repOpexRows');
+    if (repOpexRows) {
+      repOpexRows.innerHTML = (capex.opexRows?.length ? capex.opexRows.map(r =>
+        `<tr><td>${esc(r.label)}</td><td class="num-cell">${rs(r.amount)}</td></tr>`).join('')
+        : `<tr><td colspan="2" class="empty">No OPEX in this period.</td></tr>`);
+    }
+
+    const ps = d.profitShare || {};
+    const repPsSub = document.getElementById('repPsSub');
+    if (repPsSub) repPsSub.textContent = `Net profit basis (period): ${rs(ps.netProfit || 0)}`;
+    const repPsRows = document.getElementById('repPsRows');
+    if (repPsRows) {
+      repPsRows.innerHTML = (ps.partners?.length ? ps.partners.map(p =>
+        `<tr><td><b>${esc(p.name)}</b></td><td class="num-cell">${p.sharePercent}%</td><td class="num-cell">${rs(p.shareAmount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">Add profit partners under Finance → Accounting ledger.</td></tr>`);
+    }
+
+    const proj = d.projectsAssets || {};
+    const repProjKpi = document.getElementById('repProjKpi');
+    if (repProjKpi) {
+      repProjKpi.innerHTML = [
+        { v: proj.activeProjects, k: 'Active projects', fmt: 'n' },
+        { v: proj.totalBudget, k: 'Total budget' },
+        { v: proj.totalSpent, k: 'Total spent' }
+      ].map(x => `<div class="fincard"><div class="v">${x.fmt === 'n' ? esc(x.v) : rs(x.v || 0)}</div><div class="k">${esc(x.k)}</div></div>`).join('');
+    }
+    const repProjRows = document.getElementById('repProjRows');
+    if (repProjRows) {
+      repProjRows.innerHTML = (proj.projects?.length ? proj.projects.map(p =>
+        `<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.status)}</td><td class="num-cell">${rs(p.budget)}</td><td class="num-cell">${rs(p.spent)}</td></tr>`).join('')
+        : `<tr><td colspan="4" class="empty">No projects yet.</td></tr>`);
+    }
+    const repProjAssets = document.getElementById('repProjAssets');
+    if (repProjAssets) {
+      repProjAssets.innerHTML = (proj.fixedAssets?.length ? proj.fixedAssets.map(a =>
+        `<tr><td><b>${esc(a.label)}</b></td><td class="hide-sm">${esc(a.sub || '')}</td><td class="num-cell">${rs(a.amount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">No fixed assets in register.</td></tr>`);
+    }
+
+    const repCompareRows = document.getElementById('repCompareRows');
+    if (repCompareRows) {
+      repCompareRows.innerHTML = (d.comparison?.rows || []).map(r =>
+        `<tr><td><b>${esc(r.label)}</b></td>
+          <td class="num-cell" style="font-weight:700">${esc(r.thisMonth)}</td>
+          <td class="num-cell">${esc(r.lastMonth)}</td>
+          <td class="num-cell" style="color:${esc(r.differenceColor)};font-weight:700">${esc(r.difference)}</td>
+          <td class="num-cell hide-sm"><span class="breed">${esc(r.percentChange || '—')}</span></td>
+          <td class="num-cell hide-sm">${esc(r.yearToDate)}</td></tr>`).join('');
+    }
+    } catch (err) {
+      console.error('Reports render failed', err);
+    }
+  }
+
+  function initReports(initialData) {
+    const root = document.getElementById('rep-period');
+    if (!root) return;
+    const firstInit = document.body.dataset.reportsInit !== '1';
+    if (firstInit) document.body.dataset.reportsInit = '1';
+
+    function repParams() {
+      const period = document.getElementById('rep-period')?.value || 'month';
+      const groupBy = document.getElementById('rep-group')?.value || 'month';
+      const params = new URLSearchParams({ period, groupBy });
+      if (period === 'custom') {
+        params.set('from', document.getElementById('rep-from')?.value || '');
+        params.set('to', document.getElementById('rep-to')?.value || '');
+      }
+      return params;
+    }
+
+    async function reloadReports() {
+      try {
+        const data = await api('/Reports/GetData?' + repParams().toString());
+        renderReportsData(data);
+      } catch {
+        /* api() already surfaced the error modal */
+      }
+    }
+
+    if (firstInit) {
+      const tabsRoot = document.getElementById('rep-tabs');
+      if (tabsRoot) {
+        tabsRoot.addEventListener('click', e => {
+          const tab = e.target.closest('[data-reptab]');
+          if (!tab || !tabsRoot.contains(tab)) return;
+          e.preventDefault();
+          showRepTab(tab.dataset.reptab);
+        });
+      } else {
+        document.querySelectorAll('[data-reptab]').forEach(t => {
+          t.addEventListener('click', e => {
+            e.preventDefault();
+            showRepTab(t.dataset.reptab);
+          });
+        });
+      }
+
+      document.getElementById('rep-period')?.addEventListener('change', e => {
+        const custom = document.getElementById('rep-custom');
+        if (custom) custom.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+        if (e.target.value !== 'custom') reloadReports();
+      });
+      document.getElementById('rep-from')?.addEventListener('change', reloadReports);
+      document.getElementById('rep-to')?.addEventListener('change', reloadReports);
+      document.getElementById('rep-group')?.addEventListener('change', reloadReports);
+    }
+
+    function tableToCsv(tbodyId, headers) {
+      const tb = document.getElementById(tbodyId);
+      if (!tb) return [];
+      const out = [headers];
+      tb.querySelectorAll('tr').forEach(tr => {
+        const cells = [...tr.children].map(td => {
+          const inp = td.querySelector('input');
+          return (inp ? inp.value : td.textContent).replace(/\s+/g, ' ').trim();
+        });
+        if (cells.join('').trim()) out.push(cells);
+      });
+      return out;
+    }
+
+    if (firstInit) document.getElementById('repCsv')?.addEventListener('click', () => {
+      const label = document.getElementById('rep-range')?.textContent?.split('·')[0]?.trim() || 'report';
+      const lines = [];
+      const push = (title, rows) => { if (!rows || rows.length < 2) return; lines.push([title]); rows.forEach(r => lines.push(r)); lines.push([]); };
+      lines.push(['Goat Records — Farm Report']);
+      lines.push(['Period', label]);
+      lines.push(['Generated', new Date().toISOString().slice(0, 16).replace('T', ' ')]);
+      lines.push([]);
+      const kp = [...document.getElementById('dashKpi')?.querySelectorAll('.stat') || []].map(c =>
+        [c.querySelector('.lbl')?.textContent?.trim(), c.querySelector('.num')?.textContent?.trim()]);
+      push('KEY FIGURES', [['Metric', 'Value'], ...kp]);
+      const T = window.__trend;
+      if (T) {
+        const rows = [[T.label, 'Income', 'Expenses', 'Net']];
+        T.keys.forEach(k => { const b = T.bucket[k]; rows.push([k, Math.round(b.inc), Math.round(b.out), Math.round(b.inc - b.out)]); });
+        push('INCOME VS EXPENSES (by ' + T.gmode + ')', rows);
+      }
+      push('HERD MOVEMENT', tableToCsv('repHerdMove', ['Item', 'Count']));
+      push('HERD COMPOSITION', tableToCsv('repHerdRows', ['Group', 'Goats', '', 'Share', 'Value']));
+      push('HERD CHANGES', tableToCsv('repHerdChg', ['Date', 'Tag', 'Breed', 'Event', 'Value']));
+      push('KIDDING CALENDAR', tableToCsv('repDueRows', ['Doe', 'Mated', 'Kids', 'Due date', 'Due in']));
+      push('LITTER SIZE', tableToCsv('repLitter', ['Litter', 'Does', '', 'Kids']));
+      push('EMPTY SCANS', tableToCsv('repEmptyRows', ['Doe', 'Mated', 'Buck', 'Scan date', 'Times']));
+      push('WEIGHTS', tableToCsv('repWeightRows', ['Tag', 'Age', 'First', 'Latest', 'Daily gain', 'Readings']));
+      push('FEED STOCK', tableToCsv('repFeedStock', ['Feed', 'Purchased', 'Consumed', 'Stock', 'Daily use', 'Days left', 'Avg cost/kg', 'Stock value']));
+      push('FEED COST BY GROUP', tableToCsv('repFeedGrp', ['Group', 'Goats', 'Rs/goat/day', 'Cost/month', 'Share']));
+      push('FEED PURCHASES', tableToCsv('repFeedBuy', ['Feed', 'kg', 'Avg rate', 'Total']));
+      push('VACCINATION STATUS', tableToCsv('repVaccRows', ['Vaccine', 'Applies to', 'Done', 'Due now', 'Coming up']));
+      push('DEATHS', tableToCsv('repDeathRows', ['Date', 'Tag', 'Age', 'Reason', 'Value lost']));
+      push('EXPENSES BY CATEGORY', tableToCsv('repExpRows', ['Category', '', 'Amount']));
+      push('REVENUE BY SOURCE', tableToCsv('repIncRows', ['Source', '', 'Amount']));
+      push('OWNER FUNDING', tableToCsv('repOwnRows', ['Date', 'Note', 'Amount']));
+      push('COST ENTRIES', tableToCsv('repExpList', ['Date', 'Type', 'Comment', 'Amount']));
+      push('DAY BY DAY', tableToCsv('repDayRows', ['Date', 'What happened', 'In', 'Spent', 'You put in']));
+      push('MILK BY MONTH', tableToCsv('repMilkRows', ['Month', 'Collected', 'Sold', 'Avg rate', 'Income']));
+      push('INVENTORY — FEED', tableToCsv('repInvFeed', ['Item', 'Quantity', 'Rate', 'Value', 'Status']));
+      push('INVENTORY — ASSETS', tableToCsv('repInvAssets', ['Asset', 'Type', 'Value']));
+      push('PERIOD COMPARISON', tableToCsv('repCompareRows', ['Metric', 'This month', 'Last month', 'Difference', '%', 'Year to date']));
+      const csv = lines.map(r => r.map(csvCell).join(',')).join('\r\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'goat-records-report-' + label.replace(/[^0-9a-zA-Z]+/g, '-') + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    if (firstInit) document.getElementById('repPrint')?.addEventListener('click', () => {
+      const views = [...document.querySelectorAll('.repview')];
+      const prev = views.map(v => v.style.display);
+      views.forEach(v => v.style.display = 'block');
+      document.body.classList.add('printing');
+      const done = () => {
+        views.forEach((v, i) => v.style.display = prev[i]);
+        document.body.classList.remove('printing');
+        window.removeEventListener('afterprint', done);
+      };
+      window.addEventListener('afterprint', done);
+      setTimeout(() => window.print(), 120);
+    });
+
+    if (initialData) renderReportsData(initialData);
+    const initialTab = document.querySelector('.rep-subtab.active')?.dataset.reptab || 'dash';
+    showRepTab(initialTab);
+    reloadReports();
+  }
+
+  function initBackupButtons() {
+    if (!FarmPerms.can('settings', 'edit')) FarmPerms.hide('importBtn');
+    document.getElementById('exportBtn')?.addEventListener('click', () => {
+      window.location.href = '/Dashboard/Export';
+    });
+    document.getElementById('importBtn')?.addEventListener('click', () => {
+      document.getElementById('importFile')?.click();
+    });
+    document.getElementById('importFile')?.addEventListener('change', async e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const confirmed = await showConfirm('Restore from this backup? It will replace everything currently in the app.');
+      if (!confirmed) { e.target.value = ''; return; }
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        const res = await fetch('/Dashboard/Import', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.error) await showModal(data.error);
+        else {
+          sessionStorage.setItem('goatToast', 'Backup restored successfully');
+          location.href = '/Dashboard';
+        }
+      } catch {
+        await showModal('Could not read this file — make sure it is a Goat Records backup (.json).');
+      }
+      e.target.value = '';
+    });
+  }
+
+  initBackupButtons();
+
+  function initShell() {
+    initAssistant();
+    const toggle = document.getElementById('navToggle');
+    const scrim = document.getElementById('navScrim');
+    if (!toggle) return;
+    const mobile = window.matchMedia('(max-width: 1024px)');
+    const body = document.body;
+
+    function sync() {
+      const expanded = mobile.matches ? body.classList.contains('nav-open') : !body.classList.contains('nav-collapsed');
+      toggle.setAttribute('aria-expanded', String(expanded));
+      if (scrim) scrim.hidden = !(mobile.matches && expanded);
+    }
+
+    if (localStorage.getItem('goatNavCollapsed') === '1') body.classList.add('nav-collapsed');
+
+    toggle.addEventListener('click', () => {
+      if (mobile.matches) {
+        body.classList.toggle('nav-open');
+        if (body.classList.contains('nav-open')) document.querySelector('#sideNav .nav-link')?.focus();
+      } else {
+        body.classList.toggle('nav-collapsed');
+        localStorage.setItem('goatNavCollapsed', body.classList.contains('nav-collapsed') ? '1' : '0');
+      }
+      sync();
+    });
+    scrim?.addEventListener('click', () => { body.classList.remove('nav-open'); sync(); toggle.focus(); });
+    document.querySelectorAll('#sideNav .nav-link, #sideNav .side-footer-link').forEach(link => {
+      link.addEventListener('click', () => {
+        if (!mobile.matches) return;
+        body.classList.remove('nav-open');
+        sync();
+      });
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && body.classList.contains('nav-open')) {
+        body.classList.remove('nav-open');
+        sync();
+        toggle.focus();
+      }
+    });
+    mobile.addEventListener('change', () => { body.classList.remove('nav-open'); sync(); });
+    sync();
+
+    initGlobalSearch();
+  }
+
+  function initGlobalSearch() {
+    const form = document.getElementById('globalSearchForm');
+    const input = document.getElementById('globalTag');
+    if (!form || !input) return;
+
+    form.addEventListener('submit', e => {
+      const tag = input.value.trim();
+      if (!tag) {
+        e.preventDefault();
+        showToast('Enter or scan a tag / RFID ID.', 'error');
+        input.focus();
+        return;
+      }
+      input.value = tag;
+      // Same destination as the Search nav tab: GET /Search?tag=… (full profile page)
+    });
+
+    const pageTag = document.getElementById('search-tag');
+    if (pageTag?.value.trim()) input.value = pageTag.value.trim();
+    else {
+      const path = location.pathname.toLowerCase();
+      if (path.endsWith('/search')) {
+        const fromUrl = new URLSearchParams(location.search).get('tag');
+        if (fromUrl) input.value = fromUrl.trim();
+      }
+    }
+  }
+
+  let assistantBound = false;
+  initShell();
+
+  function initTasks() {
+    const $ = id => document.getElementById(id);
+    const saveBtn = $('saveTask');
+    const cancelBtn = $('cancelTask');
+    const deleteBtn = $('deleteTask');
+    const formTitle = $('taskFormTitle');
+    let editingId = null;
+
+    const canAdd = FarmPerms.can('tasks', 'add');
+    const canEdit = FarmPerms.can('tasks', 'edit');
+    const canDelete = FarmPerms.can('tasks', 'delete');
+
+    if (!canAdd) $('taskFormPanel')?.classList.add('perm-hidden');
+    if (!canEdit) document.querySelectorAll('[data-task-edit]').forEach(b => b.classList.add('perm-hidden'));
+
+    const fields = { title: $('t-title'), assignee: $('t-assignee'), due: $('t-due'), priority: $('t-priority'), type: $('t-type'), goat: $('t-goat'), notes: $('t-notes') };
+
+    function resetForm() {
+      editingId = null;
+      Object.values(fields).forEach(f => { if (f.tagName === 'SELECT') f.selectedIndex = 0; else f.value = ''; });
+      formTitle.textContent = 'Add a task';
+      saveBtn.textContent = '+ Add task';
+      cancelBtn.classList.add('perm-hidden');
+      deleteBtn.classList.add('perm-hidden');
+      if (!canAdd) $('taskFormPanel')?.classList.add('perm-hidden');
+    }
+
+    function startEdit(card) {
+      if (!canEdit) return;
+      const d = card.dataset;
+      editingId = Number(d.taskId);
+      fields.title.value = d.title || '';
+      fields.notes.value = d.notes || '';
+      fields.due.value = d.due || '';
+      fields.priority.value = d.priority || 'Normal';
+      fields.type.value = d.type || 'Task';
+      fields.assignee.value = d.assignee || '';
+      fields.goat.value = d.goat || '';
+      formTitle.textContent = 'Edit task';
+      saveBtn.textContent = 'Save changes';
+      cancelBtn.classList.remove('perm-hidden');
+      if (canDelete) deleteBtn.classList.remove('perm-hidden');
+      $('taskFormPanel')?.classList.remove('perm-hidden');
+      $('taskFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      fields.title.focus();
+    }
+
+    saveBtn?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('tasks', !!editingId)) return;
+      const title = fields.title.value.trim();
+      if (!title) { await showModal('Enter a task title.'); return; }
+      const body = {
+        title,
+        notes: fields.notes.value.trim() || null,
+        dueDate: fields.due.value || null,
+        priority: fields.priority.value,
+        type: fields.type.value,
+        assigneeUserId: fields.assignee.value || null,
+        goatTag: fields.goat.value.trim() || null
+      };
+      saveBtn.disabled = true;
+      try {
+        if (editingId) await api('/Tasks/Update?id=' + editingId, { method: 'PUT', body: JSON.stringify(body) });
+        else await api('/Tasks/Create', { method: 'POST', body: JSON.stringify(body) });
+        reloadWithToast(editingId ? 'Task updated' : 'Task added');
+      } catch { /* api() already showed the error */ } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    cancelBtn?.addEventListener('click', resetForm);
+
+    deleteBtn?.addEventListener('click', async () => {
+      if (!editingId || !canDelete) return;
+      if (!await showConfirm('Delete this task?')) return;
+      try {
+        await api('/Tasks/Delete?id=' + editingId, { method: 'DELETE' });
+        reloadWithToast('Task deleted');
+      } catch { /* shown */ }
+    });
+
+    document.querySelector('.task-board')?.addEventListener('click', async e => {
+      const card = e.target.closest('.task-card');
+      if (!card) return;
+      const statusBtn = e.target.closest('[data-task-status]');
+      if (statusBtn) {
+        statusBtn.disabled = true;
+        try {
+          await api('/Tasks/SetStatus?id=' + card.dataset.taskId, {
+            method: 'POST', body: JSON.stringify({ status: statusBtn.dataset.taskStatus })
+          });
+          reloadWithToast(statusBtn.dataset.taskStatus === 'Completed' ? 'Task completed' : 'Task updated');
+        } catch { statusBtn.disabled = false; }
+        return;
+      }
+      if (e.target.closest('[data-task-edit]')) startEdit(card);
+    });
+
+    $('taskFilter')?.addEventListener('change', e => {
+      const url = new URL(location.href);
+      url.searchParams.set('filter', e.target.value);
+      location.href = url.toString();
+    });
+  }
+
+  function initAssistant() {
+    if (assistantBound) return;
+    const panel = document.getElementById('aiAssistantPanel');
+    const scrim = document.getElementById('aiAssistantScrim');
+    const openBtn = document.getElementById('sideAiAssistantBtn');
+    const closeBtn = document.getElementById('aiAssistantClose');
+    const thread = document.getElementById('aiAssistantThread');
+    const form = document.getElementById('aiAssistantForm');
+    const input = document.getElementById('aiAssistantInput');
+    const sendBtn = document.getElementById('aiAssistantSend');
+    if (!panel || !openBtn || !form || !input || !sendBtn || !thread) return;
+    assistantBound = true;
+
+    const storageKey = 'goatAiConv';
+    const speakPrefKey = 'goatAiSpeakReplies';
+    let conversationId = sessionStorage.getItem(storageKey) || '';
+    let busy = false;
+    let lastQuestion = '';
+    let inflight = null;
+    const micBtn = document.getElementById('aiAssistantMic');
+    const speakBtn = document.getElementById('aiAssistantSpeak');
+    const stopSpeakBtn = document.getElementById('aiAssistantStopSpeak');
+    const speakPrefEl = document.getElementById('aiAssistantSpeakPref');
+    const voiceStatus = document.getElementById('aiAssistantVoiceStatus');
+
+    const voice = createAssistantVoice({
+      lang: document.documentElement.lang || navigator.language || 'en-US',
+      isOpen: () => !panel.hidden,
+      getInput: () => input.value,
+      setInput: v => { input.value = v; },
+      getSpeakPref: () => {
+        try { return localStorage.getItem(speakPrefKey) === '1'; } catch (e) { return false; }
+      },
+      setSpeakPref: on => {
+        try {
+          if (on) localStorage.setItem(speakPrefKey, '1');
+          else localStorage.removeItem(speakPrefKey);
+        } catch (e) { /* ignore quota / private mode */ }
+      },
+      setStatus: (state, message) => {
+        if (voiceStatus) voiceStatus.textContent = message || '';
+        panel.classList.toggle('is-listening', state === 'listening');
+        if (micBtn) {
+          const on = state === 'listening';
+          micBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+          micBtn.textContent = on ? 'Stop listening' : 'Start listening';
+          micBtn.disabled = busy || !voice.supportedInput();
+        }
+      }
+    });
+
+    function refreshVoiceChrome() {
+      const inOk = voice.supportedInput();
+      const outOk = voice.supportedOutput();
+      if (micBtn) micBtn.disabled = busy || !inOk;
+      if (speakBtn) speakBtn.disabled = !outOk;
+      if (stopSpeakBtn) stopSpeakBtn.disabled = !outOk;
+      if (speakPrefEl) speakPrefEl.disabled = !outOk;
+      if (voiceStatus && !voiceStatus.textContent) {
+        if (!inOk && !outOk) voiceStatus.textContent = 'Voice input and spoken replies are not available in this browser. Type your question instead.';
+        else if (!inOk) voiceStatus.textContent = 'Voice input is not available in this browser. Type your question instead.';
+        else if (!outOk) voiceStatus.textContent = 'Spoken replies are not available in this browser.';
+      }
+    }
+
+    function node(tag, className, text) {
+      const el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text != null) el.textContent = text;
+      return el;
+    }
+
+    function setOpen(open) {
+      panel.hidden = !open;
+      if (scrim) scrim.hidden = !open;
+      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+      openBtn.setAttribute('aria-expanded', String(open));
+      document.body.classList.toggle('ai-open', open);
+      if (open) {
+        input.focus();
+        thread.scrollTop = thread.scrollHeight;
+      } else {
+        inflight?.abort();
+        voice.onClose();
+        openBtn.focus();
+      }
+    }
+
+    function setBusy(on) {
+      busy = on;
+      sendBtn.disabled = on;
+      input.disabled = on;
+      sendBtn.textContent = on ? 'Sending…' : 'Send';
+      if (on) voice.stopListening();
+      if (micBtn) micBtn.disabled = on || !voice.supportedInput();
+    }
+
+    function append(el) {
+      thread.appendChild(el);
+      thread.scrollTop = thread.scrollHeight;
+      return el;
+    }
+
+    function renderBlocks(blocks) {
+      const wrap = node('div', 'ai-turn-blocks');
+      (Array.isArray(blocks) ? blocks : []).forEach(block => wrap.appendChild(renderBlock(block)));
+      if (!wrap.childNodes.length) wrap.appendChild(node('p', '', 'No reply came back. Try again.'));
+      return wrap;
+    }
+
+    function renderBlock(block) {
+      const kind = String(block?.kind || '').toLowerCase();
+      const card = node('div', 'ai-bubble' + (kind === 'error' ? ' ai-bubble-error' : ''));
+      if (block?.title) card.appendChild(node('p', 'ai-block-title', block.title));
+      if (block?.text) card.appendChild(node('p', '', block.text));
+
+      if (kind === 'summary' && Array.isArray(block.summary?.items)) {
+        const grid = node('div', 'ai-kpis');
+        block.summary.items.slice(0, 12).forEach(item => {
+          const kpi = node('div', 'fincard');
+          kpi.appendChild(node('div', 'v', item?.value));
+          kpi.appendChild(node('div', 'k', item?.label));
+          if (item?.note) kpi.appendChild(node('div', 'ai-note', item.note));
+          grid.appendChild(kpi);
+        });
+        card.appendChild(grid);
+      }
+
+      if (kind === 'table' && Array.isArray(block.table?.columns) && Array.isArray(block.table?.rows)) {
+        const wrap = node('div', 'ai-table-wrap');
+        const table = node('table', 'tbl');
+        const thead = node('thead');
+        const hr = node('tr');
+        block.table.columns.slice(0, 12).forEach(col => hr.appendChild(node('th', '', col)));
+        thead.appendChild(hr);
+        table.appendChild(thead);
+        const tbody = node('tbody');
+        block.table.rows.slice(0, 50).forEach(row => {
+          const tr = node('tr');
+          const cells = Array.isArray(row) ? row : [];
+          block.table.columns.slice(0, 12).forEach((_, i) => tr.appendChild(node('td', '', cells[i])));
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        card.appendChild(wrap);
+      }
+
+      if (kind === 'chart' && Array.isArray(block.chart?.points)) {
+        const points = block.chart.points.filter(p => p && Number.isFinite(Number(p.value))).slice(0, 12);
+        const max = Math.max(0, ...points.map(p => Math.abs(Number(p.value))));
+        const bars = node('div', 'dash-bars');
+        points.forEach(p => {
+          const col = node('div', 'dash-bar-col');
+          const track = node('div', 'dash-bar-track');
+          const fill = node('div', 'dash-bar-fill');
+          const pct = max > 0 ? Math.min(100, Math.round(Math.abs(Number(p.value)) / max * 100)) : 0;
+          fill.style.height = pct + '%';
+          track.appendChild(fill);
+          col.appendChild(node('div', 'dash-bar-val', String(p.value)));
+          col.appendChild(track);
+          col.appendChild(node('div', 'dash-bar-lbl', p.label));
+          bars.appendChild(col);
+        });
+        card.appendChild(bars);
+      }
+
+      if (kind === 'navigate' && assistantSafePath(block.navigation?.path)) {
+        const link = node('a', 'btn btn-green ai-nav', block.navigation.label || 'Open page');
+        link.href = block.navigation.path;
+        card.appendChild(link);
+      }
+
+      if (kind === 'clarify' && Array.isArray(block.clarification?.questions)) {
+        const list = node('div', 'ai-clarify-qs');
+        block.clarification.questions.slice(0, 6).forEach(q => {
+          const btn = node('button', '', q);
+          btn.type = 'button';
+          btn.addEventListener('click', () => send(String(q || '')));
+          list.appendChild(btn);
+        });
+        card.appendChild(list);
+      }
+
+      if (kind === 'error') {
+        const retry = node('button', 'btn btn-ghost ai-retry', 'Try again');
+        retry.type = 'button';
+        retry.addEventListener('click', () => { if (lastQuestion) send(lastQuestion); });
+        card.appendChild(retry);
+      }
+
+      return card;
+    }
+
+    async function send(raw) {
+      const message = String(raw || '').trim();
+      if (!message || busy) return;
+      if (message.length > 2000) {
+        showToast('Keep questions under 2000 characters.', 'error');
+        return;
+      }
+      voice.stopListening();
+      voice.stopSpeaking();
+      lastQuestion = message;
+      document.getElementById('aiAssistantWelcome')?.remove();
+      append(node('div', 'ai-bubble ai-bubble-user', message));
+      const thinking = append(node('p', 'ai-thinking', 'Looking up farm records…'));
+      setBusy(true);
+      input.value = '';
+      inflight?.abort();
+      const ac = new AbortController();
+      inflight = ac;
+      try {
+        const body = { message, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || '' };
+        if (conversationId) body.conversationId = conversationId;
+        const data = await api('/Assistant/Chat', { method: 'POST', body: JSON.stringify(body), signal: ac.signal, quiet: true });
+        if (data?.conversationId) {
+          conversationId = String(data.conversationId);
+          sessionStorage.setItem(storageKey, conversationId);
+        }
+        thinking.remove();
+        const blocks = data?.blocks;
+        append(renderBlocks(blocks));
+        voice.setLastBlocks(Array.isArray(blocks) ? blocks : []);
+      } catch (err) {
+        thinking.remove();
+        if (err.name === 'AbortError' || ac.signal.aborted) return;
+        const fail = { kind: 'Error', title: 'Could not answer', text: err.message || 'Something went wrong. Please try again.', errorCode: 'provider_error' };
+        append(renderBlocks([fail]));
+        voice.setLastBlocks([fail]);
+      } finally {
+        if (inflight === ac) inflight = null;
+        setBusy(false);
+        if (!panel.hidden) input.focus();
+      }
+    }
+
+    openBtn.addEventListener('click', () => setOpen(true));
+    closeBtn?.addEventListener('click', () => setOpen(false));
+    scrim?.addEventListener('click', () => setOpen(false));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !panel.hidden) {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    });
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      send(input.value);
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send(input.value);
+      }
+    });
+    document.getElementById('aiAssistantStarters')?.addEventListener('click', e => {
+      const btn = e.target.closest('[data-ai-q]');
+      if (btn) send(btn.getAttribute('data-ai-q') || '');
+    });
+    micBtn?.addEventListener('click', () => voice.startListening());
+    speakBtn?.addEventListener('click', () => voice.speakLatest());
+    stopSpeakBtn?.addEventListener('click', () => {
+      voice.stopSpeaking();
+      if (voiceStatus) voiceStatus.textContent = 'Stopped speaking.';
+    });
+    if (speakPrefEl) {
+      try { speakPrefEl.checked = localStorage.getItem(speakPrefKey) === '1'; } catch (e) { speakPrefEl.checked = false; }
+      speakPrefEl.addEventListener('change', () => voice.setSpeakPref(speakPrefEl.checked));
+    }
+    window.addEventListener('pagehide', () => voice.onClose());
+    refreshVoiceChrome();
+  }
+
+  return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, assistantSpeechText, createAssistantVoice, showModal, showConfirm, showToast, api, reloadWithToast };
+})();
+if (typeof window !== 'undefined') window.GoatRecords = GoatRecords;

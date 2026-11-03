@@ -1,0 +1,536 @@
+﻿(() => {
+let tradeRecs = [];
+function loadTradeRecsFromPage(){
+  try {
+    const el = document.getElementById("trading-page-json");
+    tradeRecs = JSON.parse(el?.textContent || "{}").tradeRecs || [];
+  } catch { tradeRecs = []; }
+}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function stamp(o){return Object.assign({createdAt:new Date().toISOString()},o);}
+function id(){return Math.random().toString(36).slice(2,11);}
+function meName(){return document.body?.dataset?.userDisplay||"";}
+function today(){return new Date().toISOString().slice(0,10);}
+function thisMonth(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
+function can(mod,act){
+  const tab=mod==="trade"?"trading":mod;
+  const map={create:"add",del:"delete",edit:"edit",view:"view"};
+  const p=window.FarmPermissions?.[tab]||{view:true,add:true,edit:true,delete:true};
+  const a=map[act]||act;
+  if(a!=="view"&&!p.view)return false;
+  return !!p[a];
+}
+async function postJson(url,body){
+  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data.error||data.title||"Save failed");
+  return data;
+}
+async function reloadTradeRecs(){
+  const res=await fetch("/Trading/GetData");
+  const data=await res.json().catch(()=>({}));
+  tradeRecs=data.tradeRecs||[];
+}
+function parseId(v){const n=parseInt(v,10);return Number.isFinite(n)?n:null;}
+async function persistEntry(o){
+  const body={type:o.type,date:o.date,itemId:parseId(o.itemId),storeId:parseId(o.storeId),toAccountId:parseId(o.toAccountId),partyId:parseId(o.partyId),accountId:parseId(o.accountId),categoryId:parseId(o.catId),qty:N(o.qty),rate:N(o.rate),amount:N(o.amount),freight:N(o.freight),labour:N(o.labour),paid:N(o.paid),received:N(o.received),payment:o.payment,billNo:o.billNo,reason:o.reason,dueDate:o.dueDate||null,notes:o.note||o.notes||""};
+  const r=await postJson("/Trading/SaveEntry",body);
+  return r.id;
+}
+async function persistMaster(kind,rec,isNew){
+  const body={kind,id:isNew?null:parseId(rec.id),name:rec.name,isActive:rec.active!==false};
+  if(kind==="item"){body.unit=rec.unit;body.unitNote=rec.unitNote;body.defaultPrice=N(rec.price);body.notes=rec.note;}
+  if(kind==="store")body.place=rec.place;
+  if(kind==="account"){body.type=rec.type;body.openingBalance=N(rec.opening);body.notes=rec.note;}
+  if(kind==="party"){body.role=rec.role;body.phone=rec.phone;body.place=rec.place;body.openingBalance=N(rec.opening);}
+  const r=await postJson("/Trading/SaveMaster",body);
+  return r.id;
+}
+'use strict';
+const $=x=>document.getElementById(x);
+const N=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
+const r2=v=>Math.round(N(v)*100)/100;
+const EPS=0.0005;
+const H=v=>esc(v);
+const fmtN=(n,d)=>{const v=N(n);const dd=d==null?(Math.abs(v-Math.round(v))<0.005?0:2):d;return v.toLocaleString('en-US',{minimumFractionDigits:dd,maximumFractionDigits:dd});};
+const money=v=>(N(v)<0?'- ':'')+'Rs '+fmtN(Math.abs(r2(v)));
+const val=x=>{const e=$(x);return e?String(e.value||'').trim():'';};
+const num=x=>N(val(x));
+const setVal=(x,v)=>{const e=$(x);if(e)e.value=v;};
+function lsGet(k,d){try{const v=localStorage.getItem('sftd:'+k);return v==null?d:v;}catch(e){return d;}}
+function lsSet(k,v){try{localStorage.setItem('sftd:'+k,v);}catch(e){}}
+function toast(msg){let t=$('sl-toast');if(!t){t=document.createElement('div');t.id='sl-toast';t.setAttribute('role','status');document.body.appendChild(t);}t.textContent=msg;t.className='sl-toast show';clearTimeout(t._h);t._h=setTimeout(()=>t.className='sl-toast',3800);}
+function setSel(x,html,pref){const e=typeof x==='string'?$(x):x;if(!e)return;const old=e.value;e.innerHTML=html;const opts=[...e.options].map(o=>o.value);if(pref!=null&&opts.includes(pref))e.value=pref;else if(!String(old).startsWith('__')&&opts.includes(old))e.value=old;else{const f=opts.find(v=>!String(v).startsWith('__'));if(f!=null)e.value=f;}}
+
+/* ---------------- data ---------------- */
+const recs=k=>(tradeRecs||[]).filter(r=>r.kind===k);
+const items=all=>recs('item').filter(r=>all||r.active!==false);
+const stores=all=>recs('store').filter(r=>all||r.active!==false);
+const accts=all=>recs('account').filter(r=>all||r.active!==false);
+const cats=()=>recs('cat').filter(r=>r.active!==false);
+const parties=(role,all)=>recs('party').filter(r=>r.role===role&&(all||r.active!==false)).sort((a,b)=>a.name.localeCompare(b.name));
+const pKey=e=>e.partyId||('n:'+(e.party||''));
+const pName=e=>{const r=e.partyId&&byId(e.partyId);return r?r.name:(e.party||'');};
+const entries=()=>recs('entry');
+const live=()=>entries().filter(e=>!e.cancelled);
+const byId=i=>(tradeRecs||[]).find(r=>String(r.id)===String(i))||null;
+const nm=i=>{const r=byId(i);return r?r.name:'-';};
+function ensure(){if(!Array.isArray(tradeRecs))tradeRecs=[];return false;}
+function sorted(list){return list.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));}
+
+/* ---------------- the books (one pass over the entries) ---------------- */
+function compute(opts){
+  opts=opts||{};const exclude=opts.exclude||null;
+  const st={},cost={};            // st[item|store]={qty}, cost[item]={qty,value}
+  const acc={};accts(true).forEach(a=>acc[a.id]=N(a.opening));
+  const sup={},cus={};           // party balances
+  const per=new Map();           // entry id -> {cogs,lossValue,profit}
+  let negative=null;
+  const P=(map,k)=>map[k]||(map[k]={total:0,paid:0});
+  recs('party').forEach(p=>{if(N(p.opening)){const m=p.role==='supplier'?sup:cus;P(m,p.id).total+=N(p.opening);}});
+  const moneyMove=(a,d)=>{if(a)acc[a]=(acc[a]||0)+d;};
+  sorted(live().filter(e=>e!==exclude&&e.id!==(exclude&&exclude.id))).forEach(e=>{
+    const k=e.itemId+'|'+e.storeId,c=cost[e.itemId]||(cost[e.itemId]={qty:0,value:0}),s=st[k]||(st[k]={item:e.itemId,store:e.storeId,qty:0});
+    const avg=()=>c.qty>EPS?c.value/c.qty:0;
+    if(e.type==='buy'){
+      const goods=N(e.qty)*N(e.rate),extra=N(e.freight)+N(e.labour);
+      c.qty+=N(e.qty);c.value+=goods+extra;s.qty+=N(e.qty);
+      moneyMove(e.accountId,-(N(e.paid)+extra));
+      const p=P(sup,pKey(e));p.total+=goods;p.paid+=N(e.paid);
+      per.set(e.id,{});
+    }else if(e.type==='sell'){
+      const q=N(e.qty),cg=q>=c.qty-EPS?c.value:avg()*q;
+      c.qty-=q;c.value-=cg;s.qty-=q;
+      const amt=N(e.qty)*N(e.rate);
+      moneyMove(e.accountId,N(e.received)-N(e.freight));
+      const p=P(cus,pKey(e));p.total+=amt;p.paid+=N(e.received);
+      per.set(e.id,{cogs:cg,profit:amt-cg-N(e.freight)});
+    }else if(e.type==='loss'){
+      const q=N(e.qty);
+      if(e.reason==='count+'){const v=avg()*q;c.qty+=q;c.value+=v;s.qty+=q;per.set(e.id,{lossValue:-v});}
+      else{const v=q>=c.qty-EPS?c.value:avg()*q;c.qty-=q;c.value-=v;s.qty-=q;per.set(e.id,{lossValue:v});}
+    }else if(e.type==='pay'){moneyMove(e.accountId,-N(e.amount));P(sup,pKey(e)).paid+=N(e.amount);}
+    else if(e.type==='receive'){moneyMove(e.accountId,N(e.amount));P(cus,pKey(e)).paid+=N(e.amount);}
+    else if(e.type==='expense'||e.type==='drawing'){moneyMove(e.accountId,-N(e.amount));}
+    else if(e.type==='capital'){moneyMove(e.accountId,N(e.amount));}
+    else if(e.type==='transfer'){moneyMove(e.accountId,-N(e.amount));moneyMove(e.toAccountId,N(e.amount));}
+    if(['buy','sell','loss'].includes(e.type)&&s.qty< -EPS&&!negative)negative={entry:e,item:e.itemId,store:e.storeId,qty:s.qty};
+  });
+  return {st,cost,acc,sup,cus,per,negative};
+}
+function stockQty(B,item,store){let q=0;Object.values(B.st).forEach(s=>{if(s.item===item&&(!store||s.store===store))q+=s.qty;});return q;}
+function avgCost(B,item){const c=B.cost[item];return c&&c.qty>EPS?c.value/c.qty:0;}
+function pl(B,from,to){
+  const inR=d=>(!from||d>=from)&&(!to||d<=to);
+  const r={sales:0,cogs:0,delivery:0,loss:0,exp:{},qtySold:0};
+  live().filter(e=>inR(e.date)).forEach(e=>{
+    const p=B.per.get(e.id)||{};
+    if(e.type==='sell'){r.sales+=N(e.qty)*N(e.rate);r.cogs+=N(p.cogs);r.delivery+=N(e.freight);r.qtySold+=N(e.qty);}
+    if(e.type==='loss')r.loss+=N(p.lossValue);
+    if(e.type==='expense'){const k=nm(e.catId)||'Other';r.exp[k]=(r.exp[k]||0)+N(e.amount);}
+  });
+  r.expTotal=Object.values(r.exp).reduce((a,b)=>a+b,0);
+  r.gross=r.sales-r.cogs;r.net=r.gross-r.delivery-r.loss-r.expTotal;
+  return r;
+}
+function partyBal(B,p){const m=p.role==='supplier'?B.sup:B.cus,x=m[p.id];return x?x.total-x.paid:0;}
+function partyOpts(B,role){return parties(role).map(p=>{const b=partyBal(B,p);return `<option value="${H(p.id)}">${H(p.name)}${p.place?' | '+H(p.place):''}${Math.abs(b)>0.5?(role==='supplier'?(b>0?' - you owe '+money(b):' - advance '+money(-b)):(b>0?' - owes '+money(b):' - advance '+money(-b))):''}</option>`;}).join('')+`<option value="__party_${role}">+ Add new ${role}...</option>`;}
+
+/* ---------------- UI state ---------------- */
+let tab=lsGet('tab','stock'),mtype=lsGet('mtype','pay');
+function canDo(a){return can("trade",a);}
+function guard(a){if(!canDo(a)){alert(a==='view'?'You do not have access to Trading.':'You do not have permission for this in Trading. Ask the owner to turn it on in Users & audit.');return false;}return true;}
+let busy=false;
+async function run(btn,fn){
+  if(busy)return;
+  busy=true;
+  if(btn)btn.disabled=true;
+  try{
+    const msg=await fn();
+    if(msg!==false){await reloadTradeRecs();render();if(msg)toast(typeof msg==="string"?msg:msg);}
+  }catch(e){console.warn(e);alert(e.message||String(e));}
+  finally{busy=false;if(btn)btn.disabled=false;}
+}
+function itemOpts(){return items().map(i=>`<option value="${H(i.id)}">${H(i.name)}</option>`).join('')+'<option value="__item">+ Add new item...</option>';}
+function storeOpts(){return stores().map(s=>`<option value="${H(s.id)}">${H(s.name)}</option>`).join('')+'<option value="__store">+ Add new godown...</option>';}
+function acctOpts(B){return accts().map(a=>`<option value="${H(a.id)}">${H(a.name)} - ${money(B.acc[a.id]||0)}</option>`).join('')+'<option value="__acct">+ Add new account...</option>';}
+const isKg=itemId=>String(unitOf(itemId)).toLowerCase()==='kg';
+const KG_PER={kg:1,maund:40,ton:1000};
+function basisOf(p){const b=$('td-'+p+'-basis');return b&&!b.hidden&&KG_PER[b.value]?b.value:'unit';}
+function rateFrom(p,itemId){const r=num('td-'+p+'-rate'),b=basisOf(p);return isKg(itemId)&&KG_PER[b]?r/KG_PER[b]:r;} // rate per stock unit (per kg)
+function qtyTxt(q,itemId){const u=unitOf(itemId),a=Math.abs(N(q));return fmtN(q)+' '+u+(String(u).toLowerCase()==='kg'&&a>=40?' ('+fmtN(N(q)/40,1)+' maund'+(a>=1000?' | '+fmtN(N(q)/1000,2)+' ton':'')+')':'');}
+function rateTxt(r,itemId){return isKg(itemId)?money(r*40)+'/maund | '+money(r)+'/kg | '+money(r*1000)+'/ton':money(r)+'/'+unitOf(itemId);}
+function unitOf(itemId){const i=byId(itemId);return i?(i.unit||'unit'):'unit';}
+function setTab(t){tab=t;lsSet('tab',t);document.querySelectorAll('#view-trade [data-td-tab]').forEach(b=>{const on=b.dataset.tdTab===t;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');});document.querySelectorAll('#view-trade [data-td-pane]').forEach(p=>p.hidden=p.dataset.tdPane!==t);}
+function monthRange(off){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+(off||0));const y=d.getFullYear(),m=d.getMonth();const f=`${y}-${String(m+1).padStart(2,'0')}-01`;const l=new Date(y,m+1,0).getDate();return [f,`${y}-${String(m+1).padStart(2,'0')}-${String(l).padStart(2,'0')}`];}
+
+function applyTradingStaticLabels(){
+  const root=$('view-trade');if(!root)return;
+  const flow=root.querySelector('.td-flow');
+  if(flow){
+    flow.innerHTML='<div><b>Buy</b><span>stock goes up | money goes out of Cash or Bank, or you owe the supplier</span></div><div><b>Sell</b><span>stock goes down | money comes in, or the customer owes you</span></div><div><b>Money</b><span>pay suppliers, receive from customers, rent and other expenses</span></div><div><b>Accounts</b><span>profit &amp; loss and what trading owns - worked out for you</span></div>';
+  }
+  const guideSub=root.querySelector('.td-guide .panel-head .sub');
+  if(guideSub)guideSub.textContent='set this up once - after that you only use Buy, Sell and Money';
+  const heads=[['td-setup-item','1. Items'],['td-setup-store','2. Godowns'],['td-setup-account','3. Cash in hand & Bank']];
+  heads.forEach(([id,title])=>{const h=$(id)?.querySelector('.panel-head h2');if(h)h.textContent=title;});
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  const root=$('view-trade');if(!root)return;
+  ensure();
+  bind();
+  applyTradingStaticLabels();
+  if(!canDo('view')){
+    $('td-kpis').innerHTML='<p class="td-hint">You do not have access to Trading.</p>';
+    setTab(tab);
+    return;
+  }
+  const B=compute(),m=thisMonth();
+  const M=pl(B,m+'-01',m+'-31');
+  const stockV=Object.values(B.cost).reduce((a,c)=>a+c.value,0);
+  const cash=accts(true).reduce((a,x)=>a+(B.acc[x.id]||0),0);
+  const owedToUs=Object.values(B.cus).reduce((a,p)=>a+Math.max(0,p.total-p.paid),0),weOwe=Object.values(B.sup).reduce((a,p)=>a+Math.max(0,p.total-p.paid),0);
+  const stockTxt=items().map(i=>`${H(qtyTxt(stockQty(B,i.id),i.id))} ${H(i.name.split(' (')[0])}`).join(' | ');
+  $('td-kpis').innerHTML=`<div class="td-kpi"><span>In the godown</span><b>${money(stockV)}</b><small>${stockTxt||'no items'}</small></div>
+   <div class="td-kpi"><span>Trading cash &amp; bank</span><b class="${cash<0?'td-bad':''}">${money(cash)}</b><small>${accts().map(a=>H(a.name)+' '+money(B.acc[a.id]||0)).join(' | ')}</small></div>
+   <div class="td-kpi"><span>Customers owe you</span><b>${money(owedToUs)}</b><small>You owe suppliers ${money(weOwe)}</small></div>
+   <div class="td-kpi"><span>Profit this month</span><b class="${M.net<0?'td-bad':''}">${money(M.net)}</b><small>sales ${money(M.sales)} | ${fmtN(M.qtySold)} sold</small></div>`;
+  setTab(tab);
+  document.querySelectorAll('#view-trade .td-item-sel').forEach(s=>setSel(s,itemOpts()));
+  document.querySelectorAll('#view-trade .td-store-sel').forEach(s=>setSel(s,storeOpts()));
+  document.querySelectorAll('#view-trade .td-acct-sel').forEach(s=>setSel(s,acctOpts(B)));
+  ['td-b-date','td-s-date','td-l-date','td-m-date'].forEach(x=>{if($(x)&&!$(x).value)$(x).value=today();});
+  setSel('td-b-party','<option value="">- choose supplier -</option>'+partyOpts(B,'supplier'));
+  setSel('td-s-party','<option value="">- choose customer -</option>'+partyOpts(B,'customer'));
+  document.querySelectorAll('#view-trade .td-unit').forEach(u=>u.textContent=unitOf(val(u.dataset.for)));
+  const sItem=val('td-s-item');
+  setSel('td-s-store',stores().map(s=>`<option value="${H(s.id)}">${H(s.name)} - ${fmtN(stockQty(B,sItem,s.id))} ${H(unitOf(sItem))}</option>`).join(''));
+  if(!val('td-s-inv'))$('td-s-inv').placeholder=nextBill();
+  ['b','s'].forEach(p=>{const b=$('td-'+p+'-basis');if(!b)return;b.hidden=!isKg(val('td-'+p+'-item'));if(!b.dataset.init){b.value=lsGet('basis-'+p,'maund');b.dataset.init='1';}});
+  const si=byId(sItem);if(si&&N(si.price)>0&&!val('td-s-rate')&&!$('td-s-rate').dataset.touched)setVal('td-s-rate',r2(isKg(sItem)&&KG_PER[basisOf('s')]?si.price*KG_PER[basisOf('s')]:si.price));
+  setSel('td-m-cat',cats().map(c=>`<option value="${H(c.id)}">${H(c.name)}</option>`).join('')+'<option value="__cat">+ Add new expense type...</option>');
+  sumBuy(B);sumSell(B);sumLoss(B);renderMoney(B);
+  if(tab==='accounts')renderAccounts(B);
+  if(tab==='stock')renderStock(B);
+  if(tab==='register')renderRegister(B);
+  if(tab==='setup')renderSetup(B);
+  if(tab==='parties')renderParties(B);
+}
+function nextBill(){const ym=today().slice(0,7).replace('-',''),dc=(window.SFStock&&SFStock.deviceCode)?SFStock.deviceCode():'',base='TR-'+ym+'-'+(dc?dc+'-':'');let n=entries().filter(e=>String(e.billNo||'').startsWith(base)).length+1,v;do{v=base+String(n++).padStart(3,'0');}while(entries().some(e=>e.billNo===v));return v;}
+function sumBuy(B){
+  const q=num('td-b-qty'),r=rateFrom('b',val('td-b-item')),ex=num('td-b-freight')+num('td-b-labour'),goods=r2(q*r),pay=val('td-b-pay'),u=unitOf(val('td-b-item'));
+  $('td-b-paid-f').hidden=pay!=='partial';$('td-b-due-f').hidden=pay==='paid';$('td-b-acct-f').hidden=pay==='credit'&&ex<=0;
+  const paid=pay==='paid'?goods:pay==='credit'?0:num('td-b-paid'),acct=val('td-b-acct'),bal=B.acc[acct]||0,now=stockQty(B,val('td-b-item'),val('td-b-store'));
+  const cashOut=paid+ex;
+  $('td-b-sum').innerHTML=`<div><span>Goods</span><b>${money(goods)}</b></div><div><span>+ Kiraya &amp; labour</span><b>${money(ex)}</b></div><div class="td-sum-main"><span>Total cost</span><b>${money(goods+ex)}</b><small>${q>0?'landed '+rateTxt((goods+ex)/q,val('td-b-item'))+' | ':''}stock ${qtyTxt(now,val('td-b-item'))} -> ${qtyTxt(now+q,val('td-b-item'))}${goods>0&&pay!=='paid'?' | you will owe '+money(goods-paid):''}${cashOut>0?` | ${H(nm(acct))}: ${money(bal)} -> <b class="${bal-cashOut<0?'td-bad':''}">${money(bal-cashOut)}</b>`:''}</small></div>`;
+}
+function sumSell(B){
+  const it=val('td-s-item'),store=val('td-s-store'),q=num('td-s-qty'),r=rateFrom('s',it),fr=num('td-s-freight'),pay=val('td-s-pay'),u=unitOf(it);
+  $('td-s-recv-f').hidden=pay!=='partial';$('td-s-due-f').hidden=pay==='paid';$('td-s-acct-f').hidden=pay==='credit'&&fr<=0;
+  const av=stockQty(B,it,store),c=avgCost(B,it),amt=r2(q*r),cg=q*c,pr=amt-cg-fr;
+  $('td-s-sum').innerHTML=`<div><span>Sale</span><b>${money(amt)}</b></div><div><span>Cost of ${qtyTxt(q,it)}</span><b>${money(cg)}</b><small>${c?rateTxt(c,it):''}</small></div><div class="td-sum-main"><span>Profit on this sale</span><b class="${pr<0?'td-bad':''}">${money(pr)}</b><small>available ${qtyTxt(av,it)}${q>av+EPS?' | <b class="td-bad">not enough in this godown</b>':''}${fr?' | after '+money(fr)+' delivery':''}${r>0&&c>0?' | margin '+rateTxt(r-c,it):''}</small></div>`;
+}
+function sumLoss(B){
+  const it=val('td-l-item'),store=val('td-l-store'),q=num('td-l-qty'),plus=val('td-l-reason')==='count+',u=unitOf(it),now=stockQty(B,it,store),c=avgCost(B,it);
+  $('td-l-sum').innerHTML=`<div class="td-sum-main"><span>${H(nm(store))}</span><b>${qtyTxt(now,it)} -> <span class="${(plus?now+q:now-q)< -EPS?'td-bad':''}">${qtyTxt(plus?now+q:now-q,it)}</span></b><small>${q>0&&c>0?(plus?'adds ':'loss of ')+money(q*c)+' at cost':''}</small></div>`;
+}
+const MT={pay:['Supplier','Paid from','pay'],receive:['Customer','Received into','receive'],expense:['Paid to (optional)','Paid from','expense'],capital:['From whom (e.g. owner, farm)','Into','capital'],drawing:['Taken by','Taken from','drawing'],transfer:['','From account','transfer']};
+function renderMoney(B){
+  document.querySelectorAll('#view-trade [data-td-mtype]').forEach(b=>{const on=b.dataset.tdMtype===mtype;b.classList.toggle('active',on);b.setAttribute('aria-checked',on?'true':'false');});
+  const d=MT[mtype],isP=mtype==='pay'||mtype==='receive';$('td-m-party-l').textContent=d[0];$('td-m-party-f').hidden=!isP;$('td-m-who-f').hidden=isP||mtype==='transfer';$('td-m-who-l').textContent=d[0];$('td-m-acct-l').textContent=d[1];
+  $('td-m-cat-f').hidden=mtype!=='expense';$('td-m-to-f').hidden=mtype!=='transfer';
+  if(isP){const role=mtype==='pay'?'supplier':'customer',sel=$('td-m-party');if(sel.dataset.role!==role){sel.dataset.role=role;sel.value='';}setSel('td-m-party',`<option value="">- choose ${role} -</option>`+partyOpts(B,role));}
+  const party=isP?val('td-m-party'):'',e=$('td-m-sum');let h='';
+  if(isP&&byId(party)){const p=byId(party),b=partyBal(B,p);h=mtype==='pay'?`${H(p.name)}: you owe <b>${money(b)}</b>`:`${H(p.name)} owes <b>${money(b)}</b>`;}
+  const a=val('td-m-acct');if(a&&B.acc[a]!=null)h+=(h?' | ':'')+`${H(nm(a))}: ${money(B.acc[a])}`;
+  e.innerHTML=h?`<div class="td-sum-main"><small>${h}</small></div>`:'';
+  const ac=$('td-m-accts');if(ac)ac.innerHTML=accts().map(a=>`<div class="td-acct-card ${a.type}"><span>${a.type==='bank'?'Bank':'Cash in hand'}</span><b>${H(a.name)}</b><strong class="${(B.acc[a.id]||0)<0?'td-bad':''}">${money(B.acc[a.id]||0)}</strong></div>`).join('');
+}
+function renderAccounts(B){
+  if(!val('td-a-from')){const [f,t]=monthRange(0);setVal('td-a-from',f);setVal('td-a-to',t);}
+  const from=val('td-a-from'),to=val('td-a-to'),r=pl(B,from,to);
+  $('td-pl-sub').textContent=(from||'start')+' -> '+(to||'today');
+  const row=(l,v,cls,ind)=>`<tr class="${cls||''}"><td${ind?' class="td-ind"':''}>${l}</td><td class="num-cell">${money(v)}</td></tr>`;
+  $('td-pl').innerHTML=row('<b>Sales</b>',r.sales,'td-row-in')+row('Cost of what was sold',-r.cogs,'',1)+row('<b>Gross profit</b>',r.gross,'td-row-sub')+row('Delivery paid on sales',-r.delivery,'',1)+row('Loss / spoilage / given to farm (at cost)',-r.loss,'',1)+Object.entries(r.exp).map(([k,v])=>row(H(k),-v,'',1)).join('')+row(`<b>${r.net<0?'LOSS':'PROFIT'}</b>`,r.net,r.net<0?'td-row-bad':'td-row-good');
+  const stockV=Object.values(B.cost).reduce((a,c)=>a+c.value,0),cash=accts(true).reduce((a,x)=>a+(B.acc[x.id]||0),0);
+  const ar=Object.values(B.cus).reduce((a,p)=>a+Math.max(0,p.total-p.paid),0),ap=Object.values(B.sup).reduce((a,p)=>a+Math.max(0,p.total-p.paid),0);
+  const advPaid=Object.values(B.sup).reduce((a,p)=>a+Math.max(0,p.paid-p.total),0),advRecv=Object.values(B.cus).reduce((a,p)=>a+Math.max(0,p.paid-p.total),0);
+  const capIn=live().filter(e=>e.type==='capital').reduce((a,e)=>a+N(e.amount),0),out=live().filter(e=>e.type==='drawing').reduce((a,e)=>a+N(e.amount),0),opening=accts(true).reduce((a,x)=>a+N(x.opening),0)+recs('party').reduce((a,p)=>a+(p.role==='customer'?1:-1)*N(p.opening),0);
+  const all=pl(B,'',''),assets=cash+ar+advPaid+stockV,owes=ap+advRecv,worth=assets-owes,made=opening+capIn-out+all.net;
+  $('td-bs').innerHTML=row('Cash &amp; bank (trading)',cash,'',1)+row('Customers owe',ar,'',1)+(advPaid>0.5?row('Advances paid to suppliers',advPaid,'',1):'')+row('Stock in godown at cost',stockV,'',1)+row('<b>Trading owns</b>',assets,'td-row-sub')+row('Suppliers owed',ap,'',1)+(advRecv>0.5?row('Advances received from customers',advRecv,'',1):'')+row('<b>Trading is worth</b>',worth,'td-row-good')+`<tr><td colspan="2" class="td-small">Made of: opening balances ${money(opening)} + money put in ${money(capIn)} - money taken out ${money(out)} + profit since start ${money(all.net)} = <b>${money(made)}</b> ${Math.abs(made-worth)<1?'balanced':'(!) does not balance - check entries'}</td></tr>`;
+  const acct=val('td-cb-acct')||(accts()[0]||{}).id;let bal=N((byId(acct)||{}).opening);const lines=[];
+  sorted(live()).forEach(e=>{const mv=[];const lbl=entryLabel(e);
+    if(e.type==='buy'){if(e.accountId===acct&&N(e.paid)>0)mv.push([-N(e.paid),'Paid for '+lbl]);const ex=N(e.freight)+N(e.labour);if(e.accountId===acct&&ex>0)mv.push([-ex,'Kiraya / labour | '+lbl]);}
+    if(e.type==='sell'){if(e.accountId===acct&&N(e.received)>0)mv.push([N(e.received),'Received | '+lbl]);if(e.accountId===acct&&N(e.freight)>0)mv.push([-N(e.freight),'Delivery | '+lbl]);}
+    if(['pay','expense','drawing'].includes(e.type)&&e.accountId===acct)mv.push([-N(e.amount),lbl]);
+    if(['receive','capital'].includes(e.type)&&e.accountId===acct)mv.push([N(e.amount),lbl]);
+    if(e.type==='transfer'){if(e.accountId===acct)mv.push([-N(e.amount),lbl]);if(e.toAccountId===acct)mv.push([N(e.amount),lbl]);}
+    mv.forEach(([v,t])=>{bal+=v;lines.push({date:e.date,t,v,bal});});});
+  $('td-cb').innerHTML=`<tr class="td-muted"><td></td><td>Opening balance</td><td></td><td></td><td class="num-cell">${money(N((byId(acct)||{}).opening))}</td></tr>`+(lines.length?lines.slice().reverse().slice(0,200).reverse().map(l=>`<tr><td>${H(l.date)}</td><td>${H(l.t)}</td><td class="num-cell">${l.v>0?money(l.v):''}</td><td class="num-cell">${l.v<0?money(-l.v):''}</td><td class="num-cell"><b class="${l.bal<0?'td-bad':''}">${money(l.bal)}</b></td></tr>`).join(''):'<tr><td colspan="5" class="empty">No money movements yet.</td></tr>');
+}
+function entryLabel(e){
+  const u=unitOf(e.itemId),it=nm(e.itemId);
+  switch(e.type){
+    case 'buy':return `${fmtN(e.qty)} ${u} ${it.split(' (')[0]} from ${pName(e)||'-'}`;
+    case 'sell':return `${fmtN(e.qty)} ${u} ${it.split(' (')[0]} to ${pName(e)||'-'}${e.billNo?' | '+e.billNo:''}`;
+    case 'loss':return `${LOSS[e.reason]||'Loss'} | ${fmtN(e.qty)} ${u}`;
+    case 'pay':return 'Paid supplier '+pName(e);
+    case 'receive':return 'Received from '+pName(e);
+    case 'expense':return nm(e.catId)+(e.party?' | '+e.party:'');
+    case 'capital':return 'Money put in'+(e.party?' | '+e.party:'');
+    case 'drawing':return 'Money taken out'+(e.party?' | '+e.party:'');
+    case 'transfer':return 'Moved '+nm(e.accountId)+' -> '+nm(e.toAccountId);
+  }return e.type;
+}
+const LOSS={dry:'Weight loss (dried out)',spoil:'Spoiled / wet',farm:'Given to goat farm','count-':'Count correction (-)','count+':'Count correction (+)'};
+const TLAB={buy:['Bought','chip'],sell:['Sold','chip chip-milk'],loss:['Loss / adjust','chip chip-warn'],pay:['Paid supplier','chip'],receive:['Received','chip chip-milk'],expense:['Expense','chip chip-exp'],capital:['Money in','chip chip-milk'],drawing:['Money out','chip chip-exp'],transfer:['Transfer','chip']};
+
+function renderStock(B){
+  setSel('td-k-item',items(true).map(i=>`<option value="${H(i.id)}">${H(i.name)}</option>`).join(''),lsGet('kItem',''));
+  setSel('td-k-store','<option value="">All godowns</option>'+stores(true).map(s=>`<option value="${H(s.id)}">${H(s.name)}</option>`).join(''));
+  const it=val('td-k-item'),store=val('td-k-store'),item=byId(it);if(!item){$('td-k-cards').innerHTML='';$('td-k-book').innerHTML='';return;}
+  const u=unitOf(it),kg=isKg(it),c=avgCost(B,it);
+  let bought=0,sold=0,lost=0,found=0;const book=[];let bal=0;
+  sorted(live().filter(e=>e.itemId===it&&['buy','sell','loss'].includes(e.type)&&(!store||e.storeId===store))).forEach(e=>{
+    const q=N(e.qty);let inQ=0,outQ=0,who='';
+    if(e.type==='buy'){inQ=q;bought+=q;who=pName(e);}
+    else if(e.type==='sell'){outQ=q;sold+=q;who=pName(e);}
+    else if(e.reason==='count+'){inQ=q;found+=q;who=LOSS[e.reason];}
+    else{outQ=q;lost+=q;who=LOSS[e.reason]||'Loss';}
+    bal+=inQ-outQ;book.push({e,inQ,outQ,bal,who});
+  });
+  const now=store?stockQty(B,it,store):stockQty(B,it);
+  const big=q=>`<b>${fmtN(q)} <small>${H(u)}</small></b>${kg?`<span>${fmtN(q/40,1)} maund | ${fmtN(q/1000,2)} ton</span>`:''}`;
+  const godowns=stores(true).map(s=>({s,q:stockQty(B,it,s.id)})).filter(x=>Math.abs(x.q)>EPS||x.s.active!==false);
+  $('td-k-cards').innerHTML=`<div class="td-stock-hero">
+    <div class="td-stock-now"><span>In stock now${store?' | '+H(nm(store)):''}</span>${big(now)}<small>${c?'cost '+H(rateTxt(c,it))+' | value '+money(now*c):'no cost yet'}</small></div>
+    <div class="td-stock-eq" aria-label="How the stock is worked out">
+      <div><span>Bought</span><b>+ ${fmtN(bought)}</b><small>${H(u)}</small></div>
+      <div><span>Sold</span><b>- ${fmtN(sold)}</b><small>${H(u)}</small></div>
+      <div><span>Lost / own use</span><b>- ${fmtN(lost)}</b><small>${H(u)}</small></div>
+      ${found?`<div><span>Found in count</span><b>+ ${fmtN(found)}</b><small>${H(u)}</small></div>`:''}
+      <div class="td-eq-total"><span>= In stock</span><b>${fmtN(bought-sold-lost+found)}</b><small>${H(u)}</small></div>
+    </div></div>
+    ${!store&&godowns.length>1?`<div class="td-godowns">${godowns.map(x=>`<div><span>${H(x.s.name)}</span><b>${H(qtyTxt(x.q,it))}</b></div>`).join('')}</div>`:''}`;
+  $('td-k-book').innerHTML=book.length?book.slice().reverse().map(r=>`<tr><td>${H(r.e.date)}</td><td><span class="${(TLAB[r.e.type]||['','chip'])[1]}">${(TLAB[r.e.type]||[r.e.type])[0]}</span>${r.e.billNo?'<div class="name">'+H(r.e.billNo)+'</div>':''}</td><td>${H(r.who)}</td><td>${H(nm(r.e.storeId))}</td><td class="num-cell td-in">${r.inQ?'+'+fmtN(r.inQ):''}</td><td class="num-cell td-out">${r.outQ?'-'+fmtN(r.outQ):''}</td><td class="num-cell"><b class="${r.bal< -EPS?'td-bad':''}">${fmtN(r.bal)} ${H(u)}</b>${kg?'<div class="name">'+fmtN(r.bal/40,1)+' maund</div>':''}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">No stock movements yet. Buy adds stock; Sell and Loss take it out.</td></tr>';
+}
+function renderRegister(B){
+  const f=val('td-r-filter');
+  const list=entries().filter(e=>!f||(f==='money'?['pay','receive','expense','capital','drawing','transfer'].includes(e.type):e.type===f)).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  $('td-reg').innerHTML=list.length?list.slice(0,300).map(e=>{const p=B.per.get(e.id)||{},t=TLAB[e.type]||[e.type,'chip'],u=unitOf(e.itemId);
+    const amt=e.type==='buy'?N(e.qty)*N(e.rate)+N(e.freight)+N(e.labour):e.type==='sell'?N(e.qty)*N(e.rate):e.type==='loss'?N(p.lossValue):N(e.amount);
+    let st='';if(e.cancelled)st='<span class="chip chip-exp">Cancelled</span>';else if(e.type==='buy'){const due=N(e.qty)*N(e.rate)-N(e.paid);st=due>0.5?`<span class="chip chip-warn">${money(due)} on credit</span>`:'<span class="chip chip-milk">Paid</span>';}else if(e.type==='sell'){const due=N(e.qty)*N(e.rate)-N(e.received);st=due>0.5?`<span class="chip chip-warn">${money(due)} on credit</span>`:'<span class="chip chip-milk">Paid</span>';}
+    return `<tr class="${e.cancelled?'td-cancel':''}"><td>${H(e.date)}</td><td><span class="${t[1]}">${t[0]}</span>${e.billNo?'<div class="name">'+H(e.billNo)+'</div>':''}</td><td>${H(['buy','sell','loss'].includes(e.type)?nm(e.itemId):'')}${e.party||e.type==='loss'||e.type==='transfer'||e.type==='expense'?'<div class="name">'+H(e.type==='loss'?LOSS[e.reason]||'':e.type==='transfer'?nm(e.accountId)+' -> '+nm(e.toAccountId):e.type==='expense'?nm(e.catId)+(e.party?' | '+e.party:''):pName(e))+'</div>':''}${e.cancelled?'<div class="name">cancelled: '+H(e.cancelReason||'')+'</div>':''}</td><td class="num-cell">${['buy','sell','loss'].includes(e.type)?(e.type==='loss'&&e.reason!=='count+'?'-':'')+H(qtyTxt(e.qty,e.itemId)):''}</td><td class="num-cell">${e.rate?(isKg(e.itemId)?money(e.rate*40)+'<div class="name">/maund | '+money(e.rate)+'/kg</div>':money(e.rate)):''}</td><td class="num-cell"><b>${money(amt)}</b></td><td class="num-cell hide-sm">${e.type==='sell'&&!e.cancelled?`<b class="${N(p.profit)<0?'td-bad':''}">${money(p.profit)}</b>`:''}</td><td>${st}</td><td>${!e.cancelled&&canDo('del')?`<button class="btn btn-ghost btn-sm" data-td-cancel="${H(e.id)}">Cancel</button>`:''}</td></tr>`;}).join(''):'<tr><td colspan="9" class="empty">Nothing recorded yet. Start with Buy.</td></tr>';
+}
+function renderSetup(B){
+  const card=(r,extra,big)=>`<div class="td-card ${r.active===false?'off':''}" data-td-rec="${H(r.id)}"><div class="td-card-top"><b>${H(r.name)}</b>${r.active===false?'<span class="chip chip-exp">off</span>':''}${big!=null?`<strong class="td-card-big">${big}</strong>`:''}</div>${extra||''}<div class="td-card-act"><button type="button" class="btn btn-sm btn-ghost" data-td-edit="${H(r.id)}">Edit</button><button type="button" class="btn btn-sm btn-ghost" data-td-toggle="${H(r.id)}">${r.active===false?'Switch on':'Switch off'}</button></div></div>`;
+  $('td-items').innerHTML=items(true).map(i=>card(i,`<small>Counted in <b>${H(i.unit)}</b>${isKg(i.id)?' (rates can be per maund, ton or kg)':''}${N(i.price)?' | usual rate '+H(rateTxt(i.price,i.id).split(' | ')[0]):''}${i.note?' | '+H(i.note):''}</small>`,H(qtyTxt(stockQty(B,i.id),i.id).split(' (')[0]))).join('');
+  $('td-stores').innerHTML=stores(true).map(s=>card(s,`<small>${s.place?H(s.place)+' | ':''}${items().map(i=>fmtN(stockQty(B,i.id,s.id))+' '+H(i.unit)+' '+H(i.name.split(' (')[0])).join(' | ')}</small>`)).join('');
+  $('td-accts').innerHTML=accts(true).map(a=>card(a,`<small>${a.type==='bank'?'Bank account':'Cash in hand'}${a.note?' | '+H(a.note):''} | opening ${money(a.opening)}</small>`,`<span class="${(B.acc[a.id]||0)<0?'td-bad':''}">${money(B.acc[a.id]||0)}</span>`)).join('');
+  $('td-cats').innerHTML='<div class="td-chips">'+recs('cat').map(c=>`<span class="td-chip ${c.active===false?'off':''}">${H(c.name)} <button type="button" data-td-edit="${H(c.id)}" aria-label="Rename ${H(c.name)}">Edit</button><button type="button" data-td-toggle="${H(c.id)}" aria-label="${c.active===false?'Switch on':'Switch off'} ${H(c.name)}">${c.active===false?'On':'x'}</button></span>`).join('')+'</div>';
+  const cash=accts().filter(a=>a.type!=='bank'),bank=accts().filter(a=>a.type==='bank'),ns=parties('supplier').length,nc=parties('customer').length,started=live().some(e=>e.type==='capital')||accts(true).some(a=>N(a.opening));
+  const step=(n,done,title,txt,btn)=>`<div class="td-step ${done?'done':''}"><i>${done?'OK':n}</i><div><b>${title}</b><span>${txt}</span>${btn||''}</div></div>`;
+  $('td-guide').innerHTML=
+    step(1,items().length,'Items',`${items().map(i=>H(i.name.split(' (')[0])).join(', ')||'none yet'}. Count in <b>kg</b>; on Buy and Sell you can still type the rate per maund (40 kg) or per ton (1,000 kg).`,`<button type="button" class="btn btn-ghost btn-sm" data-td-new="item">+ Add item</button>`)+
+    step(2,stores().length,'Godowns',`${stores().map(s=>H(s.name)).join(', ')}. One is enough unless you keep stock in two places.`,`<button type="button" class="btn btn-ghost btn-sm" data-td-new="store">+ Add godown</button>`)+
+    step(3,started,'Cash in hand &amp; Bank',`Cash: ${cash.map(a=>H(a.name)+' '+money(B.acc[a.id]||0)).join(', ')||'-'} | Bank: ${bank.map(a=>H(a.name)+' '+money(B.acc[a.id]||0)).join(', ')||'-'}. Every payment and receipt says which one it used - the same rule as the farm. ${started?'':'Put your starting money in with <b>Money -> Money put in</b>.'}`,started?'':`<button type="button" class="btn btn-ghost btn-sm" data-td-goto="capital">Money put in</button>`)+
+    step(4,ns&&nc,'Suppliers &amp; customers',`${ns} supplier${ns===1?'':'s'} | ${nc} customer${nc===1?'':'s'}. Add them in their own tab, or choose <b>+ Add new...</b> in the Buy / Sell list.`,`<button type="button" class="btn btn-ghost btn-sm" data-td-tab="parties">Open list</button>`);
+}
+let stmtParty=lsGet('stmt',''),pSearch={supplier:'',customer:''};
+function renderParties(B){
+  ['supplier','customer'].forEach(role=>{
+    const el=$(role==='supplier'?'td-p-sup':'td-p-cus'),q=pSearch[role].toLowerCase();
+    const list=parties(role,true).filter(p=>!q||[p.name,p.phone,p.place].join(' ').toLowerCase().includes(q)).sort((a,b)=>(a.active===false)-(b.active===false)||Math.abs(partyBal(B,b))-Math.abs(partyBal(B,a))||a.name.localeCompare(b.name));
+    const tot=parties(role,true).reduce((a,p)=>a+Math.max(0,partyBal(B,p)),0);
+    $(role==='supplier'?'td-p-sup-sub':'td-p-cus-sub').innerHTML=role==='supplier'?`you owe <b>${money(tot)}</b> in total`:`they owe you <b>${money(tot)}</b> in total`;
+    el.innerHTML=list.length?list.map(p=>{const b=partyBal(B,p),m=(role==='supplier'?B.sup:B.cus)[p.id]||{total:0,paid:0};
+      const st=Math.abs(b)<0.5?'<small class="td-ok">settled</small>':b>0?`<small>${role==='supplier'?'you owe':'owes you'}</small>`:`<small>advance ${role==='supplier'?'paid':'received'}</small>`;
+      const act=b>0.5&&canDo('create')?`<button type="button" class="btn btn-green btn-sm" data-td-settle="${role==='supplier'?'pay':'receive'}" data-td-party="${H(p.id)}" data-td-amt="${r2(b)}">${role==='supplier'?'Pay':'Receive'}</button>`:'';
+      return `<div class="td-prow ${p.active===false?'off':''} ${stmtParty===p.id?'sel':''}"><div class="td-prow-main"><b>${H(p.name)}</b>${p.active===false?' <span class="chip chip-exp">off</span>':''}<small>${[p.phone?'Tel: '+H(p.phone):'',p.place?H(p.place):''].filter(Boolean).join(' | ')||'&nbsp;'}</small><small>${role==='supplier'?'bought':'sold'} ${money(m.total)} | ${role==='supplier'?'paid':'received'} ${money(m.paid)}</small></div><div class="td-prow-bal"><b class="${b>0.5?(role==='supplier'?'td-owe':'td-due'):''}">${money(Math.abs(b))}</b>${st}</div><div class="td-prow-act">${act}<button type="button" class="btn btn-ghost btn-sm" data-td-stmt="${H(p.id)}">Statement</button><button type="button" class="btn btn-ghost btn-sm" data-td-edit="${H(p.id)}" aria-label="Edit ${H(p.name)}">Edit</button></div></div>`;}).join(''):`<p class="empty td-hint">${q?'No match.':'No '+role+'s yet. Tap "+ Add "+role+" or add one while buying/selling.'}</p>`;
+  });
+  const p=byId(stmtParty),box=$('td-stmt-p');
+  if(!p||p.kind!=='party'){box.hidden=true;return;}
+  box.hidden=false;const sup=p.role==='supplier';
+  $('td-stmt-h').textContent=(sup?'Supplier':'Customer')+' statement | '+p.name;
+  $('td-stmt-c1').textContent=sup?'Bought':'Sold';$('td-stmt-c2').textContent=sup?'Paid':'Received';
+  let bal=N(p.opening);const L=[];
+  sorted(live().filter(e=>e.partyId===p.id)).forEach(e=>{
+    if(e.type==='buy'||e.type==='sell'){const amt=N(e.qty)*N(e.rate),pd=N(e.type==='buy'?e.paid:e.received);bal+=amt;L.push([e,entryLabel(e).replace(/ (from|to) .*$/,'')+(e.billNo?' | '+e.billNo:''),amt,0,bal]);if(pd>0){bal-=pd;L.push([e,(sup?'Paid on purchase':'Received on sale')+' | '+nm(e.accountId),0,pd,bal]);}}
+    if(e.type==='pay'||e.type==='receive'){bal-=N(e.amount);L.push([e,(sup?'Payment':'Receipt')+' | '+nm(e.accountId)+(e.note?' | '+e.note:''),0,N(e.amount),bal]);}
+  });
+  $('td-stmt-sub').innerHTML=`${[p.phone,p.place].filter(Boolean).map(H).join(' | ')}${p.phone||p.place?' | ':''}${bal>0.5?(sup?'you owe ':'owes you ')+'<b>'+money(bal)+'</b>':bal< -0.5?'advance <b>'+money(-bal)+'</b>':'settled'}`;
+  $('td-stmt').innerHTML=`<tr class="td-muted"><td></td><td>Opening balance</td><td></td><td></td><td class="num-cell">${money(N(p.opening))}</td></tr>`+(L.length?L.map(([e,t,a,pd,b])=>`<tr><td>${H(e.date)}</td><td>${H(t)}</td><td class="num-cell">${a?money(a):''}</td><td class="num-cell">${pd?money(pd):''}</td><td class="num-cell"><b>${money(b)}</b></td></tr>`).join(''):'<tr><td colspan="5" class="empty">Nothing recorded with this '+(sup?'supplier':'customer')+' yet.</td></tr>');
+}
+
+/* ---------------- add / edit form (items, godowns, accounts, expense types, suppliers, customers) ---------------- */
+let dlg=null; // {kind, role, rec, target}
+const KLAB={item:'item',store:'godown',account:'money account',cat:'expense type',supplier:'supplier',customer:'customer'};
+function fld(id,label,inner,cls){return `<div class="field ${cls||''}" id="${id}-f"><label for="${id}">${label}</label>${inner}</div>`;}
+function inp(id,v,attr){return `<input id="${id}" value="${H(v==null?'':v)}" ${attr||''}>`;}
+function openForm(kind,rec,target,role){
+  if(!guard(rec?'edit':'create')){if(target)resetTarget(target);return;}
+  if(kind==='party'&&rec)role=rec.role;
+  dlg={kind,rec,target,role};const k=kind==='party'?role:kind,r=rec||{};
+  $('td-dlg-title').textContent=(rec?'Edit ':'Add new ')+KLAB[k];
+  let h='',help='';
+  if(kind==='item'){
+    const u=r.unit||'kg',std=['kg','bale','bag','trolley'].includes(u),pb=lsGet('basis-s','maund');
+    h=fld('td-f-name','Item name',inp('td-f-name',r.name,'placeholder="e.g. Wheat straw (toori)" autocomplete="off"'),'td-span-2')+
+      fld('td-f-unit','Counted in',`<select id="td-f-unit"><option value="kg">kg - recommended</option><option value="bale">bale</option><option value="bag">bag</option><option value="trolley">trolley</option><option value="__other">other...</option></select>`)+
+      fld('td-f-unit2','Unit name',inp('td-f-unit2',std?'':u,'placeholder="e.g. bundle"'))+
+      fld('td-f-price','Usual selling rate (Rs) - optional',`<div class="td-inline">${inp('td-f-price',N(r.price)?r2(u==='kg'?N(r.price)*KG_PER[pb]:N(r.price)):'','type="number" min="0" step="0.01" inputmode="decimal"')}<select id="td-f-pbasis" class="td-basis" aria-label="Rate is per"><option value="maund">per maund</option><option value="ton">per ton</option><option value="kg">per kg</option></select><span class="td-f-per" id="td-f-per"></span></div>`,'td-span-2')+
+      fld('td-f-note','Note - optional',inp('td-f-note',r.note,'placeholder="quality, where it comes from..."'),'td-span-2');
+    help='Use <b>kg</b> for anything weighed - then Buy and Sell let you type the rate per maund (40 kg), per ton (1,000 kg) or per kg, and stock shows in kg and maund.';
+    dlg.after=()=>{$('td-f-unit').value=std?u:'__other';$('td-f-pbasis').value=pb;formUnit();};
+  }else if(kind==='store'){
+    h=fld('td-f-name','Godown name',inp('td-f-name',r.name,'placeholder="e.g. Godown 2 - Pir Mahal road" autocomplete="off"'),'td-span-2')+fld('td-f-place','Place - optional',inp('td-f-place',r.place),'td-span-2');
+  }else if(kind==='account'){
+    h=fld('td-f-type','Type',`<select id="td-f-type"><option value="cash">Cash in hand</option><option value="bank">Bank account</option></select>`)+
+      fld('td-f-name','Name',inp('td-f-name',r.name,'placeholder="e.g. Trading Bank - HBL" autocomplete="off"'))+
+      fld('td-f-opening','Money in it when you started (Rs)',inp('td-f-opening',r.opening||'','type="number" step="1" inputmode="decimal" placeholder="0"'))+
+      fld('td-f-note','Bank / account no. - optional',inp('td-f-note',r.note,'placeholder="e.g. HBL Toba Tek Singh ****1234"'));
+    help='Keep cash in hand and bank separate - the same rule as the farm. Usually leave the opening at 0 and use <b>Money -> Money put in</b> for the starting money.';
+    dlg.after=()=>{$('td-f-type').value=r.type==='bank'?'bank':'cash';};
+  }else if(kind==='cat'){
+    h=fld('td-f-name','Expense type',inp('td-f-name',r.name,'placeholder="e.g. Tarpaulin / tirpal" autocomplete="off"'),'td-span-3');
+  }else{
+    const sup=role==='supplier';
+    h=fld('td-f-name',sup?'Supplier name':'Customer name',inp('td-f-name',r.name,`placeholder="${sup?'e.g. Rana Traders / zamindar name':'e.g. Chaudhry Dairy Farm'}" autocomplete="off"`),'td-span-2')+
+      fld('td-f-phone','Phone - optional',inp('td-f-phone',r.phone,'type="tel" inputmode="tel" placeholder="03xx-xxxxxxx"'))+
+      fld('td-f-place','Village / city - optional',inp('td-f-place',r.place,'placeholder="e.g. Toba Tek Singh"'))+
+      fld('td-f-opening',sup?'You already owe them (Rs) - old balance':'They already owe you (Rs) - old balance',inp('td-f-opening',r.opening||'','type="number" step="1" inputmode="decimal" placeholder="0"'))+
+      fld('td-f-note','Note - optional',inp('td-f-note',r.note))+(rec?`<label class="td-check td-span-3"><input type="checkbox" id="td-f-active" ${r.active!==false?'checked':''}> Active - show in the ${sup?'Buy':'Sell'} and Money lists</label>`:'');
+    help=sup?'Leave the old balance at 0 if you are starting fresh with this supplier.':'Leave the old balance at 0 if you are starting fresh with this customer.';
+  }
+  $('td-dlg-body').innerHTML=h;$('td-dlg-help').innerHTML=help;$('td-dlg-help').hidden=!help;$('td-dlg-err').textContent='';
+  if(dlg.after)dlg.after();
+  $('td-dlg').hidden=false;document.body.classList.add('td-dlg-open');
+  setTimeout(()=>{const f=$('td-f-name');if(f)f.focus();},30);
+}
+function formUnit(){const u=val('td-f-unit');$('td-f-unit2-f').hidden=u!=='__other';const kg=u==='kg';$('td-f-pbasis').hidden=!kg;$('td-f-per').textContent=kg?'':'per '+(u==='__other'?(val('td-f-unit2')||'unit'):u);}
+function resetTarget(t){if(!t)return;const o=[...t.options].find(o=>!o.value.startsWith('__'));t.value=t.dataset.prev&&byId(t.dataset.prev)?t.dataset.prev:(o?o.value:'');}
+function closeForm(saved){const d=dlg;dlg=null;$('td-dlg').hidden=true;document.body.classList.remove('td-dlg-open');if(d&&d.target&&!saved){resetTarget(d.target);}if(d&&d.target&&!saved)d.target.focus();}
+async function saveForm(){const d=dlg;if(!d)return;const err=m=>{$('td-dlg-err').textContent=m;};const name=val('td-f-name').replace(/\s+/g,' ');if(!name)return err('Enter the name.');const kind=d.kind;const same=recs(kind).filter(x=>x!==d.rec&&(kind!=='party'||x.role===d.role));if(same.some(x=>x.name.toLowerCase()===name.toLowerCase()))return err('"'+name+'" is already in the list.');const r=d.rec||{kind,active:true};if(kind==='item'){let u=val('td-f-unit');if(u==='__other')u=val('td-f-unit2').toLowerCase();if(!u)return err('Enter the unit name.');const pr=num('td-f-price'),b=val('td-f-pbasis');r.unit=u;r.unitNote=u==='kg'?'40 kg = 1 maund':'';r.price=u==='kg'?r2(pr/(KG_PER[b]||1)):pr;r.note=val('td-f-note');if(u==='kg')lsSet('basis-s',b);}if(kind==='store')r.place=val('td-f-place');if(kind==='account'){r.type=val('td-f-type')==='bank'?'bank':'cash';r.opening=num('td-f-opening');r.note=val('td-f-note');}if(kind==='cat'){}if(kind==='party'){r.role=d.role;r.phone=val('td-f-phone');r.place=val('td-f-place');r.opening=num('td-f-opening');r.note=val('td-f-note');if(d.rec&&$('td-f-active'))r.active=$('td-f-active').checked;}r.name=name;const mk=kind==='party'?'party':(kind==='cat'?'category':kind);try{const nid=await persistMaster(mk,r,!d.rec);r.id=String(nid);if(!d.rec)tradeRecs.push(stamp(Object.assign({kind},r)));}catch(e){return err(e.message);}closeForm(true);await reloadTradeRecs();render();if(d.target){d.target.value=r.id;d.target.dispatchEvent(new Event('change',{bubbles:true}));}toast((d.rec?'Saved ':'Added ')+name);}
+
+/* ---------------- saving ---------------- */
+async function addEntry(o){await persistEntry(o);}
+function checkStock(e){const B=compute();e.cancelled=false;tradeRecs.push(e);const after=compute();tradeRecs.pop();if(after.negative){const n=after.negative;return `Not enough ${nm(n.item)} in ${nm(n.store)} on ${n.entry.date} (it would go to ${fmtN(n.qty)} ${unitOf(n.item)}).`;}return '';}
+function saveBuy(btn){if(!guard('create'))return;run(btn,async()=>{
+  const it=val('td-b-item'),store=val('td-b-store'),pid=val('td-b-party'),party=(byId(pid)||{}).name||'',q=num('td-b-qty'),r=rateFrom('b',val('td-b-item')),fr=num('td-b-freight'),lab=num('td-b-labour'),pay=val('td-b-pay'),acct=val('td-b-acct'),date=val('td-b-date');
+  if(!date)throw new Error('Enter the date.');if(!byId(it))throw new Error('Choose the item.');if(!byId(pid))throw new Error('Choose the supplier (or add a new one).');
+  if(!byId(store))throw new Error('Choose the godown.');if(!(q>0))throw new Error('Enter the quantity.');if(!(r>0))throw new Error('Enter the rate.');
+  const goods=r2(q*r);let paid=pay==='paid'?goods:pay==='credit'?0:num('td-b-paid');
+  if(pay==='partial'&&!(paid>0&&paid<goods))throw new Error('For part payment enter an amount between 0 and '+money(goods)+'.');
+  if((paid>0||fr+lab>0)&&!byId(acct))throw new Error('Choose the trading account you paid from.');
+  const B=compute(),bal=B.acc[acct]||0,out=paid+fr+lab;
+  if(out>0&&bal-out< -0.5&&!confirm(`${nm(acct)} has ${money(bal)}; this payment of ${money(out)} would take it below zero.\n\nRecord "Money put in" first if cash came from outside. Save anyway?`))return false;
+  await addEntry({type:'buy',date,itemId:it,storeId:store,party,partyId:pid,qty:q,rate:r,freight:fr,labour:lab,payment:pay,paid:r2(paid),accountId:out>0?acct:'',dueDate:pay==='paid'?'':val('td-b-due'),note:val('td-b-note')});
+  ['td-b-qty','td-b-freight','td-b-labour','td-b-paid','td-b-due','td-b-note'].forEach(x=>setVal(x,''));
+  return `Bought ${qtyTxt(q,it)} for ${money(goods+fr+lab)}`;});}
+function saveSell(btn){if(!guard('create'))return;run(btn,async()=>{
+  const it=val('td-s-item'),store=val('td-s-store'),pid=val('td-s-party'),party=(byId(pid)||{}).name||'',q=num('td-s-qty'),r=rateFrom('s',val('td-s-item')),fr=num('td-s-freight'),pay=val('td-s-pay'),acct=val('td-s-acct'),date=val('td-s-date');
+  if(!date)throw new Error('Enter the date.');if(!byId(it))throw new Error('Choose the item.');if(!byId(pid))throw new Error('Choose the customer (or add a new one).');
+  if(!byId(store))throw new Error('Choose the godown.');if(!(q>0))throw new Error('Enter the quantity.');if(!(r>0))throw new Error('Enter the rate.');
+  const amt=r2(q*r);let rec=pay==='paid'?amt:pay==='credit'?0:num('td-s-recv');
+  if(pay==='partial'&&!(rec>0&&rec<amt))throw new Error('For part payment enter an amount between 0 and '+money(amt)+'.');
+  if((rec>0||fr>0)&&!byId(acct))throw new Error('Choose the trading account.');
+  const bill=val('td-s-inv')||nextBill();if(entries().some(e=>e.billNo&&e.billNo.toLowerCase()===bill.toLowerCase()))throw new Error('Bill no. '+bill+' is already used.');
+  const e=stamp({id:'td-'+id()+id(),kind:'entry',type:'sell',date,itemId:it,storeId:store,party,partyId:pid,qty:q,rate:r,rateBasis:basisOf('s'),rateEntered:num('td-s-rate'),freight:fr,payment:pay,received:r2(rec),accountId:rec>0||fr>0?acct:'',dueDate:pay==='paid'?'':val('td-s-due'),billNo:bill,note:val('td-s-note')});
+  const bad=checkStock(e);if(bad)throw new Error(bad);
+  await persistEntry({type:'sell',date,itemId:it,storeId:store,partyId:pid,qty:q,rate:r,freight:fr,payment:pay,received:r2(rec),accountId:rec>0||fr>0?acct:'',dueDate:pay==='paid'?'':val('td-s-due'),billNo:bill,note:val('td-s-note')});
+  const p=(compute().per.get(e.id)||{}).profit;
+  ['td-s-qty','td-s-freight','td-s-recv','td-s-due','td-s-inv','td-s-note'].forEach(x=>setVal(x,''));delete $('td-s-rate').dataset.touched;
+  return `Sold ${qtyTxt(q,it)} for ${money(amt)} | profit ${money(p)}`;});}
+function saveLoss(btn){if(!guard('create'))return;run(btn,async()=>{
+  const it=val('td-l-item'),store=val('td-l-store'),q=num('td-l-qty'),reason=val('td-l-reason'),date=val('td-l-date');
+  if(!byId(it)||!byId(store))throw new Error('Choose the item and godown.');if(!(q>0))throw new Error('Enter the quantity.');
+  const e=stamp({id:'td-'+id()+id(),kind:'entry',type:'loss',date,itemId:it,storeId:store,qty:q,reason,note:val('td-l-note')});
+  if(reason!=='count+'){const bad=checkStock(e);if(bad)throw new Error(bad);}
+  await persistEntry({type:'loss',date,itemId:it,storeId:store,qty:q,reason,note:val('td-l-note')});
+  setVal('td-l-qty','');setVal('td-l-note','');
+  return `${LOSS[reason]}: ${fmtN(q)} ${unitOf(it)}`;});}
+function saveMoney(btn){if(!guard('create'))return;run(btn,async()=>{
+  const date=val('td-m-date'),amt=num('td-m-amt'),acct=val('td-m-acct'),isP=mtype==='pay'||mtype==='receive',pid=isP?val('td-m-party'):'',party=isP?((byId(pid)||{}).name||''):val('td-m-who');
+  if(!date)throw new Error('Enter the date.');if(!(amt>0))throw new Error('Enter the amount.');if(!byId(acct))throw new Error('Choose the account.');
+  if(isP&&!byId(pid))throw new Error(mtype==='pay'?'Choose the supplier.':'Choose the customer.');
+  const o={type:mtype,date,amount:r2(amt),accountId:acct,party,note:val('td-m-note')};if(isP)o.partyId=pid;
+  if(mtype==='expense'){const c=val('td-m-cat');if(!byId(c))throw new Error('Choose the expense type.');o.catId=c;}
+  if(mtype==='transfer'){const to=val('td-m-to');if(!byId(to)||to===acct)throw new Error('Choose a different account to move the money into.');o.toAccountId=to;}
+  const B=compute();
+  if(mtype==='pay'){const p=B.sup[pid];if(!p&&!confirm('No purchases from '+party+' are recorded. Record this as an advance payment?'))return false;if(p&&amt>p.total-p.paid+0.5&&!confirm(`You owe ${party} ${money(p.total-p.paid)}. Paying ${money(amt)} leaves an advance of ${money(amt-(p.total-p.paid))}. Continue?`))return false;}
+  if(mtype==='receive'){const p=B.cus[pid];if(p&&amt>p.total-p.paid+0.5&&!confirm(`${party} owes ${money(p.total-p.paid)}. Receiving ${money(amt)} leaves an advance of ${money(amt-(p.total-p.paid))}. Continue?`))return false;}
+  if(['pay','expense','drawing','transfer'].includes(mtype)){const bal=B.acc[acct]||0;if(bal-amt< -0.5&&!confirm(`${nm(acct)} has ${money(bal)}; this would take it below zero. Save anyway?`))return false;}
+  await addEntry(o);['td-m-amt','td-m-note','td-m-who'].forEach(x=>setVal(x,''));
+  return {pay:'Supplier payment saved',receive:'Payment received',expense:'Expense saved',capital:'Money put in saved',drawing:'Money taken out saved',transfer:'Money moved'}[mtype]+' | '+money(amt);});}
+function cancelEntry(eid){
+  const e=byId(eid);if(!e||e.cancelled)return;if(!guard('del'))return;
+  const reason=prompt(`Cancel this entry?\n${entryLabel(e)} (${e.date})\n\nIt stays in the register as CANCELLED and its stock and money are removed from the books. Reason:`);
+  if(reason===null)return;if(!reason.trim())return alert('A reason is required.');
+  e.cancelled=true;const B=compute();e.cancelled=false;
+  if(B.negative){return alert(`This cannot be cancelled: later sales or losses use this stock (${nm(B.negative.item)} in ${nm(B.negative.store)} would go below zero on ${B.negative.entry.date}). Cancel those first.`);}
+  run(null,async()=>{await postJson('/Trading/CancelEntry',{id:parseId(eid),reason:reason.trim()});return 'Entry cancelled';});
+}
+function editRec(rid){const r=byId(rid);if(r)openForm(r.kind,r);}
+function toggleRec(rid){const r=byId(rid);if(!r||!guard('edit'))return;if(r.active!==false){if(r.kind==='item'&&Math.abs(stockQty(compute(),r.id))>EPS&&!confirm(r.name+' still has stock. Switch it off anyway?'))return;if(r.kind==='account'&&Math.abs(compute().acc[r.id]||0)>0.5&&!confirm(r.name+' still has money in it. Switch it off anyway?'))return;if(recs(r.kind).filter(x=>x.active!==false).length<=1&&r.kind!=='cat'&&r.kind!=='party')return alert('Keep at least one active '+r.kind+'.');}r.active=r.active===false;const mk=r.kind==='cat'?'category':r.kind;run(null,async()=>{await persistMaster(mk,r,false);return false;});}
+function exportCsv(){
+  const B=compute();const rows=[['Date','Type','Item','Godown','Party','Qty','Unit','Rate','Kiraya','Labour','Delivery','Amount','Paid/Received','Cost of sold','Profit','Account','Bill','Status','Note']];
+  sorted(entries()).forEach(e=>{const p=B.per.get(e.id)||{};const amt=e.type==='buy'?N(e.qty)*N(e.rate):e.type==='sell'?N(e.qty)*N(e.rate):e.type==='loss'?N(p.lossValue):N(e.amount);
+    rows.push([e.date,(TLAB[e.type]||[e.type])[0],nm(e.itemId)==='-'?'':nm(e.itemId),nm(e.storeId)==='-'?'':nm(e.storeId),pName(e),e.qty||'',e.itemId?unitOf(e.itemId):'',e.rate||'',e.freight||'',e.labour||'',e.type==='sell'?e.freight||'':'',r2(amt),e.type==='buy'?e.paid:e.type==='sell'?e.received:'',p.cogs!=null?r2(p.cogs):'',p.profit!=null?r2(p.profit):'',nm(e.accountId)==='-'?'':nm(e.accountId),e.billNo||'',e.cancelled?'Cancelled':'',e.note||'']);});
+  const csv=rows.map(r=>r.map(c=>{const s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='sandeel-trading-'+today()+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
+
+/* ---------------- events ---------------- */
+let bound=false;
+function bind(){
+  if(bound)return;const root=$('view-trade');if(!root)return;bound=true;
+  root.addEventListener('change',e=>{
+    const t=e.target,v=t.value,x=t.id||'';
+    if(x.startsWith('td-f-')){if(x==='td-f-unit')formUnit();return;}
+    if(v==='__item'||v==='__store'||v==='__acct'||v==='__cat'){openForm({__item:'item',__store:'store',__acct:'account',__cat:'cat'}[v],null,t);return;}
+    if(v==='__party_supplier'||v==='__party_customer'){openForm('party',null,t,v.slice(8));return;}
+    if(t.tagName==='SELECT'&&v)t.dataset.prev=v;
+    if(x==='td-b-basis'||x==='td-s-basis'){lsSet('basis-'+x.charAt(3),v);if(x==='td-s-basis'&&!$('td-s-rate').dataset.touched)setVal('td-s-rate','');}
+    if(x==='td-s-item'){delete $('td-s-rate').dataset.touched;setVal('td-s-rate','');}
+    if(x==='td-k-item')lsSet('kItem',v);
+    if(x==='td-k-item'||x==='td-k-store'||x==='td-a-from'||x==='td-a-to'||x==='td-cb-acct'||x==='td-r-filter'||x==='td-s-item'||x.endsWith('-item')){render();return;}
+    const B=compute();if(x.startsWith('td-b-'))sumBuy(B);if(x.startsWith('td-s-'))sumSell(B);if(x.startsWith('td-l-'))sumLoss(B);if(x.startsWith('td-m-'))renderMoney(B);
+  });
+  root.addEventListener('input',e=>{const x=e.target.id||'';if(e.target.dataset.tdSearch){pSearch[e.target.dataset.tdSearch]=e.target.value;renderParties(compute());return;}if(x==='td-f-unit2'){formUnit();return;}if(x.startsWith('td-f-'))return;if(x==='td-s-rate')e.target.dataset.touched='1';const B=compute();if(x.startsWith('td-b-'))sumBuy(B);if(x.startsWith('td-s-'))sumSell(B);if(x.startsWith('td-l-'))sumLoss(B);if(x.startsWith('td-m-'))renderMoney(B);});
+  $('td-dlg-form').addEventListener('submit',e=>{e.preventDefault();saveForm();});
+  $('td-dlg').addEventListener('mousedown',e=>{if(e.target.id==='td-dlg')closeForm(false);});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&dlg)closeForm(false);});
+  root.addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b||!root.contains(b))return;
+    if(b.dataset.tdTab){setTab(b.dataset.tdTab);render();return;}
+    if(b.dataset.tdMtype){mtype=b.dataset.tdMtype;lsSet('mtype',mtype);renderMoney(compute());return;}
+    if(b.dataset.tdPeriod){const k=b.dataset.tdPeriod;let f='',t='';if(k==='month')[f,t]=monthRange(0);if(k==='last')[f,t]=monthRange(-1);if(k==='year'){f=today().slice(0,4)+'-01-01';t=today().slice(0,4)+'-12-31';}setVal('td-a-from',f);setVal('td-a-to',t);render();return;}
+    if(b.dataset.tdSettle){mtype=b.dataset.tdSettle;lsSet('mtype',mtype);setTab('money');render();setVal('td-m-party',b.dataset.tdParty);render();setVal('td-m-amt',b.dataset.tdAmt);renderMoney(compute());$('td-m-amt').focus();return;}
+    if(b.dataset.tdNew){const k=b.dataset.tdNew;if(k==='supplier'||k==='customer')openForm('party',null,null,k);else openForm(k);return;}
+    if(b.dataset.tdStmt){stmtParty=stmtParty===b.dataset.tdStmt?'':b.dataset.tdStmt;lsSet('stmt',stmtParty);renderParties(compute());if(stmtParty)$('td-stmt-p').scrollIntoView({behavior:'smooth',block:'start'});return;}
+    if(b.dataset.tdGoto){mtype=b.dataset.tdGoto;lsSet('mtype',mtype);setTab('money');render();return;}
+    if(b.dataset.tdCancel){cancelEntry(b.dataset.tdCancel);return;}
+    if(b.dataset.tdEdit){editRec(b.dataset.tdEdit);return;}
+    if(b.dataset.tdToggle){toggleRec(b.dataset.tdToggle);return;}
+    switch(b.id){
+      case 'td-b-save':saveBuy(b);break;
+      case 'td-s-save':saveSell(b);break;
+      case 'td-l-save':saveLoss(b);break;
+      case 'td-m-save':saveMoney(b);break;
+      case 'td-s-all':{setVal('td-s-qty',r2(stockQty(compute(),val('td-s-item'),val('td-s-store'))));sumSell(compute());break;}
+      case 'td-dlg-cancel':closeForm(false);break;
+      case 'td-stmt-close':stmtParty='';lsSet('stmt','');renderParties(compute());break;
+      case 'td-csv':exportCsv();break;
+    }
+  });
+}
+window.SFTrade={render,compute,pl,openTab:t=>{setTab(t);render();}};
+function bootTrading(){
+  loadTradeRecsFromPage();
+  render();
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bootTrading);
+else bootTrading();
+})();
