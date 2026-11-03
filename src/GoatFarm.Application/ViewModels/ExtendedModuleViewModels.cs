@@ -279,6 +279,8 @@ public class MoneyAccountRowViewModel
     public string Name { get; set; } = "";
     public string Kind { get; set; } = "";
     public decimal Balance { get; set; }
+    public decimal OpeningBalance { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public class LedgerTransactionRowViewModel
@@ -290,6 +292,10 @@ public class LedgerTransactionRowViewModel
     public decimal Amount { get; set; }
     public string? Category { get; set; }
     public string? Notes { get; set; }
+    public int? AccountId { get; set; }
+    public int? CounterAccountId { get; set; }
+    public string? CounterAccount { get; set; }
+    public string? Reference { get; set; }
 }
 
 public class CustomerInvoiceRowViewModel
@@ -301,6 +307,7 @@ public class CustomerInvoiceRowViewModel
     public decimal Amount { get; set; }
     public decimal PaidAmount { get; set; }
     public string Status { get; set; } = "";
+    public string? DueDateDisplay { get; set; }
 }
 
 public class SupplierPayableRowViewModel
@@ -312,6 +319,7 @@ public class SupplierPayableRowViewModel
     public decimal Amount { get; set; }
     public decimal PaidAmount { get; set; }
     public string Status { get; set; } = "";
+    public string? DueDateDisplay { get; set; }
 }
 
 public class BudgetRowViewModel
@@ -328,6 +336,7 @@ public class ProfitPartnerRowViewModel
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public decimal SharePercent { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public class BusinessCustomerRowViewModel
@@ -356,6 +365,7 @@ public class SaveMoneyAccountViewModel
     [Required] public string Name { get; set; } = "";
     public MoneyAccountKind Kind { get; set; }
     public decimal OpeningBalance { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public class SaveLedgerTransactionViewModel
@@ -379,6 +389,7 @@ public class SaveCustomerInvoiceViewModel
     [Required] public string Description { get; set; } = "";
     public decimal Amount { get; set; }
     public decimal PaidAmount { get; set; }
+    public int? AccountId { get; set; }
 }
 
 public class SaveSupplierPayableViewModel
@@ -390,6 +401,7 @@ public class SaveSupplierPayableViewModel
     [Required] public string Description { get; set; } = "";
     public decimal Amount { get; set; }
     public decimal PaidAmount { get; set; }
+    public int? AccountId { get; set; }
 }
 
 public class SaveBudgetLineViewModel
@@ -406,6 +418,15 @@ public class SaveProfitSharePartnerViewModel
     public int? Id { get; set; }
     [Required] public string Name { get; set; } = "";
     public decimal SharePercent { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class SettleOpenBalanceViewModel
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+    public int AccountId { get; set; }
+    public DateOnly Date { get; set; }
 }
 
 public class SaveBusinessCustomerViewModel

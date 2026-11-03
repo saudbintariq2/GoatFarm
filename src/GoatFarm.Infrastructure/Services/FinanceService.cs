@@ -101,7 +101,7 @@ public class FinanceService : IFinanceService
         var profit = incTot - expTot;
         var feedPlanBudget = _feedService.CalculateFarmFeedMonthly();
 
-        return new FinancePageViewModel
+        var page = new FinancePageViewModel
         {
             Month = month,
             Profit = profit,
@@ -132,7 +132,69 @@ public class FinanceService : IFinanceService
             OwnerInvestments = ownerInvestments,
             NewIncome = new CreateIncomeViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
             NewExpense = new CreateExpenseViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
-            NewOwnerInvestment = new CreateOwnerInvestmentViewModel { Date = DateOnly.FromDateTime(DateTime.Today) }
+            NewOwnerInvestment = new CreateOwnerInvestmentViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
+            DisplayIncome = incTot,
+            DisplayExpense = expTot
+        };
+        await EnrichAccountingAsync(page, monthStart, monthEnd, cancellationToken);
+        return page;
+    }
+
+    public async Task<FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+    {
+        if (to < from) (from, to) = (to, from);
+        var endExclusive = to.AddDays(1);
+        var months = Math.Max(0, Math.Round((to.DayNumber - from.DayNumber) / 30.44m, 1));
+        if (months == 0 && to >= from) months = 1;
+
+        var incomes = await _context.Incomes.AsNoTracking()
+            .Where(i => i.Date >= from && i.Date < endExclusive)
+            .GroupBy(i => i.Type)
+            .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToListAsync(cancellationToken);
+        var milk = await _context.MilkSales.AsNoTracking().Where(s => s.Date >= from && s.Date < endExclusive).SumAsync(s => (decimal?)s.Amount, cancellationToken) ?? 0;
+        var products = await _context.ProductSales.AsNoTracking()
+            .Where(s => s.Date >= from && s.Date < endExclusive)
+            .GroupBy(s => s.ProductName)
+            .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToListAsync(cancellationToken);
+        var invoices = await _context.CustomerInvoices.AsNoTracking()
+            .Where(i => i.Date >= from && i.Date < endExclusive && i.Status != InvoiceStatus.Void)
+            .Where(i => !i.Description.StartsWith("Product sale:") && !i.Description.StartsWith("Live goat sale"))
+            .SumAsync(i => (decimal?)i.Amount, cancellationToken) ?? 0;
+
+        var expenses = await _context.Expenses.AsNoTracking()
+            .Where(e => e.Date >= from && e.Date < endExclusive)
+            .GroupBy(e => e.Type)
+            .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToListAsync(cancellationToken);
+        var feed = await _context.FeedPurchases.AsNoTracking().Where(f => f.Date >= from && f.Date < endExclusive).SumAsync(f => (decimal?)f.Amount, cancellationToken) ?? 0;
+        var vacc = await _context.VaccinePurchases.AsNoTracking().Where(v => v.Date >= from && v.Date < endExclusive).SumAsync(v => (decimal?)v.Amount, cancellationToken) ?? 0;
+        var salary = GetStaffSalaryMonthlyTotal() * months;
+        var recurring = GetRecurringMonthlyTotal() * months;
+        var medicine = _feedService.CalculateFarmMedicineMonthly() * months;
+
+        var inLines = new List<FinanceLineViewModel>();
+        if (milk > 0) inLines.Add(new FinanceLineViewModel { Label = "Milk sales", Amount = milk });
+        inLines.AddRange(products.Where(p => p.Amount > 0));
+        if (invoices > 0) inLines.Add(new FinanceLineViewModel { Label = "Other farm sale", Amount = invoices });
+        inLines.AddRange(incomes.Where(i => i.Amount > 0));
+        var outLines = new List<FinanceLineViewModel>();
+        if (feed > 0) outLines.Add(new FinanceLineViewModel { Label = "Feed bought", Amount = feed });
+        if (medicine > 0) outLines.Add(new FinanceLineViewModel { Label = "Medicine (plan)", Amount = medicine });
+        if (vacc > 0) outLines.Add(new FinanceLineViewModel { Label = "Vaccines bought", Amount = vacc });
+        if (salary > 0) outLines.Add(new FinanceLineViewModel { Label = "Salaries", Amount = salary });
+        if (recurring > 0) outLines.Add(new FinanceLineViewModel { Label = "Fixed & recurring", Amount = recurring });
+        outLines.AddRange(expenses.Where(e => e.Amount > 0));
+
+        return new FinanceStatementViewModel
+        {
+            From = from.ToString("yyyy-MM-dd"),
+            To = to.ToString("yyyy-MM-dd"),
+            Income = inLines.Sum(x => x.Amount),
+            Expense = outLines.Sum(x => x.Amount),
+            IncomeLines = inLines.OrderByDescending(x => x.Amount).ToList(),
+            ExpenseLines = outLines.OrderByDescending(x => x.Amount).ToList()
         };
     }
 
@@ -161,7 +223,9 @@ public class FinanceService : IFinanceService
         };
         _context.Incomes.Add(entity);
         await _context.SaveChangesAsync(cancellationToken);
-        return new IncomeViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment };
+        await SyncCashMovementAsync($"fin-income:{entity.Id}", entity.Date, entity.Amount, model.AccountId, LedgerTransactionKind.Income, "Linked income", entity.Type, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+        return new IncomeViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment, AccountId = model.AccountId };
     }
 
     public async Task<ExpenseViewModel> AddExpenseAsync(CreateExpenseViewModel model, CancellationToken cancellationToken = default)
@@ -175,7 +239,9 @@ public class FinanceService : IFinanceService
         };
         _context.Expenses.Add(entity);
         await _context.SaveChangesAsync(cancellationToken);
-        return new ExpenseViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment };
+        await SyncCashMovementAsync($"fin-expense:{entity.Id}", entity.Date, entity.Amount, model.AccountId, LedgerTransactionKind.Expense, "Linked expense", entity.Type, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+        return new ExpenseViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment, AccountId = model.AccountId };
     }
 
     public async Task<RecurringCostViewModel> AddRecurringCostAsync(CreateRecurringCostViewModel model, CancellationToken cancellationToken = default)
@@ -193,13 +259,15 @@ public class FinanceService : IFinanceService
     {
         var entity = new OwnerInvestment
         {
-            Note = model.Note.Trim(),
+            Note = ComposeFundingNote(model),
             Amount = model.Amount,
             Date = model.Date
         };
         _context.OwnerInvestments.Add(entity);
         await _context.SaveChangesAsync(cancellationToken);
-        return new OwnerInvestmentViewModel { Id = entity.Id, Note = entity.Note, Amount = entity.Amount, Date = entity.Date };
+        await SyncCashMovementAsync($"fin-funding:{entity.Id}", entity.Date, entity.Amount, model.AccountId, LedgerTransactionKind.Income, "Shareholder funding", entity.Note, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+        return new OwnerInvestmentViewModel { Id = entity.Id, Note = entity.Note, Amount = entity.Amount, Date = entity.Date, AccountId = model.AccountId };
     }
 
     public async Task<AssetViewModel?> UpdateAssetAsync(int id, CreateAssetViewModel model, CancellationToken cancellationToken = default)
@@ -222,8 +290,9 @@ public class FinanceService : IFinanceService
         entity.Amount = model.Amount;
         entity.Date = model.Date;
         entity.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
+        await SyncCashMovementAsync($"fin-income:{entity.Id}", entity.Date, entity.Amount, model.AccountId, LedgerTransactionKind.Income, "Linked income", entity.Type, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
-        return new IncomeViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment };
+        return new IncomeViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment, AccountId = model.AccountId };
     }
 
     public async Task<ExpenseViewModel?> UpdateExpenseAsync(int id, CreateExpenseViewModel model, CancellationToken cancellationToken = default)
@@ -234,8 +303,9 @@ public class FinanceService : IFinanceService
         entity.Amount = model.Amount;
         entity.Date = model.Date;
         entity.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
+        await SyncCashMovementAsync($"fin-expense:{entity.Id}", entity.Date, entity.Amount, model.AccountId, LedgerTransactionKind.Expense, "Linked expense", entity.Type, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
-        return new ExpenseViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment };
+        return new ExpenseViewModel { Id = entity.Id, Type = entity.Type, Amount = entity.Amount, Date = entity.Date, Comment = entity.Comment, AccountId = model.AccountId };
     }
 
     public async Task<RecurringCostViewModel?> UpdateRecurringCostAsync(int id, CreateRecurringCostViewModel model, CancellationToken cancellationToken = default)
@@ -256,11 +326,12 @@ public class FinanceService : IFinanceService
     {
         var entity = await _context.OwnerInvestments.FindAsync([id], cancellationToken);
         if (entity is null) return null;
-        entity.Note = model.Note.Trim();
+        entity.Note = ComposeFundingNote(model);
         entity.Amount = model.Amount;
         entity.Date = model.Date;
+        await SyncCashMovementAsync($"fin-funding:{entity.Id}", entity.Date, entity.Amount, model.AccountId, LedgerTransactionKind.Income, "Shareholder funding", entity.Note, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
-        return new OwnerInvestmentViewModel { Id = entity.Id, Note = entity.Note, Amount = entity.Amount, Date = entity.Date };
+        return new OwnerInvestmentViewModel { Id = entity.Id, Note = entity.Note, Amount = entity.Amount, Date = entity.Date, AccountId = model.AccountId };
     }
 
     public async Task<bool> DeleteAssetAsync(int id, CancellationToken cancellationToken = default)
@@ -276,6 +347,7 @@ public class FinanceService : IFinanceService
     {
         var entity = await _context.Incomes.FindAsync([id], cancellationToken);
         if (entity is null) return false;
+        await RemoveLinkedCashAsync($"fin-income:{id}", cancellationToken);
         _context.Incomes.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
@@ -285,6 +357,7 @@ public class FinanceService : IFinanceService
     {
         var entity = await _context.Expenses.FindAsync([id], cancellationToken);
         if (entity is null) return false;
+        await RemoveLinkedCashAsync($"fin-expense:{id}", cancellationToken);
         _context.Expenses.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
@@ -303,6 +376,7 @@ public class FinanceService : IFinanceService
     {
         var entity = await _context.OwnerInvestments.FindAsync([id], cancellationToken);
         if (entity is null) return false;
+        await RemoveLinkedCashAsync($"fin-funding:{id}", cancellationToken);
         _context.OwnerInvestments.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
@@ -439,4 +513,283 @@ public class FinanceService : IFinanceService
         Period = entity.Period == RecurringCostPeriod.Year ? "year" : "month",
         MonthlyAmount = entity.Period == RecurringCostPeriod.Year ? entity.Amount / 12m : entity.Amount
     };
+
+    private static string ComposeFundingNote(CreateOwnerInvestmentViewModel model)
+    {
+        var purpose = model.Note.Trim();
+        if (string.IsNullOrWhiteSpace(model.Shareholder)) return purpose;
+        var kind = string.Equals(model.FundingType, "topup", StringComparison.OrdinalIgnoreCase)
+            ? "Monthly top-up"
+            : "Capital investment";
+        return $"{model.Shareholder.Trim()} · {kind} · {purpose}";
+    }
+
+    private async Task RemoveLinkedCashAsync(string reference, CancellationToken cancellationToken)
+    {
+        var existing = await _context.LedgerTransactions.FirstOrDefaultAsync(t => t.Reference == reference, cancellationToken);
+        if (existing is not null) _context.LedgerTransactions.Remove(existing);
+    }
+
+    private async Task SyncCashMovementAsync(string reference, DateOnly date, decimal amount, int? accountId, LedgerTransactionKind kind, string category, string? notes, CancellationToken cancellationToken)
+    {
+        var existing = await _context.LedgerTransactions.FirstOrDefaultAsync(t => t.Reference == reference, cancellationToken);
+        if (accountId is null or <= 0 || amount <= 0)
+        {
+            if (existing is not null) _context.LedgerTransactions.Remove(existing);
+            return;
+        }
+
+        var account = await _context.MoneyAccounts.FirstOrDefaultAsync(a => a.Id == accountId && a.IsActive, cancellationToken)
+            ?? throw new InvalidOperationException("Selected Cash/Bank account was not found. Add it under Bank & Cash.");
+
+        if (kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment)
+        {
+            var balance = await AccountBalanceAsync(account.Id, cancellationToken);
+            var already = existing is not null && existing.AccountId == account.Id && existing.Kind == kind ? existing.Amount : 0;
+            if (amount > balance + already)
+                throw new InvalidOperationException($"Insufficient balance in {account.Name}. Available: {balance + already:N0}.");
+        }
+
+        if (existing is null)
+        {
+            existing = new LedgerTransaction { Reference = reference, CreatedDate = DateTime.UtcNow };
+            _context.LedgerTransactions.Add(existing);
+        }
+        existing.Date = date;
+        existing.Kind = kind;
+        existing.AccountId = account.Id;
+        existing.Amount = amount;
+        existing.Category = category;
+        existing.Notes = string.IsNullOrWhiteSpace(notes) ? category : notes;
+        existing.UpdatedDate = DateTime.UtcNow;
+    }
+
+    private async Task<decimal> AccountBalanceAsync(int accountId, CancellationToken cancellationToken)
+    {
+        var opening = await _context.MoneyAccounts.AsNoTracking().Where(a => a.Id == accountId).Select(a => a.OpeningBalance).FirstAsync(cancellationToken);
+        var tx = await _context.LedgerTransactions.AsNoTracking()
+            .Where(t => t.AccountId == accountId || t.CounterAccountId == accountId)
+            .ToListAsync(cancellationToken);
+        var balance = opening;
+        foreach (var t in tx)
+        {
+            if (t.Kind == LedgerTransactionKind.Transfer)
+            {
+                if (t.AccountId == accountId) balance -= t.Amount;
+                if (t.CounterAccountId == accountId) balance += t.Amount;
+            }
+            else if (t.AccountId == accountId)
+            {
+                balance += t.Kind is LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment ? t.Amount : -t.Amount;
+            }
+        }
+        return balance;
+    }
+
+    private async Task EnrichAccountingAsync(FinancePageViewModel page, DateOnly monthStart, DateOnly monthEnd, CancellationToken cancellationToken)
+    {
+        var trendStart = monthStart.AddMonths(-5);
+        var incomeRows = await _context.Incomes.AsNoTracking().Where(i => i.Date >= trendStart && i.Date < monthEnd).Select(i => new { i.Date, i.Amount, i.Type }).ToListAsync(cancellationToken);
+        var milkRows = await _context.MilkSales.AsNoTracking().Where(s => s.Date >= trendStart && s.Date < monthEnd).Select(s => new { s.Date, s.Amount, s.Comment }).ToListAsync(cancellationToken);
+        var productRows = await _context.ProductSales.AsNoTracking().Include(s => s.Customer)
+            .Where(s => s.Date >= trendStart && s.Date < monthEnd)
+            .Select(s => new { s.Id, s.Date, s.Amount, s.ProductName, s.IsCredit, Customer = s.Customer != null ? s.Customer.Name : null, s.Notes, s.CustomerId })
+            .ToListAsync(cancellationToken);
+        var invoiceRows = await _context.CustomerInvoices.AsNoTracking().Include(i => i.Customer)
+            .OrderByDescending(i => i.Date).Take(400).ToListAsync(cancellationToken);
+        var expenseRows = await _context.Expenses.AsNoTracking().Where(e => e.Date >= trendStart && e.Date < monthEnd).Select(e => new { e.Date, e.Amount, e.Type }).ToListAsync(cancellationToken);
+        var feedRows = await _context.FeedPurchases.AsNoTracking().Where(f => f.Date >= trendStart && f.Date < monthEnd).Select(f => new { f.Date, f.Amount }).ToListAsync(cancellationToken);
+        var vaccRows = await _context.VaccinePurchases.AsNoTracking().Where(v => v.Date >= trendStart && v.Date < monthEnd).Select(v => new { v.Date, v.Amount }).ToListAsync(cancellationToken);
+        var goatSales = await _context.GoatSales.AsNoTracking().OrderByDescending(g => g.Date).Take(200)
+            .Select(g => new { g.Id, g.Date, g.Price, g.Tag, g.Buyer, g.IsCredit, g.CustomerInvoiceId, g.WeightKg }).ToListAsync(cancellationToken);
+        var salary = GetStaffSalaryMonthlyTotal();
+        var recurring = GetRecurringMonthlyTotal();
+        var medicine = _feedService.CalculateFarmMedicineMonthly();
+
+        bool InMonth(DateOnly date) => date >= monthStart && date < monthEnd;
+        bool ManualInvoice(CustomerInvoice invoice) =>
+            invoice.Status != InvoiceStatus.Void
+            && !invoice.Description.StartsWith("Product sale:")
+            && !invoice.Description.StartsWith("Live goat sale");
+
+        var monthInvoices = invoiceRows.Where(i => InMonth(i.Date) && ManualInvoice(i)).ToList();
+        var monthProducts = productRows.Where(p => InMonth(p.Date)).ToList();
+        page.DisplayIncome = page.TotalIncome + monthProducts.Sum(p => p.Amount) + monthInvoices.Sum(i => i.Amount);
+        page.DisplayExpense = page.TotalExpense;
+        page.Profit = page.DisplayIncome - page.DisplayExpense;
+        page.IsLoss = page.Profit < 0;
+        page.ProfitNote = page.Profit >= 0 ? "you made money this month" : "costs were higher than income this month";
+
+        var incomeLines = new List<FinanceLineViewModel>();
+        if (page.MilkIncome > 0) incomeLines.Add(new FinanceLineViewModel { Label = "Milk sales", Amount = page.MilkIncome });
+        foreach (var group in monthProducts.GroupBy(p => string.IsNullOrWhiteSpace(p.ProductName) ? "Product sales" : p.ProductName))
+            incomeLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
+        if (monthInvoices.Count > 0)
+            incomeLines.Add(new FinanceLineViewModel { Label = "Other farm sale", Amount = monthInvoices.Sum(i => i.Amount) });
+        foreach (var group in page.Incomes.GroupBy(i => i.Type))
+            incomeLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
+        page.IncomeLines = incomeLines.Where(x => x.Amount > 0).OrderByDescending(x => x.Amount).ToList();
+
+        var expenseLines = new List<FinanceLineViewModel>();
+        if (page.FeedBoughtMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Feed bought", Amount = page.FeedBoughtMonthly });
+        if (page.MedicineMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Medicine (plan)", Amount = page.MedicineMonthly });
+        if (page.VaccineBoughtMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Vaccines bought", Amount = page.VaccineBoughtMonthly });
+        if (page.StaffSalaryMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Salaries", Amount = page.StaffSalaryMonthly });
+        foreach (var cost in page.RecurringCosts.Where(r => r.MonthlyAmount > 0))
+            expenseLines.Add(new FinanceLineViewModel { Label = cost.Name, Amount = cost.MonthlyAmount });
+        foreach (var group in page.Expenses.GroupBy(e => e.Type))
+            expenseLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
+        page.ExpenseLines = expenseLines.OrderByDescending(x => x.Amount).ToList();
+
+        var trend = new List<FinanceTrendMonthViewModel>();
+        for (var i = 5; i >= 0; i--)
+        {
+            var start = monthStart.AddMonths(-i);
+            var end = start.AddMonths(1);
+            var key = $"{start.Year:0000}-{start.Month:00}";
+            bool In(DateOnly date) => date >= start && date < end;
+            var inc = incomeRows.Where(x => In(x.Date)).Sum(x => x.Amount)
+                + milkRows.Where(x => In(x.Date)).Sum(x => x.Amount)
+                + productRows.Where(x => In(x.Date)).Sum(x => x.Amount)
+                + invoiceRows.Where(x => In(x.Date) && ManualInvoice(x)).Sum(x => x.Amount);
+            var exp = expenseRows.Where(x => In(x.Date)).Sum(x => x.Amount)
+                + feedRows.Where(x => In(x.Date)).Sum(x => x.Amount)
+                + vaccRows.Where(x => In(x.Date)).Sum(x => x.Amount)
+                + salary + recurring + medicine;
+            trend.Add(new FinanceTrendMonthViewModel { Month = key, Income = inc, Expense = exp });
+        }
+        page.Trend = trend;
+
+        var matchedInvoiceIds = new HashSet<int>();
+        var sales = new List<SaleRegisterRowViewModel>();
+        foreach (var milkSale in milkRows.Where(x => InMonth(x.Date)))
+        {
+            sales.Add(new SaleRegisterRowViewModel
+            {
+                Source = "milk",
+                DateDisplay = milkSale.Date.ToString("yyyy-MM-dd"),
+                Kind = "Direct milk",
+                Customer = string.IsNullOrWhiteSpace(milkSale.Comment) ? "Cash / direct" : milkSale.Comment,
+                Status = "Paid",
+                Amount = milkSale.Amount,
+                Received = milkSale.Amount
+            });
+        }
+        foreach (var sale in productRows)
+        {
+            var match = invoiceRows.FirstOrDefault(i =>
+                i.CustomerId == sale.CustomerId && i.Date == sale.Date && i.Amount == sale.Amount && i.Description.StartsWith("Product sale:"));
+            if (match is not null) matchedInvoiceIds.Add(match.Id);
+            var received = match?.PaidAmount ?? (sale.IsCredit ? 0 : sale.Amount);
+            var due = Math.Max(0, sale.Amount - received);
+            sales.Add(new SaleRegisterRowViewModel
+            {
+                Source = "product",
+                Id = sale.Id,
+                DateDisplay = sale.Date.ToString("yyyy-MM-dd"),
+                Kind = sale.ProductName,
+                Customer = sale.Customer ?? "—",
+                Status = due <= 0 ? "Paid" : received > 0 ? "Part paid" : "Credit",
+                Amount = sale.Amount,
+                Received = received,
+                Due = due,
+                DueDate = match?.DueDate?.ToString("yyyy-MM-dd"),
+                Note = sale.Notes
+            });
+        }
+        foreach (var sale in goatSales)
+        {
+            var match = sale.CustomerInvoiceId is int invoiceId ? invoiceRows.FirstOrDefault(i => i.Id == invoiceId) : null;
+            if (match is not null) matchedInvoiceIds.Add(match.Id);
+            var received = match?.PaidAmount ?? (sale.IsCredit ? 0 : sale.Price);
+            var due = Math.Max(0, sale.Price - received);
+            sales.Add(new SaleRegisterRowViewModel
+            {
+                Source = "goat",
+                Id = sale.Id,
+                DateDisplay = sale.Date.ToString("yyyy-MM-dd"),
+                Kind = "Live goat · " + sale.Tag,
+                Customer = string.IsNullOrWhiteSpace(sale.Buyer) ? "Cash / market" : sale.Buyer,
+                Status = due <= 0 ? "Paid" : received > 0 ? "Part paid" : "Credit",
+                Amount = sale.Price,
+                Received = received,
+                Due = due,
+                DueDate = match?.DueDate?.ToString("yyyy-MM-dd"),
+                Note = sale.WeightKg is > 0 ? $"{sale.WeightKg:N1} kg" : null
+            });
+        }
+        foreach (var invoice in invoiceRows.Where(i => !matchedInvoiceIds.Contains(i.Id) && i.Status != InvoiceStatus.Void))
+        {
+            var due = Math.Max(0, invoice.Amount - invoice.PaidAmount);
+            sales.Add(new SaleRegisterRowViewModel
+            {
+                Source = "invoice",
+                Id = invoice.Id,
+                DateDisplay = invoice.Date.ToString("yyyy-MM-dd"),
+                Kind = invoice.Description,
+                Customer = invoice.Customer.Name,
+                Status = due <= 0 ? "Paid" : invoice.PaidAmount > 0 ? "Part paid" : "Credit",
+                Amount = invoice.Amount,
+                Received = invoice.PaidAmount,
+                Due = due,
+                DueDate = invoice.DueDate?.ToString("yyyy-MM-dd")
+            });
+        }
+        page.Sales = sales.OrderByDescending(s => s.DateDisplay).ToList();
+
+        var capex = await _context.ProjectExpenditures.AsNoTracking().Include(p => p.Project)
+            .Where(p => p.Date >= monthStart && p.Date < monthEnd)
+            .OrderByDescending(p => p.Date)
+            .Select(p => new CapexRowViewModel
+            {
+                DateDisplay = p.Date.ToString("yyyy-MM-dd"),
+                Name = p.Project.Name,
+                Type = p.Description,
+                Supplier = p.Vendor,
+                Amount = p.Amount
+            }).ToListAsync(cancellationToken);
+        var assetCapex = await _context.FixedAssetRegisters.AsNoTracking()
+            .Where(a => a.PurchaseDate >= monthStart && a.PurchaseDate < monthEnd)
+            .Select(a => new CapexRowViewModel
+            {
+                DateDisplay = a.PurchaseDate!.Value.ToString("yyyy-MM-dd"),
+                Name = a.Name,
+                Type = a.Category.ToString(),
+                Supplier = a.Notes,
+                Amount = a.Cost
+            }).ToListAsync(cancellationToken);
+        page.Capex = capex.Concat(assetCapex).OrderByDescending(x => x.DateDisplay).ToList();
+        page.ProjectSpend = await _context.ProjectExpenditures.AsNoTracking().SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0;
+        page.FixedAssetRegisterValue = await _context.FixedAssetRegisters.AsNoTracking().SumAsync(a => (decimal?)a.Cost, cancellationToken) ?? 0;
+        page.FeedStockValue = await _context.FeedPrices.AsNoTracking().SumAsync(f => (decimal?)(f.StockKg * f.PricePerKg), cancellationToken) ?? 0;
+        page.GoatsBoughtMonth = await _context.Goats.AsNoTracking()
+            .Where(g => g.Source != GoatSource.Born && g.EventDate >= monthStart && g.EventDate < monthEnd)
+            .SumAsync(g => (decimal?)g.PurchasePrice, cancellationToken) ?? 0;
+        page.OpeningCash = await _context.MoneyAccounts.AsNoTracking().Where(a => a.IsActive).SumAsync(a => (decimal?)a.OpeningBalance, cancellationToken) ?? 0;
+        page.FundingHistory = await _context.OwnerInvestments.AsNoTracking().OrderByDescending(o => o.Date)
+            .Select(o => new OwnerInvestmentViewModel { Id = o.Id, Note = o.Note, Amount = o.Amount, Date = o.Date })
+            .ToListAsync(cancellationToken);
+
+        var links = await _context.LedgerTransactions.AsNoTracking().Include(t => t.Account)
+            .Where(t => t.Reference != null && (t.Reference.StartsWith("fin-income:") || t.Reference.StartsWith("fin-expense:") || t.Reference.StartsWith("fin-funding:")))
+            .ToListAsync(cancellationToken);
+        void ApplyLink<T>(IEnumerable<T> rows, string prefix, Action<T, int?, string?> set) where T : class
+        {
+            foreach (var row in rows)
+            {
+                var id = row switch
+                {
+                    IncomeViewModel i => i.Id,
+                    ExpenseViewModel e => e.Id,
+                    OwnerInvestmentViewModel o => o.Id,
+                    _ => 0
+                };
+                var link = links.FirstOrDefault(t => t.Reference == prefix + id);
+                if (link is not null) set(row, link.AccountId, link.Account?.Name);
+            }
+        }
+        ApplyLink(page.Incomes, "fin-income:", (row, id, name) => { row.AccountId = id; row.AccountName = name; });
+        ApplyLink(page.Expenses, "fin-expense:", (row, id, name) => { row.AccountId = id; row.AccountName = name; });
+        ApplyLink(page.OwnerInvestments, "fin-funding:", (row, id, name) => { row.AccountId = id; row.AccountName = name; });
+    }
 }

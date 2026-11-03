@@ -2777,7 +2777,8 @@ const GoatRecords = (() => {
     }
 
     document.getElementById('finMonth')?.addEventListener('change', e => {
-      location.href = '/Finance?month=' + encodeURIComponent(e.target.value);
+      const tab = document.querySelector('#finance-tabs .tab.active')?.dataset.fintab || 'overview';
+      location.href = '/Finance?month=' + encodeURIComponent(e.target.value) + '&tab=' + encodeURIComponent(tab);
     });
 
     function setAssetEditMode(editing) {
@@ -2820,6 +2821,8 @@ const GoatRecords = (() => {
       document.getElementById('i-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('i-amt').value = '';
       document.getElementById('i-comment').value = '';
+      const incomeAccount = document.getElementById('i-account');
+      if (incomeAccount) incomeAccount.value = '';
       document.querySelectorAll('#incomeRows tr.fin-income-row.editing').forEach(r => r.classList.remove('editing'));
       setIncomeEditMode(false);
     }
@@ -2833,6 +2836,8 @@ const GoatRecords = (() => {
       document.getElementById('e-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('e-amt').value = '';
       document.getElementById('e-comment').value = '';
+      const expenseAccount = document.getElementById('e-account');
+      if (expenseAccount) expenseAccount.value = '';
       document.querySelectorAll('#expenseRows tr.fin-expense-row.editing').forEach(r => r.classList.remove('editing'));
       setExpenseEditMode(false);
     }
@@ -2860,6 +2865,10 @@ const GoatRecords = (() => {
       document.getElementById('o-note').value = '';
       document.getElementById('o-date').value = new Date().toISOString().slice(0, 10);
       document.getElementById('o-amt').value = '';
+      const ownerAccount = document.getElementById('o-account');
+      if (ownerAccount) ownerAccount.value = '';
+      const fundingType = document.getElementById('o-funding-type');
+      if (fundingType) fundingType.value = 'topup';
       document.querySelectorAll('#ownerRows tr.fin-owner-row.editing').forEach(r => r.classList.remove('editing'));
       setOwnerEditMode(false);
     }
@@ -2889,6 +2898,8 @@ const GoatRecords = (() => {
       document.getElementById('i-date').value = row.dataset.date || '';
       document.getElementById('i-amt').value = row.dataset.amount || '';
       document.getElementById('i-comment').value = row.dataset.comment || '';
+      const incomeAccount = document.getElementById('i-account');
+      if (incomeAccount) incomeAccount.value = row.dataset.account || '';
       document.querySelectorAll('#incomeRows tr.fin-income-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setIncomeEditMode(true);
@@ -2914,6 +2925,8 @@ const GoatRecords = (() => {
       document.getElementById('e-date').value = row.dataset.date || '';
       document.getElementById('e-amt').value = row.dataset.amount || '';
       document.getElementById('e-comment').value = row.dataset.comment || '';
+      const expenseAccount = document.getElementById('e-account');
+      if (expenseAccount) expenseAccount.value = row.dataset.account || '';
       document.querySelectorAll('#expenseRows tr.fin-expense-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setExpenseEditMode(true);
@@ -2929,6 +2942,12 @@ const GoatRecords = (() => {
       document.getElementById('o-note').value = row.dataset.note || '';
       document.getElementById('o-date').value = row.dataset.date || '';
       document.getElementById('o-amt').value = row.dataset.amount || '';
+      const ownerSel = document.getElementById('o-owner');
+      if (ownerSel && row.dataset.shareholder) ownerSel.value = row.dataset.shareholder;
+      const fundingType = document.getElementById('o-funding-type');
+      if (fundingType && row.dataset.funding) fundingType.value = row.dataset.funding;
+      const ownerAccount = document.getElementById('o-account');
+      if (ownerAccount) ownerAccount.value = row.dataset.account || '';
       document.querySelectorAll('#ownerRows tr.fin-owner-row.editing').forEach(r => r.classList.remove('editing'));
       row.classList.add('editing');
       setOwnerEditMode(true);
@@ -3029,7 +3048,8 @@ const GoatRecords = (() => {
         type: document.getElementById('i-type').value,
         amount: amt,
         date,
-        comment: document.getElementById('i-comment').value.trim() || null
+        comment: document.getElementById('i-comment').value.trim() || null,
+        accountId: +document.getElementById('i-account')?.value || null
       };
       try {
         if (editingIncomeId) {
@@ -3051,7 +3071,8 @@ const GoatRecords = (() => {
         type: document.getElementById('e-type').value,
         amount: amt,
         date,
-        comment: document.getElementById('e-comment').value.trim() || null
+        comment: document.getElementById('e-comment').value.trim() || null,
+        accountId: +document.getElementById('e-account')?.value || null
       };
       try {
         if (editingExpenseId) {
@@ -3071,7 +3092,14 @@ const GoatRecords = (() => {
       const note = document.getElementById('o-note').value.trim();
       if (!amt || !date) { await showModal('Enter date and amount'); return; }
       if (!note) { await showModal('Enter a note'); return; }
-      const payload = { note, amount: amt, date };
+      const payload = {
+        note,
+        amount: amt,
+        date,
+        shareholder: document.getElementById('o-owner')?.value || null,
+        fundingType: document.getElementById('o-funding-type')?.value || null,
+        accountId: +document.getElementById('o-account')?.value || null
+      };
       if (editingOwnerId) {
         await api('/Finance/UpdateOwnerInvestment?id=' + editingOwnerId, { method: 'PUT', body: JSON.stringify(payload) });
         reloadFinanceWithToast('Owner investment updated successfully', date);
@@ -3206,6 +3234,13 @@ const GoatRecords = (() => {
       ['addEmp', 'deleteEmpBtn', '#empRows tr.fin-emp-row']
     ].forEach(([addBtnId, deleteBtnId, rowSelector]) => {
       FarmPerms.applyForm('finance', { addBtnId, deleteBtnId, rowSelector });
+    });
+
+    document.getElementById('addFundingShareholder')?.addEventListener('click', async () => {
+      const name = await showModal('New shareholder name:', { prompt: true });
+      if (!name?.trim()) return;
+      await api('/Lookup/AddOption', { method: 'POST', body: JSON.stringify({ key: 'Lookup.FundingShareholders', value: name.trim() }) });
+      reloadWithToast('Shareholder added');
     });
     initEditableDropdowns();
   }

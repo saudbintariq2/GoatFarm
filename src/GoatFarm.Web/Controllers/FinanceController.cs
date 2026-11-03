@@ -40,6 +40,10 @@ public class FinanceController : Controller
         ViewBag.IncomeTypes = await _lookupService.GetListAsync(LookupSettingKeys.IncomeTypes, cancellationToken);
         ViewBag.ExpenseTypes = await _lookupService.GetListAsync(LookupSettingKeys.ExpenseTypes, cancellationToken);
         ViewBag.AssetTypes = await _lookupService.GetListAsync(LookupSettingKeys.AssetTypes, cancellationToken);
+        ViewBag.SaleTypes = await _lookupService.GetListAsync(LookupSettingKeys.SaleTypes, cancellationToken);
+        ViewBag.FundingShareholders = await _lookupService.GetListAsync(LookupSettingKeys.FundingShareholders, cancellationToken);
+        var tab = Request.Query["tab"].ToString();
+        ViewBag.FinanceTab = string.IsNullOrWhiteSpace(tab) ? "overview" : tab;
         ViewBag.SalaryReconciliation = await _financeService.GetSalaryReconciliationAsync(cancellationToken);
         ViewBag.LedgerPage = await _ledgerService.GetPageAsync(month, cancellationToken);
         ViewBag.Statements = await _ledgerService.GetStatementsAsync(month, cancellationToken);
@@ -101,6 +105,14 @@ public class FinanceController : Controller
         Json(await _financeService.GetFinancePageAsync(month, cancellationToken));
 
     [HttpGet]
+    public async Task<IActionResult> Statement(DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        if (from == default) from = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1);
+        if (to == default) to = DateOnly.FromDateTime(DateTime.Today);
+        return Json(await _financeService.GetStatementAsync(from, to, cancellationToken));
+    }
+
+    [HttpGet]
     public async Task<IActionResult> SalaryReconciliation(CancellationToken cancellationToken) =>
         Json(await _financeService.GetSalaryReconciliationAsync(cancellationToken));
 
@@ -115,7 +127,8 @@ public class FinanceController : Controller
     public async Task<IActionResult> AddIncome([FromBody] CreateIncomeViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _financeService.AddIncomeAsync(model, cancellationToken));
+        try { return Json(await _financeService.AddIncomeAsync(model, cancellationToken)); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpPost]
@@ -130,7 +143,8 @@ public class FinanceController : Controller
         {
             return DoubleEntryResult(ex);
         }
-        return Json(await _financeService.AddExpenseAsync(model, cancellationToken));
+        try { return Json(await _financeService.AddExpenseAsync(model, cancellationToken)); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     private ObjectResult DoubleEntryResult(DoubleEntryValidationException ex) =>
@@ -145,7 +159,8 @@ public class FinanceController : Controller
     public async Task<IActionResult> AddOwnerInvestment([FromBody] CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _financeService.AddOwnerInvestmentAsync(model, cancellationToken));
+        try { return Json(await _financeService.AddOwnerInvestmentAsync(model, cancellationToken)); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpPut]
@@ -166,8 +181,12 @@ public class FinanceController : Controller
         var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
             FarmTabs.Finance, "Income", id, model, cancellationToken);
         if (pending is not null) return pending;
-        var result = await _financeService.UpdateIncomeAsync(id, model, cancellationToken);
-        return result is null ? NotFound() : Json(result);
+        try
+        {
+            var result = await _financeService.UpdateIncomeAsync(id, model, cancellationToken);
+            return result is null ? NotFound() : Json(result);
+        }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpPut]
@@ -185,8 +204,12 @@ public class FinanceController : Controller
         var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
             FarmTabs.Finance, "Expense", id, model, cancellationToken);
         if (pending is not null) return pending;
-        var result = await _financeService.UpdateExpenseAsync(id, model, cancellationToken);
-        return result is null ? NotFound() : Json(result);
+        try
+        {
+            var result = await _financeService.UpdateExpenseAsync(id, model, cancellationToken);
+            return result is null ? NotFound() : Json(result);
+        }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpPut]
@@ -196,8 +219,12 @@ public class FinanceController : Controller
         var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
             FarmTabs.Finance, "OwnerInvestment", id, model, cancellationToken);
         if (pending is not null) return pending;
-        var result = await _financeService.UpdateOwnerInvestmentAsync(id, model, cancellationToken);
-        return result is null ? NotFound() : Json(result);
+        try
+        {
+            var result = await _financeService.UpdateOwnerInvestmentAsync(id, model, cancellationToken);
+            return result is null ? NotFound() : Json(result);
+        }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpDelete]
@@ -305,5 +332,44 @@ public class FinanceController : Controller
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
         return Json(await _ledgerService.SaveCustomerAsync(model, cancellationToken));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ReceiveInvoice([FromBody] SettleOpenBalanceViewModel model, CancellationToken cancellationToken)
+    {
+        try { return Json(await _ledgerService.ReceiveInvoiceAsync(model, cancellationToken)); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> PayPayable([FromBody] SettleOpenBalanceViewModel model, CancellationToken cancellationToken)
+    {
+        try { return Json(await _ledgerService.PayPayableAsync(model, cancellationToken)); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteInvoice(int id, CancellationToken cancellationToken)
+    {
+        var ok = await _ledgerService.DeleteInvoiceAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeletePayable(int id, CancellationToken cancellationToken)
+    {
+        var ok = await _ledgerService.DeletePayableAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteLedgerTransaction(int id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ok = await _ledgerService.DeleteTransactionAsync(id, cancellationToken);
+            return ok ? Ok(new { success = true }) : NotFound();
+        }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 }

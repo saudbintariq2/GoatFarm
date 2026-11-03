@@ -371,6 +371,7 @@ public class AssistantToolTests
                 Expenses = [new ExpenseViewModel { Date = new DateOnly(2026, 9, 4), Type = "Electricity", Amount = 80 }]
             });
         }
+        public Task<FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default) => Task.FromResult(new FinanceStatementViewModel());
         public Task<AssetViewModel> AddAssetAsync(CreateAssetViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IncomeViewModel> AddIncomeAsync(CreateIncomeViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ExpenseViewModel> AddExpenseAsync(CreateExpenseViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();

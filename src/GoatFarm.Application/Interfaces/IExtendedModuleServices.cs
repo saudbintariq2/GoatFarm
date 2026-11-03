@@ -61,6 +61,11 @@ public interface ILedgerService
     Task<object> SaveProfitPartnerAsync(SaveProfitSharePartnerViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveCustomerAsync(SaveBusinessCustomerViewModel model, CancellationToken cancellationToken = default);
     Task<FinancialStatementsViewModel> GetStatementsAsync(string? month, CancellationToken cancellationToken = default);
+    Task<object> ReceiveInvoiceAsync(SettleOpenBalanceViewModel model, CancellationToken cancellationToken = default);
+    Task<object> PayPayableAsync(SettleOpenBalanceViewModel model, CancellationToken cancellationToken = default);
+    Task<bool> DeleteInvoiceAsync(int id, CancellationToken cancellationToken = default);
+    Task<bool> DeletePayableAsync(int id, CancellationToken cancellationToken = default);
+    Task<bool> DeleteTransactionAsync(int id, CancellationToken cancellationToken = default);
 }
 
 public interface IProductsService

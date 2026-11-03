@@ -26,16 +26,22 @@ public class LedgerService : ILedgerService
     {
         await EnsureSeededAsync(cancellationToken);
         var m = ParseMonth(month);
+        var monthStart = DateOnly.FromDateTime(m);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
         var accounts = await _context.MoneyAccounts.AsNoTracking().OrderBy(a => a.Name).ToListAsync(cancellationToken);
-        var tx = await _context.LedgerTransactions.AsNoTracking().Include(t => t.Account)
-            .OrderByDescending(t => t.Date).Take(150).ToListAsync(cancellationToken);
+        var tx = await _context.LedgerTransactions.AsNoTracking()
+            .Include(t => t.Account)
+            .Include(t => t.CounterAccount)
+            .OrderByDescending(t => t.Date)
+            .ToListAsync(cancellationToken);
+        var monthTx = tx.Where(t => t.Date >= monthStart && t.Date <= monthEnd).Take(300).ToList();
         var invoices = await _context.CustomerInvoices.AsNoTracking().Include(i => i.Customer)
-            .OrderByDescending(i => i.Date).Take(100).ToListAsync(cancellationToken);
+            .OrderByDescending(i => i.Date).Take(400).ToListAsync(cancellationToken);
         var payables = await _context.SupplierPayables.AsNoTracking()
-            .OrderByDescending(p => p.Date).Take(100).ToListAsync(cancellationToken);
+            .OrderByDescending(p => p.Date).Take(400).ToListAsync(cancellationToken);
         var budget = await _context.BudgetLines.AsNoTracking()
             .Where(b => b.Year == m.Year).OrderBy(b => b.Month).ToListAsync(cancellationToken);
-        var partners = await _context.ProfitSharePartners.AsNoTracking().Where(p => p.IsActive).ToListAsync(cancellationToken);
+        var partners = await _context.ProfitSharePartners.AsNoTracking().OrderBy(p => p.Id).ToListAsync(cancellationToken);
         var customers = await _context.BusinessCustomers.AsNoTracking().OrderBy(c => c.Name).ToListAsync(cancellationToken);
 
         var balances = ComputeBalances(accounts, tx);
@@ -52,17 +58,26 @@ public class LedgerService : ILedgerService
             CashOnHand = balances.Where((_, i) => accounts[i].Kind == MoneyAccountKind.Cash).Sum(x => x.Value),
             Accounts = accounts.Select(a => new MoneyAccountRowViewModel
             {
-                Id = a.Id, Name = a.Name, Kind = a.Kind.ToString(), Balance = balances.GetValueOrDefault(a.Id, a.OpeningBalance)
+                Id = a.Id,
+                Name = a.Name,
+                Kind = a.Kind.ToString(),
+                OpeningBalance = a.OpeningBalance,
+                IsActive = a.IsActive,
+                Balance = balances.GetValueOrDefault(a.Id, a.OpeningBalance)
             }).ToList(),
-            Transactions = tx.Select(t => new LedgerTransactionRowViewModel
+            Transactions = monthTx.Select(t => new LedgerTransactionRowViewModel
             {
                 Id = t.Id,
                 DateDisplay = t.Date.ToString("yyyy-MM-dd"),
                 Kind = t.Kind.ToString(),
                 Account = t.Account?.Name ?? "",
+                AccountId = t.AccountId,
+                CounterAccountId = t.CounterAccountId,
+                CounterAccount = t.CounterAccount?.Name,
                 Amount = t.Amount,
                 Category = t.Category,
-                Notes = t.Notes
+                Notes = t.Notes,
+                Reference = t.Reference
             }).ToList(),
             Invoices = invoices.Select(i => new CustomerInvoiceRowViewModel
             {
@@ -72,7 +87,8 @@ public class LedgerService : ILedgerService
                 Description = i.Description,
                 Amount = i.Amount,
                 PaidAmount = i.PaidAmount,
-                Status = i.Status.ToString()
+                Status = i.Status.ToString(),
+                DueDateDisplay = i.DueDate?.ToString("yyyy-MM-dd")
             }).ToList(),
             PayablesList = payables.Select(p => new SupplierPayableRowViewModel
             {
@@ -82,13 +98,14 @@ public class LedgerService : ILedgerService
                 Description = p.Description,
                 Amount = p.Amount,
                 PaidAmount = p.PaidAmount,
-                Status = p.Status.ToString()
+                Status = p.Status.ToString(),
+                DueDateDisplay = p.DueDate?.ToString("yyyy-MM-dd")
             }).ToList(),
             Budget = budget.Select(b => new BudgetRowViewModel
             {
                 Id = b.Id, Year = b.Year, Month = b.Month, Category = b.Category, PlannedAmount = b.PlannedAmount
             }).ToList(),
-            Partners = partners.Select(p => new ProfitPartnerRowViewModel { Id = p.Id, Name = p.Name, SharePercent = p.SharePercent }).ToList(),
+            Partners = partners.Select(p => new ProfitPartnerRowViewModel { Id = p.Id, Name = p.Name, SharePercent = p.SharePercent, IsActive = p.IsActive }).ToList(),
             Customers = customers.Select(c => new BusinessCustomerRowViewModel { Id = c.Id, Name = c.Name, Phone = c.Phone }).ToList()
         };
     }
@@ -111,8 +128,8 @@ public class LedgerService : ILedgerService
         var payables = await _context.SupplierPayables.AsNoTracking()
             .Where(p => p.Status != PayableStatus.Void).SumAsync(p => p.Amount - p.PaidAmount, cancellationToken);
 
-        var cashIn = tx.Where(t => t.Kind is LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment).Sum(t => t.Amount);
-        var cashOut = tx.Where(t => t.Kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment).Sum(t => t.Amount);
+        var cashIn = tx.Where(t => !IsLinkedMirror(t) && t.Kind is LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment).Sum(t => t.Amount);
+        var cashOut = tx.Where(t => !IsLinkedMirror(t) && t.Kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment).Sum(t => t.Amount);
 
         return new FinancialStatementsViewModel
         {
@@ -136,6 +153,7 @@ public class LedgerService : ILedgerService
         else { row = new MoneyAccount(); _context.MoneyAccounts.Add(row); }
         row.Name = model.Name.Trim();
         row.Kind = model.Kind;
+        row.IsActive = model.IsActive;
         if (model.Id is null or 0) row.OpeningBalance = model.OpeningBalance;
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
@@ -175,7 +193,24 @@ public class LedgerService : ILedgerService
         row.Status = row.PaidAmount >= row.Amount ? InvoiceStatus.Paid
             : row.PaidAmount > 0 ? InvoiceStatus.Partial : InvoiceStatus.Open;
         row.UpdatedDate = DateTime.UtcNow;
+        var postReceipt = model.PaidAmount > 0 && model.AccountId is > 0 && model.Id is null or 0;
         await _context.SaveChangesAsync(cancellationToken);
+        if (postReceipt)
+        {
+            _context.LedgerTransactions.Add(new LedgerTransaction
+            {
+                Date = model.Date,
+                Kind = LedgerTransactionKind.InvoicePayment,
+                AccountId = model.AccountId,
+                Amount = model.PaidAmount,
+                Category = "Customer receipt",
+                Reference = $"invoice:{row.Id}",
+                Notes = "Invoice receipt · " + row.Description,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+        }
         return new { id = row.Id };
     }
 
@@ -194,7 +229,24 @@ public class LedgerService : ILedgerService
         row.Status = row.PaidAmount >= row.Amount ? PayableStatus.Paid
             : row.PaidAmount > 0 ? PayableStatus.Partial : PayableStatus.Open;
         row.UpdatedDate = DateTime.UtcNow;
+        var postPayment = model.PaidAmount > 0 && model.AccountId is > 0 && model.Id is null or 0;
         await _context.SaveChangesAsync(cancellationToken);
+        if (postPayment)
+        {
+            _context.LedgerTransactions.Add(new LedgerTransaction
+            {
+                Date = model.Date,
+                Kind = LedgerTransactionKind.PayablePayment,
+                AccountId = model.AccountId,
+                Amount = model.PaidAmount,
+                Category = "Supplier payment",
+                Reference = $"payable:{row.Id}",
+                Notes = "Supplier payment · " + row.SupplierName,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+        }
         return new { id = row.Id };
     }
 
@@ -221,7 +273,7 @@ public class LedgerService : ILedgerService
         else { row = new ProfitSharePartner(); _context.ProfitSharePartners.Add(row); }
         row.Name = model.Name.Trim();
         row.SharePercent = model.SharePercent;
-        row.IsActive = true;
+        row.IsActive = model.IsActive;
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
         return new { id = row.Id };
@@ -242,17 +294,108 @@ public class LedgerService : ILedgerService
         return new { id = row.Id };
     }
 
+    public async Task<object> ReceiveInvoiceAsync(SettleOpenBalanceViewModel model, CancellationToken cancellationToken = default)
+    {
+        var row = await _context.CustomerInvoices.FirstOrDefaultAsync(i => i.Id == model.Id, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice was not found.");
+        var open = Math.Max(0, row.Amount - row.PaidAmount);
+        var pay = Math.Min(open, model.Amount);
+        if (pay <= 0) throw new InvalidOperationException("Nothing is left to receive on this invoice.");
+        if (model.AccountId <= 0) throw new InvalidOperationException("Choose the Cash/Bank account that received the money.");
+        row.PaidAmount += pay;
+        row.Status = row.PaidAmount >= row.Amount ? InvoiceStatus.Paid : InvoiceStatus.Partial;
+        row.UpdatedDate = DateTime.UtcNow;
+        _context.LedgerTransactions.Add(new LedgerTransaction
+        {
+            Date = model.Date == default ? DateOnly.FromDateTime(DateTime.Today) : model.Date,
+            Kind = LedgerTransactionKind.InvoicePayment,
+            AccountId = model.AccountId,
+            Amount = pay,
+            Category = "Customer receipt",
+            Reference = $"invoice:{row.Id}",
+            Notes = "Customer payment · " + row.Description,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+        return new { id = row.Id, paid = row.PaidAmount };
+    }
+
+    public async Task<object> PayPayableAsync(SettleOpenBalanceViewModel model, CancellationToken cancellationToken = default)
+    {
+        var row = await _context.SupplierPayables.FirstOrDefaultAsync(p => p.Id == model.Id, cancellationToken)
+            ?? throw new InvalidOperationException("Supplier bill was not found.");
+        var open = Math.Max(0, row.Amount - row.PaidAmount);
+        var pay = Math.Min(open, model.Amount);
+        if (pay <= 0) throw new InvalidOperationException("Nothing is left to pay on this bill.");
+        if (model.AccountId <= 0) throw new InvalidOperationException("Choose the Cash/Bank account the payment came from.");
+        row.PaidAmount += pay;
+        row.Status = row.PaidAmount >= row.Amount ? PayableStatus.Paid : PayableStatus.Partial;
+        row.UpdatedDate = DateTime.UtcNow;
+        _context.LedgerTransactions.Add(new LedgerTransaction
+        {
+            Date = model.Date == default ? DateOnly.FromDateTime(DateTime.Today) : model.Date,
+            Kind = LedgerTransactionKind.PayablePayment,
+            AccountId = model.AccountId,
+            Amount = pay,
+            Category = "Supplier payment",
+            Reference = $"payable:{row.Id}",
+            Notes = "Supplier payment · " + row.SupplierName,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+        return new { id = row.Id, paid = row.PaidAmount };
+    }
+
+    public async Task<bool> DeleteInvoiceAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var row = await _context.CustomerInvoices.FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        if (row is null) return false;
+        _context.CustomerInvoices.Remove(row);
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> DeletePayableAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var row = await _context.SupplierPayables.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (row is null) return false;
+        _context.SupplierPayables.Remove(row);
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> DeleteTransactionAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var row = await _context.LedgerTransactions.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (row is null) return false;
+        if (!string.IsNullOrWhiteSpace(row.Reference))
+            throw new InvalidOperationException("This movement was posted from another record. Change or delete that record instead.");
+        _context.LedgerTransactions.Remove(row);
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private static bool IsLinkedMirror(LedgerTransaction t) =>
+        t.Category is "Linked income" or "Linked expense" or "Shareholder funding";
+
     private static Dictionary<int, decimal> ComputeBalances(IReadOnlyList<MoneyAccount> accounts, IReadOnlyList<LedgerTransaction> tx)
     {
         var map = accounts.ToDictionary(a => a.Id, a => a.OpeningBalance);
         foreach (var t in tx.OrderBy(x => x.Date))
         {
+            if (t.Kind == LedgerTransactionKind.Transfer)
+            {
+                if (t.AccountId is int from && map.ContainsKey(from)) map[from] -= t.Amount;
+                if (t.CounterAccountId is int to && map.ContainsKey(to)) map[to] += t.Amount;
+                continue;
+            }
             if (t.AccountId is null || !map.ContainsKey(t.AccountId.Value)) continue;
             map[t.AccountId.Value] += t.Kind switch
             {
                 LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment => t.Amount,
                 LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment => -t.Amount,
-                LedgerTransactionKind.Transfer => t.Amount,
                 _ => 0
             };
         }

@@ -41,6 +41,16 @@ public static class LookupConstants
 
     public static readonly string[] Owners = ["Farm"];
 
+    public static readonly string[] SaleTypes =
+    [
+        "Milk", "Dairy products", "Meat", "Live animal / farm sale", "Other farm sale"
+    ];
+
+    public static readonly string[] FundingShareholders =
+    [
+        "Shareholder 1", "Shareholder 2"
+    ];
+
     /// <summary>Labels shown on the Add goat form (matches index_new.html HEALTH_STATES).</summary>
     public static readonly string[] HealthStates =
     [

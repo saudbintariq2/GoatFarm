@@ -19,6 +19,8 @@ public class IncomeViewModel
     public DateOnly Date { get; set; }
     public string DateDisplay => Date.ToString("yyyy-MM-dd");
     public string? Comment { get; set; }
+    public int? AccountId { get; set; }
+    public string? AccountName { get; set; }
 }
 
 public class ExpenseViewModel
@@ -29,6 +31,8 @@ public class ExpenseViewModel
     public DateOnly Date { get; set; }
     public string DateDisplay => Date.ToString("yyyy-MM-dd");
     public string? Comment { get; set; }
+    public int? AccountId { get; set; }
+    public string? AccountName { get; set; }
 }
 
 public class RecurringCostViewModel
@@ -83,6 +87,8 @@ public class OwnerInvestmentViewModel
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
     public string DateDisplay => Date.ToString("yyyy-MM-dd");
+    public int? AccountId { get; set; }
+    public string? AccountName { get; set; }
 }
 
 public class CreateAssetViewModel
@@ -116,6 +122,8 @@ public class CreateIncomeViewModel
 
     [StringLength(500)]
     public string? Comment { get; set; }
+
+    public int? AccountId { get; set; }
 }
 
 public class CreateExpenseViewModel
@@ -135,6 +143,8 @@ public class CreateExpenseViewModel
 
     /// <summary>Set after the user has seen and accepted a possible-duplicate warning.</summary>
     public bool ConfirmPossibleDuplicate { get; set; }
+
+    public int? AccountId { get; set; }
 }
 
 public class CreateOwnerInvestmentViewModel
@@ -149,6 +159,57 @@ public class CreateOwnerInvestmentViewModel
     [Required]
     [Range(0.01, double.MaxValue, ErrorMessage = "Enter amount")]
     public decimal Amount { get; set; }
+
+    public string? Shareholder { get; set; }
+    public string? FundingType { get; set; }
+    public int? AccountId { get; set; }
+}
+
+public class FinanceLineViewModel
+{
+    public string Label { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+}
+
+public class FinanceTrendMonthViewModel
+{
+    public string Month { get; set; } = string.Empty;
+    public decimal Income { get; set; }
+    public decimal Expense { get; set; }
+}
+
+public class SaleRegisterRowViewModel
+{
+    public string Source { get; set; } = string.Empty;
+    public int Id { get; set; }
+    public string DateDisplay { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string Customer { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public decimal Received { get; set; }
+    public decimal Due { get; set; }
+    public string? DueDate { get; set; }
+    public string? Note { get; set; }
+}
+
+public class CapexRowViewModel
+{
+    public string DateDisplay { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string? Supplier { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public class FinanceStatementViewModel
+{
+    public string From { get; set; } = string.Empty;
+    public string To { get; set; } = string.Empty;
+    public decimal Income { get; set; }
+    public decimal Expense { get; set; }
+    public IReadOnlyList<FinanceLineViewModel> IncomeLines { get; set; } = [];
+    public IReadOnlyList<FinanceLineViewModel> ExpenseLines { get; set; } = [];
 }
 
 public class FinancePageViewModel
@@ -180,6 +241,19 @@ public class FinancePageViewModel
     public IReadOnlyList<RecurringCostViewModel> RecurringCosts { get; set; } = [];
     public IReadOnlyList<EmployeeViewModel> Employees { get; set; } = [];
     public IReadOnlyList<OwnerInvestmentViewModel> OwnerInvestments { get; set; } = [];
+    public IReadOnlyList<OwnerInvestmentViewModel> FundingHistory { get; set; } = [];
+    public decimal DisplayIncome { get; set; }
+    public decimal DisplayExpense { get; set; }
+    public decimal FeedStockValue { get; set; }
+    public decimal ProjectSpend { get; set; }
+    public decimal FixedAssetRegisterValue { get; set; }
+    public decimal OpeningCash { get; set; }
+    public decimal GoatsBoughtMonth { get; set; }
+    public IReadOnlyList<FinanceLineViewModel> IncomeLines { get; set; } = [];
+    public IReadOnlyList<FinanceLineViewModel> ExpenseLines { get; set; } = [];
+    public IReadOnlyList<FinanceTrendMonthViewModel> Trend { get; set; } = [];
+    public IReadOnlyList<SaleRegisterRowViewModel> Sales { get; set; } = [];
+    public IReadOnlyList<CapexRowViewModel> Capex { get; set; } = [];
     public CreateAssetViewModel NewAsset { get; set; } = new();
     public CreateIncomeViewModel NewIncome { get; set; } = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
     public CreateExpenseViewModel NewExpense { get; set; } = new() { Date = DateOnly.FromDateTime(DateTime.Today) };

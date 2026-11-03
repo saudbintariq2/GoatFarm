@@ -20,7 +20,9 @@ public class LookupService : ILookupService
             [LookupSettingKeys.VaccineNames] = LookupConstants.VaccineNames,
             [LookupSettingKeys.VaccineUnits] = LookupConstants.VaccineUnits,
             [LookupSettingKeys.Owners] = LookupConstants.Owners,
-            [LookupSettingKeys.HealthStates] = LookupConstants.HealthStates
+            [LookupSettingKeys.HealthStates] = LookupConstants.HealthStates,
+            [LookupSettingKeys.SaleTypes] = LookupConstants.SaleTypes,
+            [LookupSettingKeys.FundingShareholders] = LookupConstants.FundingShareholders
         };
 
     private readonly GoatFarmDbContext _context;

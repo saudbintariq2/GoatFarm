@@ -298,6 +298,7 @@ public class AssistantServiceTests
             Calls++;
             return Task.FromResult(new Application.ViewModels.Finance.FinancePageViewModel());
         }
+        public Task<Application.ViewModels.Finance.FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default) => Task.FromResult(new Application.ViewModels.Finance.FinanceStatementViewModel());
         public Task<Application.ViewModels.Finance.AssetViewModel> AddAssetAsync(Application.ViewModels.Finance.CreateAssetViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Application.ViewModels.Finance.IncomeViewModel> AddIncomeAsync(Application.ViewModels.Finance.CreateIncomeViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Application.ViewModels.Finance.ExpenseViewModel> AddExpenseAsync(Application.ViewModels.Finance.CreateExpenseViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();

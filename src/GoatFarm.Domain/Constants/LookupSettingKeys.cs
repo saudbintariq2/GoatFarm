@@ -10,4 +10,6 @@ public static class LookupSettingKeys
     public const string VaccineUnits = "Lookup.VaccineUnits";
     public const string Owners = "Lookup.Owners";
     public const string HealthStates = "Lookup.HealthStates";
+    public const string SaleTypes = "Lookup.SaleTypes";
+    public const string FundingShareholders = "Lookup.FundingShareholders";
 }

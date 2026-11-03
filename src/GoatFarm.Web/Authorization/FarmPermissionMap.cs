@@ -222,6 +222,12 @@ public static class FarmPermissionMap
             ["Finance.SaveSupplierPayable"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.SaveBudgetLine"] = (FarmTabs.Finance, FarmActions.Edit),
             ["Finance.SaveProfitPartner"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.Statement"] = (FarmTabs.Finance, FarmActions.View),
+            ["Finance.ReceiveInvoice"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.PayPayable"] = (FarmTabs.Finance, FarmActions.Add),
+            ["Finance.DeleteInvoice"] = (FarmTabs.Finance, FarmActions.Delete),
+            ["Finance.DeletePayable"] = (FarmTabs.Finance, FarmActions.Delete),
+            ["Finance.DeleteLedgerTransaction"] = (FarmTabs.Finance, FarmActions.Delete),
 
             ["Vaccine.Treatments"] = (FarmTabs.Vaccines, FarmActions.View),
             ["Vaccine.SaveTreatment"] = (FarmTabs.Vaccines, FarmActions.Add),
