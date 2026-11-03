@@ -3728,15 +3728,132 @@ const GoatRecords = (() => {
       return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
 
+    function searchTagLink(tag) {
+      return '/Search?tag=' + encodeURIComponent(tag || '');
+    }
+
     function renderProfile(data) {
       const g = data.goat || {};
       const nameLine = g.name ? `<div class="name">${esc(g.name)}</div>` : '';
       const groupLine = g.groupName ? esc(g.groupName) : '—';
       const gender = g.gender === 'Male' ? 'Male' : 'Female';
       const source = g.source === 'Born' ? 'Born on farm' : 'Bought';
+      const isFemaleDoe = gender === 'Female' && g.statusKey !== 'kid';
       const herdLink = FarmPerms.can('herd', 'edit')
         ? `<a class="btn btn-ghost" href="/Goat?editId=${encodeURIComponent(g.id || '')}">Edit in Herd</a>`
         : '';
+      const heroActions = `<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+          <a class="btn btn-green" href="#" data-goatcard="${esc(g.id)}">Open goat card</a>${herdLink}</div>`;
+
+      let archivedLine = '';
+      if (g.isArchived) {
+        archivedLine = `<div class="note" style="margin-top:10px">Record closed — ${esc(g.archivedReason || 'archived')}${g.archivedDateDisplay ? ' on ' + esc(g.archivedDateDisplay) : ''}.</div>`;
+      }
+      const kidStageLine = g.kidStageLine
+        ? `<div class="name" style="color:${esc(g.kidStageColor || 'var(--ink-soft)')};font-weight:700;margin-top:6px">${esc(g.kidStageLine)}</div>`
+        : '';
+      const breedingHintLine = g.breedingHint
+        ? `<div class="breed" style="color:${esc(g.breedingHintColor || 'var(--ink-soft)')};font-weight:600;margin-top:4px">${esc(g.breedingHint)}</div>`
+        : '';
+
+      const metaExtra = [];
+      metaExtra.push(`<div class="search-meta-item">Health<b>${esc(g.healthDisplay || '—')}</b></div>`);
+      if (g.feedingGroupName) metaExtra.push(`<div class="search-meta-item">Feed group<b>${esc(g.feedingGroupName)}</b></div>`);
+      if (g.sireTag || g.damTag) {
+        const sire = g.sireTag ? '♂ ' + esc(g.sireTag) : '—';
+        const dam = g.damTag ? '♀ ' + esc(g.damTag) : '—';
+        metaExtra.push(`<div class="search-meta-item">Parents<b>${sire} · ${dam}</b></div>`);
+      }
+      if (g.owner) metaExtra.push(`<div class="search-meta-item">Owner<b>${esc(g.owner)}</b></div>`);
+      if (data.latestWeightKg != null) metaExtra.push(`<div class="search-meta-item">Latest weight<b>${(+data.latestWeightKg).toFixed(1)} kg</b></div>`);
+      if (data.latestBcsScore != null) {
+        const bcsTail = data.latestBcsDateDisplay ? ` (${esc(data.latestBcsDateDisplay)})` : '';
+        metaExtra.push(`<div class="search-meta-item">Body condition<b>${esc(data.latestBcsScore)}/5${bcsTail}</b></div>`);
+      }
+      if (g.matedDateDisplay) {
+        const buck = g.buckTag ? ' · ' + esc(g.buckTag) : '';
+        metaExtra.push(`<div class="search-meta-item">Last cross<b>${esc(g.matedDateDisplay)}${buck}</b></div>`);
+      }
+      if (g.kidsCount != null) {
+        const us = g.ultrasoundDateDisplay ? ' · ' + esc(g.ultrasoundDateDisplay) : '';
+        metaExtra.push(`<div class="search-meta-item">Scan<b>${esc(g.kidsCount)} kid(s)${us}</b></div>`);
+      }
+      const commentLine = g.comment ? `<div class="breed" style="margin-top:10px"><b>Note:</b> ${esc(g.comment)}</div>` : '';
+
+      const siblings = data.siblings || [];
+      let siblingsPanel = '';
+      if (siblings.length) {
+        siblingsPanel = `<div class="panel"><div class="panel-head"><h2>Siblings</h2></div><div class="panel-body">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${siblings.map(s =>
+          `<span style="background:var(--green-tint);border-radius:8px;padding:4px 9px;font-size:13px">
+            <a href="${searchTagLink(s.tag)}" class="tag tag-link">${esc(s.tag)}</a>
+            <span class="breed">${s.gender === 'Male' ? '♂' : '♀'} ${esc(s.birthDateDisplay)}${s.twin ? ' · twin' : ''}</span></span>`).join('')}
+          </div></div></div>`;
+      }
+
+      const kiddings = data.kiddings || [];
+      let breedingRecordPanel = '';
+      if (isFemaleDoe) {
+        const liveKids = kiddings.reduce((a, k) => a + (k.liveKids || 0), 0);
+        const kiddingsTable = kiddings.length
+          ? `<table class="tbl"><thead><tr><th>Date</th><th>Sire</th><th class="num-cell">Alive</th><th class="num-cell">Stillborn</th></tr></thead><tbody>
+            ${kiddings.map(k => {
+            const sireCell = k.sireGoatId && k.sireTag
+              ? `<a class="tag tag-link" href="${searchTagLink(k.sireTag)}">${esc(k.sireTag)}</a>`
+              : esc(k.sireTag || '—');
+            return `<tr><td>${esc(k.dateDisplay)}</td><td>${sireCell}</td><td class="num-cell">${k.liveKids}</td><td class="num-cell">${k.stillborn || 0}</td></tr>`;
+          }).join('')}
+            </tbody></table>`
+          : '<div class="search-empty">No kiddings recorded yet.</div>';
+        breedingRecordPanel = `<div class="panel"><div class="panel-head"><h2>Breeding record</h2></div><div class="panel-body">
+          <div class="breed" style="margin-bottom:8px">${kiddings.length} birth(s) · ${liveKids} kids born alive · ${data.emptyScanCount || 0} empty scan(s) · ${data.abortionCount || 0} abortion(s)</div>
+          ${kiddingsTable}</div></div>`;
+      } else if (gender === 'Male') {
+        breedingRecordPanel = `<div class="panel"><div class="panel-head"><h2>As a sire</h2></div><div class="panel-body">
+          <div class="breed">${data.siredKidsCount || 0} kid(s) sired on this farm.</div></div></div>`;
+      }
+
+      const weights = data.weights || [];
+      let weightsPanel = '';
+      if (weights.length) {
+        weightsPanel = `<div class="panel"><div class="panel-head"><h2>Weight history</h2></div><div class="panel-body">
+          <table class="tbl"><thead><tr><th>Date</th><th class="num-cell">kg</th></tr></thead><tbody>
+          ${weights.map(w => `<tr><td>${esc(w.dateDisplay)}</td><td class="num-cell">${(+w.kg).toFixed(1)}</td></tr>`).join('')}
+          </tbody></table></div></div>`;
+      }
+
+      const pedigree = data.pedigree || [];
+      let pedigreePanel = '';
+      if (pedigree.length > 1) {
+        pedigreePanel = `<div class="panel" id="family-tree"><div class="panel-head"><h2>Family tree</h2><span class="sub">ancestors (up to 4 generations)</span></div><div class="panel-body">
+          <table class="tbl"><thead><tr><th>Gen</th><th>Tag</th><th class="hide-sm">Sire</th><th class="hide-sm">Dam</th></tr></thead><tbody>
+          ${pedigree.map(p => {
+            let tagCell;
+            if (p.generation === 0) tagCell = `<span class="tag">${esc(p.tag)}</span>`;
+            else if (p.searchTag) tagCell = `<a class="tag tag-link" href="${searchTagLink(p.searchTag)}">${esc(p.tag)}</a>`;
+            else tagCell = esc(p.tag);
+            return `<tr><td>${p.generation}</td><td>${tagCell}</td><td class="hide-sm">${esc(p.sireTag || '—')}</td><td class="hide-sm">${esc(p.damTag || '—')}</td></tr>`;
+          }).join('')}
+          </tbody></table></div></div>`;
+      }
+
+      const breedingHistory = data.breedingHistory || [];
+      let breedingHistoryPanel = '';
+      if (breedingHistory.length) {
+        breedingHistoryPanel = `<div class="panel"><div class="panel-head"><h2>Breeding history</h2></div><div class="panel-body">
+          <table class="tbl"><thead><tr><th>Mated</th><th>Buck</th><th>Outcome</th></tr></thead><tbody>
+          ${breedingHistory.map(b => `<tr><td>${esc(b.matedDisplay || b.matedDate)}</td><td>${esc(b.buckTag || '—')}</td><td>${esc(b.outcome)}</td></tr>`).join('')}
+          </tbody></table></div></div>`;
+      }
+
+      const treatments = data.treatments || [];
+      const treatmentsHtml = treatments.length
+        ? `<table class="tbl"><thead><tr><th>Start</th><th>End</th><th>Problem</th><th class="hide-sm">Medicine</th><th class="num-cell hide-sm">Cost</th><th>Status</th></tr></thead><tbody>
+          ${treatments.map(t => `<tr><td>${esc(t.startDateDisplay)}</td><td>${esc(t.endDateDisplay)}</td><td>${esc(t.diagnosis)}</td>
+            <td class="hide-sm">${esc(t.medicine)}</td><td class="num-cell hide-sm">${t.cost > 0 ? rs(t.cost) : '—'}</td>
+            <td><span class="chip ${t.isActive ? 'chip-exp' : 'chip-milk'}">${t.isActive ? 'Active' : 'Ended'}</span></td></tr>`).join('')}
+          </tbody></table>`
+        : '<div class="search-empty">No treatments recorded for this goat.</div>';
 
       const history = data.vaccinationHistory || [];
       const historyHtml = history.length
@@ -3790,21 +3907,26 @@ const GoatRecords = (() => {
                 <h2><a href="#" class="tag" data-goatcard="${esc(g.id)}">${esc(g.tag)}</a></h2>
                 ${nameLine}
                 <span class="chip ${esc(g.statusCssClass)}">${esc(g.statusDisplay)}</span>
+                ${archivedLine}${kidStageLine}${breedingHintLine}
                 <div class="search-hero-meta">
                   <div class="search-meta-item">Breed<b>${esc(g.breed)}</b></div>
                   <div class="search-meta-item">Gender<b>${esc(gender)}</b></div>
                   <div class="search-meta-item">Age<b>${esc(g.ageLabel)}</b></div>
                   <div class="search-meta-item">Group<b>${groupLine}</b></div>
+                  ${metaExtra.join('')}
                   <div class="search-meta-item">Source<b>${esc(source)}</b></div>
                   <div class="search-meta-item">Price<b>${esc(g.priceDisplay)}</b></div>
                   <div class="search-meta-item">${g.source === 'Born' ? 'Born' : 'Bought on'}<b>${esc(g.eventDateDisplay)}</b></div>
                   ${g.dateOfBirthDisplay ? `<div class="search-meta-item">Date of birth<b>${esc(g.dateOfBirthDisplay)}${g.dateOfBirthIsEstimated ? ' (estimated)' : ''}</b></div>` : ''}
                 </div>
+                ${commentLine}
               </div>
-              ${herdLink}
+              ${heroActions}
             </div>
           </div>
         </div>
+        ${siblingsPanel}${breedingRecordPanel}${weightsPanel}${pedigreePanel}${breedingHistoryPanel}
+        <div class="panel"><div class="panel-head"><h2>Treatment history</h2></div><div class="panel-body">${treatmentsHtml}</div></div>
         <div class="panel"><div class="panel-head"><h2>Vaccine schedule</h2></div><div class="panel-body">${scheduleHtml}</div></div>
         <div class="panel"><div class="panel-head"><h2>Vaccination history</h2></div><div class="panel-body">${historyHtml}</div></div>
         <div class="panel"><div class="panel-head"><h2>Feed plan</h2></div><div class="panel-body">${feedHtml}</div></div>

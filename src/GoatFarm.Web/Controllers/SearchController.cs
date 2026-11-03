@@ -18,7 +18,7 @@ public class SearchController : Controller
 
         if (!string.IsNullOrWhiteSpace(tag))
         {
-            model.Profile = await _searchService.GetProfileByTagAsync(tag, cancellationToken);
+            model.Profile = await _searchService.GetGoatCardByTagAsync(tag, cancellationToken);
             if (model.Profile is null)
                 model.Error = $"No goat found with tag \"{NormalizeTagForDisplay(tag)}\".";
         }

@@ -1,4 +1,4 @@
-@model GoatFarm.Application.ViewModels.Search.GoatProfileViewModel
+@model GoatFarm.Application.ViewModels.Search.GoatCardViewModel
 @using GoatFarm.Domain.Enums
 
 @{
@@ -17,11 +17,28 @@
                     <div class="name">@g.Name</div>
                 }
                 <span class="chip @g.StatusCssClass">@g.StatusDisplay</span>
+                @if (g.IsArchived)
+                {
+                    <div class="note" style="margin-top:10px">Record closed — @(g.ArchivedReason ?? "archived")@(g.ArchivedDateDisplay is not null ? $" on {g.ArchivedDateDisplay}" : "").</div>
+                }
+                @if (!string.IsNullOrEmpty(g.KidStageLine))
+                {
+                    <div class="name" style="color:@(g.KidStageColor ?? "var(--ink-soft)");font-weight:700;margin-top:6px">@g.KidStageLine</div>
+                }
+                @if (!string.IsNullOrEmpty(g.BreedingHint))
+                {
+                    <div class="breed" style="color:@(g.BreedingHintColor ?? "var(--ink-soft)");font-weight:600;margin-top:4px">@g.BreedingHint</div>
+                }
                 <div class="search-hero-meta">
                     <div class="search-meta-item">Breed<b>@g.Breed</b></div>
                     <div class="search-meta-item">Gender<b>@gender</b></div>
                     <div class="search-meta-item">Age<b>@g.AgeLabel</b></div>
+                    <div class="search-meta-item">Health<b>@g.HealthDisplay</b></div>
                     <div class="search-meta-item">Group<b>@(g.GroupName ?? "—")</b></div>
+                    @if (!string.IsNullOrEmpty(g.FeedingGroupName))
+                    {
+                        <div class="search-meta-item">Feed group<b>@g.FeedingGroupName</b></div>
+                    }
                     <div class="search-meta-item">Source<b>@source</b></div>
                     <div class="search-meta-item">Price<b>@g.PriceDisplay</b></div>
                     <div class="search-meta-item">@(g.Source == GoatSource.Born ? "Born" : "Bought on")<b>@g.EventDateDisplay</b></div>
@@ -29,12 +46,102 @@
                     {
                         <div class="search-meta-item">Date of birth<b>@g.DateOfBirthDisplay@(g.DateOfBirthIsEstimated ? " (estimated)" : "")</b></div>
                     }
+                    @if (!string.IsNullOrEmpty(g.SireTag) || !string.IsNullOrEmpty(g.DamTag))
+                    {
+                        <div class="search-meta-item">Parents<b>@(g.SireTag is not null ? "♂ " + g.SireTag : "—") · @(g.DamTag is not null ? "♀ " + g.DamTag : "—")</b></div>
+                    }
+                    @if (!string.IsNullOrEmpty(g.Owner))
+                    {
+                        <div class="search-meta-item">Owner<b>@g.Owner</b></div>
+                    }
+                    @if (Model.LatestWeightKg is not null)
+                    {
+                        <div class="search-meta-item">Latest weight<b>@Model.LatestWeightKg.Value.ToString("F1") kg</b></div>
+                    }
+                    @if (Model.LatestBcsScore is not null)
+                    {
+                        <div class="search-meta-item">Body condition<b>@Model.LatestBcsScore/5@(Model.LatestBcsDateDisplay is not null ? $" ({Model.LatestBcsDateDisplay})" : "")</b></div>
+                    }
+                    @if (g.MatedDate.HasValue)
+                    {
+                        <div class="search-meta-item">Last cross<b>@g.MatedDateDisplay@(g.BuckTag is not null ? " · " + g.BuckTag : "")</b></div>
+                    }
+                    @if (g.KidsCount is not null)
+                    {
+                        <div class="search-meta-item">Scan<b>@g.KidsCount kid(s)@(g.UltrasoundDateDisplay is not null ? " · " + g.UltrasoundDateDisplay : "")</b></div>
+                    }
                 </div>
+                @if (!string.IsNullOrEmpty(g.Comment))
+                {
+                    <div class="breed" style="margin-top:10px"><b>Note:</b> @g.Comment</div>
+                }
             </div>
-            <a class="btn btn-ghost" asp-controller="Goat" asp-action="Index" asp-route-editId="@g.Id">Edit in Herd</a>
+            <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+                <a class="btn btn-green" href="#" data-goatcard="@g.Id">Open goat card</a>
+                <a class="btn btn-ghost" asp-controller="Goat" asp-action="Index" asp-route-editId="@g.Id">Edit in Herd</a>
+            </div>
         </div>
     </div>
 </div>
+
+@if (Model.Siblings.Count > 0)
+{
+<div class="panel">
+    <div class="panel-head"><h2>Siblings</h2></div>
+    <div class="panel-body">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+            @foreach (var s in Model.Siblings)
+            {
+                <span style="background:var(--green-tint);border-radius:8px;padding:4px 9px;font-size:13px">
+                    <a href="/Search?tag=@Uri.EscapeDataString(s.Tag)" class="tag tag-link">@s.Tag</a>
+                    <span class="breed">@(s.Gender == "Male" ? "♂" : "♀") @s.BirthDateDisplay@(s.Twin ? " · twin" : "")</span>
+                </span>
+            }
+        </div>
+    </div>
+</div>
+}
+
+@if (g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid)
+{
+<div class="panel">
+    <div class="panel-head"><h2>Breeding record</h2></div>
+    <div class="panel-body">
+        @{
+            var liveKids = Model.Kiddings.Sum(k => k.LiveKids);
+        }
+        <div class="breed" style="margin-bottom:8px">@Model.Kiddings.Count birth(s) · @liveKids kids born alive · @Model.EmptyScanCount empty scan(s) · @Model.AbortionCount abortion(s)</div>
+        @if (Model.Kiddings.Count == 0)
+        {
+            <div class="search-empty">No kiddings recorded yet.</div>
+        }
+        else
+        {
+            <table class="tbl">
+                <thead><tr><th>Date</th><th>Sire</th><th class="num-cell">Alive</th><th class="num-cell">Stillborn</th></tr></thead>
+                <tbody>
+                @foreach (var k in Model.Kiddings)
+                {
+                    <tr>
+                        <td>@k.DateDisplay</td>
+                        <td>@if (k.SireGoatId is not null && !string.IsNullOrEmpty(k.SireTag)){<a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(k.SireTag!)">@k.SireTag</a>}else{@(k.SireTag ?? "—")}</td>
+                        <td class="num-cell">@k.LiveKids</td>
+                        <td class="num-cell">@k.Stillborn</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+}
+else if (g.Gender == GoatGender.Male)
+{
+<div class="panel">
+    <div class="panel-head"><h2>As a sire</h2></div>
+    <div class="panel-body"><div class="breed">@Model.SiredKidsCount kid(s) sired on this farm.</div></div>
+</div>
+}
 
 @if (Model.Weights.Count > 0)
 {

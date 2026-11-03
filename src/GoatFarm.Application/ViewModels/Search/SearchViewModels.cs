@@ -7,7 +7,7 @@ namespace GoatFarm.Application.ViewModels.Search;
 public class SearchPageViewModel
 {
     public string? InitialTag { get; set; }
-    public GoatProfileViewModel? Profile { get; set; }
+    public GoatCardViewModel? Profile { get; set; }
     public string? Error { get; set; }
 }
 
