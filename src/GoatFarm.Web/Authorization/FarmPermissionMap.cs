@@ -230,6 +230,7 @@ public static class FarmPermissionMap
 
             ["BackupCenter.Export"] = (FarmTabs.Backup, FarmActions.View),
             ["BackupCenter.Import"] = (FarmTabs.Backup, FarmActions.Edit),
+            ["BackupCenter.ClearFarmData"] = (FarmTabs.Backup, FarmActions.Edit),
             ["BackupCenter.DownloadStored"] = (FarmTabs.Backup, FarmActions.View),
             ["BackupCenter.ExportCsv"] = (FarmTabs.Backup, FarmActions.View),
 

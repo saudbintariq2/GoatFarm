@@ -57,6 +57,7 @@ public interface IProjectsService
 
 public interface ILedgerService
 {
+    Task EnsureSeededAsync(CancellationToken cancellationToken = default);
     Task<LedgerPageViewModel> GetPageAsync(string? month, CancellationToken cancellationToken = default);
     Task<LedgerPageViewModel> GetAccountsOverviewAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<MoneyAccountRowViewModel>> GetAccountBalancesAsync(CancellationToken cancellationToken = default);

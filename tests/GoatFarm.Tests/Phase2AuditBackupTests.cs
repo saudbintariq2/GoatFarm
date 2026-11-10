@@ -50,4 +50,19 @@ public class Phase2AuditBackupTests
         Assert.Contains("ok", System.Text.Encoding.UTF8.GetString(roundTrip));
         try { File.Delete(Path.Combine(Directory.GetCurrentDirectory(), "App_Data", "backups", saved.FileName)); } catch { /* best effort */ }
     }
+
+    [Fact]
+    public async Task ClearAllFarmData_RemovesGoats_KeepsUsers()
+    {
+        var db = TestDb.Create();
+        db.Goats.Add(new Goat { Tag = "T1", Name = "A", Gender = GoatGender.Female, Status = GoatStatus.Milking, EventDate = TestDb.Today });
+        await db.SaveChangesAsync();
+        var svc = new BackupService(db, new LedgerService(db));
+
+        await svc.ClearAllFarmDataAsync();
+
+        Assert.Empty(await db.Goats.ToListAsync());
+        Assert.True(await db.FeedPrices.AnyAsync());
+        Assert.True(await db.MoneyAccounts.AnyAsync());
+    }
 }

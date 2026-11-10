@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GoatFarm.Application.Common;
+using GoatFarm.Application.Interfaces;
 using GoatFarm.Infrastructure.Configuration;
 using GoatFarm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -13,13 +14,19 @@ public partial class BackupService : Application.Interfaces.IBackupService
     private readonly GoatFarmDbContext _context;
     private readonly BackupOptions _backupOptions;
     private readonly IHostEnvironment? _hostEnvironment;
+    private readonly ILedgerService? _ledger;
+    private readonly ILookupService? _lookup;
 
     public BackupService(
         GoatFarmDbContext context,
+        ILedgerService? ledger = null,
+        ILookupService? lookup = null,
         IOptions<BackupOptions>? backupOptions = null,
         IHostEnvironment? hostEnvironment = null)
     {
         _context = context;
+        _ledger = ledger;
+        _lookup = lookup;
         _backupOptions = backupOptions?.Value ?? new BackupOptions();
         _hostEnvironment = hostEnvironment;
     }
@@ -200,5 +207,34 @@ public partial class BackupService : Application.Interfaces.IBackupService
             await transaction.CommitAsync(ct);
         }, cancellationToken);
         _context.ChangeTracker.Clear();
+    }
+
+    public async Task ClearAllFarmDataAsync(CancellationToken cancellationToken = default)
+    {
+        var useTransaction = _context.Database.IsRelational()
+            && !string.Equals(_context.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
+        if (useTransaction)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async ct =>
+            {
+                _context.ChangeTracker.Clear();
+                await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+                await DbDataCleaner.ClearAllFarmDataAsync(_context, ct);
+                await transaction.CommitAsync(ct);
+            }, cancellationToken);
+        }
+        else
+        {
+            _context.ChangeTracker.Clear();
+            await DbDataCleaner.ClearAllFarmDataAsync(_context, cancellationToken);
+        }
+
+        _context.ChangeTracker.Clear();
+        await DbSeeder.SeedAsync(_context, cancellationToken);
+        await FeedPlanMigrator.MigrateAsync(_context, cancellationToken);
+        await SettingsSeedHelper.SeedDefaultsAsync(_context, cancellationToken);
+        await (_lookup?.EnsureDefaultsAsync(cancellationToken) ?? Task.CompletedTask);
+        await (_ledger?.EnsureSeededAsync(cancellationToken) ?? Task.CompletedTask);
     }
 }

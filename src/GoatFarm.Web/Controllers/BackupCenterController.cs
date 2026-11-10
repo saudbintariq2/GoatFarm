@@ -188,5 +188,27 @@ public class BackupCenterController : Controller
 
     }
 
+    [HttpPost]
+    public async Task<IActionResult> ClearFarmData([FromBody] ClearFarmDataRequest request, CancellationToken cancellationToken)
+    {
+        var role = await _permissions.GetCurrentUserRoleAsync(cancellationToken) ?? "";
+        if (!string.Equals(role, FarmRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Only an administrator can clear all farm data." });
+
+        if (!string.Equals(request?.Confirm?.Trim(), "WIPE ALL FARM DATA", StringComparison.Ordinal))
+            return BadRequest(new { error = "Type WIPE ALL FARM DATA exactly to confirm." });
+
+        var snapshot = await _backup.ExportAsync(cancellationToken);
+        await _backup.SaveStoredBackupAsync(snapshot, "pre-wipe", cancellationToken);
+        await _backup.ClearAllFarmDataAsync(cancellationToken);
+        await _audit.LogAsync(FarmTabs.Backup, AuditAction.Delete, "All farm data cleared (empty slate)", UserId, UserDisplay, cancellationToken: cancellationToken);
+        return Ok(new { success = true });
+    }
+
+    public sealed class ClearFarmDataRequest
+    {
+        public string? Confirm { get; set; }
+    }
+
 }
 

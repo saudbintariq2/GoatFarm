@@ -85,6 +85,19 @@
                 <button type="submit" class="btn btn-danger">Restore from backup</button>
             </div>
         </form>
+        <div class="panel" style="margin-top:18px;border-color:#e8c4c0">
+            <div class="panel-head"><h2 style="color:#8a261c">Empty the farm</h2><span class="sub">production reset</span></div>
+            <div class="panel-body">
+                <p class="note" style="border-color:#e8c4c0;margin-top:0">Deletes <b>all</b> herd, finance, feed, health, breeding, tasks, products, trading, and projects data. <b>Users and sign-in are not removed.</b> A JSON snapshot is saved first (same as restore).</p>
+                <div class="field">
+                    <span class="field-label">Type <code>WIPE ALL FARM DATA</code> to confirm</span>
+                    <input type="text" id="clearFarmConfirm" class="goat-input" autocomplete="off" spellcheck="false" placeholder="WIPE ALL FARM DATA">
+                </div>
+                <div class="backup-actions" style="margin-top:12px">
+                    <button type="button" class="btn btn-danger" id="clearFarmBtn">Clear all farm data</button>
+                </div>
+            </div>
+        </div>
         }
     </div>
 </div>
@@ -109,6 +122,25 @@ document.getElementById('backupImportForm')?.addEventListener('submit', async (e
   const j = await res.json().catch(() => ({}));
   if (res.ok) { alert('Restore completed.'); location.href = '/Dashboard'; }
   else alert(j.error || 'Restore failed.');
+});
+
+document.getElementById('clearFarmBtn')?.addEventListener('click', async () => {
+  const confirmText = document.getElementById('clearFarmConfirm')?.value?.trim() || '';
+  if (confirmText !== 'WIPE ALL FARM DATA') {
+    alert('Type WIPE ALL FARM DATA in the box to confirm.');
+    return;
+  }
+  if (!confirm('This permanently removes all farm records (users stay). A snapshot will be saved first. Continue?')) return;
+  const token = document.querySelector('#backupImportForm input[name="__RequestVerificationToken"]')?.value
+    || document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+  const res = await fetch('/BackupCenter/ClearFarmData', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token || '' },
+    body: JSON.stringify({ confirm: confirmText })
+  });
+  const j = await res.json().catch(() => ({}));
+  if (res.ok) { alert('Farm data cleared. You can enter records from scratch.'); location.href = '/Dashboard'; }
+  else alert(j.error || 'Could not clear farm data.');
 });
 </script>
 }
