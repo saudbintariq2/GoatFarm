@@ -99,13 +99,39 @@ window.BreedingPage = (() => {
         return;
       }
       const g = await res.json();
-      out.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${g.tag}${g.name ? ' · ' + g.name : ''} · ${g.status}${g.extra || ''}</span>`;
+      let html = `<span style="color:var(--green-dark);font-weight:700">✓ ${g.tag}${g.name ? ' · ' + g.name : ''} · ${g.status}${g.extra || ''}</span>`;
+      if (inId === 'bc-tag' && $('bc-stage')?.value === 'cross') {
+        const buck = $('bc-buck')?.value || '';
+        const date = $('bc-date')?.value || today();
+        const checkUrl = '/Breeding/CheckCross?tag=' + encodeURIComponent(val)
+          + (buck ? '&buckTag=' + encodeURIComponent(buck) : '')
+          + (date ? '&date=' + encodeURIComponent(date) : '');
+        const checkRes = await fetch(checkUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        if (checkRes.ok) {
+          const check = await checkRes.json();
+          if (check.errors?.length) {
+            html += `<div style="color:#8a261c;margin-top:4px">${check.errors.join(' ')}</div>`;
+          }
+          if (check.warnings?.length) {
+            html += `<div style="color:var(--amber);margin-top:4px">⚠ ${check.warnings.join(' ')}</div>`;
+          }
+          if (check.notes?.length) {
+            html += `<div style="color:var(--ink-soft);margin-top:4px;font-size:12px">${check.notes.join(' ')}</div>`;
+          }
+        }
+      }
+      out.innerHTML = html;
     } catch { out.textContent = ''; }
   }
 
   async function postSeason(body) {
-    await gr().api('/Breeding/UpdateSeason', { method: 'POST', body: JSON.stringify(body) });
-    location.href = '/Breeding?batch=' + encodeURIComponent($('se-batch')?.value || '');
+    try {
+      const res = await gr().api('/Breeding/UpdateSeason', { method: 'POST', body: JSON.stringify(body) });
+      const batch = res?.newBatchId || res?.selectedBatchId || $('se-batch')?.value || '';
+      location.href = '/Breeding?batch=' + encodeURIComponent(batch);
+    } catch {
+      gr().showToast?.('Could not save season settings.');
+    }
   }
 
   let birthRequestId = null;
@@ -188,11 +214,18 @@ window.BreedingPage = (() => {
     });
 
     $('bc-tag')?.addEventListener('input', () => lookupTag('bc-tag', 'bc-found'));
+    $('bc-buck')?.addEventListener('change', () => lookupTag('bc-tag', 'bc-found'));
+    $('bc-date')?.addEventListener('change', () => lookupTag('bc-tag', 'bc-found'));
 
     $('addCross')?.addEventListener('click', async () => {
       const tag = normalizeTag($('bc-tag')?.value);
       if (!tag) { await gr().showModal('Scan or type a valid doe tag'); return; }
       const stage = $('bc-stage')?.value || 'prep';
+      const buckTag = $('bc-buck')?.value?.trim() || null;
+      if (stage === 'cross' && !buckTag) {
+        await gr().showModal('Pick the buck for this cross.');
+        return;
+      }
       try {
         await gr().api('/Breeding/AddDoe', {
           method: 'POST',
@@ -200,7 +233,7 @@ window.BreedingPage = (() => {
             tag,
             stage,
             date: $('bc-date')?.value || today(),
-            buckTag: $('bc-buck')?.value || null
+            buckTag
           })
         });
         reload(stage === 'cross' ? 'Cross recorded' : 'Doe marked ready for cross');
@@ -268,6 +301,13 @@ window.BreedingPage = (() => {
       await postSeason({ selectedBatchId: sel?.value, removeBatch: true });
     });
 
+    $('br-reconcile')?.addEventListener('click', async () => {
+      try {
+        const res = await gr().api('/Breeding/ReconcilePregnancy', { method: 'POST', body: '{}' });
+        reload(res?.message || 'Pregnancy status synced');
+      } catch { /* shown */ }
+    });
+
     $('kb-live')?.addEventListener('change', renderKidRows);
     $('kb-cancel')?.addEventListener('click', () => {
       birthRequestId = null;
@@ -306,13 +346,17 @@ window.BreedingPage = (() => {
 
     $('bg-create')?.addEventListener('click', async () => {
       const ids = [...document.querySelectorAll('[data-bgdoe]:checked')].map(c => +c.dataset.bgdoe);
+      const buck = normalizeTag($('bg-buck')?.value);
+      const startDate = $('bg-date')?.value;
+      if (!buck) { await gr().showModal('Enter the buck tag'); return; }
+      if (!startDate) { await gr().showModal('Pick a cross date'); return; }
       if (!ids.length) { await gr().showModal('Tick at least one doe'); return; }
       try {
         await gr().api('/Breeding/CreateGroup', {
           method: 'POST',
           body: JSON.stringify({
-            buckTag: $('bg-buck')?.value,
-            startDate: $('bg-date')?.value || today(),
+            buckTag: buck,
+            startDate,
             max: +$('bg-max')?.value || 15,
             doeIds: ids
           })

@@ -53,7 +53,7 @@ Phase 12 Demo mode isolation
 - [x] Record Birth wizard (transactional, idempotent, creates kids)
 - [x] Abortion recording
 - [x] Herd form: Owner, Health, Sire, Dam; filters `br:waiting`, `br:due30`, health (UI + server)
-- [ ] Owner filter dropdown in Herd UI (server filter `owner:{name}` exists; no UI option yet)
+- [x] Owner filter dropdown in Herd UI (server filter `owner:{name}` exists; no UI option yet)
 - [x] Herd bulk "Ready for cross" / "Crossed" use the same rules as Breeding, all-or-nothing
 - [x] Backup import restores Owner/Health/parent links/stage (export already includes the columns)
 - [ ] Backup export/import of `BreedingEvents`, `KiddingRecords`, `FarmTasks` (not included yet)

@@ -16,6 +16,7 @@ public interface IAuditService
         string? entityType = null, int? entityId = null, string? detailJson = null, bool showInNotices = true,
         CancellationToken cancellationToken = default);
     Task<AdminPageViewModel> GetAdminPageAsync(int auditTake, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AuditRowViewModel>> QueryAuditLogAsync(AuditLogQueryViewModel query, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AuditNoticeViewModel>> GetRecentNoticesAsync(int take, CancellationToken cancellationToken = default);
 }
 
@@ -57,7 +58,10 @@ public interface IProjectsService
 public interface ILedgerService
 {
     Task<LedgerPageViewModel> GetPageAsync(string? month, CancellationToken cancellationToken = default);
+    Task<LedgerPageViewModel> GetAccountsOverviewAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<MoneyAccountRowViewModel>> GetAccountBalancesAsync(CancellationToken cancellationToken = default);
     Task<object> SaveAccountAsync(SaveMoneyAccountViewModel model, CancellationToken cancellationToken = default);
+    Task<object> SetOpeningBalanceAsync(SetMoneyAccountOpeningViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveTransactionAsync(SaveLedgerTransactionViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveInvoiceAsync(SaveCustomerInvoiceViewModel model, CancellationToken cancellationToken = default);
     Task<object> SavePayableAsync(SaveSupplierPayableViewModel model, CancellationToken cancellationToken = default);

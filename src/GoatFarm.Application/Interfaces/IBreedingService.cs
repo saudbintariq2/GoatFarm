@@ -17,7 +17,8 @@ public interface IBreedingService
     Task RemoveCrossAsync(int goatId, CancellationToken cancellationToken = default);
     Task RecordCrossFromPrepAsync(int goatId, DateOnly date, string? buckTag, bool confirmWarnings, CancellationToken cancellationToken = default);
     Task RecordReturnedToHeatAsync(RecordReturnedToHeatViewModel model, CancellationToken cancellationToken = default);
-    Task UpdateSeasonAsync(UpdateBreedingSeasonViewModel model, CancellationToken cancellationToken = default);
+    Task<string?> UpdateSeasonAsync(UpdateBreedingSeasonViewModel model, CancellationToken cancellationToken = default);
+    Task<PregnancyReconcileResultViewModel> ReconcilePregnancyAsync(CancellationToken cancellationToken = default);
     Task AddDoeToPipelineAsync(BreedingAddDoeViewModel model, CancellationToken cancellationToken = default);
     Task ApplyStageActionAsync(BreedingStageActionViewModel model, CancellationToken cancellationToken = default);
     Task ClearBreedingMistakeAsync(int goatId, CancellationToken cancellationToken = default);

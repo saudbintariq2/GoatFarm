@@ -23,6 +23,8 @@ public class VaccineService : IVaccineService
         var goats = await _context.Goats.AsNoTracking().Where(g => !g.IsArchived).ToListAsync(cancellationToken);
         var vaccines = await _context.Vaccines.AsNoTracking().ToListAsync(cancellationToken);
         var log = await _context.VaccinationHistories.AsNoTracking().ToListAsync(cancellationToken);
+        var goatTags = await _context.Goats.AsNoTracking().ToDictionaryAsync(g => g.Id, g => g.Tag, cancellationToken);
+        var vaccineNames = vaccines.ToDictionary(v => v.Id, v => v.Name);
 
         var dueNow = new List<VaccineDueRowViewModel>();
         var upcoming = new List<VaccineUpcomingRowViewModel>();
@@ -92,6 +94,17 @@ public class VaccineService : IVaccineService
             .Take(15)
             .ToList();
 
+        var tagHistory = log
+            .OrderByDescending(h => h.VaccinationDate).ThenBy(h => h.GoatId)
+            .Take(200)
+            .Select(h => new VaccinationTagHistoryRowViewModel
+            {
+                Date = h.VaccinationDate,
+                GoatTag = goatTags.GetValueOrDefault(h.GoatId, "?"),
+                VaccineName = vaccineNames.GetValueOrDefault(h.VaccineId, "(removed)")
+            })
+            .ToList();
+
         var moneyAccounts = await LoadMoneyAccountsAsync(cancellationToken);
         var acctName = moneyAccounts.ToDictionary(a => a.Id, a => a.Name);
         var purchaseRows = await _context.VaccinePurchases.AsNoTracking()
@@ -112,6 +125,7 @@ public class VaccineService : IVaccineService
             Upcoming = upcoming,
             Schedule = schedule,
             History = history,
+            TagHistory = tagHistory,
             VaccinePurchases = purchases,
             VaccineBoughtMonthTotal = purchases.Sum(p => p.Amount),
             PurchaseMonth = month,

@@ -23,8 +23,32 @@
 }
 
 <div id="view-herd">
-<div class="note"><b>One goat →</b> open her card from the list to record anything.
+<div class="note"><b>One goat →</b> open her profile from the list or scan a tag below.
     <b>Many goats →</b> tick them in the list and use <b>Move to</b>.</div>
+
+<div class="panel" style="margin-bottom:14px">
+    <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end">
+        <div class="herd-tag-scan" style="flex:1;min-width:220px">
+            <label for="herd-scan-tag">Scan tag — open profile</label>
+            <div class="scan-row" style="display:flex;gap:8px;margin-top:6px">
+                <input id="herd-scan-tag" class="scan-inp" autocomplete="off" spellcheck="false" placeholder="scan or type tag" style="flex:1">
+                <button type="button" class="btn btn-green" id="herd-scan-go">Open</button>
+            </div>
+            <div id="herd-scan-found" class="rule" style="margin-top:6px"></div>
+        </div>
+        <div class="herd-tag-scan" style="flex:1;min-width:260px">
+            <label for="wd-tag">Weight or death — scan tag</label>
+            <div class="scan-row" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;align-items:center">
+                <input id="wd-tag" class="scan-inp" autocomplete="off" placeholder="tag" style="min-width:100px;flex:1">
+                <input id="wd-kg" type="number" min="0" step="0.1" placeholder="kg" style="width:72px">
+                <input id="wd-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" style="width:140px">
+                <button type="button" class="btn btn-green btn-sm" id="addWeight">Weight</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="addDeath">Death</button>
+            </div>
+            <div id="wd-found" class="rule" style="margin-top:6px"></div>
+        </div>
+    </div>
+</div>
 
 <div class="stats" id="stats">
     <div class="stat" data-filter="all" role="button" tabindex="0" title="Show all goats">
@@ -63,7 +87,7 @@
     <div class="panel-body">
         <div class="add-grid goat-add-grid">
             <div class="field"><label for="f-tag">Tag / ID</label>
-                <input id="f-tag" placeholder="e.g. 245" autocomplete="off" spellcheck="false"></div>
+                <input id="f-tag" required placeholder="e.g. 245" autocomplete="off" spellcheck="false"></div>
             <div class="field"><label for="f-name">Name (optional)</label><input id="f-name" placeholder="optional"></div>
             <div class="field"><label for="f-breed">Breed</label><select id="f-breed" data-lookup="Lookup.Breeds">@foreach (var b in breeds){<option>@b</option>}</select></div>
             <div class="field"><label for="f-gender">Gender</label><select id="f-gender"><option value="Female">Female</option><option value="Male">Male</option></select></div>
@@ -76,7 +100,7 @@
             <div class="field"><label for="f-status">Status</label><select id="f-status">
                 <option value="Kid">Kid</option><option value="Milking">Milking</option><option value="Pregnant">Pregnant</option>
                 <option value="Dry">Dry</option><option value="Buck">Buck</option><option value="Sale">For sale</option></select></div>
-            <div class="field"><label for="f-date">Date (born / bought)</label><input type="date" id="f-date"></div>
+            <div class="field"><label for="f-date">Date (born / bought)</label><input type="date" id="f-date" required></div>
             <div class="field"><label for="f-sire">Sire (buck)</label><select id="f-sire"><option value="">— none —</option></select></div>
             <div class="field"><label for="f-dam">Dam (mother) tag</label><input id="f-dam" maxlength="50" list="damOptions" autocomplete="off" placeholder="optional"></div>
             <div class="field field-comment"><label for="f-note">Comment</label>
@@ -195,6 +219,7 @@
                     <option value="k:graduate">Graduate to adult herd</option></optgroup>
                 <optgroup label="Birth batch">
                     @foreach (var b in Model.BirthBatches){<option value="bat:@b">@b</option>}
+                    <option value="bat:__new__">+ New birth batch…</option>
                     <option value="bat:none">Clear batch</option></optgroup>
                 <optgroup label="Health">
                     <option value="hl:healthy">Healthy</option>
@@ -239,7 +264,8 @@
                     data-dam="@g.DamTag">
                     <td><input type="checkbox" data-id="@g.Id"></td>
                     <td>
-                        <a class="tag tag-link" href="#" data-goatcard="@g.Id">@g.Tag</a>
+                        <a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(g.Tag)" title="Open full profile">@g.Tag</a>
+                        <a href="#" class="breed" data-goatcard="@g.Id" title="Quick card" style="margin-left:4px;font-size:11px">card</a>
                         @if (g.IsTemporaryTag)
                         {
                             <button type="button" class="treebtn" title="Give this kid a permanent ear tag" data-goatcard="@g.Id">🏷 Tag</button>

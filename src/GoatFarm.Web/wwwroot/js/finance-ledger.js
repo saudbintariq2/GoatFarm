@@ -29,15 +29,23 @@
 
   const rs = n => 'Rs ' + Math.round(+n || 0).toLocaleString('en-US');
 
+  const reloadTabs = new Set(['bank', 'salesar', 'budget', 'profitshare', 'tx', 'capexopex', 'capital']);
+
   document.querySelectorAll('#finance-tabs [data-fintab]').forEach(btn => {
     btn.addEventListener('click', () => {
       const name = btn.dataset.fintab;
+      const url = new URL(location.href);
+      if (monthEl?.value) url.searchParams.set('month', monthEl.value);
+      url.searchParams.set('tab', name);
+      const finRoot = document.getElementById('view-finance');
+      if (reloadTabs.has(name) && finRoot?.dataset.ledgerLoaded !== 'true') {
+        location.href = url.pathname + url.search;
+        return;
+      }
       document.querySelectorAll('#finance-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.fintab === name));
       document.querySelectorAll('#view-finance .finview').forEach(p => {
         p.style.display = p.id === 'fin-' + name ? '' : 'none';
       });
-      const url = new URL(location.href);
-      url.searchParams.set('tab', name);
       history.replaceState(null, '', url);
     });
   });
@@ -241,8 +249,26 @@
   document.getElementById('addMoneyAccount')?.addEventListener('click', () => {
     const row = document.createElement('div');
     row.className = 'money-account-row';
-    row.innerHTML = '<input data-ma-name placeholder="Account name"><select data-ma-type><option value="Cash">Cash</option><option value="Bank">Bank</option></select><input type="number" data-ma-opening value="0"><label class="partner-active"><input type="checkbox" data-ma-active checked> Active</label>';
+    row.dataset.openingProtected = 'false';
+    row.innerHTML = '<input data-ma-name placeholder="Account name"><select data-ma-type><option value="Cash">Cash</option><option value="Bank">Bank</option></select><div class="ma-opening-wrap"><span class="breed">Opening Rs</span><input type="number" data-ma-opening value="0" title="Set when creating the account"><small class="breed">Locks when non-zero or after first movement</small></div><label class="partner-active"><input type="checkbox" data-ma-active checked> Active</label>';
     document.getElementById('moneyAccountRows').appendChild(row);
+  });
+
+  document.getElementById('moneyAccountRows')?.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-set-opening]');
+    if (!btn) return;
+    const row = btn.closest('.money-account-row');
+  const id = +btn.dataset.setOpening;
+    if (!id) return;
+    const raw = prompt('Enter the opening balance (Rs). This can be set once only.');
+    if (raw === null) return;
+    const amount = Number(String(raw).replace(/,/g, ''));
+    if (!Number.isFinite(amount) || amount < 0) { alert('Enter a valid opening balance of 0 or more.'); return; }
+    if (!confirm('Set and lock this opening balance?')) return;
+    try {
+      await post('/Finance/SetOpeningBalance', { id, openingBalance: amount });
+      reload();
+    } catch (err) { alert(err.message); }
   });
 
   document.getElementById('saveMoneyAccounts')?.addEventListener('click', async () => {
@@ -251,13 +277,20 @@
       for (const row of rows) {
         const name = row.querySelector('[data-ma-name]').value.trim();
         if (!name) continue;
-        await post('/Finance/SaveMoneyAccount', {
-          id: +row.dataset.accountId || null,
+        const id = +row.dataset.accountId || null;
+        const protectedOpening = row.dataset.openingProtected === 'true';
+        const body = {
+          id,
           name,
           kind: row.querySelector('[data-ma-type]').value,
-          openingBalance: +row.querySelector('[data-ma-opening]').value || 0,
           isActive: row.querySelector('[data-ma-active]').checked
-        });
+        };
+        if (!id || !protectedOpening) {
+          body.openingBalance = +row.querySelector('[data-ma-opening]').value || 0;
+        } else {
+          body.openingBalance = +row.dataset.openingBalance || +row.querySelector('[data-ma-opening]').value || 0;
+        }
+        await post('/Finance/SaveMoneyAccount', body);
       }
       reload();
     } catch (e) { alert(e.message); }

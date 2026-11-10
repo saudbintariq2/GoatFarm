@@ -40,6 +40,11 @@ public class DoubleEntryGuardService : IDoubleEntryGuardService
                 throw new DoubleEntryValidationException(SalaryExpenseRules.SalaryBlockedMessage, DoubleEntrySeverity.Block);
         }
 
+        if (FinanceExpenseRules.IsDuplicateVaccinePurchase(model.Type))
+            throw new DoubleEntryValidationException(
+                "Vaccine costs are tracked on the Health page. Do not add a manual Vaccines expense.",
+                DoubleEntrySeverity.Block);
+
         if (model.ConfirmPossibleDuplicate)
             return;
 

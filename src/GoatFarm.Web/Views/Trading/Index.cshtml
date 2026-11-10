@@ -1,4 +1,5 @@
 ﻿@model GoatFarm.Application.ViewModels.Trading.TradingPageViewModel
+@using GoatFarm.Application.Common
 @using System.Text.Json
 @section Head {
     <link rel="stylesheet" href="~/css/products.css" asp-append-version="true" />
@@ -133,7 +134,7 @@
 </div></div>
 <div class="td-two">
 <div class="panel"><div class="panel-head"><h2>Profit &amp; loss</h2><span class="sub" id="td-pl-sub"></span></div><div class="panel-body"><table class="tbl td-fin"><tbody id="td-pl"></tbody></table></div></div>
-<div class="panel"><div class="panel-head"><h2>What trading owns &amp; owes</h2><span class="sub">today</span></div><div class="panel-body"><table class="tbl td-fin"><tbody id="td-bs"></tbody></table></div></div>
+<div class="panel"><div class="panel-head"><h2>What trading owns &amp; owes</h2><span class="sub">today · server @(Model.BalanceSheetIsBalanced ? "balanced ✓" : $"off by {DisplayHelper.FormatRs(Model.BalanceSheetImbalance)}")</span></div><div class="panel-body"><table class="tbl td-fin"><tbody id="td-bs"></tbody></table></div></div>
 </div>
 <p class="td-hint">Who owes you and whom you owe: see <button type="button" class="btn btn-ghost btn-sm" data-td-tab="parties">Suppliers &amp; customers</button></p>
 <div class="panel"><div class="panel-head"><h2>Cash book</h2><span class="sub">every rupee in and out of the trading accounts</span><select id="td-cb-acct" class="td-acct-sel td-cb-sel" aria-label="Account"></select></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>What</th><th class="num-cell">In</th><th class="num-cell">Out</th><th class="num-cell">Balance</th></tr></thead><tbody id="td-cb"></tbody></table></div></div>

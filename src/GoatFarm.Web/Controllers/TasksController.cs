@@ -36,6 +36,10 @@ public class TasksController : Controller
     public async Task<IActionResult> GetData(string? filter, CancellationToken cancellationToken) =>
         Json(await _taskService.GetPageAsync(CurrentUserId, await CanEditAsync(cancellationToken), filter, cancellationToken));
 
+    [HttpGet]
+    public async Task<IActionResult> MyOpenCount(CancellationToken cancellationToken) =>
+        Json(new { count = await _taskService.CountMyOpenTasksAsync(CurrentUserId, cancellationToken) });
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] SaveTaskViewModel model, CancellationToken cancellationToken)
     {

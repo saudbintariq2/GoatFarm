@@ -19,6 +19,11 @@ public class TaskService : ITaskService
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
+    public Task<int> CountMyOpenTasksAsync(string currentUserId, CancellationToken cancellationToken = default) =>
+        _context.FarmTasks.CountAsync(
+            t => t.Status != FarmTaskStatus.Completed && t.AssigneeUserId == currentUserId,
+            cancellationToken);
+
     public async Task<TasksPageViewModel> GetPageAsync(
         string currentUserId, bool canEdit, string? filter, CancellationToken cancellationToken = default)
     {

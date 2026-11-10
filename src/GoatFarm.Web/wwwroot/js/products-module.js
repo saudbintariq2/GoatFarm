@@ -2599,7 +2599,7 @@
   const salesRows = document.getElementById('sl-sales-rows');
   if (salesRows) {
     salesRows.innerHTML = (page.sales || []).map(s =>
-      `<tr><td>${esc(s.dateDisplay)}</td><td>—</td><td>${esc(s.customer || 'Cash')}</td><td>${esc(s.productName)}</td><td class="num-cell">${s.qty}</td><td class="num-cell hide-sm">—</td><td class="num-cell">${rs(s.amount)}</td><td class="num-cell hide-sm">—</td><td class="num-cell hide-sm">—</td><td>${s.isCredit ? 'Credit' : 'Paid'}</td><td></td></tr>`
+      `<tr><td>${esc(s.dateDisplay)}</td><td><b>${esc(s.invoiceNo || '—')}</b></td><td>${esc(s.customer || 'Cash')}</td><td>${esc(s.productName)}</td><td class="num-cell">${s.qty}</td><td class="num-cell hide-sm">—</td><td class="num-cell">${rs(s.amount)}</td><td class="num-cell hide-sm">—</td><td class="num-cell hide-sm">—</td><td>${s.isCredit ? 'Credit' : 'Paid'}</td><td></td></tr>`
     ).join('') || '<tr><td colspan="11" class="empty">No sales this month yet.</td></tr>';
   }
 
@@ -3010,19 +3010,28 @@
       const isCredit = pay === 'credit' && cust;
       const prodVal = document.getElementById('sl-sa-prod')?.value;
       const productId = src?.productId || (prodVal && !String(prodVal).startsWith('__') ? +prodVal : null);
+      const src = currentSaleSource();
+      const whId = (type === 'whole' || type === 'half') ? null : (src?.key ? +src.key : null);
       const res = await fetch('/Products/SaveSale', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           date: document.getElementById('sl-sa-date')?.value || today(),
           productId: productId || null,
+          warehouseId: whId,
           customerId: cust && cust !== '__add' ? +cust : null,
           productName: typeLabels[type] || 'Sale',
           qty, rate, isCredit: !!isCredit
         })
       });
       const j = await res.json().catch(() => ({}));
-      if (j.invoiceId) alert('Credit sale recorded — invoice #' + j.invoiceId + ' in Finance.');
+      if (!res.ok) { alert(j.error || 'Could not save sale.'); return; }
+      if (j.invoiceNo) {
+        const msg = j.invoiceId
+          ? `Sale ${j.invoiceNo} recorded — Finance invoice #${j.invoiceId}.`
+          : `Sale ${j.invoiceNo} recorded.`;
+        alert(msg);
+      } else if (j.invoiceId) alert('Credit sale recorded — invoice #' + j.invoiceId + ' in Finance.');
       reload();
     });
   });

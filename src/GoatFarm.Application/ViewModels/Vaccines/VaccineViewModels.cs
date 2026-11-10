@@ -63,6 +63,14 @@ public class VaccinationLogViewModel
     public int GoatCount { get; set; }
 }
 
+public class VaccinationTagHistoryRowViewModel
+{
+    public DateOnly Date { get; set; }
+    public string DateDisplay => Date.ToString("yyyy-MM-dd");
+    public string GoatTag { get; set; } = string.Empty;
+    public string VaccineName { get; set; } = string.Empty;
+}
+
 public class GiveVaccineViewModel
 {
     [Required]
@@ -99,6 +107,7 @@ public class VaccinePageViewModel
     public IReadOnlyList<VaccineUpcomingRowViewModel> Upcoming { get; set; } = [];
     public IReadOnlyList<VaccineViewModel> Schedule { get; set; } = [];
     public IReadOnlyList<VaccinationLogViewModel> History { get; set; } = [];
+    public IReadOnlyList<VaccinationTagHistoryRowViewModel> TagHistory { get; set; } = [];
     public IReadOnlyList<VaccinePurchaseViewModel> VaccinePurchases { get; set; } = [];
     public decimal VaccineBoughtMonthTotal { get; set; }
     public string PurchaseMonth { get; set; } = string.Empty;

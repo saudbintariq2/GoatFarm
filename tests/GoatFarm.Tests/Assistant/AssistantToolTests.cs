@@ -353,6 +353,12 @@ public class AssistantToolTests
     {
         public bool Called { get; private set; }
         public FinancePageViewModel? Page { get; set; }
+        public Task<FinancePageViewModel> GetFinancePageAsync(string? month, FinancePageLoadOptions options, CancellationToken cancellationToken = default) =>
+            GetFinancePageAsync(month, cancellationToken);
+
+        public Task<FinanceMonthSnapshotViewModel> GetFinanceMonthSnapshotAsync(string? month, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new FinanceMonthSnapshotViewModel { Month = month ?? "2026-10" });
+
         public Task<FinancePageViewModel> GetFinancePageAsync(string? month, CancellationToken cancellationToken = default)
         {
             Called = true;
@@ -397,6 +403,10 @@ public class AssistantToolTests
         public decimal GetRecurringMonthlyTotal() => 0;
         public Task<SalaryReconciliationViewModel> GetSalaryReconciliationAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new SalaryReconciliationViewModel());
+        public Task<FinanceIntegrityViewModel> GetIntegrityCheckAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new FinanceIntegrityViewModel());
+        public Task<RelinkUnpostedMoneyResultViewModel> RelinkUnpostedMoneyAsync(RelinkUnpostedMoneyViewModel model, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new RelinkUnpostedMoneyResultViewModel());
     }
 
     private sealed class FakeReports : IReportsService

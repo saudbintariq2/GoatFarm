@@ -180,6 +180,8 @@ public class MoneyAccount : BaseEntity
     public string Name { get; set; } = string.Empty;
     public MoneyAccountKind Kind { get; set; }
     public decimal OpeningBalance { get; set; }
+    /// <summary>When true, opening balance cannot be changed (set once or locked by ledger activity).</summary>
+    public bool OpeningBalanceLocked { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -384,6 +386,9 @@ public class ProductSale : BaseEntity
     public decimal Amount { get; set; }
     public bool IsCredit { get; set; }
     public string? Notes { get; set; }
+    public string? InvoiceNo { get; set; }
+    public int? WarehouseId { get; set; }
+    public Warehouse? Warehouse { get; set; }
 }
 
 public class GoatTreatment : BaseEntity

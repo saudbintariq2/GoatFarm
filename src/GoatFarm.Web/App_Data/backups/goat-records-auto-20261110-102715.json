@@ -1,0 +1,2809 @@
+{
+  "formatVersion": 3,
+  "app": "GoatFarmPro",
+  "goats": [
+    {
+      "id": 17,
+      "tag": "201",
+      "name": null,
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Female",
+      "status": "Milking",
+      "source": "Bought",
+      "purchasePrice": 38000.00,
+      "eventDate": "2024-05-16",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": "2026-11-02",
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "Ready",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 18,
+      "tag": "202",
+      "name": null,
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Female",
+      "status": "Pregnant",
+      "source": "Bought",
+      "purchasePrice": 42000.00,
+      "eventDate": "2024-11-12",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": "2026-07-25",
+      "buckTag": "B-12",
+      "kidsCount": 2,
+      "ultrasoundDate": "2026-09-13",
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "ConfirmedPregnant",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 19,
+      "tag": "203",
+      "name": null,
+      "comment": null,
+      "breed": "Makhee Cheeni",
+      "gender": "Female",
+      "status": "Milking",
+      "source": "Bought",
+      "purchasePrice": 45000.00,
+      "eventDate": "2025-01-31",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "UnderTreatment",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 20,
+      "tag": "204",
+      "name": null,
+      "comment": null,
+      "breed": "Makhee Cheeni",
+      "gender": "Female",
+      "status": "Pregnant",
+      "source": "Bought",
+      "purchasePrice": 40000.00,
+      "eventDate": "2024-08-14",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": "2026-09-03",
+      "buckTag": "B-12",
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "ScanPending",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 21,
+      "tag": "205",
+      "name": null,
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Female",
+      "status": "Pregnant",
+      "source": "Bought",
+      "purchasePrice": 39000.00,
+      "eventDate": "2024-12-12",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": "2026-06-30",
+      "buckTag": "Sultan",
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "ScanPending",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 22,
+      "tag": "B-12",
+      "name": "Sultan",
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Male",
+      "status": "Buck",
+      "source": "Bought",
+      "purchasePrice": 65000.00,
+      "eventDate": "2023-10-29",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 23,
+      "tag": "305",
+      "name": null,
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Female",
+      "status": "Kid",
+      "source": "Born",
+      "purchasePrice": 0.00,
+      "eventDate": "2026-09-18",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 24,
+      "tag": "306",
+      "name": null,
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Male",
+      "status": "Kid",
+      "source": "Born",
+      "purchasePrice": 0.00,
+      "eventDate": "2026-09-11",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 25,
+      "tag": "307",
+      "name": null,
+      "comment": null,
+      "breed": "Makhee Cheeni",
+      "gender": "Female",
+      "status": "Kid",
+      "source": "Born",
+      "purchasePrice": 0.00,
+      "eventDate": "2026-08-26",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 26,
+      "tag": "308",
+      "name": null,
+      "comment": null,
+      "breed": "Makhee Cheeni",
+      "gender": "Female",
+      "status": "Kid",
+      "source": "Born",
+      "purchasePrice": 0.00,
+      "eventDate": "2026-08-19",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 27,
+      "tag": "309",
+      "name": null,
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Male",
+      "status": "Kid",
+      "source": "Born",
+      "purchasePrice": 0.00,
+      "eventDate": "2026-07-05",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 28,
+      "tag": "310",
+      "name": null,
+      "comment": null,
+      "breed": "Beetal",
+      "gender": "Female",
+      "status": "Milking",
+      "source": "Bought",
+      "purchasePrice": 41000.00,
+      "eventDate": "2025-06-20",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    },
+    {
+      "id": 29,
+      "tag": "311",
+      "name": null,
+      "comment": null,
+      "breed": "Makhee Cheeni",
+      "gender": "Female",
+      "status": "Dry",
+      "source": "Bought",
+      "purchasePrice": 30000.00,
+      "eventDate": "2025-09-28",
+      "dateOfBirth": null,
+      "dateOfBirthIsEstimated": false,
+      "group": null,
+      "prepCrossDate": null,
+      "matedDate": null,
+      "buckTag": null,
+      "kidsCount": null,
+      "ultrasoundDate": null,
+      "isArchived": false,
+      "archivedReason": null,
+      "archivedDate": null,
+      "owner": null,
+      "healthState": "Healthy",
+      "breedingStage": "None",
+      "sireId": null,
+      "damId": null,
+      "sireTagText": null,
+      "damTagText": null,
+      "isTemporaryTag": false,
+      "kiddingRecordId": null
+    }
+  ],
+  "breedingEvents": [],
+  "kiddingRecords": [],
+  "farmTasks": [
+    {
+      "id": 5,
+      "title": "Clean milking area",
+      "notes": "Demo task",
+      "type": "Task",
+      "priority": "Normal",
+      "status": "ToDo",
+      "dueDate": "2026-11-03",
+      "assigneeEmail": null,
+      "createdByEmail": null,
+      "goatId": null,
+      "startedAtUtc": null,
+      "completedAtUtc": null
+    },
+    {
+      "id": 6,
+      "title": "Order vaccine stock",
+      "notes": null,
+      "type": "Reminder",
+      "priority": "High",
+      "status": "InProgress",
+      "dueDate": "2026-11-02",
+      "assigneeEmail": null,
+      "createdByEmail": null,
+      "goatId": null,
+      "startedAtUtc": null,
+      "completedAtUtc": null
+    }
+  ],
+  "security": {
+    "restoredOnImport": false,
+    "users": [
+      {
+        "email": "admin@goatfarm.local",
+        "fullName": "Administrator",
+        "roles": [
+          "Admin"
+        ],
+        "usesRolePermissions": true,
+        "permissions": null
+      },
+      {
+        "email": "dev@goatfarm.local",
+        "fullName": "Dev Administrator",
+        "roles": [
+          "Admin",
+          "Manager"
+        ],
+        "usesRolePermissions": true,
+        "permissions": null
+      }
+    ],
+    "rolePermissions": {
+      "Admin": {
+        "dashboard": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "tasks": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "herd": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "breeding": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "feed": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "milk": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "finance": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "reports": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "vaccines": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "search": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "settings": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        }
+      },
+      "Manager": {
+        "dashboard": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "tasks": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "herd": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "breeding": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "feed": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "milk": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "finance": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "reports": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "vaccines": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "search": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "settings": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        }
+      },
+      "Staff": {
+        "dashboard": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "tasks": {
+          "view": true,
+          "add": true,
+          "edit": false,
+          "delete": false
+        },
+        "herd": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "breeding": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "feed": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "milk": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "finance": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "reports": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "vaccines": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "search": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "settings": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        }
+      }
+    }
+  },
+  "groups": [],
+  "feedPrices": [
+    {
+      "FeedType": "sarson",
+      "DisplayName": "Sarson khali (mustard cake)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 19,
+      "CreatedDate": "2026-11-01T20:27:59.525942Z",
+      "UpdatedDate": "2026-11-01T20:27:59.525942Z"
+    },
+    {
+      "FeedType": "fodder",
+      "DisplayName": "Green fodder (chaara)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 23,
+      "CreatedDate": "2026-11-01T20:27:59.526211Z",
+      "UpdatedDate": "2026-11-01T20:27:59.526211Z"
+    },
+    {
+      "FeedType": "milkpowder",
+      "DisplayName": "Powder milk (kids)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 25,
+      "CreatedDate": "2026-11-03T06:42:34.191538Z",
+      "UpdatedDate": "2026-11-03T06:42:34.191539Z"
+    },
+    {
+      "FeedType": "wanda",
+      "DisplayName": "Wanda (concentrate)",
+      "PricePerKg": 0.00,
+      "StockKg": 134.64,
+      "StockKgFull": 150.00,
+      "UseType": "recipe",
+      "Id": 17,
+      "CreatedDate": "2026-11-01T20:27:59.499259Z",
+      "UpdatedDate": "2026-11-10T07:58:08.56533Z"
+    },
+    {
+      "FeedType": "binola",
+      "DisplayName": "Binola (cottonseed cake)",
+      "PricePerKg": 0.00,
+      "StockKg": 58.80,
+      "StockKgFull": 80.00,
+      "UseType": "recipe",
+      "Id": 18,
+      "CreatedDate": "2026-11-01T20:27:59.523938Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565386Z"
+    },
+    {
+      "FeedType": "bran",
+      "DisplayName": "Wheat bran (choker)",
+      "PricePerKg": 0.00,
+      "StockKg": 106.39,
+      "StockKgFull": 120.00,
+      "UseType": "recipe",
+      "Id": 20,
+      "CreatedDate": "2026-11-01T20:27:59.526074Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565427Z"
+    },
+    {
+      "FeedType": "maize",
+      "DisplayName": "Maize (makai)",
+      "PricePerKg": 0.00,
+      "StockKg": 53.97,
+      "StockKgFull": 60.00,
+      "UseType": "recipe",
+      "Id": 21,
+      "CreatedDate": "2026-11-01T20:27:59.52613Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565466Z"
+    },
+    {
+      "FeedType": "sheera",
+      "DisplayName": "Sheera (molasses)",
+      "PricePerKg": 0.00,
+      "StockKg": 37.17,
+      "StockKgFull": 40.00,
+      "UseType": "recipe",
+      "Id": 22,
+      "CreatedDate": "2026-11-01T20:27:59.526176Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565507Z"
+    },
+    {
+      "FeedType": "fodderdry",
+      "DisplayName": "Dry fodder (toori / bhoosa)",
+      "PricePerKg": 0.00,
+      "StockKg": 163.00,
+      "StockKgFull": 200.00,
+      "UseType": "recipe",
+      "Id": 24,
+      "CreatedDate": "2026-11-01T20:27:59.526245Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565545Z"
+    }
+  ],
+  "prices": {
+    "sarson": 0.00,
+    "fodder": 0.00,
+    "milkpowder": 0.00,
+    "wanda": 0.00,
+    "binola": 0.00,
+    "bran": 0.00,
+    "maize": 0.00,
+    "sheera": 0.00,
+    "fodderdry": 0.00
+  },
+  "feedStock": {
+    "sarson": 0.00,
+    "fodder": 0.00,
+    "milkpowder": 0.00,
+    "wanda": 134.64,
+    "binola": 58.80,
+    "bran": 106.39,
+    "maize": 53.97,
+    "sheera": 37.17,
+    "fodderdry": 163.00
+  },
+  "feedPlans": [
+    {
+      "id": 15,
+      "statusKey": "Kid",
+      "mixKgPerDay": 0.150,
+      "fodderKgPerDay": 0.500,
+      "fodderDryKgPerDay": 0.100,
+      "medicineCostPerGoatPerMonth": 50.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 150
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "statusKey": "Milking",
+      "mixKgPerDay": 1.000,
+      "fodderKgPerDay": 2.000,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 80.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 500
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 200
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 200
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 50
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 2000
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "statusKey": "Pregnant",
+      "mixKgPerDay": 0.800,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 150.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 400
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 150
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 150
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 50
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "statusKey": "Dry",
+      "mixKgPerDay": 0.300,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 40.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 200
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "statusKey": "Buck",
+      "mixKgPerDay": 0.700,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 60.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 400
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "statusKey": "Sale",
+      "mixKgPerDay": 0.350,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.400,
+      "medicineCostPerGoatPerMonth": 30.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 250
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "statusKey": "Meat",
+      "mixKgPerDay": 0.350,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.400,
+      "medicineCostPerGoatPerMonth": 30.00,
+      "items": []
+    }
+  ],
+  "feedBuys": [
+    {
+      "Date": "2026-11-02",
+      "FeedType": "wanda",
+      "Kg": 200.00,
+      "RatePerKg": 90.00,
+      "Amount": 18000.00,
+      "Comment": "monthly stock",
+      "UseAs": "recipe",
+      "PaymentStatus": "paid",
+      "PaidAmount": 18000.00,
+      "AccountId": null,
+      "Supplier": null,
+      "DueDate": null,
+      "AllocationMonths": 1,
+      "Id": 4,
+      "CreatedDate": "2026-11-01T20:28:00.977268Z",
+      "UpdatedDate": "2026-11-01T20:28:00.977268Z"
+    },
+    {
+      "Date": "2026-11-08",
+      "FeedType": "binola",
+      "Kg": 100.00,
+      "RatePerKg": 95.00,
+      "Amount": 9500.00,
+      "Comment": "",
+      "UseAs": "recipe",
+      "PaymentStatus": "paid",
+      "PaidAmount": 9500.00,
+      "AccountId": null,
+      "Supplier": null,
+      "DueDate": null,
+      "AllocationMonths": 1,
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.977716Z",
+      "UpdatedDate": "2026-11-01T20:28:00.977716Z"
+    }
+  ],
+  "recurringCosts": [
+    {
+      "Name": "Land rent (cultivated land)",
+      "Amount": 240000.00,
+      "Period": 1,
+      "Id": 3,
+      "CreatedDate": "2026-11-01T20:28:00.968605Z",
+      "UpdatedDate": "2026-11-01T20:28:00.968605Z"
+    }
+  ],
+  "vaccineBuys": [
+    {
+      "Date": "2026-11-04",
+      "Name": "PPR",
+      "Qty": 1.00,
+      "Unit": "Box",
+      "Amount": 3500.00,
+      "Comment": "50 doses",
+      "PaymentStatus": "paid",
+      "PaidAmount": 3500.00,
+      "AccountId": null,
+      "Supplier": null,
+      "DueDate": null,
+      "Id": 3,
+      "CreatedDate": "2026-11-01T20:28:00.98947Z",
+      "UpdatedDate": "2026-11-01T20:28:00.98947Z"
+    }
+  ],
+  "assets": [
+    {
+      "Name": "Chaff cutter",
+      "Type": "Machinery",
+      "Cost": 55000.00,
+      "PurchaseDate": "2026-11-01",
+      "Comment": null,
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.921779Z",
+      "UpdatedDate": "2026-11-01T20:28:00.921779Z"
+    },
+    {
+      "Name": "Milking \u0026 cooling",
+      "Type": "Machinery",
+      "Cost": 40000.00,
+      "PurchaseDate": "2026-11-01",
+      "Comment": null,
+      "Id": 6,
+      "CreatedDate": "2026-11-01T20:28:00.922194Z",
+      "UpdatedDate": "2026-11-01T20:28:00.922195Z"
+    },
+    {
+      "Name": "Sheds \u0026 fencing",
+      "Type": "Buildings/Sheds",
+      "Cost": 250000.00,
+      "PurchaseDate": "2026-11-01",
+      "Comment": null,
+      "Id": 7,
+      "CreatedDate": "2026-11-01T20:28:00.922196Z",
+      "UpdatedDate": "2026-11-01T20:28:00.922196Z"
+    }
+  ],
+  "incomes": [
+    {
+      "Type": "Ghee",
+      "Amount": 25000.00,
+      "Date": "2026-11-10",
+      "Comment": "Demo",
+      "Id": 4,
+      "CreatedDate": "2026-11-01T20:28:00.932783Z",
+      "UpdatedDate": "2026-11-01T20:28:00.932783Z"
+    },
+    {
+      "Type": "Live goat sale",
+      "Amount": 30000.00,
+      "Date": "2026-11-15",
+      "Comment": "Demo",
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.933318Z",
+      "UpdatedDate": "2026-11-01T20:28:00.933318Z"
+    }
+  ],
+  "expenses": [
+    {
+      "Type": "Cultivation (fodder)",
+      "Amount": 18000.00,
+      "Date": "2026-11-03",
+      "Comment": "Demo",
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.942164Z",
+      "UpdatedDate": "2026-11-01T20:28:00.942164Z"
+    },
+    {
+      "Type": "Utilities",
+      "Amount": 8000.00,
+      "Date": "2026-11-07",
+      "Comment": "Demo",
+      "Id": 6,
+      "CreatedDate": "2026-11-01T20:28:00.942462Z",
+      "UpdatedDate": "2026-11-01T20:28:00.942463Z"
+    }
+  ],
+  "ownerInv": [
+    {
+      "Note": "Startup \u2014 buying goats \u0026 sheds",
+      "Amount": 500000.00,
+      "Date": "2026-11-01",
+      "Id": 4,
+      "CreatedDate": "2026-11-01T20:28:00.950941Z",
+      "UpdatedDate": "2026-11-01T20:28:00.950941Z"
+    },
+    {
+      "Note": "Monthly top-up",
+      "Amount": 60000.00,
+      "Date": "2026-11-04",
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.951471Z",
+      "UpdatedDate": "2026-11-01T20:28:00.951471Z"
+    }
+  ],
+  "vaccines": [
+    {
+      "Name": "Enterotoxaemia (ET)",
+      "Scope": 1,
+      "RuleType": 0,
+      "Days": 30,
+      "Months": null,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 13,
+      "CreatedDate": "2026-11-01T20:27:59.624405Z",
+      "UpdatedDate": "2026-11-01T20:27:59.624405Z"
+    },
+    {
+      "Name": "PPR",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 12,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 14,
+      "CreatedDate": "2026-11-01T20:27:59.624704Z",
+      "UpdatedDate": "2026-11-01T20:27:59.624704Z"
+    },
+    {
+      "Name": "FMD",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 6,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 15,
+      "CreatedDate": "2026-11-01T20:27:59.624726Z",
+      "UpdatedDate": "2026-11-01T20:27:59.624727Z"
+    },
+    {
+      "Name": "CCPP",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 12,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 16,
+      "CreatedDate": "2026-11-01T20:27:59.624727Z",
+      "UpdatedDate": "2026-11-01T20:27:59.624727Z"
+    },
+    {
+      "Name": "ET booster (pre-kidding)",
+      "Scope": 3,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 6,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 17,
+      "CreatedDate": "2026-11-01T20:27:59.624727Z",
+      "UpdatedDate": "2026-11-01T20:27:59.624727Z"
+    },
+    {
+      "Name": "Deworming",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 3,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 18,
+      "CreatedDate": "2026-11-01T20:27:59.624728Z",
+      "UpdatedDate": "2026-11-01T20:27:59.624728Z"
+    }
+  ],
+  "vaccLog": [
+    {
+      "id": 4,
+      "goatId": 17,
+      "vaccineId": 14,
+      "date": "2026-09-23"
+    },
+    {
+      "id": 5,
+      "goatId": 18,
+      "vaccineId": 14,
+      "date": "2026-09-23"
+    },
+    {
+      "id": 6,
+      "goatId": 19,
+      "vaccineId": 14,
+      "date": "2026-09-23"
+    }
+  ],
+  "reminders": [
+    {
+      "Title": "Hoof trimming",
+      "Scope": 0,
+      "ReminderDate": "2026-11-22",
+      "Id": 4,
+      "CreatedDate": "2026-11-01T20:28:00.996939Z",
+      "UpdatedDate": "2026-11-01T20:28:00.996939Z"
+    },
+    {
+      "Title": "Pregnancy check (ultrasound)",
+      "Scope": 3,
+      "ReminderDate": "2026-11-10",
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.997309Z",
+      "UpdatedDate": "2026-11-01T20:28:00.997309Z"
+    }
+  ],
+  "remindDays": 30,
+  "milkProd": [
+    {
+      "Date": "2026-11-02",
+      "Breed": "Mixed",
+      "Liters": 186.00,
+      "Comment": "Demo",
+      "Id": 14,
+      "CreatedDate": "2026-11-01T20:28:00.907429Z",
+      "UpdatedDate": "2026-11-01T20:28:00.907429Z"
+    },
+    {
+      "Date": "2026-11-01",
+      "Breed": "Mixed",
+      "Liters": 190.00,
+      "Comment": "Demo",
+      "Id": 15,
+      "CreatedDate": "2026-11-01T20:28:00.907885Z",
+      "UpdatedDate": "2026-11-01T20:28:00.907885Z"
+    },
+    {
+      "Date": "2026-10-31",
+      "Breed": "Beetal",
+      "Liters": 120.00,
+      "Comment": "Demo",
+      "Id": 16,
+      "CreatedDate": "2026-11-01T20:28:00.907889Z",
+      "UpdatedDate": "2026-11-01T20:28:00.907889Z"
+    },
+    {
+      "Date": "2026-10-31",
+      "Breed": "Makhee Cheeni",
+      "Liters": 68.00,
+      "Comment": "Demo",
+      "Id": 17,
+      "CreatedDate": "2026-11-01T20:28:00.907889Z",
+      "UpdatedDate": "2026-11-01T20:28:00.907889Z"
+    },
+    {
+      "Date": "2026-10-30",
+      "Breed": "Mixed",
+      "Liters": 188.00,
+      "Comment": "Demo",
+      "Id": 18,
+      "CreatedDate": "2026-11-01T20:28:00.90789Z",
+      "UpdatedDate": "2026-11-01T20:28:00.90789Z"
+    },
+    {
+      "Date": "2026-10-29",
+      "Breed": "Mixed",
+      "Liters": 182.00,
+      "Comment": "Demo",
+      "Id": 19,
+      "CreatedDate": "2026-11-01T20:28:00.90789Z",
+      "UpdatedDate": "2026-11-01T20:28:00.90789Z"
+    }
+  ],
+  "milkSales": [
+    {
+      "Date": "2026-11-06",
+      "Liters": 500.00,
+      "Rate": 150.00,
+      "Amount": 75000.00,
+      "Comment": "Demo",
+      "Id": 4,
+      "CreatedDate": "2026-11-01T20:28:00.908988Z",
+      "UpdatedDate": "2026-11-01T20:28:00.908989Z"
+    },
+    {
+      "Date": "2026-11-12",
+      "Liters": 300.00,
+      "Rate": 150.00,
+      "Amount": 45000.00,
+      "Comment": "Demo",
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.909353Z",
+      "UpdatedDate": "2026-11-01T20:28:00.909354Z"
+    }
+  ],
+  "milkWastes": [],
+  "employees": [
+    {
+      "Name": "Aslam",
+      "Role": "Herd worker",
+      "MonthlySalary": 25000.00,
+      "Id": 4,
+      "CreatedDate": "2026-11-01T20:28:00.95884Z",
+      "UpdatedDate": "2026-11-01T20:28:00.95884Z"
+    },
+    {
+      "Name": "Bilal",
+      "Role": "Milking \u0026 feeding",
+      "MonthlySalary": 22000.00,
+      "Id": 5,
+      "CreatedDate": "2026-11-01T20:28:00.959086Z",
+      "UpdatedDate": "2026-11-01T20:28:00.959086Z"
+    }
+  ],
+  "breedingEmptyLogs": [],
+  "mixRecipe": "{\u0022wanda\u0022:25,\u0022binola\u0022:40,\u0022sarson\u0022:0,\u0022bran\u0022:20,\u0022maize\u0022:10,\u0022sheera\u0022:5}",
+  "mixRecipes": {
+    "kid": {
+      "wanda": 40,
+      "binola": 20,
+      "sarson": 0,
+      "bran": 25,
+      "maize": 12,
+      "sheera": 3
+    },
+    "milking": {
+      "wanda": 25,
+      "binola": 40,
+      "sarson": 0,
+      "bran": 20,
+      "maize": 10,
+      "sheera": 5
+    },
+    "pregnant": {
+      "wanda": 28,
+      "binola": 35,
+      "sarson": 0,
+      "bran": 22,
+      "maize": 10,
+      "sheera": 5
+    },
+    "dry": {
+      "wanda": 15,
+      "binola": 25,
+      "sarson": 0,
+      "bran": 45,
+      "maize": 10,
+      "sheera": 5
+    },
+    "buck": {
+      "wanda": 25,
+      "binola": 30,
+      "sarson": 0,
+      "bran": 30,
+      "maize": 12,
+      "sheera": 3
+    },
+    "sale": {
+      "wanda": 30,
+      "binola": 35,
+      "sarson": 0,
+      "bran": 20,
+      "maize": 12,
+      "sheera": 3
+    },
+    "meat": {
+      "wanda": 30,
+      "binola": 35,
+      "sarson": 0,
+      "bran": 20,
+      "maize": 12,
+      "sheera": 3
+    },
+    "kidstarter": {
+      "wanda": 40,
+      "binola": 20,
+      "sarson": 0,
+      "bran": 25,
+      "maize": 12,
+      "sheera": 3
+    }
+  },
+  "fodderPool": {
+    "Acres": 3,
+    "Mode": "share",
+    "Items": [
+      {
+        "Id": "rent",
+        "Label": "Land rent",
+        "Amount": 240000
+      },
+      {
+        "Id": "seeding",
+        "Label": "Seeding \u0026 ploughing",
+        "Amount": 35000
+      },
+      {
+        "Id": "cutting",
+        "Label": "Cutting \u0026 labour",
+        "Amount": 60000
+      },
+      {
+        "Id": "water",
+        "Label": "Irrigation / water",
+        "Amount": 24000
+      },
+      {
+        "Id": "fert",
+        "Label": "Fertiliser (urea/DAP)",
+        "Amount": 28000
+      }
+    ]
+  },
+  "feedSettings": {
+    "AutoUsage": true,
+    "LastUsageDate": "2026-11-10",
+    "OpeningStockByFeed": {}
+  },
+  "feedFull": {
+    "wanda": 150.00,
+    "binola": 80.00,
+    "bran": 120.00,
+    "maize": 60.00,
+    "sheera": 40.00,
+    "fodderdry": 200.00
+  },
+  "feedUsage": [
+    {
+      "Date": "2026-11-02",
+      "FeedType": "wanda",
+      "Kg": 1.940,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 136,
+      "CreatedDate": "2026-11-01T20:29:23.15073Z",
+      "UpdatedDate": "2026-11-01T20:29:23.150731Z"
+    },
+    {
+      "Date": "2026-11-02",
+      "FeedType": "binola",
+      "Kg": 2.480,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 137,
+      "CreatedDate": "2026-11-01T20:29:23.208142Z",
+      "UpdatedDate": "2026-11-01T20:29:23.208142Z"
+    },
+    {
+      "Date": "2026-11-02",
+      "FeedType": "bran",
+      "Kg": 1.660,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 138,
+      "CreatedDate": "2026-11-01T20:29:23.210923Z",
+      "UpdatedDate": "2026-11-01T20:29:23.210923Z"
+    },
+    {
+      "Date": "2026-11-02",
+      "FeedType": "maize",
+      "Kg": 0.740,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 139,
+      "CreatedDate": "2026-11-01T20:29:23.211054Z",
+      "UpdatedDate": "2026-11-01T20:29:23.211055Z"
+    },
+    {
+      "Date": "2026-11-02",
+      "FeedType": "sheera",
+      "Kg": 0.330,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 140,
+      "CreatedDate": "2026-11-01T20:29:23.211124Z",
+      "UpdatedDate": "2026-11-01T20:29:23.211124Z"
+    },
+    {
+      "Date": "2026-11-02",
+      "FeedType": "fodderdry",
+      "Kg": 4.500,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 141,
+      "CreatedDate": "2026-11-01T20:29:23.211205Z",
+      "UpdatedDate": "2026-11-01T20:29:23.211205Z"
+    },
+    {
+      "Date": "2026-11-03",
+      "FeedType": "wanda",
+      "Kg": 1.940,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 142,
+      "CreatedDate": "2026-11-02T19:42:19.127246Z",
+      "UpdatedDate": "2026-11-02T19:42:19.127248Z"
+    },
+    {
+      "Date": "2026-11-03",
+      "FeedType": "binola",
+      "Kg": 2.480,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 143,
+      "CreatedDate": "2026-11-02T19:42:19.269394Z",
+      "UpdatedDate": "2026-11-02T19:42:19.269395Z"
+    },
+    {
+      "Date": "2026-11-03",
+      "FeedType": "bran",
+      "Kg": 1.660,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 144,
+      "CreatedDate": "2026-11-02T19:42:19.272832Z",
+      "UpdatedDate": "2026-11-02T19:42:19.272832Z"
+    },
+    {
+      "Date": "2026-11-03",
+      "FeedType": "maize",
+      "Kg": 0.740,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 145,
+      "CreatedDate": "2026-11-02T19:42:19.272996Z",
+      "UpdatedDate": "2026-11-02T19:42:19.272996Z"
+    },
+    {
+      "Date": "2026-11-03",
+      "FeedType": "sheera",
+      "Kg": 0.330,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 146,
+      "CreatedDate": "2026-11-02T19:42:19.273114Z",
+      "UpdatedDate": "2026-11-02T19:42:19.273114Z"
+    },
+    {
+      "Date": "2026-11-03",
+      "FeedType": "fodderdry",
+      "Kg": 4.500,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 147,
+      "CreatedDate": "2026-11-02T19:42:19.273171Z",
+      "UpdatedDate": "2026-11-02T19:42:19.273171Z"
+    },
+    {
+      "Date": "2026-11-04",
+      "FeedType": "wanda",
+      "Kg": 1.640,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 148,
+      "CreatedDate": "2026-11-10T07:58:08.432616Z",
+      "UpdatedDate": "2026-11-10T07:58:08.432617Z"
+    },
+    {
+      "Date": "2026-11-04",
+      "FeedType": "binola",
+      "Kg": 2.320,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 149,
+      "CreatedDate": "2026-11-10T07:58:08.557269Z",
+      "UpdatedDate": "2026-11-10T07:58:08.557269Z"
+    },
+    {
+      "Date": "2026-11-04",
+      "FeedType": "bran",
+      "Kg": 1.470,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 150,
+      "CreatedDate": "2026-11-10T07:58:08.561615Z",
+      "UpdatedDate": "2026-11-10T07:58:08.561615Z"
+    },
+    {
+      "Date": "2026-11-04",
+      "FeedType": "maize",
+      "Kg": 0.650,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 151,
+      "CreatedDate": "2026-11-10T07:58:08.561884Z",
+      "UpdatedDate": "2026-11-10T07:58:08.561884Z"
+    },
+    {
+      "Date": "2026-11-04",
+      "FeedType": "sheera",
+      "Kg": 0.310,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 152,
+      "CreatedDate": "2026-11-10T07:58:08.562267Z",
+      "UpdatedDate": "2026-11-10T07:58:08.562267Z"
+    },
+    {
+      "Date": "2026-11-04",
+      "FeedType": "fodderdry",
+      "Kg": 4.000,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 153,
+      "CreatedDate": "2026-11-10T07:58:08.562445Z",
+      "UpdatedDate": "2026-11-10T07:58:08.562445Z"
+    },
+    {
+      "Date": "2026-11-05",
+      "FeedType": "wanda",
+      "Kg": 1.640,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 154,
+      "CreatedDate": "2026-11-10T07:58:08.562602Z",
+      "UpdatedDate": "2026-11-10T07:58:08.562602Z"
+    },
+    {
+      "Date": "2026-11-05",
+      "FeedType": "binola",
+      "Kg": 2.320,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 155,
+      "CreatedDate": "2026-11-10T07:58:08.562822Z",
+      "UpdatedDate": "2026-11-10T07:58:08.562822Z"
+    },
+    {
+      "Date": "2026-11-05",
+      "FeedType": "bran",
+      "Kg": 1.470,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 156,
+      "CreatedDate": "2026-11-10T07:58:08.562916Z",
+      "UpdatedDate": "2026-11-10T07:58:08.562916Z"
+    },
+    {
+      "Date": "2026-11-05",
+      "FeedType": "maize",
+      "Kg": 0.650,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 157,
+      "CreatedDate": "2026-11-10T07:58:08.563026Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563026Z"
+    },
+    {
+      "Date": "2026-11-05",
+      "FeedType": "sheera",
+      "Kg": 0.310,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 158,
+      "CreatedDate": "2026-11-10T07:58:08.56308Z",
+      "UpdatedDate": "2026-11-10T07:58:08.56308Z"
+    },
+    {
+      "Date": "2026-11-05",
+      "FeedType": "fodderdry",
+      "Kg": 4.000,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 159,
+      "CreatedDate": "2026-11-10T07:58:08.563125Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563126Z"
+    },
+    {
+      "Date": "2026-11-06",
+      "FeedType": "wanda",
+      "Kg": 1.640,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 160,
+      "CreatedDate": "2026-11-10T07:58:08.563208Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563209Z"
+    },
+    {
+      "Date": "2026-11-06",
+      "FeedType": "binola",
+      "Kg": 2.320,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 161,
+      "CreatedDate": "2026-11-10T07:58:08.563275Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563275Z"
+    },
+    {
+      "Date": "2026-11-06",
+      "FeedType": "bran",
+      "Kg": 1.470,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 162,
+      "CreatedDate": "2026-11-10T07:58:08.563322Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563322Z"
+    },
+    {
+      "Date": "2026-11-06",
+      "FeedType": "maize",
+      "Kg": 0.650,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 163,
+      "CreatedDate": "2026-11-10T07:58:08.563367Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563367Z"
+    },
+    {
+      "Date": "2026-11-06",
+      "FeedType": "sheera",
+      "Kg": 0.310,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 164,
+      "CreatedDate": "2026-11-10T07:58:08.563412Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563412Z"
+    },
+    {
+      "Date": "2026-11-06",
+      "FeedType": "fodderdry",
+      "Kg": 4.000,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 165,
+      "CreatedDate": "2026-11-10T07:58:08.56346Z",
+      "UpdatedDate": "2026-11-10T07:58:08.56346Z"
+    },
+    {
+      "Date": "2026-11-07",
+      "FeedType": "wanda",
+      "Kg": 1.640,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 166,
+      "CreatedDate": "2026-11-10T07:58:08.563531Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563531Z"
+    },
+    {
+      "Date": "2026-11-07",
+      "FeedType": "binola",
+      "Kg": 2.320,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 167,
+      "CreatedDate": "2026-11-10T07:58:08.563584Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563584Z"
+    },
+    {
+      "Date": "2026-11-07",
+      "FeedType": "bran",
+      "Kg": 1.470,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 168,
+      "CreatedDate": "2026-11-10T07:58:08.563634Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563634Z"
+    },
+    {
+      "Date": "2026-11-07",
+      "FeedType": "maize",
+      "Kg": 0.650,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 169,
+      "CreatedDate": "2026-11-10T07:58:08.563704Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563704Z"
+    },
+    {
+      "Date": "2026-11-07",
+      "FeedType": "sheera",
+      "Kg": 0.310,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 170,
+      "CreatedDate": "2026-11-10T07:58:08.563755Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563755Z"
+    },
+    {
+      "Date": "2026-11-07",
+      "FeedType": "fodderdry",
+      "Kg": 4.000,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 171,
+      "CreatedDate": "2026-11-10T07:58:08.563797Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563797Z"
+    },
+    {
+      "Date": "2026-11-08",
+      "FeedType": "wanda",
+      "Kg": 1.640,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 172,
+      "CreatedDate": "2026-11-10T07:58:08.56384Z",
+      "UpdatedDate": "2026-11-10T07:58:08.56384Z"
+    },
+    {
+      "Date": "2026-11-08",
+      "FeedType": "binola",
+      "Kg": 2.320,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 173,
+      "CreatedDate": "2026-11-10T07:58:08.563891Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563891Z"
+    },
+    {
+      "Date": "2026-11-08",
+      "FeedType": "bran",
+      "Kg": 1.470,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 174,
+      "CreatedDate": "2026-11-10T07:58:08.563942Z",
+      "UpdatedDate": "2026-11-10T07:58:08.563942Z"
+    },
+    {
+      "Date": "2026-11-08",
+      "FeedType": "maize",
+      "Kg": 0.650,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 175,
+      "CreatedDate": "2026-11-10T07:58:08.564032Z",
+      "UpdatedDate": "2026-11-10T07:58:08.564032Z"
+    },
+    {
+      "Date": "2026-11-08",
+      "FeedType": "sheera",
+      "Kg": 0.310,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 176,
+      "CreatedDate": "2026-11-10T07:58:08.564095Z",
+      "UpdatedDate": "2026-11-10T07:58:08.564095Z"
+    },
+    {
+      "Date": "2026-11-08",
+      "FeedType": "fodderdry",
+      "Kg": 4.000,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 177,
+      "CreatedDate": "2026-11-10T07:58:08.564222Z",
+      "UpdatedDate": "2026-11-10T07:58:08.564222Z"
+    },
+    {
+      "Date": "2026-11-09",
+      "FeedType": "wanda",
+      "Kg": 1.640,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 178,
+      "CreatedDate": "2026-11-10T07:58:08.564376Z",
+      "UpdatedDate": "2026-11-10T07:58:08.564376Z"
+    },
+    {
+      "Date": "2026-11-09",
+      "FeedType": "binola",
+      "Kg": 2.320,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 179,
+      "CreatedDate": "2026-11-10T07:58:08.564513Z",
+      "UpdatedDate": "2026-11-10T07:58:08.564513Z"
+    },
+    {
+      "Date": "2026-11-09",
+      "FeedType": "bran",
+      "Kg": 1.470,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 180,
+      "CreatedDate": "2026-11-10T07:58:08.564637Z",
+      "UpdatedDate": "2026-11-10T07:58:08.564637Z"
+    },
+    {
+      "Date": "2026-11-09",
+      "FeedType": "maize",
+      "Kg": 0.650,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 181,
+      "CreatedDate": "2026-11-10T07:58:08.564769Z",
+      "UpdatedDate": "2026-11-10T07:58:08.564769Z"
+    },
+    {
+      "Date": "2026-11-09",
+      "FeedType": "sheera",
+      "Kg": 0.310,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 182,
+      "CreatedDate": "2026-11-10T07:58:08.565029Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565029Z"
+    },
+    {
+      "Date": "2026-11-09",
+      "FeedType": "fodderdry",
+      "Kg": 4.000,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 183,
+      "CreatedDate": "2026-11-10T07:58:08.565171Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565171Z"
+    },
+    {
+      "Date": "2026-11-10",
+      "FeedType": "wanda",
+      "Kg": 1.640,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 184,
+      "CreatedDate": "2026-11-10T07:58:08.565292Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565292Z"
+    },
+    {
+      "Date": "2026-11-10",
+      "FeedType": "binola",
+      "Kg": 2.320,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 185,
+      "CreatedDate": "2026-11-10T07:58:08.565333Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565333Z"
+    },
+    {
+      "Date": "2026-11-10",
+      "FeedType": "bran",
+      "Kg": 1.470,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 186,
+      "CreatedDate": "2026-11-10T07:58:08.565389Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565389Z"
+    },
+    {
+      "Date": "2026-11-10",
+      "FeedType": "maize",
+      "Kg": 0.650,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 187,
+      "CreatedDate": "2026-11-10T07:58:08.565429Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565429Z"
+    },
+    {
+      "Date": "2026-11-10",
+      "FeedType": "sheera",
+      "Kg": 0.310,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 188,
+      "CreatedDate": "2026-11-10T07:58:08.56547Z",
+      "UpdatedDate": "2026-11-10T07:58:08.56547Z"
+    },
+    {
+      "Date": "2026-11-10",
+      "FeedType": "fodderdry",
+      "Kg": 4.000,
+      "IsAutomatic": true,
+      "IsStockCheck": false,
+      "Id": 189,
+      "CreatedDate": "2026-11-10T07:58:08.565509Z",
+      "UpdatedDate": "2026-11-10T07:58:08.565509Z"
+    }
+  ],
+  "deaths": [],
+  "goatWeights": [],
+  "lookupSettings": {
+    "Lookup.AssetTypes": "[\u0022Machinery\u0022,\u0022Land\u0022,\u0022Buildings/Sheds\u0022,\u0022Other\u0022]",
+    "Lookup.Breeds": "[\u0022Beetal\u0022,\u0022Makhee Cheeni\u0022,\u0022Mixed\u0022]",
+    "Lookup.CapexCostTypes": "[\u0022Civil / Construction\u0022,\u0022Solar Panels\u0022,\u0022Solar Inverter\u0022,\u0022Solar Structure / Mounting\u0022,\u0022Battery / Storage\u0022,\u0022Milking Parlor Equipment\u0022,\u0022Milking Machine / Cluster\u0022,\u0022Milk Tank / Chiller\u0022,\u0022Pasteurizer / Dairy Equipment\u0022,\u0022Cold Room Equipment\u0022,\u0022Electrical\u0022,\u0022Plumbing\u0022,\u0022Installation Labour\u0022,\u0022Professional / Approval Fees\u0022,\u0022Transport / Delivery\u0022,\u0022Other Equipment\u0022,\u0022Other Capital Cost\u0022]",
+    "Lookup.ExpenseTypes": "[\u0022Seeding\u0022,\u0022Fodder cutting\u0022,\u0022Irrigation / water\u0022,\u0022Cultivation (fodder)\u0022,\u0022Vaccines\u0022,\u0022Doctor / vet visit\u0022,\u0022Vet / extra medicine\u0022,\u0022Utilities\u0022,\u0022Transport\u0022,\u0022Repairs\u0022,\u0022Land rent\u0022,\u0022Other\u0022]",
+    "Lookup.FundingShareholders": "[\u0022Shareholder 1\u0022,\u0022Shareholder 2\u0022]",
+    "Lookup.HealthStates": "[\u0022Healthy\u0022,\u0022Sick\u0022,\u0022Under treatment\u0022,\u0022Recovering\u0022,\u0022Quarantine\u0022,\u0022Injured\u0022,\u0022Weak / off feed\u0022]",
+    "Lookup.IncomeTypes": "[\u0022Ghee\u0022,\u0022Paneer\u0022,\u0022Yogurt / Lassi\u0022,\u0022Soap\u0022,\u0022Live goat sale\u0022,\u0022Meat\u0022,\u0022Other\u0022]",
+    "Lookup.Owners": "[\u0022Farm\u0022]",
+    "Lookup.ProjectAssetCategories": "[\u0022Buildings / Sheds\u0022,\u0022Milking / Dairy Equipment\u0022,\u0022Solar / Power\u0022,\u0022Slaughter / Meat Equipment\u0022,\u0022Cold Storage\u0022,\u0022Machinery\u0022,\u0022Vehicle\u0022,\u0022Water / Utilities\u0022,\u0022Other Asset\u0022]",
+    "Lookup.ProjectCategories": "[\u0022Construction\u0022,\u0022Milking Parlor\u0022,\u0022Solar / Power\u0022,\u0022Slaughter / Processing\u0022,\u0022Cold Room / Warehouse\u0022,\u0022Water / Utilities\u0022,\u0022Other Capital Project\u0022,\u0022Biogas Plant\u0022]",
+    "Lookup.ProjectFundingSources": "[\u0022Farm Cash\u0022,\u0022Shareholder Funding\u0022,\u0022Bank / Loan\u0022,\u0022Mixed\u0022]",
+    "Lookup.SaleTypes": "[\u0022Milk\u0022,\u0022Dairy products\u0022,\u0022Meat\u0022,\u0022Live animal / farm sale\u0022,\u0022Other farm sale\u0022]",
+    "Lookup.VaccineNames": "[\u0022Enterotoxaemia (ET)\u0022,\u0022PPR\u0022,\u0022FMD\u0022,\u0022CCPP\u0022,\u0022ET booster (pre-kidding)\u0022,\u0022Deworming\u0022]",
+    "Lookup.VaccineUnits": "[\u0022Box\u0022,\u0022Bottle\u0022,\u0022Dose\u0022,\u0022Vial\u0022,\u0022Other\u0022]"
+  },
+  "v241Extended": {
+    "auditLog": [
+      {
+        "Module": "trading",
+        "Action": 0,
+        "EntityType": null,
+        "EntityId": null,
+        "Summary": "Demo: recorded straw purchase",
+        "DetailJson": null,
+        "UserId": null,
+        "UserDisplay": "System seed",
+        "ShowInNotices": true,
+        "Id": 5,
+        "CreatedDate": "2026-11-01T20:28:01.5581Z",
+        "UpdatedDate": "2026-11-01T20:28:01.5581Z"
+      },
+      {
+        "Module": "finance",
+        "Action": 1,
+        "EntityType": null,
+        "EntityId": null,
+        "Summary": "Demo: sample invoice added",
+        "DetailJson": null,
+        "UserId": null,
+        "UserDisplay": "System seed",
+        "ShowInNotices": true,
+        "Id": 6,
+        "CreatedDate": "2026-11-01T20:28:01.558531Z",
+        "UpdatedDate": "2026-11-01T20:28:01.558532Z"
+      },
+      {
+        "Module": "projects",
+        "Action": 1,
+        "EntityType": null,
+        "EntityId": null,
+        "Summary": "Project Milking parlor test",
+        "DetailJson": null,
+        "UserId": "429c1d70-5760-4a98-b656-25b393ba932f",
+        "UserDisplay": "Administrator",
+        "ShowInNotices": true,
+        "Id": 7,
+        "CreatedDate": "2026-11-03T11:42:52.97307Z",
+        "UpdatedDate": "2026-11-03T11:42:52.97312Z"
+      }
+    ],
+    "approvalRequests": [
+      {
+        "Module": "herd",
+        "ActionKey": "Delete",
+        "PayloadJson": "{\u0022entity\u0022:\u0022Goat\u0022,\u0022action\u0022:\u0022Delete\u0022,\u0022id\u0022:0}",
+        "Status": 0,
+        "RequestedByUserId": "demo-seed",
+        "RequestedByDisplay": "Demo Staff",
+        "ReviewedByUserId": null,
+        "ReviewNote": null,
+        "ReviewedAtUtc": null,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.566879Z",
+        "UpdatedDate": "2026-11-01T20:28:01.566879Z"
+      }
+    ],
+    "tradeItems": [
+      {
+        "Name": "Moongphali bhoosa",
+        "Unit": "kg",
+        "UnitNote": "40 kg = 1 maund",
+        "DefaultPrice": 42.00,
+        "Notes": null,
+        "IsActive": true,
+        "Id": 4,
+        "CreatedDate": "2026-11-01T20:28:01.123641Z",
+        "UpdatedDate": "2026-11-01T20:28:01.123641Z"
+      }
+    ],
+    "tradeStores": [
+      {
+        "Name": "Trading Godown",
+        "Place": null,
+        "IsActive": true,
+        "Id": 4,
+        "CreatedDate": "2026-11-01T20:28:01.124077Z",
+        "UpdatedDate": "2026-11-01T20:28:01.124078Z"
+      }
+    ],
+    "tradeAccounts": [
+      {
+        "Name": "Trading Cash",
+        "Type": 0,
+        "OpeningBalance": 5000,
+        "Notes": null,
+        "IsActive": true,
+        "Id": 7,
+        "CreatedDate": "2026-11-01T20:28:01.124126Z",
+        "UpdatedDate": "2026-11-01T20:28:01.124127Z"
+      },
+      {
+        "Name": "Trading Bank",
+        "Type": 1,
+        "OpeningBalance": 20000,
+        "Notes": null,
+        "IsActive": true,
+        "Id": 8,
+        "CreatedDate": "2026-11-01T20:28:01.124289Z",
+        "UpdatedDate": "2026-11-01T20:28:01.124289Z"
+      }
+    ],
+    "tradeParties": [
+      {
+        "Name": "Ali Traders",
+        "Role": 1,
+        "Phone": "0300-0000000",
+        "Place": null,
+        "OpeningBalance": 0,
+        "IsActive": true,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.12429Z",
+        "UpdatedDate": "2026-11-01T20:28:01.12429Z"
+      }
+    ],
+    "tradeExpenseCategories": [
+      {
+        "Name": "Transport / kiraya",
+        "IsActive": true,
+        "Id": 8,
+        "CreatedDate": "2026-11-01T20:28:01.124645Z",
+        "UpdatedDate": "2026-11-01T20:28:01.124645Z"
+      }
+    ],
+    "tradeEntries": [
+      {
+        "Type": 0,
+        "Date": "2026-11-03",
+        "ItemId": 4,
+        "Item": null,
+        "StoreId": 4,
+        "Store": null,
+        "ToStoreId": null,
+        "ToStore": null,
+        "ToAccountId": null,
+        "ToAccount": null,
+        "PartyId": 3,
+        "Party": null,
+        "AccountId": 8,
+        "Account": null,
+        "CategoryId": null,
+        "Category": null,
+        "Qty": 2000.000,
+        "Rate": 40.00,
+        "Amount": 80000.00,
+        "Freight": 0.00,
+        "Labour": 0.00,
+        "PaidAmount": 0.00,
+        "ReceivedAmount": 0.00,
+        "BillNo": null,
+        "LossReason": null,
+        "PaymentMode": null,
+        "DueDate": null,
+        "Notes": "Demo purchase",
+        "IsCancelled": false,
+        "CancelReason": null,
+        "Id": 7,
+        "CreatedDate": "2026-11-01T20:28:01.269917Z",
+        "UpdatedDate": "2026-11-01T20:28:01.269917Z"
+      },
+      {
+        "Type": 1,
+        "Date": "2026-10-29",
+        "ItemId": 4,
+        "Item": null,
+        "StoreId": 4,
+        "Store": null,
+        "ToStoreId": null,
+        "ToStore": null,
+        "ToAccountId": null,
+        "ToAccount": null,
+        "PartyId": null,
+        "Party": null,
+        "AccountId": 7,
+        "Account": null,
+        "CategoryId": null,
+        "Category": null,
+        "Qty": 400.000,
+        "Rate": 45.00,
+        "Amount": 18000.00,
+        "Freight": 0.00,
+        "Labour": 0.00,
+        "PaidAmount": 0.00,
+        "ReceivedAmount": 0.00,
+        "BillNo": null,
+        "LossReason": null,
+        "PaymentMode": null,
+        "DueDate": null,
+        "Notes": "Demo sale",
+        "IsCancelled": false,
+        "CancelReason": null,
+        "Id": 8,
+        "CreatedDate": "2026-11-01T20:28:01.273739Z",
+        "UpdatedDate": "2026-11-01T20:28:01.273739Z"
+      },
+      {
+        "Type": 2,
+        "Date": "2026-10-31",
+        "ItemId": null,
+        "Item": null,
+        "StoreId": null,
+        "Store": null,
+        "ToStoreId": null,
+        "ToStore": null,
+        "ToAccountId": null,
+        "ToAccount": null,
+        "PartyId": null,
+        "Party": null,
+        "AccountId": 7,
+        "Account": null,
+        "CategoryId": 8,
+        "Category": null,
+        "Qty": 0.000,
+        "Rate": 0.00,
+        "Amount": 2500.00,
+        "Freight": 0.00,
+        "Labour": 0.00,
+        "PaidAmount": 0.00,
+        "ReceivedAmount": 0.00,
+        "BillNo": null,
+        "LossReason": null,
+        "PaymentMode": null,
+        "DueDate": null,
+        "Notes": "Demo transport",
+        "IsCancelled": false,
+        "CancelReason": null,
+        "Id": 9,
+        "CreatedDate": "2026-11-01T20:28:01.273902Z",
+        "UpdatedDate": "2026-11-01T20:28:01.273902Z"
+      }
+    ],
+    "farmProjects": [
+      {
+        "Name": "Solar for milk chiller",
+        "Description": "Demo CAPEX project",
+        "Category": null,
+        "Funding": null,
+        "Status": 1,
+        "StartDate": "2026-08-02",
+        "TargetEndDate": null,
+        "BudgetAmount": 350000.00,
+        "CapitalizedAt": null,
+        "CapitalizedAssetId": null,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.410119Z",
+        "UpdatedDate": "2026-11-01T20:28:01.41012Z"
+      },
+      {
+        "Name": "Milking parlor test",
+        "Description": "civil works and equipment",
+        "Category": "Milking Parlor",
+        "Funding": "Farm Cash",
+        "Status": 2,
+        "StartDate": "2026-11-03",
+        "TargetEndDate": null,
+        "BudgetAmount": 500000.00,
+        "CapitalizedAt": "2026-11-03",
+        "CapitalizedAssetId": 4,
+        "Id": 4,
+        "CreatedDate": "2026-11-03T11:42:52.828648Z",
+        "UpdatedDate": "2026-11-03T11:43:08.687724Z"
+      }
+    ],
+    "projectExpenditures": [
+      {
+        "ProjectId": 3,
+        "Project": null,
+        "Date": "2026-09-02",
+        "Description": "Panels \u002B inverter",
+        "CostType": "Panels \u002B inverter",
+        "Item": null,
+        "Qty": 0.000,
+        "Unit": null,
+        "Model": null,
+        "Spec": null,
+        "WarrantyUntil": null,
+        "Amount": 280000.00,
+        "PaidAmount": 280000.00,
+        "PaymentStatus": "Paid",
+        "AccountId": null,
+        "Account": null,
+        "FundingSource": null,
+        "DueDate": null,
+        "Vendor": "Solar Co.",
+        "Note": null,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.451497Z",
+        "UpdatedDate": "2026-11-01T20:28:01.451497Z"
+      },
+      {
+        "ProjectId": 4,
+        "Project": null,
+        "Date": "2026-11-03",
+        "Description": "Milking cluster",
+        "CostType": "Milking Parlor Equipment",
+        "Item": "Milking cluster",
+        "Qty": 2.000,
+        "Unit": "Set",
+        "Model": "DeLaval",
+        "Spec": "20-stall",
+        "WarrantyUntil": null,
+        "Amount": 5000.00,
+        "PaidAmount": 5000.00,
+        "PaymentStatus": "Paid",
+        "AccountId": 8,
+        "Account": null,
+        "FundingSource": "Farm Cash",
+        "DueDate": null,
+        "Vendor": "Dairy Equip",
+        "Note": "stage 1",
+        "Id": 4,
+        "CreatedDate": "2026-11-03T11:42:53.686346Z",
+        "UpdatedDate": "2026-11-03T11:42:53.772439Z"
+      }
+    ],
+    "fixedAssetRegisters": [
+      {
+        "Name": "5kW Solar array",
+        "Category": 3,
+        "CategoryName": "Solar / Power",
+        "Cost": 280000.00,
+        "PurchaseDate": "2026-09-02",
+        "ProjectId": 3,
+        "Project": null,
+        "ProjectCapitalized": true,
+        "Location": null,
+        "Supplier": null,
+        "PaidAmount": 0.00,
+        "AccountId": null,
+        "Account": null,
+        "WarrantyUntil": null,
+        "Notes": null,
+        "IsActive": true,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.45258Z",
+        "UpdatedDate": "2026-11-01T20:28:01.45258Z"
+      },
+      {
+        "Name": "Milking parlor",
+        "Category": 0,
+        "CategoryName": "Milking Parlor",
+        "Cost": 5000.00,
+        "PurchaseDate": "2026-11-03",
+        "ProjectId": 4,
+        "Project": null,
+        "ProjectCapitalized": true,
+        "Location": null,
+        "Supplier": null,
+        "PaidAmount": 0.00,
+        "AccountId": null,
+        "Account": null,
+        "WarrantyUntil": null,
+        "Notes": "Capitalized from completed project: Milking parlor test",
+        "IsActive": true,
+        "Id": 4,
+        "CreatedDate": "2026-11-03T11:43:08.606958Z",
+        "UpdatedDate": "2026-11-03T11:43:08.606959Z"
+      }
+    ],
+    "solarProductionLogs": [
+      {
+        "ProjectId": null,
+        "Project": null,
+        "Date": "2026-11-01",
+        "KwhGenerated": 18.500,
+        "SavingsEstimate": 1200.00,
+        "MaintenanceAmount": 0.00,
+        "InstalledCapacityKw": null,
+        "Notes": "Demo log",
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.453603Z",
+        "UpdatedDate": "2026-11-01T20:28:01.453603Z"
+      },
+      {
+        "ProjectId": 4,
+        "Project": null,
+        "Date": "2026-11-03",
+        "KwhGenerated": 12.500,
+        "SavingsEstimate": 800.00,
+        "MaintenanceAmount": 50.00,
+        "InstalledCapacityKw": 5.000,
+        "Notes": "meter reading",
+        "Id": 4,
+        "CreatedDate": "2026-11-03T11:43:09.266755Z",
+        "UpdatedDate": "2026-11-03T11:43:09.354712Z"
+      }
+    ],
+    "moneyAccounts": [
+      {
+        "Name": "Farm Cash",
+        "Kind": 0,
+        "OpeningBalance": 25000.00,
+        "OpeningBalanceLocked": true,
+        "IsActive": true,
+        "Id": 7,
+        "CreatedDate": "2026-11-01T20:28:01.461401Z",
+        "UpdatedDate": "2026-11-01T20:28:01.461403Z"
+      },
+      {
+        "Name": "Farm Bank",
+        "Kind": 1,
+        "OpeningBalance": 150000.00,
+        "OpeningBalanceLocked": true,
+        "IsActive": true,
+        "Id": 8,
+        "CreatedDate": "2026-11-01T20:28:01.461801Z",
+        "UpdatedDate": "2026-11-01T20:28:01.461802Z"
+      }
+    ],
+    "ledgerTransactions": [
+      {
+        "Date": "2026-10-28",
+        "Kind": 0,
+        "AccountId": 8,
+        "Account": null,
+        "CounterAccountId": null,
+        "CounterAccount": null,
+        "Amount": 6600.00,
+        "Category": "Milk",
+        "Reference": null,
+        "Notes": "Demo deposit",
+        "Id": 4,
+        "CreatedDate": "2026-11-01T20:28:01.493927Z",
+        "UpdatedDate": "2026-11-01T20:28:01.493927Z"
+      },
+      {
+        "Date": "2026-11-03",
+        "Kind": 1,
+        "AccountId": 8,
+        "Account": null,
+        "CounterAccountId": null,
+        "CounterAccount": null,
+        "Amount": 5000.00,
+        "Category": "Capital expenditure",
+        "Reference": "capex:4",
+        "Notes": "CAPEX \u00B7 Milking parlor test \u00B7 Milking Parlor Equipment",
+        "Id": 5,
+        "CreatedDate": "2026-11-03T11:42:54.001685Z",
+        "UpdatedDate": "2026-11-03T11:42:54.001685Z"
+      }
+    ],
+    "businessCustomers": [
+      {
+        "Name": "City Dairy Shop",
+        "Phone": "042-1111111",
+        "Place": "Lahore",
+        "OpeningBalance": 0,
+        "IsActive": true,
+        "Id": 4,
+        "CreatedDate": "2026-11-01T20:28:01.461803Z",
+        "UpdatedDate": "2026-11-01T20:28:01.461803Z"
+      }
+    ],
+    "customerInvoices": [
+      {
+        "CustomerId": 4,
+        "Customer": null,
+        "Date": "2026-10-26",
+        "DueDate": "2026-11-09",
+        "Description": "Ghee order \u2014 demo",
+        "Amount": 12000.00,
+        "PaidAmount": 4000.00,
+        "Status": 1,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.495021Z",
+        "UpdatedDate": "2026-11-01T20:28:01.495022Z"
+      }
+    ],
+    "supplierPayables": [
+      {
+        "SupplierName": "Feed merchant",
+        "Date": "2026-10-30",
+        "DueDate": "2026-11-16",
+        "Description": "Wanda load",
+        "Amount": 42500.00,
+        "PaidAmount": 20000.00,
+        "Status": 1,
+        "SourceType": null,
+        "SourceId": null,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.496086Z",
+        "UpdatedDate": "2026-11-01T20:28:01.496087Z"
+      }
+    ],
+    "budgetLines": [
+      {
+        "Year": 2026,
+        "Month": 11,
+        "Category": "Feed",
+        "PlannedAmount": 50000,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.496857Z",
+        "UpdatedDate": "2026-11-01T20:28:01.496858Z"
+      }
+    ],
+    "profitSharePartners": [
+      {
+        "Name": "Partner A (demo)",
+        "SharePercent": 30,
+        "IsActive": true,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.498239Z",
+        "UpdatedDate": "2026-11-01T20:28:01.49824Z"
+      }
+    ],
+    "productCatalogItems": [
+      {
+        "Sku": "MILK-RAW",
+        "Name": "Raw milk",
+        "Category": "",
+        "PackSize": null,
+        "Unit": "L",
+        "DefaultPrice": 220.00,
+        "MilkTreatment": null,
+        "MeatType": null,
+        "IsActive": true,
+        "Id": 5,
+        "CreatedDate": "2026-11-01T20:28:01.285163Z",
+        "UpdatedDate": "2026-11-01T20:28:01.285163Z"
+      },
+      {
+        "Sku": "GHEE",
+        "Name": "Ghee",
+        "Category": "",
+        "PackSize": null,
+        "Unit": "kg",
+        "DefaultPrice": 2800.00,
+        "MilkTreatment": null,
+        "MeatType": null,
+        "IsActive": true,
+        "Id": 6,
+        "CreatedDate": "2026-11-01T20:28:01.285487Z",
+        "UpdatedDate": "2026-11-01T20:28:01.285487Z"
+      },
+      {
+        "Sku": "MILK-PAST",
+        "Name": "Pasteurized milk (bulk)",
+        "Category": "",
+        "PackSize": null,
+        "Unit": "L",
+        "DefaultPrice": 0.00,
+        "MilkTreatment": null,
+        "MeatType": null,
+        "IsActive": true,
+        "Id": 7,
+        "CreatedDate": "2026-11-02T09:55:36.433966Z",
+        "UpdatedDate": "2026-11-02T09:55:36.433966Z"
+      }
+    ],
+    "warehouses": [
+      {
+        "Name": "Main cold store",
+        "Location": "Shed A",
+        "IsActive": true,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.285488Z",
+        "UpdatedDate": "2026-11-01T20:28:01.285488Z"
+      },
+      {
+        "Name": "Farm Raw Milk Tank",
+        "Location": "raw_tank",
+        "IsActive": true,
+        "Id": 4,
+        "CreatedDate": "2026-11-02T09:55:36.546643Z",
+        "UpdatedDate": "2026-11-02T09:55:36.546644Z"
+      },
+      {
+        "Name": "Pasteurized Milk Tank 1",
+        "Location": "past_tank",
+        "IsActive": true,
+        "Id": 5,
+        "CreatedDate": "2026-11-02T09:55:36.549587Z",
+        "UpdatedDate": "2026-11-02T09:55:36.549588Z"
+      },
+      {
+        "Name": "Meat chiller",
+        "Location": "meat_store",
+        "IsActive": true,
+        "Id": 6,
+        "CreatedDate": "2026-11-02T09:55:36.550815Z",
+        "UpdatedDate": "2026-11-02T09:55:36.550815Z"
+      }
+    ],
+    "stockMovements": [
+      {
+        "Date": "2026-11-01",
+        "Type": 0,
+        "ProductId": 5,
+        "Product": null,
+        "WarehouseId": 3,
+        "Warehouse": null,
+        "ToWarehouseId": null,
+        "ToWarehouse": null,
+        "Qty": 100.000,
+        "UnitCost": 180.00,
+        "Notes": "Demo receive",
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.311723Z",
+        "UpdatedDate": "2026-11-01T20:28:01.311725Z"
+      },
+      {
+        "Date": "2026-11-02",
+        "Type": 0,
+        "ProductId": 5,
+        "Product": null,
+        "WarehouseId": 4,
+        "Warehouse": null,
+        "ToWarehouseId": null,
+        "ToWarehouse": null,
+        "Qty": 85.000,
+        "UnitCost": 0.00,
+        "Notes": "Milking session Evening",
+        "Id": 4,
+        "CreatedDate": "2026-11-02T10:39:54.004902Z",
+        "UpdatedDate": "2026-11-02T10:39:54.005048Z"
+      }
+    ],
+    "milkingSessions": [
+      {
+        "Date": "2026-11-02",
+        "Session": "AM",
+        "Breed": "Beetal",
+        "Liters": 22,
+        "RejectedLiters": 0.5,
+        "Notes": "Demo session",
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.311023Z",
+        "UpdatedDate": "2026-11-01T20:28:01.311024Z"
+      },
+      {
+        "Date": "2026-11-02",
+        "Session": "Evening",
+        "Breed": "Makhee Cheeni",
+        "Liters": 100,
+        "RejectedLiters": 15,
+        "Notes": null,
+        "Id": 4,
+        "CreatedDate": "2026-11-02T10:39:53.817542Z",
+        "UpdatedDate": "2026-11-02T10:39:53.891917Z"
+      }
+    ],
+    "slaughterRecords": [
+      {
+        "Date": "2026-11-11",
+        "GoatId": null,
+        "Goat": null,
+        "TagText": "S-099",
+        "LiveWeightKg": 35,
+        "CarcassKg": 18,
+        "SaleAmount": 42000,
+        "Notes": "Demo Eid cull",
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.397878Z",
+        "UpdatedDate": "2026-11-01T20:28:01.397878Z"
+      }
+    ],
+    "productSales": [
+      {
+        "Date": "2026-11-01",
+        "CustomerId": null,
+        "Customer": null,
+        "ProductId": 6,
+        "Product": null,
+        "ProductName": "Ghee",
+        "Qty": 2,
+        "Rate": 2800,
+        "Amount": 5600,
+        "IsCredit": false,
+        "Notes": "Demo retail",
+        "InvoiceNo": null,
+        "WarehouseId": null,
+        "Warehouse": null,
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.316838Z",
+        "UpdatedDate": "2026-11-01T20:28:01.316839Z"
+      }
+    ],
+    "goatTreatments": [
+      {
+        "GoatId": 19,
+        "Goat": null,
+        "StartDate": "2026-10-30",
+        "EndDate": null,
+        "Diagnosis": "Mastitis (demo)",
+        "Medicine": "Antibiotic course",
+        "Cost": 3500.00,
+        "WithdrawalDays": 7,
+        "Notes": "Sample treatment row",
+        "Id": 3,
+        "CreatedDate": "2026-11-01T20:28:01.544245Z",
+        "UpdatedDate": "2026-11-01T20:28:01.544245Z"
+      }
+    ],
+    "customFeedingGroups": []
+  },
+  "_savedAt": "2026-11-10T10:27:15.8636745Z"
+}

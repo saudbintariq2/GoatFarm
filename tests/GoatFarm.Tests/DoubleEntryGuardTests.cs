@@ -87,13 +87,21 @@ public class DoubleEntryGuardTests
 
     [Theory]
     [InlineData("Feed concentrate")]
-    [InlineData("Vaccines")]
     public async Task ValidateExpenseAsync_WarnsOnAutoCountedCosts(string type)
     {
         var guard = CreateService(out _);
         var ex = await Assert.ThrowsAsync<DoubleEntryValidationException>(() =>
             guard.ValidateExpenseAsync(new CreateExpenseViewModel { Type = type, Amount = 500, Date = Today }));
         Assert.Equal(DoubleEntrySeverity.Warn, ex.Severity);
+    }
+
+    [Fact]
+    public async Task ValidateExpenseAsync_BlocksManualVaccinesType()
+    {
+        var guard = CreateService(out _);
+        var ex = await Assert.ThrowsAsync<DoubleEntryValidationException>(() =>
+            guard.ValidateExpenseAsync(new CreateExpenseViewModel { Type = "Vaccines", Amount = 500, Date = Today }));
+        Assert.Equal(DoubleEntrySeverity.Block, ex.Severity);
     }
 
     [Theory]

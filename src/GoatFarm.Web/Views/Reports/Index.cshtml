@@ -297,12 +297,20 @@
         <tbody id="repProjAssets"></tbody></table></div></div>
 </div>
 <div class="repview" id="rep-logistics" style="display:none">
-    <div class="panel"><div class="panel-head"><h2>Logistics</h2></div>
-        <div class="panel-body"><div class="note">Transport and delivery routes — track shipments via Products stock movements until dedicated logistics is expanded.</div></div></div>
+    <div class="fin3" id="repLogKpi"></div>
+    <div class="panel"><div class="panel-head"><h2>Shipments</h2><span class="sub">transport &amp; delivery in this period</span></div>
+        <div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Route</th><th class="hide-sm">Type</th>
+            <th class="num-cell">Qty</th><th class="num-cell hide-sm">Rs/unit</th><th class="num-cell">Cost</th><th class="hide-sm">Carrier</th></tr></thead>
+        <tbody id="repLogRows"></tbody></table></div></div>
 </div>
 <div class="repview" id="rep-owners" style="display:none">
-    <div class="panel"><div class="panel-head"><h2>Investors / owners</h2></div>
-        <div class="panel-body"><div class="note">Owner investments and profit partners appear in Finance reports and ledger.</div></div></div>
+    <div class="fin3" id="repOwnKpi"></div>
+    <div class="panel"><div class="panel-head"><h2>Owner funding</h2><span class="sub">not farm income</span></div>
+        <div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Note</th><th class="num-cell">Amount</th></tr></thead>
+        <tbody id="repOwnRows"></tbody></table></div></div>
+    <div class="panel"><div class="panel-head"><h2>Profit-share partners</h2></div>
+        <div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Partner</th><th class="num-cell">Share %</th><th class="num-cell">Share (period)</th></tr></thead>
+        <tbody id="repOwnPartners"></tbody></table></div></div>
 </div>
 
 <div class="repview" id="rep-alerts" style="display:none">

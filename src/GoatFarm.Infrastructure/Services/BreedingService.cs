@@ -35,9 +35,8 @@ public class BreedingService : IBreedingService
             .OrderBy(g => g.Tag)
             .ToListAsync(cancellationToken);
         var prep = goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue).ToList();
-        var exp = goats.Where(g => g.MatedDate.HasValue).ToList();
-        var waiting = exp.Where(g => !g.KidsCount.HasValue).ToList();
-        var confirmed = exp.Where(g => g.KidsCount > 0).ToList();
+        var waiting = goats.Where(PregnancyRules.IsAwaitingScan).ToList();
+        var confirmed = goats.Where(PregnancyRules.IsConfirmedPregnant).ToList();
 
         int? soonest = confirmed.Count > 0
             ? confirmed.Min(g => BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate!.Value)))
@@ -49,7 +48,7 @@ public class BreedingService : IBreedingService
             .ToListAsync(cancellationToken);
 
         var emptyByGoat = emptyLogs.GroupBy(l => l.GoatId).ToDictionary(g => g.Key, g => g.Count());
-        var totalScans = exp.Count(e => e.KidsCount.HasValue) + emptyLogs.Count;
+        var totalScans = confirmed.Count + emptyLogs.Count;
         var totalEmpty = emptyLogs.Count;
         var emptyRateText = totalScans > 0
             ? $"{totalEmpty} empty of {totalScans} scans ({Math.Round(totalEmpty / (double)totalScans * 100)}%)"
@@ -660,8 +659,9 @@ public class BreedingService : IBreedingService
         };
     }
 
-    public async Task UpdateSeasonAsync(UpdateBreedingSeasonViewModel model, CancellationToken cancellationToken = default)
+    public async Task<string?> UpdateSeasonAsync(UpdateBreedingSeasonViewModel model, CancellationToken cancellationToken = default)
     {
+        string? newBatchId = null;
         var season = await LoadSeasonSettingsAsync(cancellationToken);
         if (model.BuildUp is > 0) season.BuildUp = model.BuildUp.Value;
         if (model.ScanAfter is > 0) season.ScanAfter = model.ScanAfter.Value;
@@ -692,10 +692,10 @@ public class BreedingService : IBreedingService
 
         if (!string.IsNullOrWhiteSpace(model.NewBatchName))
         {
-            var id = "b" + Guid.NewGuid().ToString("N")[..8];
+            newBatchId = "b" + Guid.NewGuid().ToString("N")[..8];
             season.Batches.Add(new BreedingSeasonBatch
             {
-                Id = id,
+                Id = newBatchId,
                 Name = model.NewBatchName.Trim(),
                 From = "06-01",
                 To = "06-15"
@@ -703,6 +703,64 @@ public class BreedingService : IBreedingService
         }
 
         await SaveSeasonSettingsAsync(season, cancellationToken);
+        return newBatchId;
+    }
+
+    public async Task<PregnancyReconcileResultViewModel> ReconcilePregnancyAsync(CancellationToken cancellationToken = default)
+    {
+        var goats = await _context.Goats.Where(g => !g.IsArchived && g.Gender == GoatGender.Female).ToListAsync(cancellationToken);
+        var events = await _context.BreedingEvents.AsNoTracking().ToListAsync(cancellationToken);
+        var adjusted = 0;
+
+        foreach (var g in goats)
+        {
+            var changed = false;
+            if (!g.MatedDate.HasValue)
+            {
+                var ev = events.Where(e => e.DoeId == g.Id)
+                    .OrderByDescending(e => e.MatedDate)
+                    .FirstOrDefault(e =>
+                        e.Outcome == BreedingOutcome.ConfirmedPregnant
+                        || (e.Outcome == BreedingOutcome.Open && e.ScanKids is > 0));
+                if (ev is not null)
+                {
+                    g.MatedDate = ev.MatedDate;
+                    g.BuckTag ??= ev.BuckTagText;
+                    if (ev.ScanKids is > 0)
+                        g.KidsCount ??= ev.ScanKids;
+                    changed = true;
+                }
+            }
+
+            if (PregnancyRules.IsConfirmedPregnant(g) && g.Status != GoatStatus.Pregnant)
+            {
+                g.Status = GoatStatus.Pregnant;
+                g.BreedingStage = BreedingStage.ConfirmedPregnant;
+                changed = true;
+            }
+            else if (g.Status == GoatStatus.Pregnant && !PregnancyRules.IsConfirmedPregnant(g))
+            {
+                g.Status = GoatStatus.Dry;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                g.UpdatedDate = DateTime.UtcNow;
+                adjusted++;
+            }
+        }
+
+        if (adjusted > 0)
+            await _context.SaveChangesAsync(cancellationToken);
+
+        return new PregnancyReconcileResultViewModel
+        {
+            Adjusted = adjusted,
+            Message = adjusted == 0
+                ? "Herd pregnancy status already matches breeding records."
+                : $"Adjusted pregnancy data on {adjusted} doe(s)."
+        };
     }
 
     public async Task AddDoeToPipelineAsync(BreedingAddDoeViewModel model, CancellationToken cancellationToken = default)
@@ -820,6 +878,10 @@ public class BreedingService : IBreedingService
 
     public async Task CreateBreedingGroupAsync(CreateBreedingGroupViewModel model, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(model.BuckTag))
+            throw new InvalidOperationException("Enter the buck tag.");
+        if (model.StartDate == default)
+            throw new InvalidOperationException("Pick a cross date.");
         if (model.DoeIds.Count == 0)
             throw new InvalidOperationException("Tick at least one doe.");
         var take = model.DoeIds.Take(Math.Max(1, model.Max)).ToList();

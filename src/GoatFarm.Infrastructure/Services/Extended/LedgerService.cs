@@ -1,3 +1,4 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Ledger;
 using GoatFarm.Domain.Entities;
@@ -45,6 +46,7 @@ public class LedgerService : ILedgerService
         var customers = await _context.BusinessCustomers.AsNoTracking().OrderBy(c => c.Name).ToListAsync(cancellationToken);
 
         var balances = ComputeBalances(accounts, tx);
+        var activity = AccountIdsWithActivity(tx);
         var receivables = invoices.Where(i => i.Status is InvoiceStatus.Open or InvoiceStatus.Partial)
             .Sum(i => i.Amount - i.PaidAmount);
         var payablesOpen = payables.Where(p => p.Status is PayableStatus.Open or PayableStatus.Partial)
@@ -56,15 +58,7 @@ public class LedgerService : ILedgerService
             Receivables = receivables,
             Payables = payablesOpen,
             CashOnHand = balances.Where((_, i) => accounts[i].Kind == MoneyAccountKind.Cash).Sum(x => x.Value),
-            Accounts = accounts.Select(a => new MoneyAccountRowViewModel
-            {
-                Id = a.Id,
-                Name = a.Name,
-                Kind = a.Kind.ToString(),
-                OpeningBalance = a.OpeningBalance,
-                IsActive = a.IsActive,
-                Balance = balances.GetValueOrDefault(a.Id, a.OpeningBalance)
-            }).ToList(),
+            Accounts = accounts.Select(a => MapAccountRow(a, balances, activity)).ToList(),
             Transactions = monthTx.Select(t => new LedgerTransactionRowViewModel
             {
                 Id = t.Id,
@@ -110,6 +104,27 @@ public class LedgerService : ILedgerService
         };
     }
 
+    public async Task<LedgerPageViewModel> GetAccountsOverviewAsync(CancellationToken cancellationToken = default)
+    {
+        var accounts = await GetAccountBalancesAsync(cancellationToken);
+        return new LedgerPageViewModel
+        {
+            Month = MonthHelper.CurrentMonthKey(),
+            Accounts = accounts.ToList(),
+            CashOnHand = accounts.Where(a => a.Kind == MoneyAccountKind.Cash.ToString()).Sum(a => a.Balance)
+        };
+    }
+
+    public async Task<IReadOnlyList<MoneyAccountRowViewModel>> GetAccountBalancesAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureSeededAsync(cancellationToken);
+        var accounts = await _context.MoneyAccounts.AsNoTracking().OrderBy(a => a.Name).ToListAsync(cancellationToken);
+        var tx = await _context.LedgerTransactions.AsNoTracking().ToListAsync(cancellationToken);
+        var balances = ComputeBalances(accounts, tx);
+        var activity = AccountIdsWithActivity(tx);
+        return accounts.Select(a => MapAccountRow(a, balances, activity)).ToList();
+    }
+
     public async Task<FinancialStatementsViewModel> GetStatementsAsync(string? month, CancellationToken cancellationToken = default)
     {
         await EnsureSeededAsync(cancellationToken);
@@ -149,15 +164,42 @@ public class LedgerService : ILedgerService
     {
         MoneyAccount row;
         if (model.Id is > 0)
+        {
             row = await _context.MoneyAccounts.FirstAsync(a => a.Id == model.Id, cancellationToken);
-        else { row = new MoneyAccount(); _context.MoneyAccounts.Add(row); }
+            if (model.OpeningBalance != row.OpeningBalance)
+                throw new InvalidOperationException("Opening balance is protected. Use “Set opening balance” once before any transactions.");
+        }
+        else
+        {
+            row = new MoneyAccount();
+            _context.MoneyAccounts.Add(row);
+            row.OpeningBalance = model.OpeningBalance;
+            if (model.OpeningBalance != 0) row.OpeningBalanceLocked = true;
+        }
         row.Name = model.Name.Trim();
         row.Kind = model.Kind;
         row.IsActive = model.IsActive;
-        if (model.Id is null or 0) row.OpeningBalance = model.OpeningBalance;
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
         return new { id = row.Id };
+    }
+
+    public async Task<object> SetOpeningBalanceAsync(SetMoneyAccountOpeningViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (model.Id <= 0) throw new InvalidOperationException("Choose an account.");
+        if (model.OpeningBalance < 0) throw new InvalidOperationException("Opening balance must be zero or more.");
+
+        var row = await _context.MoneyAccounts.FirstAsync(a => a.Id == model.Id, cancellationToken);
+        if (row.OpeningBalanceLocked)
+            throw new InvalidOperationException("Opening balance is already protected and cannot be changed.");
+        if (await HasLedgerActivityAsync(row.Id, cancellationToken))
+            throw new InvalidOperationException("This account already has movements. Opening balance can only be set before the first transaction.");
+
+        row.OpeningBalance = model.OpeningBalance;
+        row.OpeningBalanceLocked = true;
+        row.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return new { id = row.Id, openingBalance = row.OpeningBalance, openingBalanceLocked = true };
     }
 
     public async Task<object> SaveTransactionAsync(SaveLedgerTransactionViewModel model, CancellationToken cancellationToken = default)
@@ -174,6 +216,7 @@ public class LedgerService : ILedgerService
         row.Category = model.Category;
         row.Notes = model.Notes;
         row.UpdatedDate = DateTime.UtcNow;
+        await LockOpeningForAccountsAsync(model.AccountId, model.CounterAccountId, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
         return new { id = row.Id };
     }
@@ -379,6 +422,55 @@ public class LedgerService : ILedgerService
 
     private static bool IsLinkedMirror(LedgerTransaction t) =>
         t.Category is "Linked income" or "Linked expense" or "Shareholder funding";
+
+    private static MoneyAccountRowViewModel MapAccountRow(
+        MoneyAccount a,
+        IReadOnlyDictionary<int, decimal> balances,
+        HashSet<int> activity)
+    {
+        var balance = balances.GetValueOrDefault(a.Id, a.OpeningBalance);
+        var hasActivity = activity.Contains(a.Id);
+        return new MoneyAccountRowViewModel
+        {
+            Id = a.Id,
+            Name = a.Name,
+            Kind = a.Kind.ToString(),
+            OpeningBalance = a.OpeningBalance,
+            OpeningBalanceLocked = a.OpeningBalanceLocked,
+            HasLedgerActivity = hasActivity,
+            IsLowBalance = balance < -0.01m,
+            IsActive = a.IsActive,
+            Balance = balance
+        };
+    }
+
+    private static HashSet<int> AccountIdsWithActivity(IReadOnlyList<LedgerTransaction> tx)
+    {
+        var ids = new HashSet<int>();
+        foreach (var t in tx)
+        {
+            if (t.AccountId is int aid and > 0) ids.Add(aid);
+            if (t.CounterAccountId is int cid and > 0) ids.Add(cid);
+        }
+        return ids;
+    }
+
+    private async Task<bool> HasLedgerActivityAsync(int accountId, CancellationToken cancellationToken) =>
+        await _context.LedgerTransactions.AsNoTracking()
+            .AnyAsync(t => t.AccountId == accountId || t.CounterAccountId == accountId, cancellationToken);
+
+    private async Task LockOpeningForAccountsAsync(int? accountId, int? counterAccountId, CancellationToken cancellationToken)
+    {
+        foreach (var id in new[] { accountId, counterAccountId }.Where(x => x is > 0).Select(x => x!.Value).Distinct())
+        {
+            var acct = await _context.MoneyAccounts.FirstAsync(a => a.Id == id, cancellationToken);
+            if (!acct.OpeningBalanceLocked)
+            {
+                acct.OpeningBalanceLocked = true;
+                acct.UpdatedDate = DateTime.UtcNow;
+            }
+        }
+    }
 
     private static Dictionary<int, decimal> ComputeBalances(IReadOnlyList<MoneyAccount> accounts, IReadOnlyList<LedgerTransaction> tx)
     {

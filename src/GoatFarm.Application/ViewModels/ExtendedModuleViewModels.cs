@@ -70,6 +70,8 @@ public class TradingPageViewModel
     public IReadOnlyList<TradeMasterRowViewModel> Categories { get; set; } = [];
     public IReadOnlyList<TradeEntryRowViewModel> Entries { get; set; } = [];
     public IReadOnlyList<object> TradeRecs { get; set; } = [];
+    public bool BalanceSheetIsBalanced { get; set; }
+    public decimal BalanceSheetImbalance { get; set; }
 }
 
 public class TradePeriodPnLRowViewModel
@@ -363,6 +365,10 @@ public class MoneyAccountRowViewModel
     public string Kind { get; set; } = "";
     public decimal Balance { get; set; }
     public decimal OpeningBalance { get; set; }
+    public bool OpeningBalanceLocked { get; set; }
+    public bool HasLedgerActivity { get; set; }
+    public bool OpeningBalanceProtected => OpeningBalanceLocked || HasLedgerActivity || OpeningBalance != 0;
+    public bool IsLowBalance { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -449,6 +455,12 @@ public class SaveMoneyAccountViewModel
     public MoneyAccountKind Kind { get; set; }
     public decimal OpeningBalance { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+public class SetMoneyAccountOpeningViewModel
+{
+    public int Id { get; set; }
+    public decimal OpeningBalance { get; set; }
 }
 
 public class SaveLedgerTransactionViewModel
@@ -820,6 +832,7 @@ public class ProductSaleRowViewModel
 {
     public int Id { get; set; }
     public string DateDisplay { get; set; } = "";
+    public string? InvoiceNo { get; set; }
     public string ProductName { get; set; } = "";
     public string? Customer { get; set; }
     public decimal Qty { get; set; }
@@ -905,6 +918,7 @@ public class SaveProductSaleViewModel
     public DateOnly Date { get; set; }
     public int? CustomerId { get; set; }
     public int? ProductId { get; set; }
+    public int? WarehouseId { get; set; }
     [Required] public string ProductName { get; set; } = "";
     public decimal Qty { get; set; }
     public decimal Rate { get; set; }

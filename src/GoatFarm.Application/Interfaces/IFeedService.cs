@@ -64,6 +64,8 @@ public interface IFeedService
 
     Task UpdateDirectPlanAsync(UpdateDirectPlanViewModel model, CancellationToken cancellationToken = default);
 
+    Task UpdateFeedActiveMonthsAsync(UpdateFeedActiveMonthsViewModel model, CancellationToken cancellationToken = default);
+
     Task<KidMilkDietViewModel> GetKidMilkDietAsync(CancellationToken cancellationToken = default);
 
     Task<KidMilkDietViewModel> SaveKidMilkDietAsync(SaveKidMilkDietViewModel model, CancellationToken cancellationToken = default);
@@ -77,6 +79,10 @@ public interface IFeedService
     decimal GetFeedPurchasedMonthly(string month);
 
     decimal GetFeedPurchasedKg(string month);
+
+    Task<IReadOnlyList<FeedStockRowViewModel>> GetFeedStockRowsAsync(CancellationToken cancellationToken = default);
+
+    Task<FeedStockRebuildViewModel> RebuildFeedStockAsync(CancellationToken cancellationToken = default);
 
 }
 

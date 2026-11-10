@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Assistant;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
 
+[Authorize]
 public class AssistantController : Controller
 {
     private readonly IAssistantService _assistantService;

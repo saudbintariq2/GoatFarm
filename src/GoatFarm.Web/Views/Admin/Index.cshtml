@@ -32,8 +32,24 @@
 
 <div class="panel" data-admin-pane="audit" hidden>
     <div class="panel-body">
+        <div class="filterbar" style="margin-bottom:12px">
+            <div class="field"><label>Module</label>
+                <select id="audit-module">
+                    <option value="">All</option>
+                    @foreach (var m in GoatFarm.Domain.Constants.FarmTabs.All.Select(t => t.Key).Distinct())
+                    {
+                        <option value="@m">@m</option>
+                    }
+                </select>
+            </div>
+            <div class="field"><label>User</label><input type="text" id="audit-user" placeholder="Name"></div>
+            <div class="field"><label>From</label><input type="date" id="audit-from"></div>
+            <div class="field"><label>To</label><input type="date" id="audit-to"></div>
+            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green btn-sm" id="audit-apply">Apply</button></div>
+            <div class="field"><label>&nbsp;</label><a class="btn btn-ghost btn-sm" id="audit-csv" href="#">Export CSV</a></div>
+        </div>
         <table class="tbl"><thead><tr><th>When</th><th>Module</th><th>Action</th><th>Summary</th><th>User</th></tr></thead>
-        <tbody>
+        <tbody id="audit-rows">
         @foreach (var a in Model.AuditLog)
         {
             <tr><td>@a.WhenDisplay</td><td>@a.Module</td><td>@a.Action</td><td>@a.Summary</td><td>@a.UserDisplay</td></tr>

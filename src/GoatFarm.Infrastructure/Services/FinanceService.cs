@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GoatFarm.Infrastructure.Services;
 
-public class FinanceService : IFinanceService
+public partial class FinanceService : IFinanceService
 {
     private readonly GoatFarmDbContext _context;
     private readonly IFeedService _feedService;
@@ -27,7 +27,10 @@ public class FinanceService : IFinanceService
         _vaccineService = vaccineService;
     }
 
-    public async Task<FinancePageViewModel> GetFinancePageAsync(string? month, CancellationToken cancellationToken = default)
+    public Task<FinancePageViewModel> GetFinancePageAsync(string? month, CancellationToken cancellationToken = default) =>
+        GetFinancePageAsync(month, FinancePageLoadOptions.Full, cancellationToken);
+
+    public async Task<FinancePageViewModel> GetFinancePageAsync(string? month, FinancePageLoadOptions options, CancellationToken cancellationToken = default)
     {
         month ??= MonthHelper.CurrentMonthKey();
         var (monthStart, monthEnd) = MonthHelper.GetMonthRange(month);
@@ -85,7 +88,7 @@ public class FinanceService : IFinanceService
         var recurM = GetRecurringMonthlyTotal();
         var salaryM = GetStaffSalaryMonthlyTotal();
         var vaccBought = _vaccineService.GetVaccinePurchasedMonthly(month);
-        var expManual = expenses.Sum(e => e.Amount);
+        var expManual = expenses.Where(e => !FinanceExpenseRules.IsDuplicateVaccinePurchase(e.Type)).Sum(e => e.Amount);
         var expTot = expManual + feedBought + medM + recurM + vaccBought + salaryM;
 
         var employees = await _context.Employees.AsNoTracking()
@@ -136,8 +139,43 @@ public class FinanceService : IFinanceService
             DisplayIncome = incTot,
             DisplayExpense = expTot
         };
-        await EnrichAccountingAsync(page, monthStart, monthEnd, cancellationToken);
+        await EnrichAccountingAsync(page, monthStart, monthEnd, options.IncludeTabRegisters, cancellationToken);
+        if (options.IncludeIntegrityAndBalance)
+        {
+            page.Integrity = await GetIntegrityCheckAsync(cancellationToken);
+            page.BalanceSheet = await BuildBalanceSheetAsync(page, cancellationToken);
+            page.MonthlyClosing = await BuildMonthlyClosingRowsAsync(month, cancellationToken);
+        }
+        else
+        {
+            page.Integrity = new FinanceIntegrityViewModel();
+            page.BalanceSheet = new FinanceBalanceSheetViewModel();
+        }
         return page;
+    }
+
+    public async Task<FinanceMonthSnapshotViewModel> GetFinanceMonthSnapshotAsync(string? month, CancellationToken cancellationToken = default)
+    {
+        month ??= MonthHelper.CurrentMonthKey();
+        var page = await GetFinancePageAsync(month, new FinancePageLoadOptions
+        {
+            IncludeTabRegisters = false,
+            IncludeIntegrityAndBalance = false
+        }, cancellationToken);
+
+        return new FinanceMonthSnapshotViewModel
+        {
+            Month = month,
+            TotalIncome = page.DisplayIncome,
+            TotalExpense = page.DisplayExpense,
+            Profit = page.Profit,
+            IsLoss = page.IsLoss,
+            Capital = page.Capital,
+            IncomeLines = page.IncomeLines,
+            ExpenseLines = page.ExpenseLines,
+            Incomes = page.Incomes,
+            Expenses = page.Expenses
+        };
     }
 
     public async Task<FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
@@ -214,6 +252,7 @@ public class FinanceService : IFinanceService
 
     public async Task<IncomeViewModel> AddIncomeAsync(CreateIncomeViewModel model, CancellationToken cancellationToken = default)
     {
+        EnsureMoneyAccount(model.AccountId);
         var entity = new Income
         {
             Type = model.Type,
@@ -230,6 +269,9 @@ public class FinanceService : IFinanceService
 
     public async Task<ExpenseViewModel> AddExpenseAsync(CreateExpenseViewModel model, CancellationToken cancellationToken = default)
     {
+        if (FinanceExpenseRules.IsDuplicateVaccinePurchase(model.Type))
+            throw new InvalidOperationException("Vaccine costs belong on the Health page — not as a manual Vaccines expense.");
+        EnsureMoneyAccount(model.AccountId);
         var entity = new Expense
         {
             Type = model.Type,
@@ -257,6 +299,7 @@ public class FinanceService : IFinanceService
 
     public async Task<OwnerInvestmentViewModel> AddOwnerInvestmentAsync(CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken = default)
     {
+        EnsureMoneyAccount(model.AccountId);
         var entity = new OwnerInvestment
         {
             Note = ComposeFundingNote(model),
@@ -286,6 +329,7 @@ public class FinanceService : IFinanceService
     {
         var entity = await _context.Incomes.FindAsync([id], cancellationToken);
         if (entity is null) return null;
+        EnsureMoneyAccount(model.AccountId);
         entity.Type = model.Type;
         entity.Amount = model.Amount;
         entity.Date = model.Date;
@@ -299,6 +343,7 @@ public class FinanceService : IFinanceService
     {
         var entity = await _context.Expenses.FindAsync([id], cancellationToken);
         if (entity is null) return null;
+        EnsureMoneyAccount(model.AccountId);
         entity.Type = model.Type;
         entity.Amount = model.Amount;
         entity.Date = model.Date;
@@ -326,6 +371,7 @@ public class FinanceService : IFinanceService
     {
         var entity = await _context.OwnerInvestments.FindAsync([id], cancellationToken);
         if (entity is null) return null;
+        EnsureMoneyAccount(model.AccountId);
         entity.Note = ComposeFundingNote(model);
         entity.Amount = model.Amount;
         entity.Date = model.Date;
@@ -514,6 +560,13 @@ public class FinanceService : IFinanceService
         MonthlyAmount = entity.Period == RecurringCostPeriod.Year ? entity.Amount / 12m : entity.Amount
     };
 
+    private static void EnsureMoneyAccount(int? accountId)
+    {
+        if (accountId is null or <= 0)
+            throw new InvalidOperationException(
+                "Choose a Cash or Bank account. Every receipt and payment must post to an account — add one under Bank & Cash if needed.");
+    }
+
     private static string ComposeFundingNote(CreateOwnerInvestmentViewModel model)
     {
         var purpose = model.Note.Trim();
@@ -562,6 +615,11 @@ public class FinanceService : IFinanceService
         existing.Category = category;
         existing.Notes = string.IsNullOrWhiteSpace(notes) ? category : notes;
         existing.UpdatedDate = DateTime.UtcNow;
+        if (!account.OpeningBalanceLocked)
+        {
+            account.OpeningBalanceLocked = true;
+            account.UpdatedDate = DateTime.UtcNow;
+        }
     }
 
     private async Task<decimal> AccountBalanceAsync(int accountId, CancellationToken cancellationToken)
@@ -586,7 +644,7 @@ public class FinanceService : IFinanceService
         return balance;
     }
 
-    private async Task EnrichAccountingAsync(FinancePageViewModel page, DateOnly monthStart, DateOnly monthEnd, CancellationToken cancellationToken)
+    private async Task EnrichAccountingAsync(FinancePageViewModel page, DateOnly monthStart, DateOnly monthEnd, bool includeTabRegisters, CancellationToken cancellationToken)
     {
         var trendStart = monthStart.AddMonths(-5);
         var incomeRows = await _context.Incomes.AsNoTracking().Where(i => i.Date >= trendStart && i.Date < monthEnd).Select(i => new { i.Date, i.Amount, i.Type }).ToListAsync(cancellationToken);
@@ -637,7 +695,7 @@ public class FinanceService : IFinanceService
         if (page.StaffSalaryMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Salaries", Amount = page.StaffSalaryMonthly });
         foreach (var cost in page.RecurringCosts.Where(r => r.MonthlyAmount > 0))
             expenseLines.Add(new FinanceLineViewModel { Label = cost.Name, Amount = cost.MonthlyAmount });
-        foreach (var group in page.Expenses.GroupBy(e => e.Type))
+        foreach (var group in page.Expenses.Where(e => !FinanceExpenseRules.IsDuplicateVaccinePurchase(e.Type)).GroupBy(e => e.Type))
             expenseLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
         page.ExpenseLines = expenseLines.OrderByDescending(x => x.Amount).ToList();
 
@@ -652,13 +710,16 @@ public class FinanceService : IFinanceService
                 + milkRows.Where(x => In(x.Date)).Sum(x => x.Amount)
                 + productRows.Where(x => In(x.Date)).Sum(x => x.Amount)
                 + invoiceRows.Where(x => In(x.Date) && ManualInvoice(x)).Sum(x => x.Amount);
-            var exp = expenseRows.Where(x => In(x.Date)).Sum(x => x.Amount)
+            var exp = expenseRows.Where(x => In(x.Date) && !FinanceExpenseRules.IsDuplicateVaccinePurchase(x.Type)).Sum(x => x.Amount)
                 + feedRows.Where(x => In(x.Date)).Sum(x => x.Amount)
                 + vaccRows.Where(x => In(x.Date)).Sum(x => x.Amount)
                 + salary + recurring + medicine;
             trend.Add(new FinanceTrendMonthViewModel { Month = key, Income = inc, Expense = exp });
         }
         page.Trend = trend;
+
+        if (!includeTabRegisters)
+            return;
 
         var matchedInvoiceIds = new HashSet<int>();
         var sales = new List<SaleRegisterRowViewModel>();

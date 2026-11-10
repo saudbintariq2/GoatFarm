@@ -1,14 +1,11 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
-
 using GoatFarm.Application.ViewModels.Trading;
-
 using GoatFarm.Domain.Entities;
-
 using GoatFarm.Domain.Enums;
-
 using GoatFarm.Infrastructure.Persistence;
-
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 
 
@@ -21,10 +18,13 @@ public class TradingService : ITradingService
 {
 
     private readonly GoatFarmDbContext _context;
+    private readonly string _deviceCode;
 
-
-
-    public TradingService(GoatFarmDbContext context) => _context = context;
+    public TradingService(GoatFarmDbContext context, IConfiguration configuration)
+    {
+        _context = context;
+        _deviceCode = configuration["ApplicationSettings:DeviceCode"] ?? "K7Q";
+    }
 
 
 
@@ -216,8 +216,11 @@ public class TradingService : ITradingService
 
             }).ToList(),
 
-            TradeRecs = TradeRecsMapper.Build(items, stores, accounts, parties, cats, allEntries)
-
+            TradeRecs = TradeRecsMapper.Build(items, stores, accounts, parties, cats, allEntries),
+            BalanceSheetIsBalanced = ComputeBalanceSheetCheck(
+                accounts, parties, allEntries.Where(e => !e.IsCancelled).ToList(), stockValue, balances.Values.Sum(),
+                out var imbalance),
+            BalanceSheetImbalance = imbalance
         };
 
     }
@@ -449,16 +452,13 @@ public class TradingService : ITradingService
             row = await _context.TradeEntries.FirstAsync(e => e.Id == model.Id, cancellationToken);
 
         else
-
         {
-
             row = new TradeEntry();
-
             _context.TradeEntries.Add(row);
-
         }
 
-
+        if (type == TradeEntryType.Sell && model.Id is null or <= 0 && string.IsNullOrWhiteSpace(model.BillNo))
+            model.BillNo = await NextTradingBillAsync(model.Date, cancellationToken);
 
         row.Type = type;
 
@@ -506,7 +506,7 @@ public class TradingService : ITradingService
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        return new { id = row.Id.ToString() };
+        return new { id = row.Id.ToString(), billNo = row.BillNo };
 
     }
 
@@ -908,6 +908,146 @@ public class TradingService : ITradingService
 
         return DateTime.Today;
 
+    }
+
+    private async Task<string> NextTradingBillAsync(DateOnly date, CancellationToken cancellationToken)
+    {
+        var prefix = $"TR-{date:yyyyMM}-{_deviceCode.Trim().ToUpperInvariant()}-";
+        var existing = await _context.TradeEntries.AsNoTracking()
+            .Where(e => e.BillNo != null && e.BillNo.StartsWith(prefix))
+            .Select(e => e.BillNo!)
+            .ToListAsync(cancellationToken);
+        var seq = existing.Count + 1;
+        string candidate;
+        do
+        {
+            candidate = FarmRecordNumberFormat.FormatTradingBill(_deviceCode, date, seq++);
+        } while (existing.Contains(candidate));
+        return candidate;
+    }
+
+    private static bool ComputeBalanceSheetCheck(
+        IReadOnlyList<TradeAccount> accounts,
+        IReadOnlyList<TradeParty> parties,
+        IReadOnlyList<TradeEntry> live,
+        decimal stockValue,
+        decimal cash,
+        out decimal imbalance)
+    {
+        var (sup, cus) = ComputePartyBalances(parties, live);
+        decimal Ar() => cus.Values.Sum(p => Math.Max(0, p.Total - p.Paid));
+        decimal Ap() => sup.Values.Sum(p => Math.Max(0, p.Total - p.Paid));
+        decimal AdvPaid() => sup.Values.Sum(p => Math.Max(0, p.Paid - p.Total));
+        decimal AdvRecv() => cus.Values.Sum(p => Math.Max(0, p.Paid - p.Total));
+        var assets = cash + Ar() + AdvPaid() + stockValue;
+        var owes = Ap() + AdvRecv();
+        var worth = assets - owes;
+        var opening = accounts.Where(a => a.IsActive).Sum(a => a.OpeningBalance)
+            + parties.Where(p => p.Role == TradePartyRole.Customer).Sum(p => p.OpeningBalance)
+            - parties.Where(p => p.Role == TradePartyRole.Supplier).Sum(p => p.OpeningBalance);
+        var capIn = live.Where(e => e.Type == TradeEntryType.Capital).Sum(e => e.Amount);
+        var drawings = live.Where(e => e.Type == TradeEntryType.Drawing).Sum(e => e.Amount);
+        var net = ComputeLifetimeNetProfit(live);
+        var made = opening + capIn - drawings + net;
+        imbalance = Math.Abs(made - worth);
+        return imbalance <= 1m;
+    }
+
+    private sealed class PartyLedger
+    {
+        public decimal Total;
+        public decimal Paid;
+    }
+
+    private static (Dictionary<int, PartyLedger> Sup, Dictionary<int, PartyLedger> Cus) ComputePartyBalances(
+        IReadOnlyList<TradeParty> parties, IReadOnlyList<TradeEntry> entries)
+    {
+        var sup = new Dictionary<int, PartyLedger>();
+        var cus = new Dictionary<int, PartyLedger>();
+        PartyLedger P(Dictionary<int, PartyLedger> map, int id) =>
+            map.TryGetValue(id, out var row) ? row : (map[id] = new PartyLedger());
+        foreach (var p in parties)
+        {
+            if (p.OpeningBalance == 0) continue;
+            var map = p.Role == TradePartyRole.Supplier ? sup : cus;
+            P(map, p.Id).Total += p.OpeningBalance;
+        }
+
+        foreach (var e in entries.OrderBy(x => x.Date).ThenBy(x => x.Id))
+        {
+            if (e.Type == TradeEntryType.Buy && e.PartyId is > 0)
+            {
+                var row = P(sup, e.PartyId.Value);
+                row.Total += e.Qty * e.Rate;
+                row.Paid += e.PaidAmount;
+            }
+            else if (e.Type == TradeEntryType.Sell && e.PartyId is > 0)
+            {
+                var row = P(cus, e.PartyId.Value);
+                row.Total += e.Qty * e.Rate;
+                row.Paid += e.ReceivedAmount;
+            }
+            else if (e.Type == TradeEntryType.PaymentOut && e.PartyId is > 0)
+                P(sup, e.PartyId.Value).Paid += e.Amount;
+            else if (e.Type == TradeEntryType.PaymentIn && e.PartyId is > 0)
+                P(cus, e.PartyId.Value).Paid += e.Amount;
+        }
+
+        return (sup, cus);
+    }
+
+    private static decimal ComputeLifetimeNetProfit(IReadOnlyList<TradeEntry> live)
+    {
+        var cost = new Dictionary<int, (decimal Qty, decimal Value)>();
+        decimal sales = 0, cogs = 0, delivery = 0, loss = 0, exp = 0;
+        foreach (var e in live.OrderBy(x => x.Date).ThenBy(x => x.Id))
+        {
+            if (e.Type == TradeEntryType.Expense)
+                exp += e.Amount;
+
+            if (e.ItemId is not > 0) continue;
+            var itemId = e.ItemId.Value;
+            cost.TryAdd(itemId, (0, 0));
+            var (q, v) = cost[itemId];
+            switch (e.Type)
+            {
+                case TradeEntryType.Buy:
+                    q += e.Qty;
+                    v += e.Qty * e.Rate + e.Freight + e.Labour;
+                    break;
+                case TradeEntryType.Sell:
+                {
+                    var avg = q > 0.0005m ? v / q : 0;
+                    var take = e.Qty >= q - 0.0005m ? v : avg * e.Qty;
+                    q -= e.Qty;
+                    v -= take;
+                    sales += e.Qty * e.Rate;
+                    cogs += take;
+                    delivery += e.Freight;
+                    break;
+                }
+                case TradeEntryType.Loss when e.LossReason == "count+":
+                {
+                    var avg = q > 0.0005m ? v / q : 0;
+                    q += e.Qty;
+                    v += avg * e.Qty;
+                    break;
+                }
+                case TradeEntryType.Loss:
+                {
+                    var avg = q > 0.0005m ? v / q : 0;
+                    var take = e.Qty >= q - 0.0005m ? v : avg * e.Qty;
+                    q -= e.Qty;
+                    v -= take;
+                    loss += take;
+                    break;
+                }
+            }
+
+            cost[itemId] = (q, v);
+        }
+
+        return sales - cogs - delivery - loss - exp;
     }
 
 }

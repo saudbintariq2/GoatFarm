@@ -34,6 +34,19 @@ public static class FinanceVisibility
         MilkTodayLiters = m.MilkTodayLiters,
         MilkLast7Days = m.MilkLast7Days,
         BreedDistribution = m.BreedDistribution,
+        HerdComposition = m.HerdComposition,
+        SixMonthTrend = m.SixMonthTrend.Select(p => new DashboardTrendPointViewModel
+        {
+            Month = p.Month,
+            MonthLabel = p.MonthLabel,
+            HerdTotal = p.HerdTotal,
+            MilkLiters = p.MilkLiters,
+            Births = p.Births,
+            MoneyIn = 0
+        }).ToList(),
+        BreedingLast12Months = m.BreedingLast12Months,
+        RecentGoats = m.RecentGoats,
+        PendingApprovalItems = m.PendingApprovalItems,
         HealthHealthy = m.HealthHealthy,
         HealthUnderObservation = m.HealthUnderObservation,
         HealthSick = m.HealthSick,
@@ -41,6 +54,13 @@ public static class FinanceVisibility
         RecentActivities = m.RecentActivities,
         RecentSales = [],
         RecentExpenses = [],
+        TodayAtFarm = m.TodayAtFarm,
+        CashAccounts = [],
+        CashAndBankTotal = 0,
+        TopAlerts = m.TopAlerts.Where(a => string.IsNullOrEmpty(a.Href) || !a.Href.StartsWith("/Finance", StringComparison.OrdinalIgnoreCase)).ToList(),
+        MonthIncomeLines = [],
+        MonthExpenseLines = [],
+        IntegrityCriticalCount = 0,
         FinanceHidden = true
     };
 
@@ -88,7 +108,15 @@ public static class FinanceVisibility
             FeedStockTotalValue = m.Inventory.FeedStockTotalValue
         },
         Alerts = m.Alerts,
-        Comparison = new ReportComparisonSectionViewModel { Rows = m.Comparison.Rows.Where(r => !r.IsFinancial).ToList() }
+        Comparison = new ReportComparisonSectionViewModel { Rows = m.Comparison.Rows.Where(r => !r.IsFinancial).ToList() },
+        Logistics = m.Logistics,
+        Owners = new ReportOwnersSectionViewModel
+        {
+            TotalFunding = 0,
+            FundingInPeriod = 0,
+            Investments = [],
+            ProfitPartners = []
+        }
     };
 
     private static List<ReportKpiViewModel> NonFinancial(IEnumerable<ReportKpiViewModel> kpis) =>

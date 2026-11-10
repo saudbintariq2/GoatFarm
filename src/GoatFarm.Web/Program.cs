@@ -50,6 +50,7 @@ builder.Services.AddAntiforgery(options =>
 var mvcBuilder = builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add<FarmPermissionFilter>();
+    options.Filters.Add<FarmAuditActionFilter>();
     options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
 })
     .AddJsonOptions(options =>

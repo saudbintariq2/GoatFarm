@@ -101,8 +101,11 @@ public class FeedService : IFeedService
         var fodderPoolDto = await LoadFodderPoolDtoAsync(cancellationToken);
 
         var feedSettings = await LoadFeedSettingsDtoAsync(cancellationToken);
+        var seasonAsOf = DateOnly.FromDateTime(DateTime.Today);
+        var activeMonths = feedSettings.ActiveMonthsByFeed;
 
-        var fodderPoolVm = BuildFodderPoolViewModel(fodderPoolDto, plans);
+        var fodderFinanceRefs = await LoadFodderFinanceRefsAsync(cancellationToken);
+        var fodderPoolVm = BuildFodderPoolViewModel(fodderPoolDto, plans, fodderFinanceRefs);
 
         var feedSettingsVm = BuildFeedSettingsViewModel(feedSettings);
 
@@ -159,7 +162,7 @@ public class FeedService : IFeedService
         var directPlans = await LoadDirectPlansAsync(cancellationToken);
         var moneyAccounts = await LoadMoneyAccountsAsync(cancellationToken);
 
-        var dailyUse = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans);
+        var dailyUse = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, activeMonths);
 
         var stockFeeds = feedCatalog.Where(f => FeedTypes.IsPurchasable(f.FeedType)).ToList();
 
@@ -167,7 +170,7 @@ public class FeedService : IFeedService
 
         var usedTotals = await GetUsedTotalsAsync(cancellationToken);
 
-        var stock = BuildStockRows(stockFeeds, dailyUse, prices, purchasedTotals, usedTotals);
+        var stock = BuildStockRows(stockFeeds, dailyUse, prices, purchasedTotals, usedTotals, feedSettings);
 
         var storeStats = BuildStoreStats(stock, dailyUse, prices);
 
@@ -216,7 +219,7 @@ public class FeedService : IFeedService
             var fodderCostPerGoat = CalculateFodderCostPerGoat(
                 plan.FodderKgPerDay, fodderDailyPool, totalFodderShare, totalHeads, fodderPoolDto.Mode);
             var dryPrice = prices.GetValueOrDefault(FeedTypes.FodderDry);
-            var directCost = DirectCostPerGoat(stKey, feedCatalog, prices, directPlans);
+            var directCost = DirectCostPerGoat(stKey, feedCatalog, prices, directPlans, activeMonths, seasonAsOf);
             var dailyPerGoat = MixRecipeHelper.PlanDailyFeedCostV41(
                 plan.MixKgPerDay, statusMixCost, plan.FodderDryKgPerDay, dryPrice, fodderCostPerGoat) + directCost;
             var feedM = dailyPerGoat * 30 * count;
@@ -238,7 +241,7 @@ public class FeedService : IFeedService
                 MedicineCostPerGoatPerMonth = plan.MedicineCostPerGoatPerMonth,
                 MonthlyTotal = feedM,
                 RecipeFrom = stKey,
-                DirectKg = DirectKgFor(stKey, feedCatalog, directPlans)
+                DirectKg = DirectKgFor(stKey, feedCatalog, directPlans, activeMonths, seasonAsOf)
             });
 
 
@@ -291,7 +294,7 @@ public class FeedService : IFeedService
             var fodderCostPerGoat = CalculateFodderCostPerGoat(
                 fg.FodderKgPerDay, fodderDailyPool, totalFodderShare, totalHeads, fodderPoolDto.Mode);
             var dryPrice = prices.GetValueOrDefault(FeedTypes.FodderDry);
-            var directCost = DirectCostPerGoat(fgKey, feedCatalog, prices, directPlans);
+            var directCost = DirectCostPerGoat(fgKey, feedCatalog, prices, directPlans, activeMonths, seasonAsOf);
             var dailyPerGoat = MixRecipeHelper.PlanDailyFeedCostV41(
                 fg.MixKgPerDay, statusMixCost, fg.FodderDryKgPerDay, dryPrice, fodderCostPerGoat) + directCost;
             var feedM = dailyPerGoat * 30 * count;
@@ -313,7 +316,7 @@ public class FeedService : IFeedService
                 MonthlyTotal = feedM,
                 IsCustomGroup = true,
                 RecipeFrom = recipeKey,
-                DirectKg = DirectKgFor(fgKey, feedCatalog, directPlans)
+                DirectKg = DirectKgFor(fgKey, feedCatalog, directPlans, activeMonths, seasonAsOf)
             });
 
             categoryCosts.Add(new FeedCategoryCostRowViewModel
@@ -344,7 +347,7 @@ public class FeedService : IFeedService
 
 
 
-        var buying = BuildBuyingList(plans, allRecipes, prices, mixFeedKeys, herd, customGroups, feedCatalog, directPlans);
+        var buying = BuildBuyingList(plans, allRecipes, prices, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, activeMonths);
 
         var buyingTotalKg = buying.Where(b => !b.IsOwnLand).Sum(b => b.KgPerMonth);
 
@@ -502,10 +505,17 @@ public class FeedService : IFeedService
 
             MoneyAccounts = moneyAccounts,
 
-            DirectFeeds = feedCatalog.Where(f => FeedTypes.IsDirectUse(f.UseType)).Select(f => new FeedDirectFeedViewModel
+            DirectFeeds = feedCatalog.Where(f => FeedTypes.IsDirectUse(f.UseType)).Select(f =>
             {
-                FeedType = f.FeedType,
-                DisplayName = f.DisplayName
+                var months = activeMonths.GetValueOrDefault(f.FeedType) ?? [];
+                return new FeedDirectFeedViewModel
+                {
+                    FeedType = f.FeedType,
+                    DisplayName = f.DisplayName,
+                    ActiveMonths = months,
+                    SeasonLabel = FeedSeasonHelper.SeasonLabel(months),
+                    IsActiveNow = FeedSeasonHelper.IsActive(f.FeedType, seasonAsOf, activeMonths)
+                };
             }).ToList(),
 
             KidMilkDiet = await BuildKidMilkDietViewAsync(herd, cancellationToken)
@@ -680,7 +690,8 @@ public class FeedService : IFeedService
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
-        return BuildFodderPoolViewModel(dto, plans);
+        var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, refs);
 
     }
 
@@ -706,7 +717,15 @@ public class FeedService : IFeedService
 
                 Label = i.Label,
 
-                Amount = i.Amount
+                Amount = i.Amount,
+
+                PaidDate = string.IsNullOrWhiteSpace(i.PaidDate) ? null : DateOnly.Parse(i.PaidDate),
+
+                AllocateMonths = Math.Clamp(i.AllocateMonths <= 0 ? 1 : i.AllocateMonths, 1, 12),
+
+                AccountId = i.AccountId,
+
+                PaidAmount = i.PaidAmount
 
             }).ToList()
 
@@ -714,9 +733,12 @@ public class FeedService : IFeedService
 
         await SaveFodderPoolDtoAsync(dto, cancellationToken);
 
+        await SyncFodderPoolFinanceAsync(dto, cancellationToken);
+
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
-        return BuildFodderPoolViewModel(dto, plans);
+        var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, refs);
 
     }
 
@@ -752,7 +774,8 @@ public class FeedService : IFeedService
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
-        return BuildFodderPoolViewModel(dto, plans);
+        var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, refs);
 
     }
 
@@ -770,7 +793,8 @@ public class FeedService : IFeedService
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
-        return BuildFodderPoolViewModel(dto, plans);
+        var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, refs);
 
     }
 
@@ -857,31 +881,22 @@ public class FeedService : IFeedService
         var herd = await LoadHerdSnapshotAsync(cancellationToken);
         var customGroups = await _context.CustomFeedingGroups.AsNoTracking().ToListAsync(cancellationToken);
         var directPlans = await LoadDirectPlansAsync(cancellationToken);
+        var activeMonths = settings.ActiveMonthsByFeed;
 
-        var dailyUse = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans)
-
+        var feedTypesNeeded = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, today, activeMonths)
             .Where(kv => !FeedTypes.IsGreenFodder(kv.Key) && kv.Value > 0)
+            .Select(kv => kv.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            .ToDictionary(kv => kv.Key, kv => kv.Value);
-
-
-
-        if (dailyUse.Count == 0)
-
+        if (feedTypesNeeded.Count == 0)
         {
-
             settings.LastUsageDate = today.ToString("yyyy-MM-dd");
-
             await SaveFeedSettingsDtoAsync(settings, cancellationToken);
-
             return 0;
-
         }
 
-
-
         var priceEntities = await _context.FeedPrices
-            .Where(p => dailyUse.Keys.Contains(p.FeedType))
+            .Where(p => feedTypesNeeded.Contains(p.FeedType))
             .ToListAsync(cancellationToken);
 
         var applied = 0;
@@ -889,6 +904,11 @@ public class FeedService : IFeedService
         while (day < today && applied < 120)
         {
             day = day.AddDays(1);
+            var dailyUse = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, day, activeMonths)
+                .Where(kv => !FeedTypes.IsGreenFodder(kv.Key) && kv.Value > 0)
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+            if (dailyUse.Count == 0) { applied++; continue; }
+
             foreach (var (feedType, kgPerDay) in dailyUse)
             {
                 var kg = Math.Round(kgPerDay, 2);
@@ -1006,7 +1026,16 @@ public class FeedService : IFeedService
 
         }
 
-
+        var settings = await LoadFeedSettingsDtoAsync(cancellationToken);
+        var purchasedTotals = await GetPurchasedTotalsAsync(cancellationToken);
+        var usedTotals = await GetUsedTotalsAsync(cancellationToken);
+        foreach (var (feedType, actual) in entries)
+        {
+            var purchased = purchasedTotals.GetValueOrDefault(feedType);
+            var used = usedTotals.GetValueOrDefault(feedType);
+            settings.OpeningStockByFeed[feedType] = FeedStockHelper.InferOpeningKg(actual, purchased, used);
+        }
+        await SaveFeedSettingsDtoAsync(settings, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -1222,6 +1251,24 @@ public class FeedService : IFeedService
 
         if (entity is null) return;
 
+        var settings = await LoadFeedSettingsDtoAsync(cancellationToken);
+
+        var purchased = await _context.FeedPurchases.AsNoTracking()
+
+            .Where(p => p.FeedType == model.FeedType)
+
+            .SumAsync(p => p.Kg, cancellationToken);
+
+        var used = await _context.FeedUsageRecords.AsNoTracking()
+
+            .Where(u => u.FeedType == model.FeedType)
+
+            .SumAsync(u => u.Kg, cancellationToken);
+
+        settings.OpeningStockByFeed[model.FeedType] = FeedStockHelper.InferOpeningKg(model.StockKg, purchased, used);
+
+        await SaveFeedSettingsDtoAsync(settings, cancellationToken);
+
         entity.StockKg = Math.Max(0, model.StockKg);
 
         if (entity.StockKg > entity.StockKgFull)
@@ -1405,11 +1452,144 @@ public class FeedService : IFeedService
 
         var (monthStart, monthEnd) = MonthHelper.GetMonthRange(month);
 
-        return _context.FeedPurchases.AsNoTracking()
+        var purchases = _context.FeedPurchases.AsNoTracking().ToList();
 
-            .Where(p => p.Date >= monthStart && p.Date < monthEnd)
+        decimal total = 0;
 
-            .Sum(p => p.Amount);
+        foreach (var p in purchases)
+
+        {
+
+            var months = Math.Clamp(p.AllocationMonths <= 0 ? 1 : p.AllocationMonths, 1, 12);
+
+            var perMonth = p.Amount / months;
+
+            for (var i = 0; i < months; i++)
+
+            {
+
+                var d = p.Date.AddMonths(i);
+
+                if (d >= monthStart && d < monthEnd)
+
+                    total += perMonth;
+
+            }
+
+        }
+
+        return total;
+
+    }
+
+
+
+    public async Task<IReadOnlyList<FeedStockRowViewModel>> GetFeedStockRowsAsync(CancellationToken cancellationToken = default)
+
+    {
+
+        await RunAutoUsageAsync(cancellationToken);
+
+        var feedSettings = await LoadFeedSettingsDtoAsync(cancellationToken);
+
+        var prices = await GetPriceDictionaryAsync(cancellationToken);
+
+        var feedCatalog = await GetFeedCatalogAsync(cancellationToken);
+
+        var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
+
+        var allRecipes = await GetAllMixRecipesAsync(cancellationToken);
+
+        var mixFeedKeys = MixRecipeHelper.MixFeedKeys(
+
+            feedCatalog.Where(f => !FeedTypes.IsDirectUse(f.UseType)).Select(f => f.FeedType)).ToList();
+
+        var herd = await LoadHerdSnapshotAsync(cancellationToken);
+
+        var customGroups = await _context.CustomFeedingGroups.AsNoTracking().ToListAsync(cancellationToken);
+
+        var directPlans = await LoadDirectPlansAsync(cancellationToken);
+        var seasonAsOf = DateOnly.FromDateTime(DateTime.Today);
+
+        var dailyUse = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, feedSettings.ActiveMonthsByFeed);
+
+        var stockFeeds = feedCatalog.Where(f => FeedTypes.IsPurchasable(f.FeedType)).ToList();
+
+        var purchasedTotals = await GetPurchasedTotalsAsync(cancellationToken);
+
+        var usedTotals = await GetUsedTotalsAsync(cancellationToken);
+
+        return BuildStockRows(stockFeeds, dailyUse, prices, purchasedTotals, usedTotals, feedSettings);
+
+    }
+
+
+
+    public async Task<FeedStockRebuildViewModel> RebuildFeedStockAsync(CancellationToken cancellationToken = default)
+
+    {
+
+        var feedSettings = await LoadFeedSettingsDtoAsync(cancellationToken);
+
+        var catalog = await _context.FeedPrices.Where(p => FeedTypes.IsPurchasable(p.FeedType)).ToListAsync(cancellationToken);
+
+        var purchasedTotals = await GetPurchasedTotalsAsync(cancellationToken);
+
+        var usedTotals = await GetUsedTotalsAsync(cancellationToken);
+
+        var adjusted = 0;
+
+        foreach (var price in catalog)
+
+        {
+
+            var purchased = purchasedTotals.GetValueOrDefault(price.FeedType);
+
+            var used = usedTotals.GetValueOrDefault(price.FeedType);
+
+            feedSettings.OpeningStockByFeed.TryGetValue(price.FeedType, out var opening);
+
+            var computed = FeedStockHelper.BookKg(opening, purchased, used);
+
+            if (Math.Abs(price.StockKg - computed) >= 0.05m)
+
+            {
+
+                price.StockKg = computed;
+
+                if (computed > price.StockKgFull)
+
+                    price.StockKgFull = computed;
+
+                price.UpdatedDate = DateTime.UtcNow;
+
+                adjusted++;
+
+            }
+
+            feedSettings.OpeningStockByFeed[price.FeedType] = opening;
+
+        }
+
+        await SaveFeedSettingsDtoAsync(feedSettings, cancellationToken);
+
+        if (adjusted > 0)
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+        return new FeedStockRebuildViewModel
+
+        {
+
+            Adjusted = adjusted,
+
+            Message = adjusted == 0
+
+                ? "Store stock already matches purchases and usage."
+
+                : $"Rebuilt stock on {adjusted} feed type(s)."
+
+        };
 
     }
 
@@ -1753,7 +1933,17 @@ public class FeedService : IFeedService
 
 
 
-    private FodderPoolViewModel BuildFodderPoolViewModel(FodderPoolDto dto, IReadOnlyList<FeedPlan> plans)
+    private async Task<HashSet<string>> LoadFodderFinanceRefsAsync(CancellationToken cancellationToken) =>
+        (await _context.LedgerTransactions.AsNoTracking()
+            .Where(t => t.Reference != null && t.Reference.StartsWith("fodder_pool:"))
+            .Select(t => t.Reference!)
+            .ToListAsync(cancellationToken))
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private FodderPoolViewModel BuildFodderPoolViewModel(
+        FodderPoolDto dto,
+        IReadOnlyList<FeedPlan> plans,
+        IReadOnlySet<string> financeRefs)
 
     {
 
@@ -1811,7 +2001,17 @@ public class FeedService : IFeedService
 
                 Label = i.Label,
 
-                Amount = i.Amount
+                Amount = i.Amount,
+
+                PaidDate = i.PaidDate?.ToString("yyyy-MM-dd"),
+
+                AllocateMonths = Math.Clamp(i.AllocateMonths <= 0 ? 1 : i.AllocateMonths, 1, 12),
+
+                AccountId = i.AccountId,
+
+                PaidAmount = i.PaidAmount,
+
+                PostedToFinance = financeRefs.Contains("fodder_pool:" + i.Id)
 
             }).ToList(),
 
@@ -2011,7 +2211,9 @@ public class FeedService : IFeedService
         IReadOnlyList<HerdSnap> herd,
         IReadOnlyList<CustomFeedingGroup> customGroups,
         IReadOnlyList<FeedPrice> catalog,
-        Dictionary<string, Dictionary<string, decimal>> directPlans)
+        Dictionary<string, Dictionary<string, decimal>> directPlans,
+        DateOnly asOfDate,
+        IReadOnlyDictionary<string, int[]>? activeMonthsByFeed = null)
     {
         var kg = mixFeedKeys.ToDictionary(k => k, _ => 0m, StringComparer.OrdinalIgnoreCase);
         kg[FeedTypes.Fodder] = 0;
@@ -2036,7 +2238,7 @@ public class FeedService : IFeedService
             foreach (var f in catalog.Where(x => FeedTypes.IsDirectUse(x.UseType)))
             {
                 var qty = DirectQty(groupKey, f.FeedType, directPlans);
-                if (qty > 0)
+                if (qty > 0 && FeedSeasonHelper.IsActive(f.FeedType, asOfDate, activeMonthsByFeed))
                     kg[f.FeedType] = kg.GetValueOrDefault(f.FeedType) + qty * n;
             }
         }
@@ -2166,7 +2368,9 @@ public class FeedService : IFeedService
 
         IReadOnlyDictionary<string, decimal> purchasedTotals,
 
-        IReadOnlyDictionary<string, decimal> usedTotals)
+        IReadOnlyDictionary<string, decimal> usedTotals,
+
+        FeedSettingsDto feedSettings)
 
     {
 
@@ -2174,7 +2378,13 @@ public class FeedService : IFeedService
 
         {
 
-            var st = f.StockKg;
+            var purchased = purchasedTotals.GetValueOrDefault(f.FeedType);
+
+            var used = usedTotals.GetValueOrDefault(f.FeedType);
+
+            feedSettings.OpeningStockByFeed.TryGetValue(f.FeedType, out var opening);
+
+            var st = FeedStockHelper.BookKg(opening, purchased, used);
 
             var du = dailyUse.GetValueOrDefault(f.FeedType, 0);
 
@@ -2288,9 +2498,11 @@ public class FeedService : IFeedService
         IReadOnlyList<HerdSnap> herd,
         IReadOnlyList<CustomFeedingGroup> customGroups,
         IReadOnlyList<FeedPrice> catalog,
-        Dictionary<string, Dictionary<string, decimal>> directPlans)
+        Dictionary<string, Dictionary<string, decimal>> directPlans,
+        DateOnly asOfDate,
+        IReadOnlyDictionary<string, int[]>? activeMonthsByFeed = null)
     {
-        var daily = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, catalog, directPlans);
+        var daily = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, catalog, directPlans, asOfDate, activeMonthsByFeed);
         var nameByType = catalog.ToDictionary(f => f.FeedType, f => f.DisplayName, StringComparer.OrdinalIgnoreCase);
         var rows = new List<FeedBuyingRowViewModel>();
 
@@ -2356,6 +2568,28 @@ public class FeedService : IFeedService
         _context.CustomFeedingGroups.Remove(group);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task UpdateFeedActiveMonthsAsync(UpdateFeedActiveMonthsViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(model.FeedType))
+            throw new InvalidOperationException("Choose a feed type.");
+        var feedType = model.FeedType.Trim();
+        var exists = await _context.FeedPrices.AnyAsync(p => p.FeedType == feedType, cancellationToken);
+        if (!exists)
+            throw new InvalidOperationException("Feed type not found.");
+
+        var incoming = (model.Months ?? []).Where(m => m is >= 1 and <= 12).Distinct().ToArray();
+        if (incoming.Length == 0)
+            throw new InvalidOperationException("Choose at least one month.");
+        var normalized = FeedSeasonHelper.NormalizeMonthsForSave(incoming);
+
+        var settings = await LoadFeedSettingsDtoAsync(cancellationToken);
+        if (normalized.Length == 0)
+            settings.ActiveMonthsByFeed.Remove(feedType);
+        else
+            settings.ActiveMonthsByFeed[feedType] = normalized;
+        await SaveFeedSettingsDtoAsync(settings, cancellationToken);
     }
 
     public async Task UpdateDirectPlanAsync(UpdateDirectPlanViewModel model, CancellationToken cancellationToken = default)
@@ -2443,15 +2677,26 @@ public class FeedService : IFeedService
     }
 
     private static IReadOnlyDictionary<string, decimal> DirectKgFor(
-        string groupKey, IReadOnlyList<FeedPrice> catalog, Dictionary<string, Dictionary<string, decimal>> plans) =>
+        string groupKey, IReadOnlyList<FeedPrice> catalog, Dictionary<string, Dictionary<string, decimal>> plans,
+        IReadOnlyDictionary<string, int[]>? activeMonths, DateOnly asOf) =>
         catalog.Where(f => FeedTypes.IsDirectUse(f.UseType))
-            .ToDictionary(f => f.FeedType, f => DirectQty(groupKey, f.FeedType, plans), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(f => f.FeedType, f =>
+            {
+                var q = DirectQty(groupKey, f.FeedType, plans);
+                return FeedSeasonHelper.IsActive(f.FeedType, asOf, activeMonths) ? q : 0;
+            }, StringComparer.OrdinalIgnoreCase);
 
     private static decimal DirectCostPerGoat(
         string groupKey, IReadOnlyList<FeedPrice> catalog, IReadOnlyDictionary<string, decimal> prices,
-        Dictionary<string, Dictionary<string, decimal>> plans) =>
+        Dictionary<string, Dictionary<string, decimal>> plans,
+        IReadOnlyDictionary<string, int[]>? activeMonths, DateOnly asOf) =>
         catalog.Where(f => FeedTypes.IsDirectUse(f.UseType))
-            .Sum(f => DirectQty(groupKey, f.FeedType, plans) * prices.GetValueOrDefault(f.FeedType));
+            .Sum(f =>
+            {
+                var q = DirectQty(groupKey, f.FeedType, plans);
+                if (!FeedSeasonHelper.IsActive(f.FeedType, asOf, activeMonths)) return 0;
+                return q * prices.GetValueOrDefault(f.FeedType);
+            });
 
     private async Task<Dictionary<string, Dictionary<string, decimal>>> LoadDirectPlansAsync(CancellationToken cancellationToken)
     {
@@ -2614,6 +2859,54 @@ public class FeedService : IFeedService
         if (price is null) return;
         price.PricePerKg = Math.Round(amt / kg, 2);
         price.UpdatedDate = DateTime.UtcNow;
+    }
+
+    private async Task SyncFodderPoolFinanceAsync(FodderPoolDto dto, CancellationToken cancellationToken)
+    {
+        foreach (var item in dto.Items)
+        {
+            var cashRef = "fodder_pool:" + item.Id;
+            var txs = await _context.LedgerTransactions
+                .Where(t => t.Reference != null && (t.Reference == cashRef || t.Reference.StartsWith(cashRef + ":pl:")))
+                .ToListAsync(cancellationToken);
+            _context.LedgerTransactions.RemoveRange(txs);
+            var spread = await _context.Expenses
+                .Where(e => e.Comment != null && e.Comment.StartsWith(cashRef + ":pl:"))
+                .ToListAsync(cancellationToken);
+            _context.Expenses.RemoveRange(spread);
+
+            if (item.PaidAmount <= 0 || !item.PaidDate.HasValue || item.AccountId is not > 0)
+                continue;
+
+            if (!await _context.MoneyAccounts.AnyAsync(a => a.Id == item.AccountId && a.IsActive, cancellationToken))
+                continue;
+
+            _context.LedgerTransactions.Add(new LedgerTransaction
+            {
+                Date = item.PaidDate.Value,
+                Kind = LedgerTransactionKind.Expense,
+                AccountId = item.AccountId.Value,
+                Amount = item.PaidAmount,
+                Category = "Green fodder",
+                Reference = cashRef,
+                Notes = $"Green fodder · {item.Label}"
+            });
+
+            var months = Math.Clamp(item.AllocateMonths <= 0 ? 1 : item.AllocateMonths, 1, 12);
+            var monthly = item.Amount / months;
+            for (var i = 0; i < months; i++)
+            {
+                _context.Expenses.Add(new Expense
+                {
+                    Type = "Green fodder",
+                    Amount = Math.Round(monthly),
+                    Date = item.PaidDate.Value.AddMonths(i),
+                    Comment = $"{cashRef}:pl:{i} · {item.Label}"
+                });
+            }
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task ReversePurchaseMoneyAsync(int purchaseId, CancellationToken cancellationToken)

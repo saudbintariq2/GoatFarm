@@ -5,6 +5,8 @@ namespace GoatFarm.Application.Interfaces;
 public interface IFinanceService
 {
     Task<FinancePageViewModel> GetFinancePageAsync(string? month, CancellationToken cancellationToken = default);
+    Task<FinancePageViewModel> GetFinancePageAsync(string? month, FinancePageLoadOptions options, CancellationToken cancellationToken = default);
+    Task<FinanceMonthSnapshotViewModel> GetFinanceMonthSnapshotAsync(string? month, CancellationToken cancellationToken = default);
     Task<AssetViewModel> AddAssetAsync(CreateAssetViewModel model, CancellationToken cancellationToken = default);
     Task<IncomeViewModel> AddIncomeAsync(CreateIncomeViewModel model, CancellationToken cancellationToken = default);
     Task<ExpenseViewModel> AddExpenseAsync(CreateExpenseViewModel model, CancellationToken cancellationToken = default);
@@ -30,4 +32,6 @@ public interface IFinanceService
     decimal GetRecurringMonthlyTotal();
     Task<SalaryReconciliationViewModel> GetSalaryReconciliationAsync(CancellationToken cancellationToken = default);
     Task<FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+    Task<FinanceIntegrityViewModel> GetIntegrityCheckAsync(CancellationToken cancellationToken = default);
+    Task<RelinkUnpostedMoneyResultViewModel> RelinkUnpostedMoneyAsync(RelinkUnpostedMoneyViewModel model, CancellationToken cancellationToken = default);
 }

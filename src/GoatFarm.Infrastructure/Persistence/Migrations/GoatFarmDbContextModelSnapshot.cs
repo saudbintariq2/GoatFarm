@@ -1766,6 +1766,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<bool>("OpeningBalanceLocked")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -1986,6 +1989,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
+                    b.Property<string>("InvoiceNo")
+                        .HasColumnType("text");
+
                     b.Property<bool>("IsCredit")
                         .HasColumnType("boolean");
 
@@ -2008,11 +2014,16 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("WarehouseId");
 
                     b.ToTable("ProductSales");
                 });
@@ -3378,9 +3389,15 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ProductId");
 
+                    b.HasOne("GoatFarm.Domain.Entities.Warehouse", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId");
+
                     b.Navigation("Customer");
 
                     b.Navigation("Product");
+
+                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.ProjectExpenditure", b =>

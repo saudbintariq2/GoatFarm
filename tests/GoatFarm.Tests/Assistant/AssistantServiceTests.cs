@@ -298,6 +298,10 @@ public class AssistantServiceTests
             Calls++;
             return Task.FromResult(new Application.ViewModels.Finance.FinancePageViewModel());
         }
+        public Task<Application.ViewModels.Finance.FinancePageViewModel> GetFinancePageAsync(string? month, Application.ViewModels.Finance.FinancePageLoadOptions options, CancellationToken cancellationToken = default) =>
+            GetFinancePageAsync(month, cancellationToken);
+        public Task<Application.ViewModels.Finance.FinanceMonthSnapshotViewModel> GetFinanceMonthSnapshotAsync(string? month, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new Application.ViewModels.Finance.FinanceMonthSnapshotViewModel { Month = month ?? "" });
         public Task<Application.ViewModels.Finance.FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default) => Task.FromResult(new Application.ViewModels.Finance.FinanceStatementViewModel());
         public Task<Application.ViewModels.Finance.AssetViewModel> AddAssetAsync(Application.ViewModels.Finance.CreateAssetViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Application.ViewModels.Finance.IncomeViewModel> AddIncomeAsync(Application.ViewModels.Finance.CreateIncomeViewModel model, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -324,6 +328,10 @@ public class AssistantServiceTests
         public decimal GetRecurringMonthlyTotal() => 0;
         public Task<Application.ViewModels.Finance.SalaryReconciliationViewModel> GetSalaryReconciliationAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new Application.ViewModels.Finance.SalaryReconciliationViewModel());
+        public Task<Application.ViewModels.Finance.FinanceIntegrityViewModel> GetIntegrityCheckAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new Application.ViewModels.Finance.FinanceIntegrityViewModel());
+        public Task<Application.ViewModels.Finance.RelinkUnpostedMoneyResultViewModel> RelinkUnpostedMoneyAsync(Application.ViewModels.Finance.RelinkUnpostedMoneyViewModel model, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new Application.ViewModels.Finance.RelinkUnpostedMoneyResultViewModel());
     }
 
     private sealed class UnusedReports : IReportsService

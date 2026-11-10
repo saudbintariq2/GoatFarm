@@ -45,13 +45,16 @@
         .ToList();
     var loans = ledger.PayablesList.Where(p => p.Description.StartsWith("Loan", StringComparison.OrdinalIgnoreCase)).ToList();
     var bills = ledger.PayablesList.Where(p => !p.Description.StartsWith("Loan", StringComparison.OrdinalIgnoreCase)).ToList();
-    var cashNow = ledger.Accounts.Where(a => a.IsActive).Sum(a => a.Balance);
-    var receivables = Model.Sales.Sum(s => s.Due);
-    var payablesOpen = bills.Sum(p => Math.Max(0, p.Amount - p.PaidAmount));
-    var loansOpen = loans.Sum(p => Math.Max(0, p.Amount - p.PaidAmount));
-    var assetsOwned = cashNow + receivables + Model.LivestockValue + Model.Capital - Model.LivestockValue + Model.FixedAssetRegisterValue + Model.ProjectSpend + Model.FeedStockValue;
-    var owed = payablesOpen + loansOpen;
-    var worth = assetsOwned - owed;
+    var bs = Model.BalanceSheet;
+    var integ = Model.Integrity;
+    var cashNow = bs.CashAndBank;
+    var receivables = bs.Receivables;
+    var payablesOpen = bs.PayablesOpen;
+    var loansOpen = bs.LoansOpen;
+    var assetsOwned = bs.TotalAssets;
+    var owed = bs.TotalLiabilities;
+    var worth = bs.NetWorth;
+    var fixedAssetsOnly = bs.FixedAssetsValue;
     var capexTotal = Model.Capex.Sum(x => x.Amount);
     var salesMonth = Model.Sales.Where(s => s.DateDisplay.StartsWith(Model.Month)).ToList();
     var activePartners = ledger.Partners.Where(p => p.IsActive).ToList();
@@ -64,7 +67,7 @@
 <link rel="stylesheet" href="~/css/accounting.css" asp-append-version="true" />
 }
 
-<div id="view-finance">
+<div id="view-finance" data-ledger-loaded="@((ViewBag.LedgerLoaded as bool?) == true ? "true" : "false")">
 <div style="display:none" id="profitBanner" class="@(profit < 0 ? "loss" : "")">
     <span id="profitVal">@DisplayHelper.FormatRs(Math.Abs(profit))</span>
     <span id="profitNote">@Model.ProfitNote</span>
@@ -76,18 +79,18 @@
 </div>
 
 <div class="stats" id="finCards">
+    <div class="stat"><div class="k-ico" style="background:var(--red-tint)">↑</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(expense)</div><div class="lbl"><span class="dot" style="background:var(--red)"></span>Total spent</div><div class="lbl" style="opacity:.75;font-weight:500">running costs this month</div></div></div>
+    <div class="stat"><div class="k-ico" style="background:var(--amber-tint)">◆</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(Model.OwnerInvestmentTotal)</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Money you put in</div><div class="lbl" style="opacity:.75;font-weight:500">all-time funding (not sales)</div></div></div>
     <div class="stat"><div class="k-ico" style="background:var(--green-tint)">↓</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(income)</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Money in</div><div class="lbl" style="opacity:.75;font-weight:500">earned this month</div></div></div>
-    <div class="stat"><div class="k-ico" style="background:var(--red-tint)">↑</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(expense)</div><div class="lbl"><span class="dot" style="background:var(--red)"></span>Money out</div><div class="lbl" style="opacity:.75;font-weight:500">running costs</div></div></div>
-    @if (income <= 0)
-    {
-        <div class="stat"><div class="k-ico" style="background:var(--amber-tint)">◆</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(Model.OwnerInvestmentMonthTotal)</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>You put in</div><div class="lbl" style="opacity:.75;font-weight:500">owner funding</div></div></div>
-    }
-    else
+    @if (income > 0)
     {
         <div class="stat"><div class="k-ico" style="background:@(profit < 0 ? "var(--red-tint)" : "var(--green-tint)")">=</div><div class="k-body"><div class="num">@(profit < 0 ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(profit))</div><div class="lbl"><span class="dot" style="background:@(profit < 0 ? "var(--red)" : "var(--green)")"></span>@(profit < 0 ? "Loss" : "Profit")</div><div class="lbl" style="opacity:.75;font-weight:500">@Pct(profit, income)% of income</div></div></div>
     }
+    else
+    {
+        <div class="stat"><div class="k-ico" style="background:var(--amber-tint)">◆</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(Model.OwnerInvestmentMonthTotal)</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Funding this month</div><div class="lbl" style="opacity:.75;font-weight:500">covers spend before sales</div></div></div>
+    }
     <div class="stat"><div class="k-ico" style="background:var(--blue-tint)">🏠</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(Model.Capital)</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Capital</div><div class="lbl" style="opacity:.75;font-weight:500">goats + assets</div></div></div>
-    <div class="stat"><div class="k-ico" style="background:var(--amber-tint)">◆</div><div class="k-body"><div class="num">@DisplayHelper.FormatRs(Model.OwnerInvestmentTotal)</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Owner funding</div><div class="lbl" style="opacity:.75;font-weight:500">not income</div></div></div>
 </div>
 
 <div class="tabs" id="finance-tabs" style="margin-bottom:16px">
@@ -107,6 +110,64 @@
 </div>
 
 <div class="finview" id="fin-overview" style="@Pane("overview")">
+<div class="panel" id="fin-control-center" style="margin-bottom:16px">
+    <div class="panel-head">
+        <h2>Accounting control center</h2>
+        <span class="sub">cash position · data integrity</span>
+    </div>
+    <div class="panel-body">
+        <div class="stats" style="margin-bottom:12px">
+            <div class="stat"><div class="k-body"><div class="num">@DisplayHelper.FormatRs(cashNow)</div><div class="lbl">Cash &amp; bank now</div></div></div>
+            <div class="stat"><div class="k-body"><div class="num">@DisplayHelper.FormatRs(bs.Equity)</div><div class="lbl">Equity (funding + profit)</div></div></div>
+            <div class="stat"><div class="k-body"><div class="num" style="color:@(integ.CriticalCount > 0 ? "#8a261c" : "var(--green-dark)")">@integ.CriticalCount</div><div class="lbl">Critical issues</div></div></div>
+            <div class="stat"><div class="k-body"><div class="num">@(bs.IsBalanced ? "✓" : "⚠")</div><div class="lbl">@(bs.IsBalanced ? "Balance sheet OK" : "Out of balance")</div></div></div>
+        </div>
+        @if (integ.CriticalCount > 0 || integ.WarningCount > 0)
+        {
+            <div class="note" style="margin:0 0 12px;border-color:var(--amber)">
+                <b>@integ.Issues.Count issue@(integ.Issues.Count == 1 ? "" : "s")</b>
+                (@integ.UnlinkedFundingCount unposted funding,
+                @integ.UnlinkedIncomeCount income,
+                @integ.UnlinkedExpenseCount expenses).
+                @if (ledger.Accounts.Any(a => a.IsActive))
+                {
+                    <span> Use <b>Re-link to default account</b> after choosing where historical entries should post.</span>
+                }
+            </div>
+            <table class="tbl" style="margin-bottom:12px"><tbody>
+            @foreach (var issue in integ.Issues.Take(12))
+            {
+                <tr><td style="width:90px"><span class="chip @(issue.Severity == "critical" ? "chip-exp" : "chip-warn")">@issue.Severity</span></td><td>@issue.Message</td></tr>
+            }
+            @if (integ.Issues.Count > 12)
+            {
+                <tr><td colspan="2" class="empty">… and @(integ.Issues.Count - 12) more — open Balance sheet or refresh after fixing.</td></tr>
+            }
+            </tbody></table>
+        }
+        else
+        {
+            <p class="breed" style="margin:0 0 12px">No integrity problems flagged. Keep choosing Cash/Bank on every new entry.</p>
+        }
+        <div class="filterbar" style="margin:0">
+            <div class="field"><label>Re-link unposted entries to</label>
+                <select id="fin-relink-account">
+                    <option value="">Select account…</option>
+                    @foreach (var a in ledger.Accounts.Where(a => a.IsActive))
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="field"><label>&nbsp;</label>
+                <button type="button" class="btn btn-green" id="fin-relink-btn">Re-link to default account</button>
+            </div>
+            <div class="field"><label>&nbsp;</label>
+                <button type="button" class="btn btn-ghost" id="fin-integrity-refresh">Refresh check</button>
+            </div>
+        </div>
+    </div>
+</div>
 <div class="dash2">
 <div>
 <div class="panel">
@@ -192,7 +253,7 @@
             <div class="field"><label>Source</label><select id="i-type" data-lookup="Lookup.IncomeTypes">@foreach (var t in incomeTypes) { <option>@t</option> }</select></div>
             <div class="field"><label>Date</label><input type="date" id="i-date" value="@today"></div>
             <div class="field"><label>Amount (Rs)</label><input type="number" id="i-amt" min="0"></div>
-            <div class="field"><label>Received into</label><select id="i-account"><option value="">Select Cash / Bank account…</option>@foreach (var a in ledger.Accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name · @DisplayHelper.FormatRs(a.Balance)</option> }</select></div>
+            <div class="field"><label>Received into <span style="color:#8a261c">*</span></label><select id="i-account" required><option value="">Select Cash / Bank account…</option>@foreach (var a in ledger.Accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name · @DisplayHelper.FormatRs(a.Balance)</option> }</select></div>
             <div class="field field-comment"><label>Comment</label><input id="i-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
@@ -229,7 +290,7 @@
             <div class="field"><label>Cost type</label><select id="e-type" data-lookup="Lookup.ExpenseTypes">@foreach (var t in expenseTypes) { <option>@t</option> }</select></div>
             <div class="field"><label>Date</label><input type="date" id="e-date" value="@today"></div>
             <div class="field"><label>Amount (Rs)</label><input type="number" id="e-amt" min="0"></div>
-            <div class="field"><label>Paid from</label><select id="e-account"><option value="">Select Cash / Bank account…</option>@foreach (var a in ledger.Accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name · @DisplayHelper.FormatRs(a.Balance)</option> }</select></div>
+            <div class="field"><label>Paid from <span style="color:#8a261c">*</span></label><select id="e-account" required><option value="">Select Cash / Bank account…</option>@foreach (var a in ledger.Accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name · @DisplayHelper.FormatRs(a.Balance)</option> }</select></div>
             <div class="field field-comment"><label>Comment</label><input id="e-comment" placeholder="optional"></div>
         </div>
         <div class="goat-form-actions">
@@ -411,7 +472,7 @@
     <div class="field"><label>Opening balances (all accounts)</label><div class="price-in"><span class="pre">Rs</span><input id="cf-open" value="@Model.OpeningCash.ToString("0.##", CultureInfo.InvariantCulture)" readonly></div></div>
     <div class="field"><label>Books start from</label><input id="cf-books" type="date" value="@plFrom" readonly></div>
 </div>
-<div class="rule" style="margin-top:10px"><span class="breed">Opening balances are edited on each account under Bank &amp; Cash. Cash held now is opening balance plus every posted receipt and payment.</span></div>
+<div class="rule" style="margin-top:10px"><span class="breed">Set each account’s opening balance once under Bank &amp; Cash (then it locks when money moves). Cash held now is opening balance plus every posted receipt and payment.</span></div>
 </div></div>
 </div>
 
@@ -424,7 +485,7 @@
     <tr><td style="padding-left:22px">Cash in accounts</td><td class="num-cell" style="color:var(--blue)">@DisplayHelper.FormatRs(cashNow)</td></tr>
     <tr><td style="padding-left:22px">Customer receivables</td><td class="num-cell">@DisplayHelper.FormatRs(receivables)</td></tr>
     <tr><td style="padding-left:22px">Goats (purchase price of the herd)</td><td class="num-cell">@DisplayHelper.FormatRs(Model.LivestockValue)</td></tr>
-    <tr><td style="padding-left:22px">Machinery, sheds and land</td><td class="num-cell">@DisplayHelper.FormatRs(Model.Capital - Model.LivestockValue + Model.FixedAssetRegisterValue)</td></tr>
+    <tr><td style="padding-left:22px">Machinery, sheds and land</td><td class="num-cell">@DisplayHelper.FormatRs(fixedAssetsOnly)</td></tr>
     <tr><td style="padding-left:22px">Projects under construction</td><td class="num-cell">@DisplayHelper.FormatRs(Model.ProjectSpend)</td></tr>
     <tr><td style="padding-left:22px">Feed sitting in the store</td><td class="num-cell">@DisplayHelper.FormatRs(Model.FeedStockValue)</td></tr>
     <tr><td style="font-weight:800">Everything the farm owns</td><td class="num-cell" style="font-weight:800;color:var(--green-dark)">@DisplayHelper.FormatRs(assetsOwned)</td></tr>
@@ -433,11 +494,14 @@
     <tr><td style="padding-left:22px">Loans</td><td class="num-cell" style="color:#8a261c">@DisplayHelper.FormatRs(loansOpen)</td></tr>
     <tr><td style="font-weight:800">Everything it owes</td><td class="num-cell" style="font-weight:800;color:#8a261c">@DisplayHelper.FormatRs(owed)</td></tr>
     <tr style="background:@(worth < 0 ? "var(--red-tint)" : "var(--green-tint)")"><td style="font-weight:800">WHAT THE FARM IS WORTH</td><td class="num-cell" style="font-weight:800">@(worth < 0 ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(worth))</td></tr>
-    <tr style="background:#F6F8F4"><td colspan="2" style="font-weight:800">HOW THAT CAME ABOUT</td></tr>
-    <tr><td style="padding-left:22px">Money you put in</td><td class="num-cell" style="color:#8a5b13">@DisplayHelper.FormatRs(Model.OwnerInvestmentTotal)</td></tr>
-    <tr><td style="padding-left:22px">Profit this month</td><td class="num-cell">@(profit < 0 ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(profit))</td></tr>
+    <tr style="background:#F6F8F4"><td colspan="2" style="font-weight:800">EQUITY</td></tr>
+    <tr><td style="padding-left:22px">Money you put in (all time)</td><td class="num-cell" style="color:#8a5b13">@DisplayHelper.FormatRs(bs.OwnerFundingTotal)</td></tr>
+    <tr><td style="padding-left:22px">Profit / loss (all time)</td><td class="num-cell">@(bs.CumulativeProfit < 0 ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(bs.CumulativeProfit))</td></tr>
+    <tr><td style="font-weight:800">Owner's equity</td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(bs.Equity)</td></tr>
+    <tr><td style="padding-left:22px">Profit this month (P&amp;L)</td><td class="num-cell">@(profit < 0 ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(profit))</td></tr>
+    <tr style="background:@(bs.IsBalanced ? "var(--green-tint)" : "var(--red-tint)")"><td style="font-weight:800">Balance check</td><td class="num-cell" style="font-weight:800">@(bs.IsBalanced ? "balanced ✓" : $"off by {DisplayHelper.FormatRs(bs.ImbalanceAmount)}")</td></tr>
 </tbody></table>
-<div class="rule" id="bsNote" style="margin-top:12px"><span class="breed">Worth is cash, receivables, goats, assets, projects and feed, minus supplier bills and loans. It is a working figure from the records on this page.</span></div>
+<div class="rule" id="bsNote" style="margin-top:12px"><span class="breed">Assets should match liabilities + equity (owner funding + cumulative profit). Net worth is assets minus what you owe.</span></div>
 </div></div>
 <div class="panel">
 <div class="panel-head"><h2>Loans &amp; money owed</h2><span class="sub">what the farm still has to pay back</span></div>
@@ -560,7 +624,7 @@
     <div class="field"><label>Purpose / note</label><input id="o-note" placeholder="e.g. September top-up / goat purchase / shed construction"></div>
     <div class="field"><label>Date</label><input id="o-date" type="date" value="@today"></div>
     <div class="field"><label>Amount (Rs)</label><input id="o-amt" min="0" type="number"></div>
-    <div class="field"><label>Received into</label><select id="o-account"><option value="">Select Cash / Bank account…</option>@foreach (var a in ledger.Accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name · @DisplayHelper.FormatRs(a.Balance)</option> }</select></div>
+    <div class="field"><label>Received into <span style="color:#8a261c">*</span></label><select id="o-account" required><option value="">Select Cash / Bank account…</option>@foreach (var a in ledger.Accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name · @DisplayHelper.FormatRs(a.Balance)</option> }</select></div>
 </div>
 <div class="goat-form-actions">
     <div class="goat-form-actions-left">
@@ -578,10 +642,17 @@
 <div class="panel-head"><h2>Bank &amp; Cash accounts</h2><span class="sub">where the farm's money is held</span></div>
 <div class="panel-body">
 <div class="note" style="margin:0 0 14px"><b>Automatic account ledger.</b> Sales, funding, invoices and linked payments update the account chosen on the original record. Use this tab to see balances, transfer between your accounts, or record a receipt or payment that has no other source. Internal transfers never create income or expense.</div>
+@{
+    var lowAccounts = ledger.Accounts.Where(a => a.IsActive && a.IsLowBalance).ToList();
+}
+@if (lowAccounts.Any())
+{
+    <div class="note" style="margin:0 0 14px;border-color:#e8c4c0;background:#fff6f5"><b>Low balance:</b> @string.Join(" · ", lowAccounts.Select(a => $"{a.Name} ({DisplayHelper.FormatRs(a.Balance)})")) — record funding or review payments.</div>
+}
 <div class="stats bank-account-stats" id="bankAccountCards">
 @foreach (var a in ledger.Accounts.Where(a => a.IsActive))
 {
-    <div class="stat"><div class="lbl">@(a.Kind == "Bank" ? "🏦" : "💵") @a.Name</div><div class="num">@DisplayHelper.FormatRs(a.Balance)</div><div class="lbl">@(a.Kind == "Bank" ? "Bank account" : "Cash account")</div></div>
+    <div class="stat @(a.IsLowBalance ? "bank-stat-warn" : "")"><div class="lbl">@(a.Kind == "Bank" ? "🏦" : "💵") @a.Name</div><div class="num" style="@(a.IsLowBalance ? "color:#8a261c" : "")">@DisplayHelper.FormatRs(a.Balance)</div><div class="lbl">@(a.IsLowBalance ? "Below zero" : a.Kind == "Bank" ? "Bank account" : "Cash account")</div></div>
 }
 @if (!ledger.Accounts.Any(a => a.IsActive)) { <div class="empty">No active money accounts.</div> }
 </div>
@@ -612,17 +683,51 @@
 }
 </tbody></table>
 </div></div>
+@if (Model.MonthlyClosing.Any())
+{
+<div class="panel">
+<div class="panel-head"><h2>Monthly closing summary</h2><span class="sub">cash carry-forward · AR/AP still open until collected</span></div>
+<div class="panel-body">
+<div class="note" style="margin:0 0 12px"><b>Automatic carry forward:</b> each month’s closing cash becomes the basis for the next. Receivables and payables stay on the books until paid.</div>
+<table class="tbl"><thead><tr><th>Month</th><th class="num-cell">Opening cash</th><th class="num-cell">Money in</th><th class="num-cell">Money out</th><th class="num-cell">Closing cash</th><th class="num-cell hide-sm">Receivables</th><th class="num-cell hide-sm">Payables</th></tr></thead>
+<tbody>
+@foreach (var row in Model.MonthlyClosing)
+{
+    <tr class="@(row.Month == Model.Month ? "fin-row-selected" : "")"><td><b>@row.Month</b></td>
+        <td class="num-cell">@DisplayHelper.FormatRs(row.OpeningCash)</td>
+        <td class="num-cell">@DisplayHelper.FormatRs(row.MoneyIn)</td>
+        <td class="num-cell">@DisplayHelper.FormatRs(row.MoneyOut)</td>
+        <td class="num-cell" style="font-weight:700">@DisplayHelper.FormatRs(row.ClosingCash)</td>
+        <td class="num-cell hide-sm">@DisplayHelper.FormatRs(row.ReceivablesOpen)</td>
+        <td class="num-cell hide-sm">@DisplayHelper.FormatRs(row.PayablesOpen)</td></tr>
+}
+</tbody></table>
+</div></div>
+}
 <div class="panel">
 <div class="panel-head"><h2>Manage accounts</h2><button type="button" class="btn" id="addMoneyAccount">+ Add account</button></div>
 <div class="panel-body">
 <div id="moneyAccountRows">
 @foreach (var a in ledger.Accounts)
 {
-    <div class="money-account-row" data-account-id="@a.Id">
+    var openingProtected = a.OpeningBalanceProtected;
+    <div class="money-account-row" data-account-id="@a.Id" data-opening-protected="@(openingProtected ? "true" : "false")" data-opening-balance="@a.OpeningBalance.ToString("0.##", CultureInfo.InvariantCulture)">
         <input data-ma-name value="@a.Name" placeholder="Account name">
         <select data-ma-type>@if (a.Kind == "Bank") { <option value="Cash">Cash</option><option value="Bank" selected>Bank</option> } else { <option value="Cash" selected>Cash</option><option value="Bank">Bank</option> }</select>
-        <input type="number" data-ma-opening value="@a.OpeningBalance.ToString("0.##", CultureInfo.InvariantCulture)" title="Opening balance">
-        <label class="partner-active"><input type="checkbox" data-ma-active @(a.IsActive ? "checked" : "")> Active · now @DisplayHelper.FormatRs(a.Balance)</label>
+        <div class="ma-opening-wrap">
+            <span class="breed">Opening Rs</span>
+            <input type="number" data-ma-opening value="@a.OpeningBalance.ToString("0.##", CultureInfo.InvariantCulture)" title="Opening balance" @(openingProtected ? "disabled" : "readonly")>
+            @if (openingProtected)
+            {
+                <small class="ma-opening-lock">Protected</small>
+            }
+            else
+            {
+                <button type="button" class="btn btn-sm" data-set-opening="@a.Id">Set opening balance</button>
+                <small class="breed">Once only, before first transaction</small>
+            }
+        </div>
+        <label class="partner-active"><input type="checkbox" data-ma-active @(a.IsActive ? "checked" : "")> Active · now @DisplayHelper.FormatRs(a.Balance)@(a.IsLowBalance ? " · low" : "")</label>
     </div>
 }
 </div>

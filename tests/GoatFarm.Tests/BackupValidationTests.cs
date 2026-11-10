@@ -35,8 +35,9 @@ public class BackupValidationTests
     public async Task NewerFormatVersion_IsRejected()
     {
         var backup = ValidV2();
-        backup["formatVersion"] = 3;
-        Assert.Contains(await RejectAsync(backup), e => e.Contains("version 3"));
+        var newer = BackupFormat.CurrentVersion + 1;
+        backup["formatVersion"] = newer;
+        Assert.Contains(await RejectAsync(backup), e => e.Contains($"version {newer}"));
     }
 
     [Theory]

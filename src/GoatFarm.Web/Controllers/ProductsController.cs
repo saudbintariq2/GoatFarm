@@ -98,7 +98,14 @@ public class ProductsController : Controller
     public async Task<IActionResult> SaveSale([FromBody] SaveProductSaleViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _products.SaveProductSaleAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _products.SaveProductSaleAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]

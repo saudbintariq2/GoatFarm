@@ -208,6 +208,17 @@
         }
         else {<tr><td colspan="3" class="empty">No vaccinations recorded yet.</td></tr>}
         </tbody></table>
+        @if (Model.TagHistory.Any())
+        {
+            <div class="rule" style="margin:14px 0 8px"><b>Per-goat history</b> <span class="breed">(latest 200 doses)</span></div>
+            <table class="tbl"><thead><tr><th>Date</th><th>Tag</th><th>Vaccine</th></tr></thead>
+            <tbody>
+            @foreach (var row in Model.TagHistory)
+            {
+                <tr><td><span class="breed">@row.DateDisplay</span></td><td><span class="tag">@row.GoatTag</span></td><td>@row.VaccineName</td></tr>
+            }
+            </tbody></table>
+        }
         <div class="add-grid" id="histForm" style="margin-top:14px;display:none;grid-template-columns:1fr 1fr 1fr">
             <div class="field"><label>Date</label><input type="date" id="h-date"></div>
             <div class="field"><label>Vaccine</label><input id="h-vaccine" disabled></div>

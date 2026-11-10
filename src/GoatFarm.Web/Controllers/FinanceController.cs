@@ -10,6 +10,13 @@ namespace GoatFarm.Web.Controllers;
 
 public class FinanceController : Controller
 {
+    private static readonly HashSet<string> FullLedgerTabs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "bank", "salesar", "budget", "profitshare", "tx"
+    };
+
+    private static bool NeedsFullLedgerTab(string tab) => FullLedgerTabs.Contains(tab);
+
     private readonly IFinanceService _financeService;
     private readonly ILedgerService _ledgerService;
     private readonly ILookupService _lookupService;
@@ -43,11 +50,25 @@ public class FinanceController : Controller
         ViewBag.SaleTypes = await _lookupService.GetListAsync(LookupSettingKeys.SaleTypes, cancellationToken);
         ViewBag.FundingShareholders = await _lookupService.GetListAsync(LookupSettingKeys.FundingShareholders, cancellationToken);
         var tab = Request.Query["tab"].ToString();
-        ViewBag.FinanceTab = string.IsNullOrWhiteSpace(tab) ? "overview" : tab;
+        tab = string.IsNullOrWhiteSpace(tab) ? "overview" : tab;
+        ViewBag.FinanceTab = tab;
         ViewBag.SalaryReconciliation = await _financeService.GetSalaryReconciliationAsync(cancellationToken);
-        ViewBag.LedgerPage = await _ledgerService.GetPageAsync(month, cancellationToken);
-        ViewBag.Statements = await _ledgerService.GetStatementsAsync(month, cancellationToken);
-        return View(await _financeService.GetFinancePageAsync(month, cancellationToken));
+
+        var needsFullLedger = NeedsFullLedgerTab(tab);
+        ViewBag.LedgerLoaded = needsFullLedger;
+        if (needsFullLedger)
+        {
+            ViewBag.LedgerPage = await _ledgerService.GetPageAsync(month, cancellationToken);
+            ViewBag.Statements = await _ledgerService.GetStatementsAsync(month, cancellationToken);
+        }
+        else
+        {
+            ViewBag.LedgerPage = await _ledgerService.GetAccountsOverviewAsync(cancellationToken);
+            ViewBag.Statements = null;
+        }
+
+        var loadOptions = tab == "overview" ? FinancePageLoadOptions.Overview : FinancePageLoadOptions.Full;
+        return View(await _financeService.GetFinancePageAsync(month, loadOptions, cancellationToken));
     }
 
     [HttpGet]
@@ -62,7 +83,27 @@ public class FinanceController : Controller
     public async Task<IActionResult> SaveMoneyAccount([FromBody] SaveMoneyAccountViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _ledgerService.SaveAccountAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _ledgerService.SaveAccountAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SetOpeningBalance([FromBody] SetMoneyAccountOpeningViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _ledgerService.SetOpeningBalanceAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]
@@ -115,6 +156,23 @@ public class FinanceController : Controller
     [HttpGet]
     public async Task<IActionResult> SalaryReconciliation(CancellationToken cancellationToken) =>
         Json(await _financeService.GetSalaryReconciliationAsync(cancellationToken));
+
+    [HttpGet]
+    public async Task<IActionResult> IntegrityCheck(CancellationToken cancellationToken) =>
+        Json(await _financeService.GetIntegrityCheckAsync(cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> RelinkUnpostedMoney([FromBody] RelinkUnpostedMoneyViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _financeService.RelinkUnpostedMoneyAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 
     [HttpPost]
     public async Task<IActionResult> AddAsset([FromBody] CreateAssetViewModel model, CancellationToken cancellationToken)

@@ -1,7 +1,9 @@
 using System.Text.Json;
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Ledger;
 using GoatFarm.Application.ViewModels.Products;
+using Microsoft.Extensions.Configuration;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
@@ -14,11 +16,13 @@ public class ProductsService : IProductsService
 {
     private readonly GoatFarmDbContext _context;
     private readonly ILedgerService _ledger;
+    private readonly string _deviceCode;
 
-    public ProductsService(GoatFarmDbContext context, ILedgerService ledger)
+    public ProductsService(GoatFarmDbContext context, ILedgerService ledger, IConfiguration configuration)
     {
         _context = context;
         _ledger = ledger;
+        _deviceCode = configuration["ApplicationSettings:DeviceCode"] ?? "K7Q";
     }
 
     public async Task EnsureSeededAsync(CancellationToken cancellationToken = default)
@@ -351,6 +355,7 @@ public class ProductsService : IProductsService
             {
                 Id = s.Id,
                 DateDisplay = s.Date.ToString("yyyy-MM-dd"),
+                InvoiceNo = s.InvoiceNo,
                 ProductName = s.ProductName,
                 Customer = s.Customer?.Name,
                 Qty = s.Qty,
@@ -513,14 +518,33 @@ public class ProductsService : IProductsService
 
     public async Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default)
     {
+        if (model.Qty <= 0) throw new InvalidOperationException("Enter quantity sold.");
         var amount = model.Qty * model.Rate;
+        var isNew = model.Id is not > 0;
         ProductSale row;
-        if (model.Id is > 0)
+        if (!isNew)
             row = await _context.ProductSales.FirstAsync(s => s.Id == model.Id, cancellationToken);
         else { row = new ProductSale(); _context.ProductSales.Add(row); }
+
+        if (isNew && model.ProductId is > 0 && model.WarehouseId is > 0)
+        {
+            var moves = await _context.StockMovements.AsNoTracking()
+                .Where(m => m.ProductId == model.ProductId && m.WarehouseId == model.WarehouseId)
+                .ToListAsync(cancellationToken);
+            var onHand = ComputeBalances(moves).FirstOrDefault(b => b.productId == model.ProductId && b.warehouseId == model.WarehouseId.Value).qty;
+            if (model.Qty > onHand + 0.0005m)
+                throw new InvalidOperationException($"Not enough stock ({onHand:0.##} available).");
+        }
+
+        if (isNew)
+        {
+            row.InvoiceNo = await NextProductSaleInvoiceNoAsync(model.Date, cancellationToken);
+        }
+
         row.Date = model.Date;
         row.CustomerId = model.CustomerId;
         row.ProductId = model.ProductId;
+        row.WarehouseId = model.WarehouseId;
         row.ProductName = model.ProductName.Trim();
         row.Qty = model.Qty;
         row.Rate = model.Rate;
@@ -530,11 +554,28 @@ public class ProductsService : IProductsService
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
 
+        if (isNew && model.ProductId is > 0 && model.WarehouseId is > 0)
+        {
+            _context.StockMovements.Add(new StockMovement
+            {
+                Date = model.Date,
+                Type = StockMovementType.Issue,
+                ProductId = model.ProductId.Value,
+                WarehouseId = model.WarehouseId.Value,
+                Qty = model.Qty,
+                UnitCost = 0,
+                Notes = $"Sale · {row.InvoiceNo}",
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
         int? invoiceId = null;
         if (model.IsCredit && model.CustomerId is > 0 && amount > 0)
         {
             var due = model.Date.AddDays(14);
-            var desc = $"Product sale: {row.ProductName} × {model.Qty}";
+            var desc = $"Product sale {row.InvoiceNo}: {row.ProductName} × {model.Qty}";
             if (!string.IsNullOrWhiteSpace(model.Notes)) desc += " — " + model.Notes.Trim();
             var inv = new CustomerInvoice
             {
@@ -553,7 +594,23 @@ public class ProductsService : IProductsService
             invoiceId = inv.Id;
         }
 
-        return new { id = row.Id, invoiceId };
+        return new { id = row.Id, invoiceId, invoiceNo = row.InvoiceNo };
+    }
+
+    private async Task<string> NextProductSaleInvoiceNoAsync(DateOnly date, CancellationToken cancellationToken)
+    {
+        var prefix = $"SF-{date:yyyyMM}-{_deviceCode.Trim().ToUpperInvariant()}-";
+        var existing = await _context.ProductSales.AsNoTracking()
+            .Where(s => s.InvoiceNo != null && s.InvoiceNo.StartsWith(prefix))
+            .Select(s => s.InvoiceNo!)
+            .ToListAsync(cancellationToken);
+        var seq = existing.Count + 1;
+        string candidate;
+        do
+        {
+            candidate = FarmRecordNumberFormat.FormatSaleInvoice(_deviceCode, date, seq++);
+        } while (existing.Any(x => string.Equals(x, candidate, StringComparison.OrdinalIgnoreCase)));
+        return candidate;
     }
 
     public async Task<object> SavePasteurizationAsync(SavePasteurizationViewModel model, CancellationToken cancellationToken = default)

@@ -1,4 +1,10 @@
-<div class="note"><b>Backup center:</b> download a full JSON snapshot or restore from a file. Restore replaces farm data — use only trusted backups.</div>
+@using GoatFarm.Application.ViewModels.Backup
+@{
+    var stored = ViewBag.StoredBackups as IReadOnlyList<StoredBackupFileViewModel> ?? Array.Empty<StoredBackupFileViewModel>();
+    var canRestore = ViewBag.CanRestore as bool? == true;
+}
+
+<div class="note"><b>Backup center:</b> download a full JSON snapshot, automatic server copies, and restore (administrators only).</div>
 
 <div class="panel">
     <div class="panel-head"><h2>Export</h2></div>
@@ -11,8 +17,60 @@
 </div>
 
 <div class="panel">
+    <div class="panel-head"><h2>CSV exports</h2><span class="sub">spreadsheet snapshots</span></div>
+    <div class="panel-body">
+        <p class="sub" style="margin:0 0 12px">Herd, finance (current month), feed, health, breeding, and open tasks.</p>
+        <div class="backup-actions" style="flex-wrap:wrap;gap:8px">
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="herd">Herd</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="finance">Finance</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="feed">Feed</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="health">Health</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="breeding">Breeding</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="tasks">Tasks</a>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Automatic backups</h2><span class="sub">weekly when enabled in server config</span></div>
+    <div class="panel-body table-wrap">
+        @if (!stored.Any())
+        {
+            <p class="empty">No server-stored backups yet. Enable <code>Backup:AutomaticEnabled</code> on the server, or restore will still save a pre-restore snapshot.</p>
+        }
+        else
+        {
+            <table class="tbl">
+                <thead><tr><th>When</th><th>Type</th><th class="num-cell">Size</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var b in stored)
+                {
+                    <tr>
+                        <td>@b.CreatedDisplay</td>
+                        <td>@b.Label</td>
+                        <td class="num-cell">@(b.SizeBytes / 1024) KB</td>
+                        <td><a class="btn btn-ghost btn-sm" asp-action="DownloadStored" asp-route-name="@b.FileName">Download</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="panel">
     <div class="panel-head"><h2>Import / restore</h2></div>
     <div class="panel-body backup-panel-body">
+        @if (!canRestore)
+        {
+            <p class="note" style="border-color:var(--amber)">Only an <b>Admin</b> user can restore. You can still download backups.</p>
+        }
+        else
+        {
+            <p class="note">A full snapshot is saved automatically <b>before</b> every restore.</p>
+        }
+        @if (canRestore)
+        {
         <form id="backupImportForm" class="backup-import-form" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
             <div class="field">
@@ -27,7 +85,7 @@
                 <button type="submit" class="btn btn-danger">Restore from backup</button>
             </div>
         </form>
-        <p class="note" style="margin-top:12px">You can also export/import from Dashboard if you have admin access there.</p>
+        }
     </div>
 </div>
 
@@ -41,7 +99,7 @@ document.getElementById('backupFileInput')?.addEventListener('change', e => {
 
 document.getElementById('backupImportForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!confirm('Restore will replace current farm data. Continue?')) return;
+  if (!confirm('Restore will replace current farm data. A pre-restore snapshot will be saved first. Continue?')) return;
   const fd = new FormData(e.target);
   const token = fd.get('__RequestVerificationToken');
   const file = fd.get('file');

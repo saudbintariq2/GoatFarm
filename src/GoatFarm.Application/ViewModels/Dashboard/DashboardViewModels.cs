@@ -1,10 +1,45 @@
+using GoatFarm.Application.ViewModels.Approval;
 using GoatFarm.Application.ViewModels.Breeding;
 using GoatFarm.Application.ViewModels.Feed;
+using GoatFarm.Application.ViewModels.Finance;
 using GoatFarm.Application.ViewModels.Goats;
+using GoatFarm.Application.ViewModels.Ledger;
 using GoatFarm.Application.ViewModels.Reminders;
 using GoatFarm.Application.ViewModels.Vaccines;
 
 namespace GoatFarm.Application.ViewModels.Dashboard;
+
+public class DashboardHerdSliceViewModel
+{
+    public string Name { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
+public class DashboardTrendPointViewModel
+{
+    public string Month { get; set; } = string.Empty;
+    public string MonthLabel { get; set; } = string.Empty;
+    public int HerdTotal { get; set; }
+    public decimal MilkLiters { get; set; }
+    public int Births { get; set; }
+    public decimal MoneyIn { get; set; }
+}
+
+public class DashboardBreedingMonthViewModel
+{
+    public string MonthLabel { get; set; } = string.Empty;
+    public int Crosses { get; set; }
+    public int Births { get; set; }
+}
+
+public class DashboardRecentGoatViewModel
+{
+    public int Id { get; set; }
+    public string Tag { get; set; } = string.Empty;
+    public string Breed { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string WhenDisplay { get; set; } = string.Empty;
+}
 
 public class DashboardBreedSliceViewModel
 {
@@ -36,6 +71,22 @@ public class DashboardLedgerRowViewModel
     public string? Detail { get; set; }
     public decimal Amount { get; set; }
     public string AmountDisplay { get; set; } = string.Empty;
+}
+
+public class DashboardTodayItemViewModel
+{
+    public string Icon { get; set; } = "•";
+    public string Text { get; set; } = string.Empty;
+    public string? Subtext { get; set; }
+    public string? Href { get; set; }
+    public string Tone { get; set; } = "var(--ink)";
+}
+
+public class DashboardAlertViewModel
+{
+    public string Severity { get; set; } = "info";
+    public string Message { get; set; } = string.Empty;
+    public string? Href { get; set; }
 }
 
 public class DashboardViewModel
@@ -74,6 +125,11 @@ public class DashboardViewModel
     public decimal MilkTodayLiters { get; set; }
     public IReadOnlyList<DashboardMilkDayViewModel> MilkLast7Days { get; set; } = [];
     public IReadOnlyList<DashboardBreedSliceViewModel> BreedDistribution { get; set; } = [];
+    public IReadOnlyList<DashboardHerdSliceViewModel> HerdComposition { get; set; } = [];
+    public IReadOnlyList<DashboardTrendPointViewModel> SixMonthTrend { get; set; } = [];
+    public IReadOnlyList<DashboardBreedingMonthViewModel> BreedingLast12Months { get; set; } = [];
+    public IReadOnlyList<DashboardRecentGoatViewModel> RecentGoats { get; set; } = [];
+    public IReadOnlyList<ApprovalRequestViewModel> PendingApprovalItems { get; set; } = [];
     public int HealthHealthy { get; set; }
     public int HealthUnderObservation { get; set; }
     public int HealthSick { get; set; }
@@ -85,4 +141,12 @@ public class DashboardViewModel
     public decimal PayablesOpen { get; set; }
     public decimal ProductStockValue { get; set; }
     public int PendingApprovals { get; set; }
+
+    public IReadOnlyList<DashboardTodayItemViewModel> TodayAtFarm { get; set; } = [];
+    public IReadOnlyList<MoneyAccountRowViewModel> CashAccounts { get; set; } = [];
+    public decimal CashAndBankTotal { get; set; }
+    public IReadOnlyList<DashboardAlertViewModel> TopAlerts { get; set; } = [];
+    public IReadOnlyList<FinanceLineViewModel> MonthIncomeLines { get; set; } = [];
+    public IReadOnlyList<FinanceLineViewModel> MonthExpenseLines { get; set; } = [];
+    public int IntegrityCriticalCount { get; set; }
 }

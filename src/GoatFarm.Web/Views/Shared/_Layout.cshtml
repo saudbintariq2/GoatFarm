@@ -14,9 +14,11 @@
 
     var activeTab = ViewData["ActiveTab"]?.ToString() ?? "";
 
-    var farmName = Configuration["ApplicationSettings:FarmName"] ?? "Goat Records";
+    var farmName = Configuration["ApplicationSettings:FarmName"] ?? "Sandeel Farms";
 
     var farmLocation = Configuration["ApplicationSettings:FarmLocation"] ?? "";
+    var deviceCode = Configuration["ApplicationSettings:DeviceCode"] ?? "K7Q";
+    var brandSubtitle = Configuration["ApplicationSettings:BrandSubtitle"] ?? "Farm management";
 
     var isAuthenticated = User.Identity?.IsAuthenticated == true;
 
@@ -46,13 +48,13 @@
 
         (FarmTabs.Products, "Products", "Products", "products"),
 
-        (FarmTabs.Feed, "Feed", "Feed & Inventory", "feed"),
+        (FarmTabs.Feed, "Feed", "Feed", "feed"),
 
         (FarmTabs.Trading, "Trading", "Trading", "trading"),
 
-        (FarmTabs.Vaccines, "Vaccine", "Health & vaccines", "health"),
+        (FarmTabs.Vaccines, "Vaccine", "Health", "health"),
 
-        (FarmTabs.Finance, "Finance", "Accounting", "finance"),
+        (FarmTabs.Finance, "Finance", "Finance", "finance"),
 
         (FarmTabs.Projects, "Projects", "Projects & Assets", "projects"),
 
@@ -60,7 +62,7 @@
 
         (FarmTabs.Tasks, "Tasks", "Tasks", "tasks"),
 
-        (FarmTabs.Admin, "Admin", "Users & Audit", "admin"),
+        (FarmTabs.Admin, "Admin", "Admin", "admin"),
 
         (FarmTabs.Search, "Search", "Search", "search")
 
@@ -80,12 +82,12 @@
 
         ["breeding"] = ("Breeding", "Ready → crossed → scan → birth", "💞"),
 
-        ["health"] = ("Health & vaccines", "Schedules, due lists and purchases", "✚"),
+        ["health"] = ("Health", "Schedules, due lists and purchases", "✚"),
 
         ["products"] = ("Products", "Milk, meat, stock and sales", "🥛"),
         ["trading"] = ("Trading", "Separate buy/sell books", "📦"),
         ["projects"] = ("Projects & Assets", "Plan farm construction, capital spending, equipment and solar", "🏗"),
-        ["admin"] = ("Users & audit", "Approvals, audit log, profile", "👥"),
+        ["admin"] = ("Admin", "Approvals, audit log, users, profile", "👥"),
         ["backup"] = ("Backup center", "Export and restore your farm", "💾"),
         ["milk"] = ("Milk", "Collect, sell and account for waste", "🥛"),
 
@@ -158,7 +160,7 @@
 
     <meta name="csrf-token" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken">
 
-    <title>@farmName — Farm Software</title>
+    <title>@farmName — @brandSubtitle</title>
 
     <link rel="icon" href="~/images/goat-logo.png" type="image/png" asp-append-version="true" />
 
@@ -200,7 +202,7 @@
 
                         <b>@brandUpper</b>
 
-                        <span>GOAT FARM MANAGEMENT</span>
+                        <span>@brandSubtitle.ToUpperInvariant()</span>
 
                     </div>
 
@@ -338,32 +340,29 @@
 
                             }
 
-                            @if (visibleTabs.Contains(FarmTabs.Tasks))
+                            @if (visibleTabs.Contains(FarmTabs.Admin) || visibleTabs.Contains(FarmTabs.Tasks))
 
                             {
 
-                                <a class="farm-header-bell" asp-controller="Tasks" asp-action="Index" asp-route-filter="mine" title="My open tasks">
+                                <a class="farm-header-bell" asp-controller="Admin" asp-action="Index" title="Approvals &amp; tasks" id="headerNoticesLink">
 
                                     <span aria-hidden="true">🔔</span>
-
-                                    <span class="farm-header-bell-badge" id="headerTaskBadge" hidden>0</span>
-
-                                </a>
-
-                            }
-
-                            @if (visibleTabs.Contains(FarmTabs.Admin))
-
-                            {
-
-                                <a class="farm-header-bell" asp-controller="Admin" asp-action="Index" title="Pending approvals" id="headerNoticesLink">
-
-                                    <span aria-hidden="true">📋</span>
 
                                     <span class="farm-header-bell-badge" id="headerNotifBadge" hidden>0</span>
 
                                 </a>
 
+                            }
+
+                            <div class="farm-header-sync" id="farmSyncStatus" title="Connection and device code for record numbering">
+                                <span class="farm-sync-dot" id="farmSyncDot" aria-hidden="true"></span>
+                                <span class="farm-sync-label" id="farmSyncLabel">Online</span>
+                                <span class="farm-sync-device">@deviceCode</span>
+                            </div>
+
+                            @if (assistantUiEnabled && visibleTabs.Contains(FarmTabs.Assistant))
+                            {
+                                <button type="button" class="btn btn-ghost btn-sm farm-header-voice" id="headerVoiceAssistant" title="AI assistant (English / Urdu)">🎙 Assistant</button>
                             }
 
                             <div class="farm-header-datetime" aria-live="polite">
@@ -375,6 +374,10 @@
                                     <b id="headerClockDate">@DateTime.Now.ToString("ddd, d MMM yyyy")</b>
 
                                     <span id="headerClockTime">@DateTime.Now.ToString("hh:mm tt")</span>
+                                    @if (!string.IsNullOrWhiteSpace(farmLocation))
+                                    {
+                                        <span class="farm-header-loc">@farmLocation</span>
+                                    }
 
                                 </div>
 
@@ -495,12 +498,50 @@
 
             })();
 
-            fetch('/Admin/PendingApprovalCount').then(r => r.ok ? r.json() : null).then(data => {
+            (async () => {
               const badge = document.getElementById('headerNotifBadge');
-              if (!badge || !data || typeof data.count !== 'number') return;
-              const n = data.count;
-              if (n > 0) { badge.hidden = false; badge.textContent = String(n); }
-            }).catch(() => {});
+              const link = document.getElementById('headerNoticesLink');
+              if (!badge) return;
+              let approvals = 0;
+              let tasks = 0;
+              try {
+                const r = await fetch('/Admin/NotificationSummary');
+                if (r.ok) {
+                  const d = await r.json();
+                  approvals = d.approvals || 0;
+                  tasks = d.tasks || 0;
+                } else {
+                  const tr = await fetch('/Tasks/MyOpenCount');
+                  if (tr.ok) tasks = (await tr.json()).count || 0;
+                }
+              } catch { /* offline */ }
+              const n = approvals + tasks;
+              if (n > 0) {
+                badge.hidden = false;
+                badge.textContent = String(n);
+                if (link) {
+                  const parts = [];
+                  if (approvals > 0) parts.push(approvals + ' approval' + (approvals === 1 ? '' : 's'));
+                  if (tasks > 0) parts.push(tasks + ' open task' + (tasks === 1 ? '' : 's'));
+                  link.title = parts.join(' · ') || 'Notifications';
+                }
+              }
+            })();
+
+            const syncDot = document.getElementById('farmSyncDot');
+            const syncLabel = document.getElementById('farmSyncLabel');
+            const setSync = () => {
+              const on = navigator.onLine;
+              if (syncDot) syncDot.classList.toggle('is-offline', !on);
+              if (syncLabel) syncLabel.textContent = on ? 'Online' : 'Offline';
+            };
+            window.addEventListener('online', setSync);
+            window.addEventListener('offline', setSync);
+            setSync();
+
+            document.getElementById('headerVoiceAssistant')?.addEventListener('click', () => {
+              document.getElementById('sideAiAssistantBtn')?.click();
+            });
 
         </script>
 

@@ -1,15 +1,28 @@
 using System.Text.Json;
 using GoatFarm.Application.Common;
+using GoatFarm.Infrastructure.Configuration;
 using GoatFarm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace GoatFarm.Infrastructure.Services;
 
-public class BackupService : Application.Interfaces.IBackupService
+public partial class BackupService : Application.Interfaces.IBackupService
 {
     private readonly GoatFarmDbContext _context;
+    private readonly BackupOptions _backupOptions;
+    private readonly IHostEnvironment? _hostEnvironment;
 
-    public BackupService(GoatFarmDbContext context) => _context = context;
+    public BackupService(
+        GoatFarmDbContext context,
+        IOptions<BackupOptions>? backupOptions = null,
+        IHostEnvironment? hostEnvironment = null)
+    {
+        _context = context;
+        _backupOptions = backupOptions?.Value ?? new BackupOptions();
+        _hostEnvironment = hostEnvironment;
+    }
 
     public static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
 

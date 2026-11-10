@@ -359,7 +359,7 @@ body.farm-pro #view-finance #fin-salary .tbl input[type="number"] {
 
 #fin-bank .money-account-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.5fr) 110px minmax(140px, 0.9fr) minmax(160px, 1fr);
+  grid-template-columns: minmax(160px, 1.3fr) 100px minmax(200px, 1.15fr) minmax(180px, 1fr);
   gap: 10px;
   align-items: center;
   padding: 12px 14px;
@@ -390,6 +390,28 @@ body.farm-pro #view-finance #fin-salary .tbl input[type="number"] {
   flex-shrink: 0;
   margin: 0;
   padding: 0;
+}
+
+#fin-bank .ma-opening-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+#fin-bank .ma-opening-wrap input {
+  min-height: 44px;
+}
+
+#fin-bank .ma-opening-lock {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+#fin-bank .bank-stat-warn {
+  border-color: #e8c4c0;
+  background: #fff9f8;
 }
 
 #fin-capital .shareholder-manager {

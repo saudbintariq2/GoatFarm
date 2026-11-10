@@ -128,8 +128,8 @@ public class ReportsService : IReportsService
         }
 
         var totalGoats = goats.Count;
-        var confirmed = goats.Where(g => g.MatedDate.HasValue && g.KidsCount.HasValue && g.KidsCount > 0).ToList();
-        var waiting = goats.Where(g => g.MatedDate.HasValue && (!g.KidsCount.HasValue || g.KidsCount == 0)).ToList();
+        var confirmed = goats.Where(PregnancyRules.IsConfirmedPregnant).ToList();
+        var waiting = goats.Where(PregnancyRules.IsAwaitingScan).ToList();
         var emptyCount = emptyLogs.Count;
         var scans = confirmed.Count + emptyCount;
         var concRate = scans > 0 ? (int)Math.Round(confirmed.Count / (double)scans * 100) : (int?)null;
@@ -218,6 +218,8 @@ public class ReportsService : IReportsService
         var capexOpex = await BuildCapexOpexSectionAsync(range, cancellationToken);
         var profitShare = await BuildProfitShareSectionAsync(range, incTot - expTot, cancellationToken);
         var projectsAssets = await BuildProjectsSectionAsync(cancellationToken);
+        var logistics = await BuildLogisticsSectionAsync(range, cancellationToken);
+        var owners = await BuildOwnersSectionAsync(range, incTot - expTot, cancellationToken);
 
         return new ReportsPageViewModel
         {
@@ -245,7 +247,62 @@ public class ReportsService : IReportsService
             Comparison = comparison,
             CapexOpex = capexOpex,
             ProfitShare = profitShare,
-            ProjectsAssets = projectsAssets
+            ProjectsAssets = projectsAssets,
+            Logistics = logistics,
+            Owners = owners
+        };
+    }
+
+    private async Task<ReportLogisticsSectionViewModel> BuildLogisticsSectionAsync(
+        ReportRange range, CancellationToken cancellationToken)
+    {
+        var rows = await _context.TransportShipments.AsNoTracking()
+            .OrderByDescending(s => s.Date)
+            .ToListAsync(cancellationToken);
+        var inRange = rows.Where(s => range.Test(s.Date)).ToList();
+        return new ReportLogisticsSectionViewModel
+        {
+            ShipmentCount = inRange.Count,
+            TotalQty = inRange.Sum(s => s.Qty),
+            TotalCost = inRange.Sum(s => s.Cost),
+            Rows = inRange.Take(80).Select(s => new ReportLogisticsRowViewModel
+            {
+                Date = s.Date.ToString("yyyy-MM-dd"),
+                Route = $"{s.FromLocation} → {s.ToLocation}",
+                ShipmentType = s.ShipmentType,
+                Qty = s.Qty,
+                Unit = s.Unit,
+                Cost = s.Cost,
+                CostPerUnit = s.CostPerUnit,
+                Transporter = s.Transporter
+            }).ToList()
+        };
+    }
+
+    private async Task<ReportOwnersSectionViewModel> BuildOwnersSectionAsync(
+        ReportRange range, decimal netProfit, CancellationToken cancellationToken)
+    {
+        var investments = await _context.OwnerInvestments.AsNoTracking()
+            .OrderByDescending(o => o.Date).ToListAsync(cancellationToken);
+        var partners = await _context.ProfitSharePartners.AsNoTracking()
+            .Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync(cancellationToken);
+        var inRange = investments.Where(o => range.Test(o.Date)).ToList();
+        return new ReportOwnersSectionViewModel
+        {
+            TotalFunding = investments.Sum(o => o.Amount),
+            FundingInPeriod = inRange.Sum(o => o.Amount),
+            Investments = inRange.Take(100).Select(o => new ReportOwnerRowViewModel
+            {
+                Date = o.Date.ToString("yyyy-MM-dd"),
+                Note = o.Note,
+                Amount = o.Amount
+            }).ToList(),
+            ProfitPartners = partners.Select(p => new ReportProfitShareRowViewModel
+            {
+                Name = p.Name,
+                SharePercent = p.SharePercent,
+                ShareAmount = netProfit > 0 ? Math.Round(netProfit * p.SharePercent / 100m, 0) : 0
+            }).ToList()
         };
     }
 
@@ -1269,7 +1326,7 @@ public class ReportsService : IReportsService
             var v = (rc.Period == RecurringCostPeriod.Year ? rc.Amount / 12m : rc.Amount) * range.MonthCount;
             if (v > 0) map[rc.Name] = map.GetValueOrDefault(rc.Name) + v;
         }
-        foreach (var e in expenses.Where(x => range.Test(x.Date)))
+        foreach (var e in expenses.Where(x => range.Test(x.Date) && !FinanceExpenseRules.IsDuplicateVaccinePurchase(x.Type)))
             map[e.Type] = map.GetValueOrDefault(e.Type) + e.Amount;
         return map;
     }

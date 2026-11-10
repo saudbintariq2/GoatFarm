@@ -276,6 +276,16 @@ public class FodderPoolItemViewModel
 
     public decimal Amount { get; set; }
 
+  public string? PaidDate { get; set; }
+
+  public int AllocateMonths { get; set; } = 1;
+
+  public int? AccountId { get; set; }
+
+  public decimal PaidAmount { get; set; }
+
+  public bool PostedToFinance { get; set; }
+
 }
 
 
@@ -700,6 +710,18 @@ public class FeedDirectFeedViewModel
 
     public string DisplayName { get; set; } = string.Empty;
 
+    public int[] ActiveMonths { get; set; } = [];
+
+    public string SeasonLabel { get; set; } = "all year";
+
+    public bool IsActiveNow { get; set; } = true;
+
+}
+
+public class UpdateFeedActiveMonthsViewModel
+{
+    public string FeedType { get; set; } = string.Empty;
+    public int[] Months { get; set; } = [];
 }
 
 

@@ -207,12 +207,12 @@ public class SearchService : ISearchService
             }
             else if (next.Value.Days <= window)
             {
-                status = $"Due in {next.Value.Days} day{(next.Value.Days == 1 ? "" : "s")}";
+                status = $"Upcoming · {next.Value.Days} day{(next.Value.Days == 1 ? "" : "s")}";
                 statusCss = "chip-kid";
             }
             else
             {
-                status = $"Due {dueDate}";
+                status = $"Upcoming · {dueDate}";
                 statusCss = "chip-dry";
             }
         }

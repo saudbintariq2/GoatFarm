@@ -1,18 +1,23 @@
 /* Goat Farm Pro — Behance-inspired dairy/farm dashboard shell (single design system) */
 
 body.farm-pro {
-  --fp-sidebar: #1a2c24;
-  --fp-sidebar-deep: #121f19;
-  --fp-nav-active: rgba(82, 183, 136, 0.22);
-  --fp-nav-active-border: rgba(82, 183, 136, 0.55);
-  --fp-sidebar-text: rgba(255, 255, 255, 0.88);
-  --fp-sidebar-muted: rgba(255, 255, 255, 0.45);
+  /* Sandeel Farms kit (PDF G1) */
+  --fp-brand-green: #1e4635;
+  --fp-brand-brown: #7a4a28;
+  --fp-brand-rust: #c05a21;
+  --fp-brand-paper: #f1eee8;
+  --fp-sidebar: #1e4635;
+  --fp-sidebar-deep: #152f24;
+  --fp-nav-active: rgba(192, 90, 33, 0.22);
+  --fp-nav-active-border: rgba(192, 90, 33, 0.55);
+  --fp-sidebar-text: rgba(255, 255, 255, 0.9);
+  --fp-sidebar-muted: rgba(255, 255, 255, 0.5);
   --fp-sidebar-hover: rgba(255, 255, 255, 0.08);
-  --fp-accent: #40916c;
-  --fp-accent-dark: #2d6a4f;
-  --fp-accent-bright: #52b788;
-  --fp-canvas: #eef2f6;
-  --fp-canvas-tint: #e4eaf2;
+  --fp-accent: #2f6b3d;
+  --fp-accent-dark: #1e4635;
+  --fp-accent-bright: #40916c;
+  --fp-canvas: var(--fp-brand-paper);
+  --fp-canvas-tint: #e8e4dc;
   --fp-ink: #152429;
   --fp-ink-soft: #5c6b73;
   --fp-line: #dde4ec;
@@ -404,6 +409,70 @@ body.farm-pro .farm-header-tools {
   justify-content: flex-end;
 }
 
+body.farm-pro .farm-header-sync {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--fp-line);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+body.farm-pro .farm-sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fp-accent-bright);
+}
+
+body.farm-pro .farm-sync-dot.is-offline {
+  background: var(--fp-brand-rust);
+}
+
+body.farm-pro .farm-sync-device {
+  color: var(--fp-brand-brown);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+body.farm-pro .farm-header-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  max-width: 160px;
+}
+
+body.farm-pro .farm-header-user-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--fp-ink);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+body.farm-pro .farm-header-user-role {
+  font-size: 11px;
+  color: var(--fp-ink-soft);
+}
+
+body.farm-pro .farm-header-logout {
+  margin: 0;
+}
+
+body.farm-pro .farm-header-loc {
+  display: block;
+  font-size: 11px;
+  color: var(--fp-ink-soft);
+  margin-top: 2px;
+}
+
 body.farm-pro .farm-header-search.scanbar {
   flex: 1 1 280px;
   max-width: min(560px, 48vw);
@@ -782,10 +851,117 @@ body.farm-pro .skip-link {
   color: var(--fp-ink-soft);
 }
 
+.dash-kpi-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 26px;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 120px;
+}
+
+.dash-kpi-spark span {
+  flex: 1;
+  min-width: 3px;
+  height: var(--h, 4%);
+  min-height: 2px;
+  background: var(--fp-accent);
+  border-radius: 2px 2px 0 0;
+  opacity: 0.5;
+}
+
+.dash-kpi-spark--milk span { background: #4895ef; opacity: 0.55; }
+.dash-kpi-spark--birth span { background: #e63946; opacity: 0.5; }
+.dash-kpi-spark--money span { background: #2d6a4f; opacity: 0.55; }
+
 .dash-charts-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+.dash-charts-row--duo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dash-breeding-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fp-ink-soft);
+  margin-bottom: 10px;
+}
+
+.dash-breeding-legend .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.dash-breeding-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 120px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.dash-breeding-col {
+  flex: 1;
+  min-width: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.dash-breeding-pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 96px;
+  width: 100%;
+  justify-content: center;
+}
+
+.dash-breeding-track {
+  width: 10px;
+  height: 100%;
+  background: var(--fp-surface);
+  border-radius: 4px 4px 2px 2px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.dash-breeding-fill {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.15s ease;
+}
+
+.dash-breeding-fill.cross { background: #4895ef; }
+.dash-breeding-fill.birth { background: #40916c; }
+
+.dash-approval-tbl td,
+.dash-goats-tbl td {
+  font-size: 13px;
+}
+
+.dash-goats-tbl a {
+  font-weight: 700;
+  color: var(--fp-accent);
+  text-decoration: none;
+}
+
+.dash-goats-tbl a:hover {
+  text-decoration: underline;
 }
 
 .dash-mid-row {
@@ -798,6 +974,97 @@ body.farm-pro .skip-link {
   display: grid;
   grid-template-columns: 1fr 1fr minmax(280px, 0.85fr);
   gap: 16px;
+}
+
+.dash-money-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dash-today-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dash-today-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--fp-line);
+  border-radius: 10px;
+  border-left: 3px solid var(--tone, var(--fp-accent));
+  text-decoration: none;
+  color: inherit;
+}
+
+.dash-today-item:hover {
+  background: var(--fp-surface);
+}
+
+.dash-today-ico {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.dash-today-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.dash-cash-total {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.dash-cash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.dash-cash-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dash-alert-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.dash-alert a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dash-alert a:hover {
+  text-decoration: underline;
+}
+
+.dash-alert--critical { color: #8a261c; font-weight: 700; }
+.dash-alert--warning { color: var(--amber); }
+
+.dash-money-tbl tfoot .dash-money-profit.loss td {
+  color: #8a261c;
 }
 
 body.farm-pro .dash-sandeel .dash-card {
@@ -1180,7 +1447,8 @@ body.farm-pro .dash-sandeel .dash-card {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .dash-charts-row,
-  .dash-mid-row {
+  .dash-mid-row,
+  .dash-money-row {
     grid-template-columns: 1fr;
   }
   .dash-bottom-row {

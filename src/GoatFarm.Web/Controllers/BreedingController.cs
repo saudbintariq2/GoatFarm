@@ -118,8 +118,27 @@ public class BreedingController : Controller
     }
 
     [HttpPost]
-    public Task<IActionResult> UpdateSeason([FromBody] UpdateBreedingSeasonViewModel model, CancellationToken cancellationToken) =>
-        Run(() => _breedingService.UpdateSeasonAsync(model, cancellationToken));
+    public async Task<IActionResult> UpdateSeason([FromBody] UpdateBreedingSeasonViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var newBatchId = await _breedingService.UpdateSeasonAsync(model, cancellationToken);
+            return Ok(new
+            {
+                success = true,
+                newBatchId,
+                selectedBatchId = newBatchId ?? model.SelectedBatchId
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ReconcilePregnancy(CancellationToken cancellationToken) =>
+        Ok(await _breedingService.ReconcilePregnancyAsync(cancellationToken));
 
     [HttpPost]
     public Task<IActionResult> AddDoe([FromBody] BreedingAddDoeViewModel model, CancellationToken cancellationToken) =>

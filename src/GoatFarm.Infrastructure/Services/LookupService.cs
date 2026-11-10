@@ -90,7 +90,8 @@ public class LookupService : ILookupService
     {
         var list = await ReadStoredListAsync(key, cancellationToken);
         return key == LookupSettingKeys.ExpenseTypes
-            ? list.Where(t => SalaryExpenseRules.Classify(t) == SalaryExpenseKind.None).ToArray()
+            ? list.Where(t => SalaryExpenseRules.Classify(t) == SalaryExpenseKind.None
+                && !FinanceExpenseRules.IsDuplicateVaccinePurchase(t)).ToArray()
             : list;
     }
 
@@ -123,6 +124,8 @@ public class LookupService : ILookupService
             throw new ArgumentException("Unknown lookup key.");
         if (key == LookupSettingKeys.ExpenseTypes && SalaryExpenseRules.Classify(trimmed) != SalaryExpenseKind.None)
             throw new ArgumentException(SalaryExpenseRules.SalaryBlockedMessage);
+        if (key == LookupSettingKeys.ExpenseTypes && FinanceExpenseRules.IsDuplicateVaccinePurchase(trimmed))
+            throw new ArgumentException("Vaccine purchases are recorded on the Health tab — do not add a separate \"Vaccines\" expense.");
 
         var list = (await ReadStoredListAsync(key, cancellationToken)).ToList();
         if (!list.Contains(trimmed, StringComparer.OrdinalIgnoreCase))

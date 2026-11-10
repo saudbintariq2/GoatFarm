@@ -126,12 +126,12 @@ public class DateOfBirthTests
     public async Task BulkCrossFromHerd_AlsoAsksToConfirmUnknownAge()
     {
         var (_, goats, db) = Create();
-        db.Goats.AddRange(BoughtDoe("U1"), TestDb.Doe("BORN1"));
+        db.Goats.AddRange(BoughtDoe("U1"), TestDb.Doe("BORN1"), TestDb.Buck("SIRE"));
         await db.SaveChangesAsync();
-        var ids = await db.Goats.Select(g => g.Id).ToListAsync();
+        var ids = await db.Goats.Where(g => g.Gender == GoatGender.Female).Select(g => g.Id).ToListAsync();
 
         var ex = await Assert.ThrowsAsync<ConfirmationRequiredException>(() => goats.BulkMoveAsync(
-            new BulkMoveViewModel { GoatIds = ids, MoveTarget = "br:cross", MatedDate = Today }));
+            new BulkMoveViewModel { GoatIds = ids, MoveTarget = "br:cross", MatedDate = Today, BuckTag = "SIRE" }));
         Assert.Single(ex.Warnings, w => w.Contains("U1") && w.Contains("age is unknown"));
         Assert.Empty(db.BreedingEvents);
     }

@@ -284,7 +284,9 @@ public class FeedController : Controller
 
     }
 
-
+    [HttpPost]
+    public async Task<IActionResult> RebuildStock(CancellationToken cancellationToken) =>
+        Ok(await _feedService.RebuildFeedStockAsync(cancellationToken));
 
     [HttpPost]
     public async Task<IActionResult> AddFeedingGroup([FromBody] AddFeedingGroupViewModel model, CancellationToken cancellationToken)
@@ -307,6 +309,20 @@ public class FeedController : Controller
         if (pending is not null) return pending;
         var ok = await _feedService.DeleteFeedingGroupAsync(id, cancellationToken);
         return ok ? Ok(new { success = true }) : NotFound();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateFeedSeason([FromBody] UpdateFeedActiveMonthsViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _feedService.UpdateFeedActiveMonthsAsync(model, cancellationToken);
+            return Ok(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]

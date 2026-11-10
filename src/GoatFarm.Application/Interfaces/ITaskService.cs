@@ -14,4 +14,6 @@ public interface ITaskService
     Task<TaskViewModel?> SetStatusAsync(int id, FarmTaskStatus status, string currentUserId, bool canEditAny, CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
+
+    Task<int> CountMyOpenTasksAsync(string currentUserId, CancellationToken cancellationToken = default);
 }

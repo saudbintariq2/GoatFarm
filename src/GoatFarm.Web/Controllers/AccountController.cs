@@ -48,23 +48,27 @@ public class AccountController : Controller
             return View(model);
         }
 
-        var result = await _signInManager.PasswordSignInAsync(
-            user.UserName!,
-            model.Password,
-            model.RememberMe,
-            lockoutOnFailure: true);
-
-        if (result.Succeeded)
-            return RedirectToLocal(model.ReturnUrl);
-
-        if (result.IsLockedOut)
+        if (!await _userManager.CheckPasswordAsync(user, model.Password))
         {
-            ModelState.AddModelError(string.Empty, "Too many failed attempts. Try again in 15 minutes or ask an administrator.");
+            var failed = await _userManager.AccessFailedAsync(user);
+            if (failed.Succeeded && user.LockoutEnd is not null && user.LockoutEnd > DateTimeOffset.UtcNow)
+            {
+                ModelState.AddModelError(string.Empty, "Too many failed attempts. Try again in 15 minutes or ask an administrator.");
+                return View(model);
+            }
+            ModelState.AddModelError(string.Empty, "Invalid email or password.");
             return View(model);
         }
 
-        ModelState.AddModelError(string.Empty, "Invalid email or password.");
-        return View(model);
+        await _userManager.ResetAccessFailedCountAsync(user);
+        var props = new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+        {
+            IsPersistent = model.RememberMe
+        };
+        if (model.RememberMe)
+            props.ExpiresUtc = DateTimeOffset.UtcNow.AddDays(14);
+        await _signInManager.SignInAsync(user, props);
+        return RedirectToLocal(model.ReturnUrl);
     }
 
     [HttpPost]

@@ -51,6 +51,7 @@ public class GoatService : IGoatService
             .GroupBy(g => g.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
+        var confirmedPregnant = await LiveGoatsQuery().CountAsync(PregnancyRules.ConfirmedPregnantExpression, cancellationToken);
 
         var groups = await GetGroupsAsync(cancellationToken);
         var batches = await GetBirthBatchesAsync(cancellationToken);
@@ -61,7 +62,7 @@ public class GoatService : IGoatService
 
         return new HerdPageViewModel
         {
-            Stats = BuildStats(statusCounts),
+            Stats = BuildStats(statusCounts, confirmedPregnant),
             Goats = MapGoatsWithWeights(goats, await LoadLatestWeightsAsync(goats.Select(g => g.Id).ToList(), cancellationToken)),
             UnderTreatment = await LoadUnderTreatmentAsync(cancellationToken),
             Groups = groups,
@@ -227,7 +228,22 @@ public class GoatService : IGoatService
         goat.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
         goat.Breed = model.Breed;
         goat.Gender = model.Gender;
-        goat.Status = model.Status;
+        if (PregnancyRules.IsConfirmedPregnant(goat))
+        {
+            if (model.Status is not GoatStatus.Pregnant and not GoatStatus.Meat and not GoatStatus.Sale)
+                throw new InvalidOperationException("She is confirmed pregnant — use Breeding to record birth, abortion, or clear a mistake before changing herd status.");
+            goat.Status = GoatStatus.Pregnant;
+        }
+        else if (model.Status == GoatStatus.Pregnant)
+        {
+            if (goat.Gender != GoatGender.Female)
+                throw new InvalidOperationException("Only does can be marked pregnant.");
+            if (!goat.MatedDate.HasValue)
+                throw new InvalidOperationException("Record her cross in Breeding first — pregnant status requires a cross date.");
+            throw new InvalidOperationException("Record a positive scan in Breeding first — she is not confirmed pregnant yet.");
+        }
+        else
+            goat.Status = model.Status;
         goat.Source = model.Source;
         goat.PurchasePrice = model.Source == GoatSource.Born ? 0 : model.PurchasePrice;
         goat.EventDate = model.EventDate;
@@ -295,10 +311,13 @@ public class GoatService : IGoatService
         var hasHistory =
             await _context.Goats.AnyAsync(g => g.SireId == id || g.DamId == id, cancellationToken) ||
             await _context.BreedingEvents.AnyAsync(e => e.DoeId == id || e.BuckId == id, cancellationToken) ||
-            await _context.KiddingRecords.AnyAsync(k => k.DoeId == id, cancellationToken);
+            await _context.KiddingRecords.AnyAsync(k => k.DoeId == id, cancellationToken) ||
+            await _context.VaccinationHistories.AnyAsync(v => v.GoatId == id, cancellationToken) ||
+            await _context.GoatWeightRecords.AnyAsync(w => w.GoatId == id, cancellationToken) ||
+            await _context.GoatTreatments.AnyAsync(t => t.GoatId == id, cancellationToken);
         if (hasHistory)
             throw new InvalidOperationException(
-                $"{goat.Tag} has breeding or offspring history and can't be deleted. Record a death or sale instead so the history is kept.");
+                $"{goat.Tag} has herd history (breeding, health, weights, or offspring) and can't be deleted. Record a death or sale instead so the history is kept.");
 
         _context.Goats.Remove(goat);
         await _context.SaveChangesAsync(cancellationToken);
@@ -479,6 +498,9 @@ public class GoatService : IGoatService
                 throw new InvalidOperationException("Pick the cross date.");
             date = today;
         }
+
+        if (isCross && string.IsNullOrWhiteSpace(model.BuckTag))
+            throw new InvalidOperationException("Enter the buck tag.");
 
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -806,12 +828,12 @@ public class GoatService : IGoatService
         return rem > 0 ? $"{years}y {rem}m" : $"{years}y";
     }
 
-    private static HerdStatsViewModel BuildStats(IReadOnlyDictionary<GoatStatus, int> counts) => new()
+    private static HerdStatsViewModel BuildStats(IReadOnlyDictionary<GoatStatus, int> counts, int confirmedPregnant) => new()
     {
         Total = counts.Values.Sum(),
         Kids = counts.GetValueOrDefault(GoatStatus.Kid),
         Milking = counts.GetValueOrDefault(GoatStatus.Milking),
-        Pregnant = counts.GetValueOrDefault(GoatStatus.Pregnant),
+        Pregnant = confirmedPregnant,
         Dry = counts.GetValueOrDefault(GoatStatus.Dry),
         Bucks = counts.GetValueOrDefault(GoatStatus.Buck),
         Meat = counts.GetValueOrDefault(GoatStatus.Meat)
@@ -944,7 +966,10 @@ public class GoatService : IGoatService
 
         if (filter.StartsWith("st:", StringComparison.Ordinal))
         {
-            var status = DisplayHelper.ParseStatusKey(filter[3..]);
+            var key = filter[3..];
+            if (string.Equals(key, "pregnant", StringComparison.OrdinalIgnoreCase))
+                return goats.Where(PregnancyRules.ConfirmedPregnantExpression);
+            var status = DisplayHelper.ParseStatusKey(key);
             return goats.Where(g => g.Status == status);
         }
 

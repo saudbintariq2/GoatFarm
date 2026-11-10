@@ -516,7 +516,12 @@ const GoatRecords = (() => {
       const err = await res.json().catch(() => ({}));
       if (res.status === 409 && err.requiresConfirmation && typeof fetchOptions.body === 'string') {
         if (await showConfirm(err.error + '\n\nSave anyway?')) {
-          const body = { ...JSON.parse(fetchOptions.body), confirmPossibleDuplicate: true, confirmWarnings: true };
+          const body = {
+            ...JSON.parse(fetchOptions.body),
+            confirmPossibleDuplicate: true,
+            confirmWarnings: true,
+            confirmSecondActive: true
+          };
           return api(url, { ...options, body: JSON.stringify(body) });
         }
         throw new Error(err.error);
@@ -1115,9 +1120,14 @@ const GoatRecords = (() => {
       } else if (v === 'br:cross') {
         const dt = await showModal('Mating date (YYYY-MM-DD)', { prompt: true, defaultValue: defaultDate });
         if (!dt) return;
-        const bk = await showModal('Buck tag (optional)', { prompt: true, defaultValue: '', okText: 'OK', cancelText: 'Skip' });
+        const bk = await showModal('Buck tag', { prompt: true, defaultValue: '' });
+        if (!bk?.trim()) { await showModal('Enter the buck tag for this cross.'); return; }
         payload.matedDate = dt;
-        if (bk) payload.buckTag = bk;
+        payload.buckTag = bk.trim();
+      } else if (v === 'bat:__new__') {
+        const name = await showModal('Name for this birth batch', { prompt: true });
+        if (!name?.trim()) return;
+        payload.moveTarget = 'bat:' + name.trim();
       } else if (v === 'br:kidded') {
         const confirmed = await showConfirm('Mark ' + selected.size + ' doe(s) as kidded? They move to Milking.');
         if (!confirmed) return;
@@ -1257,6 +1267,39 @@ const GoatRecords = (() => {
       document.getElementById('wd-tag').value = '';
       showToast('Death recorded');
       setTimeout(() => location.reload(), 800);
+    });
+
+    function openHerdProfile(tag) {
+      const t = normalizeTag(tag);
+      if (!t) return;
+      location.href = '/Search?tag=' + encodeURIComponent(t);
+    }
+
+    document.getElementById('herd-scan-go')?.addEventListener('click', () => {
+      openHerdProfile(document.getElementById('herd-scan-tag')?.value);
+    });
+    document.getElementById('herd-scan-tag')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        openHerdProfile(e.target.value);
+      }
+    });
+    document.getElementById('herd-scan-tag')?.addEventListener('input', async () => {
+      const tag = normalizeTag(document.getElementById('herd-scan-tag')?.value);
+      const el = document.getElementById('herd-scan-found');
+      if (!el) return;
+      if (!tag) { el.textContent = ''; return; }
+      const row = findRowByTag(tag);
+      if (row) {
+        el.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ On this page: ${esc(row.dataset.tag)}</span>`;
+        return;
+      }
+      try {
+        await api('/Goat/GetByTag?tag=' + encodeURIComponent(tag), { quiet: true });
+        el.innerHTML = `<span style="color:var(--green-dark);font-weight:700">✓ ${esc(tag)} — press Open for profile</span>`;
+      } catch {
+        el.innerHTML = '<span style="color:#8a261c">No goat with that tag.</span>';
+      }
     });
 
     if (opts.editGoat && opts.editGoat.id) {
@@ -1479,7 +1522,11 @@ const GoatRecords = (() => {
       const items = [...document.querySelectorAll('[data-foditem]')].map(el => ({
         id: el.dataset.foditem,
         label: el.dataset.fodlabel,
-        amount: +document.querySelector(`[data-fodamt="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0
+        amount: +document.querySelector(`[data-fodamt="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0,
+        paidDate: document.querySelector(`[data-fodpaid="${CSS.escape(el.dataset.foditem)}"]`)?.value || null,
+        paidAmount: +document.querySelector(`[data-fodcash="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0,
+        allocateMonths: +document.querySelector(`[data-fodmonths="${CSS.escape(el.dataset.foditem)}"]`)?.value || 1,
+        accountId: +document.querySelector(`[data-fodacct="${CSS.escape(el.dataset.foditem)}"]`)?.value || null
       }));
       await api('/Feed/UpdateFodderPool', {
         method: 'POST',
@@ -1574,12 +1621,20 @@ const GoatRecords = (() => {
     function renderFodderPool(pool) {
       const box = document.getElementById('fodderInputs');
       if (!box || !pool) return;
+      const acctOpts = (feedData?.moneyAccounts || []).map(a =>
+        `<option value="${a.id}">${esc(a.name)}</option>`).join('');
       box.innerHTML = (pool.items || []).map(it =>
-        `<div class="price-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}">
-          <label>${esc(it.label)} <span class="del feed-foddel" data-delfod="${esc(it.id)}" title="remove" style="font-size:13px">×</span></label>
+        `<div class="price-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}" style="grid-column:1/-1">
+          <label>${esc(it.label)} ${it.postedToFinance ? '<span class="breed">✓ in Finance</span>' : ''}
+          <span class="del feed-foddel" data-delfod="${esc(it.id)}" title="remove" style="font-size:13px">×</span></label>
           <div class="price-in"><span class="pre">Rs</span>
           <input type="number" min="0" data-fodamt="${esc(it.id)}" value="${+it.amount || 0}" style="width:110px">
-          <span class="suf">/ year</span></div></div>`).join('') ||
+          <span class="suf">/ year</span></div>
+          <div class="field" style="margin-top:6px"><label style="font-size:11px">Cash paid</label>
+          <input type="date" data-fodpaid="${esc(it.id)}" value="${esc(it.paidDate || '')}">
+          <input type="number" min="0" data-fodcash="${esc(it.id)}" value="${+it.paidAmount || 0}" placeholder="Rs paid" style="width:90px">
+          <select data-fodacct="${esc(it.id)}"><option value="">Account</option>${acctOpts}</select>
+          <input type="number" min="1" max="12" data-fodmonths="${esc(it.id)}" value="${+it.allocateMonths || 1}" title="P&amp;L months" style="width:52px"></div></div>`).join('') ||
         '<div class="rule" style="grid-column:1/-1">No cost lines yet — add one below.</div>';
       const mode = document.getElementById('fodderMode');
       const acres = document.getElementById('fodderAcres');
@@ -1594,7 +1649,11 @@ const GoatRecords = (() => {
       }
       const note = document.getElementById('fodderNote');
       if (note) note.innerHTML = pool.noteHtml || '';
-      document.querySelectorAll('[data-fodamt]').forEach(inp => { inp.onchange = () => saveFodderPool(); });
+      (pool.items || []).forEach(it => {
+        const sel = document.querySelector(`[data-fodacct="${CSS.escape(it.id)}"]`);
+        if (sel && it.accountId) sel.value = String(it.accountId);
+      });
+      document.querySelectorAll('[data-fodamt],[data-fodpaid],[data-fodcash],[data-fodacct],[data-fodmonths]').forEach(inp => { inp.onchange = () => saveFodderPool(); });
       document.querySelectorAll('.feed-foddel').forEach(x => {
         x.onclick = async e => {
           e.preventDefault();
@@ -1847,6 +1906,17 @@ const GoatRecords = (() => {
       bindStockInputs();
     }
 
+    const FEED_MONTHS3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function feedSeasonLabelFromMonths(months) {
+      if (!months || !months.length || months.length >= 12) return 'all year';
+      const ms = months.slice().sort((a, b) => a - b);
+      const st = ms.find(m => !ms.includes(m === 1 ? 12 : m - 1)) || ms[0];
+      const ord = ms.slice().sort((a, b) => ((a - st + 12) % 12) - ((b - st + 12) % 12));
+      const run = ord.length > 2 && ord.every((m, i) => i === 0 || m === (ord[i - 1] % 12) + 1);
+      if (run) return `${FEED_MONTHS3[ord[0] - 1]}–${FEED_MONTHS3[ord[ord.length - 1] - 1]}`;
+      return ord.map(m => FEED_MONTHS3[m - 1]).join(', ');
+    }
+
     function renderDirectFeedPlans(data) {
       const box = document.getElementById('directFeedPlanBox');
       if (!box) return;
@@ -1854,7 +1924,13 @@ const GoatRecords = (() => {
       const groups = data.groupPlans || [];
       if (!dfs.length) { box.innerHTML = ''; return; }
       box.innerHTML = `<div class="note" style="margin:0 0 10px"><b>Direct / bulk feeds</b> — use this for items such as Mungphali Bhusa, silage or another feed bought in bulk and fed separately. Enter kg per goat per day; stock and animal cost follow automatically.</div>
-        <div class="table-wrap"><table class="tbl"><thead><tr><th>Group</th>${dfs.map(f => `<th class="num-cell">${esc(f.displayName)}<div class="name">kg/goat/day</div></th>`).join('')}</tr></thead>
+        <div class="table-wrap"><table class="tbl"><thead><tr><th>Group</th>${dfs.map(f => {
+          const active = f.isActiveNow !== false;
+          const label = f.seasonLabel || feedSeasonLabelFromMonths(f.activeMonths);
+          return `<th class="num-cell">${esc(f.displayName)}<div class="name">kg/goat/day</div>
+          <div class="name" style="text-transform:none;color:${active ? 'var(--green-dark)' : 'var(--red)'}">${active ? '● in use now' : '○ off season now'} · ${esc(label)}</div>
+          <button type="button" class="btn btn-ghost btn-sm" data-feedseason="${esc(f.feedType)}" style="margin-top:4px;padding:3px 8px;font-size:11px;min-height:0">Set months</button></th>`;
+        }).join('')}</tr></thead>
         <tbody>${groups.map(row => `<tr><td><span class="chip ${esc(row.statusCssClass)}">${esc(row.statusDisplay)}</span></td>${dfs.map(f => {
           const v = (row.directKg && row.directKg[f.feedType]) || 0;
           return `<td class="num-cell"><input type="number" min="0" step="0.05" data-direct-st="${esc(row.statusKey)}" data-direct-k="${esc(f.feedType)}" value="${esc(v)}"
@@ -2076,6 +2152,74 @@ const GoatRecords = (() => {
       document.getElementById('fb-kg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       document.getElementById('fb-kg')?.focus();
     });
+    document.getElementById('rebuildStock')?.addEventListener('click', async () => {
+      if (!FarmPerms.can('feed', 'edit')) return;
+      const res = await api('/Feed/RebuildStock', { method: 'POST', body: '{}' });
+      showToast(res?.message || 'Stock rebuilt');
+      await reloadFeed();
+    });
+
+    if (!window.__feedSeasonBound) {
+      window.__feedSeasonBound = true;
+      document.addEventListener('click', async e => {
+        const b = e.target.closest?.('[data-feedseason]');
+        if (!b) return;
+        e.preventDefault();
+        if (!FarmPerms.can('feed', 'edit') && !FarmPerms.can('feed', 'create')) {
+          await showModal('No permission.');
+          return;
+        }
+        const feedType = b.dataset.feedseason;
+        const f = (feedData?.directFeeds || []).find(x => x.feedType === feedType);
+        if (!f) return;
+        let cur = Array.isArray(f.activeMonths) && f.activeMonths.length ? f.activeMonths.slice() : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        const box = document.createElement('div');
+        box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:grid;place-items:center;padding:16px';
+        const draw = () => {
+          box.innerHTML = `<div style="background:#fff;border-radius:14px;padding:18px;max-width:380px;width:100%;box-shadow:0 18px 48px rgba(0,0,0,.25)">
+            <h3 style="margin:0 0 4px;font-size:16px">${esc(f.displayName)} — months fed</h3>
+            <div class="sub" style="margin-bottom:12px">Tap months to turn on/off. Off-season months use 0 kg: no stock taken, no cost.</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${FEED_MONTHS3.map((m, i) =>
+              `<button type="button" class="btn btn-sm ${cur.includes(i + 1) ? 'btn-green' : 'btn-ghost'}" data-m="${i + 1}">${m}</button>`).join('')}</div>
+            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+              <button type="button" class="btn btn-ghost btn-sm" data-preset="all">All year</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-preset="winter">Winter (Nov–Feb)</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-preset="summer">Summer (May–Sep)</button></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+              <button type="button" class="btn btn-ghost" data-x="cancel">Cancel</button>
+              <button type="button" class="btn btn-green" data-x="save">Save</button></div></div>`;
+          box.querySelectorAll('[data-m]').forEach(x => {
+            x.onclick = () => {
+              const m = +x.dataset.m;
+              cur = cur.includes(m) ? cur.filter(y => y !== m) : cur.concat(m);
+              draw();
+            };
+          });
+          box.querySelectorAll('[data-preset]').forEach(x => {
+            x.onclick = () => {
+              cur = { all: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], winter: [11, 12, 1, 2], summer: [5, 6, 7, 8, 9] }[x.dataset.preset].slice();
+              draw();
+            };
+          });
+          box.querySelector('[data-x=cancel]').onclick = () => box.remove();
+          box.querySelector('[data-x=save]').onclick = async () => {
+            if (!cur.length) { await showModal('Choose at least one month.'); return; }
+            const months = cur.length === 12 ? [] : cur.sort((a, b) => a - b);
+            try {
+              await api('/Feed/UpdateFeedSeason', { method: 'POST', body: JSON.stringify({ feedType, months: months.length ? months : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }) });
+              box.remove();
+              await reloadFeed();
+              showToast('Feed season saved');
+            } catch (err) {
+              await showModal(err.message || 'Could not save season.');
+            }
+          };
+        };
+        draw();
+        document.body.appendChild(box);
+      });
+    }
+
     document.getElementById('jumpCheck')?.addEventListener('click', () => {
       showFeedTab('store');
       document.getElementById('checkList')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2776,6 +2920,12 @@ const GoatRecords = (() => {
       location.href = financeUrl(date);
     }
 
+    function requireFinAccount(selectId) {
+      const id = +(document.getElementById(selectId)?.value || 0);
+      if (id > 0) return id;
+      return null;
+    }
+
     document.getElementById('finMonth')?.addEventListener('change', e => {
       const tab = document.querySelector('#finance-tabs .tab.active')?.dataset.fintab || 'overview';
       location.href = '/Finance?month=' + encodeURIComponent(e.target.value) + '&tab=' + encodeURIComponent(tab);
@@ -3044,12 +3194,14 @@ const GoatRecords = (() => {
       const amt = +document.getElementById('i-amt').value || 0;
       const date = document.getElementById('i-date').value;
       if (!amt || !date) { await showModal('Enter date and amount'); return; }
+      const accountId = requireFinAccount('i-account');
+      if (!accountId) { await showModal('Choose Cash or Bank — every receipt must post to an account.'); return; }
       const payload = {
         type: document.getElementById('i-type').value,
         amount: amt,
         date,
         comment: document.getElementById('i-comment').value.trim() || null,
-        accountId: +document.getElementById('i-account')?.value || null
+        accountId
       };
       try {
         if (editingIncomeId) {
@@ -3067,12 +3219,14 @@ const GoatRecords = (() => {
       const amt = +document.getElementById('e-amt').value || 0;
       const date = document.getElementById('e-date').value;
       if (!amt || !date) { await showModal('Enter date and amount'); return; }
+      const accountId = requireFinAccount('e-account');
+      if (!accountId) { await showModal('Choose Cash or Bank — every payment must post to an account.'); return; }
       const payload = {
         type: document.getElementById('e-type').value,
         amount: amt,
         date,
         comment: document.getElementById('e-comment').value.trim() || null,
-        accountId: +document.getElementById('e-account')?.value || null
+        accountId
       };
       try {
         if (editingExpenseId) {
@@ -3092,13 +3246,15 @@ const GoatRecords = (() => {
       const note = document.getElementById('o-note').value.trim();
       if (!amt || !date) { await showModal('Enter date and amount'); return; }
       if (!note) { await showModal('Enter a note'); return; }
+      const accountId = requireFinAccount('o-account');
+      if (!accountId) { await showModal('Choose Cash or Bank — owner funding must post to an account.'); return; }
       const payload = {
         note,
         amount: amt,
         date,
         shareholder: document.getElementById('o-owner')?.value || null,
         fundingType: document.getElementById('o-funding-type')?.value || null,
-        accountId: +document.getElementById('o-account')?.value || null
+        accountId
       };
       if (editingOwnerId) {
         await api('/Finance/UpdateOwnerInvestment?id=' + editingOwnerId, { method: 'PUT', body: JSON.stringify(payload) });
@@ -3242,6 +3398,32 @@ const GoatRecords = (() => {
       await api('/Lookup/AddOption', { method: 'POST', body: JSON.stringify({ key: 'Lookup.FundingShareholders', value: name.trim() }) });
       reloadWithToast('Shareholder added');
     });
+
+    document.getElementById('fin-relink-btn')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', true)) return;
+      const defaultAccountId = requireFinAccount('fin-relink-account');
+      if (!defaultAccountId) {
+        await showModal('Choose the Cash or Bank account for historical entries.');
+        return;
+      }
+      const ok = await showConfirm(
+        'Post every unlinked owner funding, income and expense row to this account? ' +
+        'Run on a backup copy first if you are unsure.');
+      if (!ok) return;
+      try {
+        const data = await api('/Finance/RelinkUnpostedMoney', {
+          method: 'POST',
+          body: JSON.stringify({ defaultAccountId, dryRun: false })
+        });
+        const msg = (data.messages || []).join(' ') || 'Re-link finished.';
+        reloadFinanceWithToast(msg);
+      } catch { /* api shows error */ }
+    });
+
+    document.getElementById('fin-integrity-refresh')?.addEventListener('click', () => {
+      reloadFinanceWithToast('Integrity check refreshed');
+    });
+
     initEditableDropdowns();
   }
 
@@ -4585,6 +4767,47 @@ const GoatRecords = (() => {
       repProjAssets.innerHTML = (proj.fixedAssets?.length ? proj.fixedAssets.map(a =>
         `<tr><td><b>${esc(a.label)}</b></td><td class="hide-sm">${esc(a.sub || '')}</td><td class="num-cell">${rs(a.amount)}</td></tr>`).join('')
         : `<tr><td colspan="3" class="empty">No fixed assets in register.</td></tr>`);
+    }
+
+    const log = d.logistics || {};
+    const repLogKpi = document.getElementById('repLogKpi');
+    if (repLogKpi) {
+      repLogKpi.innerHTML = [
+        { v: log.shipmentCount, k: 'Shipments', fmt: 'n' },
+        { v: log.totalCost, k: 'Delivery cost' },
+        { v: log.totalQty, k: 'Qty moved', fmt: 'n' }
+      ].map(x => `<div class="fincard"><div class="v">${x.fmt === 'n' ? esc(x.v ?? 0) : rs(x.v || 0)}</div><div class="k">${esc(x.k)}</div></div>`).join('');
+    }
+    const repLogRows = document.getElementById('repLogRows');
+    if (repLogRows) {
+      repLogRows.innerHTML = (log.rows?.length ? log.rows.map(r =>
+        `<tr><td><span class="breed">${esc(r.date)}</span></td><td>${esc(r.route)}</td><td class="hide-sm">${esc(r.shipmentType)}</td>
+          <td class="num-cell">${esc(r.qty)} ${esc(r.unit)}</td><td class="num-cell hide-sm">${rs(r.costPerUnit)}</td>
+          <td class="num-cell" style="font-weight:700">${rs(r.cost)}</td><td class="hide-sm">${esc(r.transporter || '—')}</td></tr>`).join('')
+        : `<tr><td colspan="7" class="empty">No shipments in this period.</td></tr>`);
+    }
+
+    const own = d.owners || {};
+    const repOwnKpi = document.getElementById('repOwnKpi');
+    if (repOwnKpi && !d.financeHidden) {
+      repOwnKpi.innerHTML = [
+        { v: own.fundingInPeriod, k: 'Funding this period' },
+        { v: own.totalFunding, k: 'All-time funding' }
+      ].map(x => `<div class="fincard"><div class="v">${rs(x.v || 0)}</div><div class="k">${esc(x.k)}</div></div>`).join('');
+    } else if (repOwnKpi) {
+      repOwnKpi.innerHTML = `<div class="note">Financial owner details are hidden for your role.</div>`;
+    }
+    const repOwnRows = document.getElementById('repOwnRows');
+    if (repOwnRows) {
+      repOwnRows.innerHTML = (!d.financeHidden && own.investments?.length ? own.investments.map(o =>
+        `<tr><td><span class="breed">${esc(o.date)}</span></td><td>${esc(o.note || '—')}</td><td class="num-cell" style="font-weight:700">${rs(o.amount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">${d.financeHidden ? 'Owner funding is restricted.' : 'No owner funding in this period.'}</td></tr>`);
+    }
+    const repOwnPartners = document.getElementById('repOwnPartners');
+    if (repOwnPartners) {
+      repOwnPartners.innerHTML = (!d.financeHidden && own.profitPartners?.length ? own.profitPartners.map(p =>
+        `<tr><td><b>${esc(p.name)}</b></td><td class="num-cell">${p.sharePercent}%</td><td class="num-cell">${rs(p.shareAmount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="empty">${d.financeHidden ? 'Profit share is restricted.' : 'Add partners under Finance → ledger.'}</td></tr>`);
     }
 
     const repCompareRows = document.getElementById('repCompareRows');

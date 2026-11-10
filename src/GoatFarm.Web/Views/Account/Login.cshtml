@@ -6,7 +6,7 @@
     ViewData["Title"] = "Login";
     ViewData["BodyClass"] = "auth-page";
     Layout = "_Layout";
-    var farmName = Configuration["ApplicationSettings:FarmName"] ?? "Goat Records";
+    var farmName = Configuration["ApplicationSettings:FarmName"] ?? "Sandeel Farms";
     var farmLocation = Configuration["ApplicationSettings:FarmLocation"] ?? "";
 }
 
@@ -43,7 +43,7 @@
                 <div class="login-fields">
                     <div class="field">
                         <label asp-for="Email">Email</label>
-                        <input asp-for="Email" type="email" autocomplete="username" placeholder="admin@goatfarm.local" />
+                        <input asp-for="Email" type="email" autocomplete="username" placeholder="you@farm.com" />
                     </div>
                     <div class="field">
                         <label asp-for="Password">Password</label>

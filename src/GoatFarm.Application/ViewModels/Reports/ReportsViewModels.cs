@@ -30,6 +30,36 @@ public class ReportsPageViewModel
     public ReportCapexOpexSectionViewModel CapexOpex { get; set; } = new();
     public ReportProfitShareSectionViewModel ProfitShare { get; set; } = new();
     public ReportProjectsSectionViewModel ProjectsAssets { get; set; } = new();
+    public ReportLogisticsSectionViewModel Logistics { get; set; } = new();
+    public ReportOwnersSectionViewModel Owners { get; set; } = new();
+}
+
+public class ReportLogisticsSectionViewModel
+{
+    public int ShipmentCount { get; set; }
+    public decimal TotalQty { get; set; }
+    public decimal TotalCost { get; set; }
+    public IReadOnlyList<ReportLogisticsRowViewModel> Rows { get; set; } = [];
+}
+
+public class ReportLogisticsRowViewModel
+{
+    public string Date { get; set; } = "";
+    public string Route { get; set; } = "";
+    public string ShipmentType { get; set; } = "";
+    public decimal Qty { get; set; }
+    public string Unit { get; set; } = "";
+    public decimal Cost { get; set; }
+    public decimal CostPerUnit { get; set; }
+    public string? Transporter { get; set; }
+}
+
+public class ReportOwnersSectionViewModel
+{
+    public decimal TotalFunding { get; set; }
+    public decimal FundingInPeriod { get; set; }
+    public IReadOnlyList<ReportOwnerRowViewModel> Investments { get; set; } = [];
+    public IReadOnlyList<ReportProfitShareRowViewModel> ProfitPartners { get; set; } = [];
 }
 
 public class ReportCapexOpexSectionViewModel

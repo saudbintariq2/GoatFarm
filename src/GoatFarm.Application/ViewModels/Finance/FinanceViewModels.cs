@@ -258,4 +258,18 @@ public class FinancePageViewModel
     public CreateIncomeViewModel NewIncome { get; set; } = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
     public CreateExpenseViewModel NewExpense { get; set; } = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
     public CreateOwnerInvestmentViewModel NewOwnerInvestment { get; set; } = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
+    public FinanceBalanceSheetViewModel BalanceSheet { get; set; } = new();
+    public FinanceIntegrityViewModel Integrity { get; set; } = new();
+    public IReadOnlyList<FinanceMonthlyClosingRowViewModel> MonthlyClosing { get; set; } = [];
+}
+
+public class FinanceMonthlyClosingRowViewModel
+{
+    public string Month { get; set; } = string.Empty;
+    public decimal OpeningCash { get; set; }
+    public decimal MoneyIn { get; set; }
+    public decimal MoneyOut { get; set; }
+    public decimal ClosingCash { get; set; }
+    public decimal ReceivablesOpen { get; set; }
+    public decimal PayablesOpen { get; set; }
 }
