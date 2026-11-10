@@ -1,146 +1,103 @@
-@using GoatFarm.Application.ViewModels.Backup
-@{
-    var stored = ViewBag.StoredBackups as IReadOnlyList<StoredBackupFileViewModel> ?? Array.Empty<StoredBackupFileViewModel>();
-    var canRestore = ViewBag.CanRestore as bool? == true;
-}
-
-<div class="note"><b>Backup center:</b> download a full JSON snapshot, automatic server copies, and restore (administrators only).</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>Export</h2></div>
-    <div class="panel-body backup-panel-body">
-        <p class="backup-desc">Includes herd, breeding, tasks, finance, products, trading, projects, and settings (no password hashes).</p>
-        <div class="backup-actions">
-            <a class="btn btn-green" asp-controller="BackupCenter" asp-action="Export">Download full backup</a>
-        </div>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>CSV exports</h2><span class="sub">spreadsheet snapshots</span></div>
-    <div class="panel-body">
-        <p class="sub" style="margin:0 0 12px">Herd, finance (current month), feed, health, breeding, and open tasks.</p>
-        <div class="backup-actions" style="flex-wrap:wrap;gap:8px">
-            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="herd">Herd</a>
-            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="finance">Finance</a>
-            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="feed">Feed</a>
-            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="health">Health</a>
-            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="breeding">Breeding</a>
-            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="tasks">Tasks</a>
-        </div>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>Automatic backups</h2><span class="sub">weekly when enabled in server config</span></div>
-    <div class="panel-body table-wrap">
-        @if (!stored.Any())
-        {
-            <p class="empty">No server-stored backups yet. Enable <code>Backup:AutomaticEnabled</code> on the server, or restore will still save a pre-restore snapshot.</p>
-        }
-        else
-        {
-            <table class="tbl">
-                <thead><tr><th>When</th><th>Type</th><th class="num-cell">Size</th><th></th></tr></thead>
-                <tbody>
-                @foreach (var b in stored)
-                {
-                    <tr>
-                        <td>@b.CreatedDisplay</td>
-                        <td>@b.Label</td>
-                        <td class="num-cell">@(b.SizeBytes / 1024) KB</td>
-                        <td><a class="btn btn-ghost btn-sm" asp-action="DownloadStored" asp-route-name="@b.FileName">Download</a></td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        }
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-head"><h2>Import / restore</h2></div>
-    <div class="panel-body backup-panel-body">
-        @if (!canRestore)
-        {
-            <p class="note" style="border-color:var(--amber)">Only an <b>Admin</b> user can restore. You can still download backups.</p>
-        }
-        else
-        {
-            <p class="note">A full snapshot is saved automatically <b>before</b> every restore.</p>
-        }
-        @if (canRestore)
-        {
-        <form id="backupImportForm" class="backup-import-form" enctype="multipart/form-data">
-            @Html.AntiForgeryToken()
-            <div class="field">
-                <span class="field-label">Backup file (.json)</span>
-                <div class="file-picker">
-                    <input type="file" id="backupFileInput" name="file" class="file-picker-input" accept=".json,application/json" required>
-                    <label for="backupFileInput" class="btn btn-ghost file-picker-btn">Choose file</label>
-                    <span class="file-picker-name" id="backupFileName">No file chosen</span>
-                </div>
-            </div>
-            <div class="backup-actions">
-                <button type="submit" class="btn btn-danger">Restore from backup</button>
-            </div>
-        </form>
-        <div class="panel" style="margin-top:18px;border-color:#e8c4c0">
-            <div class="panel-head"><h2 style="color:#8a261c">Empty the farm</h2><span class="sub">production reset</span></div>
-            <div class="panel-body">
-                <p class="note" style="border-color:#e8c4c0;margin-top:0">Deletes <b>all</b> herd, finance, feed, health, breeding, tasks, products, trading, and projects data. <b>Users and sign-in are not removed.</b> A JSON snapshot is saved first (same as restore).</p>
-                <div class="field">
-                    <span class="field-label">Type <code>WIPE ALL FARM DATA</code> to confirm</span>
-                    <input type="text" id="clearFarmConfirm" class="goat-input" autocomplete="off" spellcheck="false" placeholder="WIPE ALL FARM DATA">
-                </div>
-                <div class="backup-actions" style="margin-top:12px">
-                    <button type="button" class="btn btn-danger" id="clearFarmBtn">Clear all farm data</button>
-                </div>
-            </div>
-        </div>
-        }
-    </div>
-</div>
-
-@section Scripts {
-<script>
-document.getElementById('backupFileInput')?.addEventListener('change', e => {
-  const nameEl = document.getElementById('backupFileName');
-  const file = e.target.files?.[0];
-  if (nameEl) nameEl.textContent = file ? file.name : 'No file chosen';
-});
-
-document.getElementById('backupImportForm')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!confirm('Restore will replace current farm data. A pre-restore snapshot will be saved first. Continue?')) return;
-  const fd = new FormData(e.target);
-  const token = fd.get('__RequestVerificationToken');
-  const file = fd.get('file');
-  const body = new FormData();
-  body.append('file', file);
-  const res = await fetch('/BackupCenter/Import', { method: 'POST', headers: { 'X-CSRF-TOKEN': token }, body });
-  const j = await res.json().catch(() => ({}));
-  if (res.ok) { alert('Restore completed.'); location.href = '/Dashboard'; }
-  else alert(j.error || 'Restore failed.');
-});
-
-document.getElementById('clearFarmBtn')?.addEventListener('click', async () => {
-  const confirmText = document.getElementById('clearFarmConfirm')?.value?.trim() || '';
-  if (confirmText !== 'WIPE ALL FARM DATA') {
-    alert('Type WIPE ALL FARM DATA in the box to confirm.');
-    return;
-  }
-  if (!confirm('This permanently removes all farm records (users stay). A snapshot will be saved first. Continue?')) return;
-  const token = document.querySelector('#backupImportForm input[name="__RequestVerificationToken"]')?.value
-    || document.querySelector('input[name="__RequestVerificationToken"]')?.value;
-  const res = await fetch('/BackupCenter/ClearFarmData', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token || '' },
-    body: JSON.stringify({ confirm: confirmText })
-  });
-  const j = await res.json().catch(() => ({}));
-  if (res.ok) { alert('Farm data cleared. You can enter records from scratch.'); location.href = '/Dashboard'; }
-  else alert(j.error || 'Could not clear farm data.');
-});
-</script>
-}
+@using GoatFarm.Application.ViewModels.Backup
+@{
+    var stored = ViewBag.StoredBackups as IReadOnlyList<StoredBackupFileViewModel> ?? Array.Empty<StoredBackupFileViewModel>();
+    var canRestore = ViewBag.CanRestore as bool? == true;
+}
+
+<div class="note"><b>Backup center:</b> download a full JSON snapshot, automatic server copies, and restore (administrators only).</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Export</h2></div>
+    <div class="panel-body backup-panel-body">
+        <p class="backup-desc">Includes herd, breeding, tasks, finance, products, trading, projects, and settings (no password hashes).</p>
+        <div class="backup-actions">
+            <a class="btn btn-green" asp-controller="BackupCenter" asp-action="Export">Download full backup</a>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>CSV exports</h2><span class="sub">spreadsheet snapshots</span></div>
+    <div class="panel-body">
+        <p class="sub" style="margin:0 0 12px">Herd, finance (current month), feed, health, breeding, and open tasks.</p>
+        <div class="backup-actions" style="flex-wrap:wrap;gap:8px">
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="herd">Herd</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="finance">Finance</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="feed">Feed</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="health">Health</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="breeding">Breeding</a>
+            <a class="btn btn-ghost btn-sm" asp-action="ExportCsv" asp-route-module="tasks">Tasks</a>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Automatic backups</h2><span class="sub">weekly when enabled in server config</span></div>
+    <div class="panel-body table-wrap">
+        @if (!stored.Any())
+        {
+            <p class="empty">No server-stored backups yet. Enable <code>Backup:AutomaticEnabled</code> on the server, or restore will still save a pre-restore snapshot.</p>
+        }
+        else
+        {
+            <table class="tbl">
+                <thead><tr><th>When</th><th>Type</th><th class="num-cell">Size</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var b in stored)
+                {
+                    <tr>
+                        <td>@b.CreatedDisplay</td>
+                        <td>@b.Label</td>
+                        <td class="num-cell">@(b.SizeBytes / 1024) KB</td>
+                        <td><a class="btn btn-ghost btn-sm" asp-action="DownloadStored" asp-route-name="@b.FileName">Download</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head"><h2>Import / restore</h2></div>
+    <div class="panel-body backup-panel-body">
+        @if (!canRestore)
+        {
+            <p class="note" style="border-color:var(--amber)">Only an <b>Admin</b> user can restore. You can still download backups.</p>
+        }
+        else
+        {
+            <p class="note">A full snapshot is saved automatically <b>before</b> every restore.</p>
+        }
+        @if (canRestore)
+        {
+        <form id="backupImportForm" class="backup-import-form" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div class="field">
+                <span class="field-label">Backup file (.json)</span>
+                <div class="file-picker">
+                    <input type="file" id="backupFileInput" name="file" class="file-picker-input" accept=".json,application/json" required>
+                    <label for="backupFileInput" class="btn btn-ghost file-picker-btn">Choose file</label>
+                    <span class="file-picker-name" id="backupFileName">No file chosen</span>
+                </div>
+            </div>
+            <div class="backup-actions">
+                <button type="submit" class="btn btn-danger">Restore from backup</button>
+            </div>
+        </form>
+        <div class="panel" style="margin-top:18px;border-color:#e8c4c0">
+            <div class="panel-head"><h2 style="color:#8a261c">Empty the farm</h2><span class="sub">production reset</span></div>
+            <div class="panel-body">
+                <p class="note" style="border-color:#e8c4c0;margin-top:0">Deletes <b>all</b> herd, finance, feed, health, breeding, tasks, products, trading, and projects data. <b>Users and sign-in are not removed.</b> A JSON snapshot is saved first (same as restore).</p>
+                <div class="field">
+                    <span class="field-label">Type <code>WIPE ALL FARM DATA</code> to confirm</span>
+                    <input type="text" id="clearFarmConfirm" class="goat-input" autocomplete="off" spellcheck="false" placeholder="WIPE ALL FARM DATA">
+                </div>
+                <div class="backup-actions" style="margin-top:12px">
+                    <button type="button" class="btn btn-danger" id="clearFarmBtn">Clear all farm data</button>
+                </div>
+            </div>
+        </div>
+        }
+    </div>
+</div>

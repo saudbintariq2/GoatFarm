@@ -198,11 +198,18 @@ public class BackupCenterController : Controller
         if (!string.Equals(request?.Confirm?.Trim(), "WIPE ALL FARM DATA", StringComparison.Ordinal))
             return BadRequest(new { error = "Type WIPE ALL FARM DATA exactly to confirm." });
 
-        var snapshot = await _backup.ExportAsync(cancellationToken);
-        await _backup.SaveStoredBackupAsync(snapshot, "pre-wipe", cancellationToken);
-        await _backup.ClearAllFarmDataAsync(cancellationToken);
-        await _audit.LogAsync(FarmTabs.Backup, AuditAction.Delete, "All farm data cleared (empty slate)", UserId, UserDisplay, cancellationToken: cancellationToken);
-        return Ok(new { success = true });
+        try
+        {
+            var snapshot = await _backup.ExportAsync(cancellationToken);
+            await _backup.SaveStoredBackupAsync(snapshot, "pre-wipe", cancellationToken);
+            await _backup.ClearAllFarmDataAsync(cancellationToken);
+            await _audit.LogAsync(FarmTabs.Backup, AuditAction.Delete, "All farm data cleared (empty slate)", UserId, UserDisplay, cancellationToken: cancellationToken);
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Could not clear farm data. " + ex.Message });
+        }
     }
 
     public sealed class ClearFarmDataRequest

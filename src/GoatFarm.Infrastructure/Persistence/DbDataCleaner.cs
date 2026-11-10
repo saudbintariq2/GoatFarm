@@ -9,8 +9,6 @@ public static class DbDataCleaner
     {
         await BackupV241Helper.ClearV241Async(context, cancellationToken);
         context.FarmTasks.RemoveRange(await context.FarmTasks.ToListAsync(cancellationToken));
-        context.BreedingEvents.RemoveRange(await context.BreedingEvents.ToListAsync(cancellationToken));
-        context.KiddingRecords.RemoveRange(await context.KiddingRecords.ToListAsync(cancellationToken));
         context.MilkWastes.RemoveRange(await context.MilkWastes.ToListAsync(cancellationToken));
         await GoatGraphCleaner.DetachBreedingGraphAsync(context, cancellationToken);
         context.VaccinationHistories.RemoveRange(await context.VaccinationHistories.ToListAsync(cancellationToken));

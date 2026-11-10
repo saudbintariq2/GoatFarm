@@ -4963,6 +4963,68 @@ const GoatRecords = (() => {
     reloadReports();
   }
 
+  function initBackupCenter() {
+    document.getElementById('backupFileInput')?.addEventListener('change', e => {
+      const nameEl = document.getElementById('backupFileName');
+      const file = e.target.files?.[0];
+      if (nameEl) nameEl.textContent = file ? file.name : 'No file chosen';
+    });
+
+    document.getElementById('backupImportForm')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const confirmed = await showConfirm('Restore will replace current farm data. A pre-restore snapshot will be saved on the server first. Continue?');
+      if (!confirmed) return;
+      const fd = new FormData(e.target);
+      const file = fd.get('file');
+      const body = new FormData();
+      body.append('file', file);
+      try {
+        const res = await fetch('/BackupCenter/Import', { method: 'POST', body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          await showModal(data.error || 'Restore failed.');
+          return;
+        }
+        sessionStorage.setItem('goatToast', 'Backup restored successfully.');
+        location.href = '/Dashboard';
+      } catch {
+        await showModal('Restore failed — check your connection and try again.');
+      }
+    });
+
+    document.getElementById('clearFarmBtn')?.addEventListener('click', async () => {
+      const confirmText = document.getElementById('clearFarmConfirm')?.value?.trim() || '';
+      if (confirmText !== 'WIPE ALL FARM DATA') {
+        await showModal('Type WIPE ALL FARM DATA in the box exactly, then press Clear all farm data again.');
+        return;
+      }
+      const ok = await showConfirm(
+        'This permanently removes all farm records (herd, finance, feed, breeding, tasks, products, trading, projects).\n\n' +
+        'User accounts stay. A full JSON snapshot is saved on the server first.\n\n' +
+        'Clear everything?'
+      );
+      if (!ok) return;
+      const btn = document.getElementById('clearFarmBtn');
+      const label = btn?.textContent;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Clearing…';
+      }
+      try {
+        await api('/BackupCenter/ClearFarmData', { method: 'POST', body: JSON.stringify({ confirm: confirmText }) });
+        sessionStorage.setItem('goatToast', 'Farm data cleared. You can enter records from scratch.');
+        location.href = '/Dashboard';
+      } catch {
+        /* api() shows the modal */
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (label) btn.textContent = label;
+        }
+      }
+    });
+  }
+
   function initBackupButtons() {
     if (!FarmPerms.can('settings', 'edit')) FarmPerms.hide('importBtn');
     document.getElementById('exportBtn')?.addEventListener('click', () => {
@@ -4994,6 +5056,7 @@ const GoatRecords = (() => {
   }
 
   initBackupButtons();
+  initBackupCenter();
 
   function initShell() {
     initAssistant();
