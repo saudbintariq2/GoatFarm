@@ -23,32 +23,8 @@
 }
 
 <div id="view-herd">
-<div class="note"><b>One goat →</b> open her profile from the list or scan a tag below.
+<div class="note"><b>One goat →</b> open her profile from the list (or use Search).
     <b>Many goats →</b> tick them in the list and use <b>Move to</b>.</div>
-
-<div class="panel" style="margin-bottom:14px">
-    <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end">
-        <div class="herd-tag-scan" style="flex:1;min-width:220px">
-            <label for="herd-scan-tag">Scan tag — open profile</label>
-            <div class="scan-row" style="display:flex;gap:8px;margin-top:6px">
-                <input id="herd-scan-tag" class="scan-inp" autocomplete="off" spellcheck="false" placeholder="scan or type tag" style="flex:1">
-                <button type="button" class="btn btn-green" id="herd-scan-go">Open</button>
-            </div>
-            <div id="herd-scan-found" class="rule" style="margin-top:6px"></div>
-        </div>
-        <div class="herd-tag-scan" style="flex:1;min-width:260px">
-            <label for="wd-tag">Weight or death — scan tag</label>
-            <div class="scan-row" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;align-items:center">
-                <input id="wd-tag" class="scan-inp" autocomplete="off" placeholder="tag" style="min-width:100px;flex:1">
-                <input id="wd-kg" type="number" min="0" step="0.1" placeholder="kg" style="width:72px">
-                <input id="wd-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" style="width:140px">
-                <button type="button" class="btn btn-green btn-sm" id="addWeight">Weight</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="addDeath">Death</button>
-            </div>
-            <div id="wd-found" class="rule" style="margin-top:6px"></div>
-        </div>
-    </div>
-</div>
 
 <div class="stats" id="stats">
     <div class="stat" data-filter="all" role="button" tabindex="0" title="Show all goats">

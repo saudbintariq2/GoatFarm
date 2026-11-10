@@ -65,4 +65,25 @@ public class Phase2AuditBackupTests
         Assert.True(await db.FeedPrices.AnyAsync());
         Assert.True(await db.MoneyAccounts.AnyAsync());
     }
+
+    [Fact]
+    public async Task ClearAllFarmData_ClearsProductPricingAndAllocations()
+    {
+        var db = TestDb.Create();
+        var product = new ProductCatalogItem { Name = "Yogurt", Sku = "Y1", Unit = "kg" };
+        db.ProductCatalogItems.Add(product);
+        await db.SaveChangesAsync();
+        db.ProductPricingProfiles.Add(new ProductPricingProfile { ProductId = product.Id, SellPrice = 100 });
+        db.ProductCostAllocations.Add(new ProductCostAllocation { Date = TestDb.Today, CostType = "pack", Amount = 50, Scope = "product", ProductId = product.Id });
+        db.TransportShipments.Add(new TransportShipment { Date = TestDb.Today, Qty = 10, Cost = 100, DispatchRef = "S1" });
+        await db.SaveChangesAsync();
+
+        var svc = new BackupService(db, new LedgerService(db));
+        await svc.ClearAllFarmDataAsync();
+
+        Assert.Empty(await db.ProductCatalogItems.ToListAsync());
+        Assert.Empty(await db.ProductPricingProfiles.ToListAsync());
+        Assert.Empty(await db.ProductCostAllocations.ToListAsync());
+        Assert.Empty(await db.TransportShipments.ToListAsync());
+    }
 }

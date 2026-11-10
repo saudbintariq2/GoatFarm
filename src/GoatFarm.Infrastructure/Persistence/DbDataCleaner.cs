@@ -7,38 +7,13 @@ public static class DbDataCleaner
 {
     public static async Task ClearAllFarmDataAsync(GoatFarmDbContext context, CancellationToken cancellationToken = default)
     {
-        await BackupV241Helper.ClearV241Async(context, cancellationToken);
-        context.FarmTasks.RemoveRange(await context.FarmTasks.ToListAsync(cancellationToken));
-        context.MilkWastes.RemoveRange(await context.MilkWastes.ToListAsync(cancellationToken));
-        await GoatGraphCleaner.DetachBreedingGraphAsync(context, cancellationToken);
-        context.VaccinationHistories.RemoveRange(await context.VaccinationHistories.ToListAsync(cancellationToken));
-        context.Goats.RemoveRange(await context.Goats.ToListAsync(cancellationToken));
-        context.MilkProductions.RemoveRange(await context.MilkProductions.ToListAsync(cancellationToken));
-        context.MilkSales.RemoveRange(await context.MilkSales.ToListAsync(cancellationToken));
-        context.MilkWastes.RemoveRange(await context.MilkWastes.ToListAsync(cancellationToken));
-        context.FeedPurchases.RemoveRange(await context.FeedPurchases.ToListAsync(cancellationToken));
-        context.VaccinePurchases.RemoveRange(await context.VaccinePurchases.ToListAsync(cancellationToken));
-        context.Incomes.RemoveRange(await context.Incomes.ToListAsync(cancellationToken));
-        context.Expenses.RemoveRange(await context.Expenses.ToListAsync(cancellationToken));
-        context.OwnerInvestments.RemoveRange(await context.OwnerInvestments.ToListAsync(cancellationToken));
-        context.Assets.RemoveRange(await context.Assets.ToListAsync(cancellationToken));
-        context.RecurringCosts.RemoveRange(await context.RecurringCosts.ToListAsync(cancellationToken));
-        context.Reminders.RemoveRange(await context.Reminders.ToListAsync(cancellationToken));
-        context.Vaccines.RemoveRange(await context.Vaccines.ToListAsync(cancellationToken));
-        context.GoatGroups.RemoveRange(await context.GoatGroups.ToListAsync(cancellationToken));
-        context.FeedPlans.RemoveRange(await context.FeedPlans.ToListAsync(cancellationToken));
-        context.FeedPrices.RemoveRange(await context.FeedPrices.ToListAsync(cancellationToken));
-        context.FeedUsageRecords.RemoveRange(await context.FeedUsageRecords.ToListAsync(cancellationToken));
-        context.GoatWeightRecords.RemoveRange(await context.GoatWeightRecords.ToListAsync(cancellationToken));
-        context.DeathRecords.RemoveRange(await context.DeathRecords.ToListAsync(cancellationToken));
-        context.GoatSales.RemoveRange(await context.GoatSales.ToListAsync(cancellationToken));
-        context.Employees.RemoveRange(await context.Employees.ToListAsync(cancellationToken));
-        context.BreedingEmptyLogs.RemoveRange(await context.BreedingEmptyLogs.ToListAsync(cancellationToken));
+        await BackupImportHelper.ClearFarmDataAsync(context, cancellationToken);
 
         var demoMarker = await context.AppSettings.FirstOrDefaultAsync(s => s.Key == DemoDataSeedHelper.MarkerKey, cancellationToken);
         if (demoMarker is not null)
+        {
             context.AppSettings.Remove(demoMarker);
-
-        await context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+        }
     }
 }

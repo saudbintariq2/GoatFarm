@@ -66,6 +66,11 @@ internal static class BackupV241Helper
         context.MilkingSessions.RemoveRange(await context.MilkingSessions.ToListAsync(cancellationToken));
         context.SlaughterRecords.RemoveRange(await context.SlaughterRecords.ToListAsync(cancellationToken));
         context.ProductSales.RemoveRange(await context.ProductSales.ToListAsync(cancellationToken));
+        context.ProductCostAllocations.RemoveRange(await context.ProductCostAllocations.ToListAsync(cancellationToken));
+        context.TransportShipments.RemoveRange(await context.TransportShipments.ToListAsync(cancellationToken));
+        context.ClientProductPrices.RemoveRange(await context.ClientProductPrices.ToListAsync(cancellationToken));
+        context.DeliveryRoutePricings.RemoveRange(await context.DeliveryRoutePricings.ToListAsync(cancellationToken));
+        context.ProductPricingProfiles.RemoveRange(await context.ProductPricingProfiles.ToListAsync(cancellationToken));
         context.ProductCatalogItems.RemoveRange(await context.ProductCatalogItems.ToListAsync(cancellationToken));
         context.Warehouses.RemoveRange(await context.Warehouses.ToListAsync(cancellationToken));
         context.GoatTreatments.RemoveRange(await context.GoatTreatments.ToListAsync(cancellationToken));
