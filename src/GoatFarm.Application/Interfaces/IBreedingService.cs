@@ -5,7 +5,11 @@ namespace GoatFarm.Application.Interfaces;
 
 public interface IBreedingService
 {
-    Task<BreedingPageViewModel> GetBreedingPageAsync(string? selectedBatchId = null, CancellationToken cancellationToken = default);
+    Task<BreedingPageViewModel> GetBreedingPageAsync(
+        string? selectedBatchId = null,
+        string? reportBuck = null,
+        CancellationToken cancellationToken = default);
+    Task<BreedingDoeProfileViewModel?> GetDoeProfileAsync(int goatId, CancellationToken cancellationToken = default);
     Task RecordPrepAsync(RecordPrepViewModel model, CancellationToken cancellationToken = default);
     Task<CrossCheckViewModel> CheckCrossAsync(string doeTag, string? buckTag, DateOnly? date, CancellationToken cancellationToken = default);
     Task RecordCrossAsync(RecordCrossViewModel model, CancellationToken cancellationToken = default);
@@ -24,4 +28,17 @@ public interface IBreedingService
     Task ClearBreedingMistakeAsync(int goatId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BreedingGroupDto>> GetBreedingGroupsAsync(CancellationToken cancellationToken = default);
     Task CreateBreedingGroupAsync(CreateBreedingGroupViewModel model, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<BreedingGroupCardViewModel>> GetBreedingGroupCardsAsync(CancellationToken cancellationToken = default);
+    Task<BreedingScanSheetViewModel> GetScanSheetAsync(CancellationToken cancellationToken = default);
+    Task<BulkScanSaveResultViewModel> SaveScanBatchAsync(BulkScanSaveViewModel model, CancellationToken cancellationToken = default);
+    Task CloseBreedingGroupAsync(CloseBreedingGroupViewModel model, CancellationToken cancellationToken = default);
+    Task DeleteBreedingGroupAsync(string groupId, CancellationToken cancellationToken = default);
+    Task RemoveBreedingGroupMemberAsync(BreedingGroupMemberActionViewModel model, CancellationToken cancellationToken = default);
+    Task PutBuckInGroupAsync(BuckInBreedingGroupViewModel model, CancellationToken cancellationToken = default);
+    Task TakeBuckOutGroupAsync(CloseBreedingGroupViewModel model, CancellationToken cancellationToken = default);
+    Task RecordBuckCheckAsync(RecordBuckCheckViewModel model, CancellationToken cancellationToken = default);
+    Task UpdateKidFieldAsync(UpdateKidFieldViewModel model, CancellationToken cancellationToken = default);
+    Task RecordKidWeanWeightAsync(RecordKidWeanWeightViewModel model, CancellationToken cancellationToken = default);
+    Task BulkWeanKidsAsync(BulkWeanKidsViewModel model, CancellationToken cancellationToken = default);
+    Task UpdateKidWeanRuleAsync(UpdateKidWeanRuleViewModel model, CancellationToken cancellationToken = default);
 }

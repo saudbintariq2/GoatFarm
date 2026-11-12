@@ -22,7 +22,14 @@ public class Phase3BreedingTests
     public async Task UpdateSeason_NewBatch_ReturnsBatchId()
     {
         var (svc, _, _) = Create();
-        var id = await svc.UpdateSeasonAsync(new UpdateBreedingSeasonViewModel { NewBatchName = "Fall 2026" });
+        var id = await svc.UpdateSeasonAsync(new UpdateBreedingSeasonViewModel
+        {
+            NewBatchName = "Fall 2026",
+            NewBatchIcon = "🍂",
+            BatchFrom = "11-01",
+            BatchTo = "11-20",
+            CopyFromBatchId = "b1"
+        });
         Assert.False(string.IsNullOrWhiteSpace(id));
         Assert.StartsWith("b", id);
     }

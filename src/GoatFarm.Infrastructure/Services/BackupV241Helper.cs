@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GoatFarm.Domain.Common;
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 using GoatFarm.Infrastructure.Persistence;
@@ -249,13 +250,23 @@ internal static class BackupV241Helper
         {
             foreach (var el in sl.EnumerateArray())
             {
+                var carcassKg = GetDec(el, "carcassKg");
+                var remaining = GetDec(el, "remainingKg");
+                if (remaining <= 0 && carcassKg > 0) remaining = carcassKg;
+                var halfPieces = GetInt(el, "halfPieces");
+                if (halfPieces is null or < 1) halfPieces = 1;
                 context.SlaughterRecords.Add(new SlaughterRecord
                 {
                     Date = GetDate(el, "date") ?? DateOnly.FromDateTime(DateTime.Today),
                     GoatId = RemapNullable(GetInt(el, "goatId"), goatIdMap),
                     TagText = GetStr(el, "tagText"),
                     LiveWeightKg = GetDec(el, "liveWeightKg"),
-                    CarcassKg = GetDec(el, "carcassKg"),
+                    CarcassKg = carcassKg,
+                    RemainingKg = remaining,
+                    CarcassForm = GetStr(el, "carcassForm") ?? MeatCarcassForms.Whole,
+                    HalfPieces = halfPieces.Value,
+                    WarehouseId = RemapNullable(GetInt(el, "warehouseId"), whMap),
+                    UnitCostPerKg = GetDec(el, "unitCostPerKg"),
                     SaleAmount = GetDec(el, "saleAmount"),
                     Notes = GetStr(el, "notes")
                 });

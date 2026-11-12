@@ -86,6 +86,8 @@ public interface IProductsService
     Task<object> SaveStockMovementAsync(SaveStockMovementViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveMilkingSessionAsync(SaveMilkingSessionViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveSlaughterAsync(SaveSlaughterViewModel model, CancellationToken cancellationToken = default);
+    Task<object> SaveMeatSplitAsync(SaveMeatSplitViewModel model, CancellationToken cancellationToken = default);
+    Task<object> SaveMeatCutAsync(SaveMeatCutViewModel model, CancellationToken cancellationToken = default);
     Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default);
     Task SaveCustomMilkingSessionsAsync(IReadOnlyList<string> sessions, CancellationToken cancellationToken = default);
     Task SaveProductDropdownOptionsAsync(Dictionary<string, List<string>> options, CancellationToken cancellationToken = default);

@@ -115,24 +115,165 @@
     }
 
     fillMeatFormSelects();
+    renderMeatTables();
   }
 
-  function carcassOpts(emptyLabel) {
-    const rows = page.slaughters || [];
+  function slaughterRemaining(s) {
+    const r = N(s?.remainingKg);
+    return r > 0.0001 ? r : N(s?.carcassKg);
+  }
+
+  function carcassOptionLabel(s) {
+    const form = (s.carcassForm || 'whole') === 'half' ? 'Half' : 'Whole';
+    const pcs = N(s.halfPieces) > 1 ? ` · ${fmtN(s.halfPieces, 0)} pc` : '';
+    return `${esc(s.tag || 'Carcass')} · ${form}${pcs} · ${fmtQ(slaughterRemaining(s), 'kg')} · ${esc(s.dateDisplay || '')}`;
+  }
+
+  function carcassOpts(emptyLabel, forms) {
+    const want = forms ? new Set(forms) : null;
+    const rows = (page.slaughters || []).filter(s => {
+      const rem = slaughterRemaining(s);
+      if (rem <= 0.0001) return false;
+      const form = (s.carcassForm || 'whole').toLowerCase();
+      if (want && !want.has(form)) return false;
+      return true;
+    });
     if (!rows.length) return `<option value="">${esc(emptyLabel)}</option>`;
-    return rows.map(s =>
-      `<option value="${s.id}">${esc(s.tag || 'Carcass')} · ${fmtQ(s.carcassKg, 'kg')} · ${esc(s.dateDisplay || '')}</option>`
-    ).join('');
+    return rows.map(s => `<option value="${s.id}">${carcassOptionLabel(s)}</option>`).join('');
+  }
+
+  function slaughterById(id) {
+    return (page.slaughters || []).find(s => String(s.id) === String(id)) || null;
   }
 
   function fillMeatFormSelects() {
     setSelectHtml('sl-sg-store', tankOptsMeat());
     setSelectHtml('sl-ct-store', tankOptsMeat());
-    setSelectHtml('sl-sp-src', carcassOpts('No whole carcass in stock'));
-    setSelectHtml('sl-ct-src', carcassOpts('No carcass in stock'));
+    setSelectHtml('sl-sp-src', carcassOpts('No whole carcass in stock', ['whole']));
+    setSelectHtml('sl-ct-src', carcassOpts('No carcass in stock', ['whole', 'half']));
     fillPaidFromSelects();
     refreshSlaughterGoatDatalist();
     sgLookup();
+    spPreview();
+    ctPreview();
+  }
+
+  function cutProducts() {
+    return catalogActiveOnly().filter(p =>
+      (p.category || '').toLowerCase() === 'meat' &&
+      (p.sku || '').toUpperCase() !== 'MEAT'
+    );
+  }
+
+  function cutAllocation(totalValue, rows, method) {
+    const ok = rows.filter(r => r.kg > 0 && r.productId);
+    let weights = ok.map(r => r.kg);
+    if (method === 'value') {
+      const vw = ok.map(r => r.kg * N((catalogById(r.productId) || {}).defaultPrice));
+      if (vw.every(x => x > 0)) weights = vw;
+      else method = 'weight';
+    }
+    const tw = weights.reduce((a, b) => a + b, 0);
+    let left = Math.round(totalValue * 100) / 100;
+    const vals = ok.map((r, i) => {
+      if (i === ok.length - 1) return left;
+      const v = tw > 0 ? Math.round(totalValue * weights[i] / tw * 100) / 100 : 0;
+      left = Math.round((left - v) * 100) / 100;
+      return v;
+    });
+    return { rows: ok, vals, method };
+  }
+
+  function spPreview() {
+    const el = document.getElementById('sl-sp-preview');
+    if (!el) return;
+    const s = slaughterById(document.getElementById('sl-sp-src')?.value);
+    if (!s) { el.innerHTML = ''; return; }
+    const total = slaughterRemaining(s);
+    const aIn = document.getElementById('sl-sp-a');
+    const a = N(aIn?.value) > 0 ? N(aIn?.value) : total / 2;
+    const b = total - a;
+    el.innerHTML = `<span>Carcass weight: <b>${fmtQ(total, 'kg')}</b></span><span>Half A: <b>${fmtQ(a, 'kg')}</b></span><span>Half B: <b class="${b < -0.01 ? 'sl-bad' : ''}">${fmtQ(b, 'kg')}</b></span>`;
+  }
+
+  function readCutRows() {
+    return [...document.querySelectorAll('#sl-ct-rows tr')].map(tr => ({
+      tr,
+      productId: +tr.querySelector('.sl-ct-prod')?.value || 0,
+      kg: N(tr.querySelector('.sl-ct-kg')?.value)
+    }));
+  }
+
+  function refreshCutRowOptions() {
+    const list = cutProducts();
+    const html = list.length
+      ? list.map(p => `<option value="${p.id}">${esc(productLabel(p))}</option>`).join('')
+      : '<option value="">Add meat cuts in Product Setup first</option>';
+    document.querySelectorAll('#sl-ct-rows .sl-ct-prod').forEach(s => {
+      const v = s.value;
+      s.innerHTML = html;
+      if (v && [...s.options].some(o => o.value === v)) s.value = v;
+    });
+  }
+
+  function addCutRow(productId, kg) {
+    const body = document.getElementById('sl-ct-rows');
+    if (!body) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><select class="sl-ct-prod"></select></td><td><input class="sl-ct-kg" type="number" min="0" step="0.01" placeholder="0.00" value="${kg || ''}"></td><td class="num-cell sl-ct-val">—</td><td><button type="button" class="btn btn-ghost btn-sm sl-ct-del" aria-label="Remove row">×</button></td>`;
+    body.appendChild(tr);
+    refreshCutRowOptions();
+    if (productId) tr.querySelector('.sl-ct-prod').value = String(productId);
+    tr.querySelector('.sl-ct-del')?.addEventListener('click', () => { tr.remove(); ctPreview(); });
+    tr.querySelectorAll('input,select').forEach(el => el.addEventListener('input', ctPreview));
+    ctPreview();
+  }
+
+  function ensureCutRows() {
+    const body = document.getElementById('sl-ct-rows');
+    if (!body) return;
+    if (!body.querySelector('tr')) addCutRow();
+  }
+
+  function ctPreview() {
+    const el = document.getElementById('sl-ct-preview');
+    if (!el) return;
+    const s = slaughterById(document.getElementById('sl-ct-src')?.value);
+    if (!s) { el.innerHTML = 'Record a carcass first.'; return; }
+    const avail = slaughterRemaining(s);
+    const inKg = N(document.getElementById('sl-ct-in')?.value) || avail;
+    const rws = readCutRows();
+    const outKg = rws.reduce((a, r) => a + (r.kg > 0 ? r.kg : 0), 0);
+    const waste = inKg - outKg;
+    const unitCost = N(s.unitCostPerKg);
+    const V = unitCost > 0 ? unitCost * Math.min(inKg, avail) : 0;
+    const method = document.getElementById('sl-ct-method')?.value || 'weight';
+    const al = cutAllocation(V, rws, method);
+    rws.forEach(r => {
+      const i = al.rows.indexOf(r);
+      const cell = r.tr.querySelector('.sl-ct-val');
+      if (cell) cell.textContent = i >= 0 && r.kg > 0 && V > 0 ? `${money(al.vals[i] / r.kg)}/kg` : '—';
+    });
+    el.innerHTML = `<span>Available: <b>${fmtQ(avail, 'kg')}</b>${N(s.halfPieces) > 1 ? ` (${fmtN(s.halfPieces, 0)} pieces)` : ''}</span><span>Cutting: <b>${fmtQ(inKg, 'kg')}</b></span><span>Cuts weighed: <b>${fmtQ(outKg, 'kg')}</b></span><span>Bone / trim / waste: <b class="${waste < -0.01 ? 'sl-bad' : ''}">${fmtQ(waste, 'kg')}${inKg > 0 ? ` (${pct(waste, inKg)})` : ''}</b></span>${inKg > avail + 0.01 ? '<span class="sl-bad">More than the carcass weighs</span>' : ''}${waste < -0.01 ? '<span class="sl-bad">Cuts weigh more than the carcass — check the scale</span>' : ''}`;
+  }
+
+  function renderMeatTables() {
+    const carcassRows = document.getElementById('sl-carcass-rows');
+    if (carcassRows) {
+      const rows = (page.slaughters || []).filter(s => slaughterRemaining(s) > 0.001);
+      carcassRows.innerHTML = rows.length ? rows.map(s => {
+        const form = (s.carcassForm || 'whole') === 'half' ? 'Half' : 'Whole';
+        const pcs = N(s.halfPieces) || 1;
+        return `<tr><td>${esc(s.tag || '—')}</td><td>${form}</td><td class="num-cell">${pcs}</td><td class="num-cell">${fmtQ(slaughterRemaining(s), 'kg')}</td><td class="num-cell hide-sm">${s.unitCostPerKg ? money(s.unitCostPerKg) : '—'}</td><td class="num-cell hide-sm">${rs(s.saleAmount)}</td><td class="hide-sm">${s.warehouseId ? esc(whName(s.warehouseId)) : '—'}</td><td></td></tr>`;
+      }).join('') : '<tr><td colspan="8" class="empty">No carcasses in stock yet.</td></tr>';
+    }
+    const cutsRows = document.getElementById('sl-cuts-rows');
+    if (cutsRows) {
+      const cuts = page.meatCutStock || [];
+      cutsRows.innerHTML = cuts.length ? cuts.map(c =>
+        `<tr><td>${esc(c.name)}</td><td>${esc(whName(c.warehouseId))}</td><td class="num-cell">${fmtQ(c.qty, c.unit || 'kg')}</td><td class="num-cell hide-sm">${c.unitCost ? money(c.unitCost) : '—'}</td><td class="num-cell hide-sm">—</td><td class="num-cell">—</td><td></td></tr>`
+      ).join('') : '<tr><td colspan="7" class="empty">No cuts in stock yet.</td></tr>';
+    }
   }
 
   function liveHerdGoats() {
@@ -525,13 +666,16 @@
       }));
     }
     if (type === 'whole' || type === 'half') {
-      if (type === 'half') return [];
-      return (page.slaughters || []).map(s => ({
+      const form = type === 'half' ? 'half' : 'whole';
+      return (page.slaughters || []).filter(s => {
+        const rem = slaughterRemaining(s);
+        return rem > 0.001 && (s.carcassForm || 'whole').toLowerCase() === form;
+      }).map(s => ({
         key: String(s.id),
-        label: `${s.tag || 'Carcass'} · ${fmtQ(s.carcassKg, 'kg')}`,
-        qty: N(s.carcassKg),
+        label: carcassOptionLabel(s).replace(/<[^>]+>/g, ''),
+        qty: slaughterRemaining(s),
         unit: 'kg',
-        count: 1,
+        count: N(s.halfPieces) || 1,
         productId: catalogId('MEAT')
       }));
     }
@@ -811,18 +955,32 @@
       const pid = catalogId('MEAT');
       if (pid) {
         (page.slaughters || []).forEach(s => {
-          const q = N(s.carcassKg);
+          if (s.warehouseId !== +locId) return;
+          const q = slaughterRemaining(s);
           if (!includeZero && q <= 0.0001) return;
+          const form = (s.carcassForm || 'whole') === 'half' ? 'Half' : 'Whole';
           items.push({
             productId: pid,
             warehouseId: +locId,
             batch: String(s.id),
             qty: q,
             unit: 'kg',
-            name: `Whole carcass · ${s.tag || 'Carcass'}`
+            name: `${form} carcass · ${s.tag || 'Carcass'}`
           });
         });
       }
+      (page.meatCutStock || []).filter(c => c.warehouseId === +locId).forEach(c => {
+        const q = N(c.qty);
+        if (!includeZero && q <= 0.0001) return;
+        items.push({
+          productId: c.productId,
+          warehouseId: +locId,
+          batch: '',
+          qty: q,
+          unit: c.unit || 'kg',
+          name: c.name || 'Cut'
+        });
+      });
     }
     return items;
   }
@@ -1967,6 +2125,8 @@
     const meatPane = document.querySelector('.prod-pane[data-ppane="meat"]');
     if (!meatPane) return;
     meatPane.querySelectorAll('[data-sl-form]').forEach(p => { p.hidden = p.dataset.slForm !== name; });
+    if (name === 'split') spPreview();
+    if (name === 'cut') { ensureCutRows(); ctPreview(); }
   }
   document.querySelectorAll('.sl-actions [data-sl-action]').forEach(btn => {
     btn.addEventListener('click', () => setMeatForm(btn.dataset.slAction));
@@ -2603,13 +2763,6 @@
     ).join('') || '<tr><td colspan="11" class="empty">No sales this month yet.</td></tr>';
   }
 
-  const carcassRows = document.getElementById('sl-carcass-rows');
-  if (carcassRows) {
-    carcassRows.innerHTML = (page.slaughters || []).map(s =>
-      `<tr><td>${esc(s.tag || '—')}</td><td>Whole</td><td class="num-cell">1</td><td class="num-cell">${s.carcassKg}</td><td class="num-cell hide-sm">—</td><td class="num-cell hide-sm">${rs(s.saleAmount)}</td><td class="hide-sm">—</td><td></td></tr>`
-    ).join('') || '<tr><td colspan="8" class="empty">No carcasses in stock yet.</td></tr>';
-  }
-
   let breedPerfRows = [];
 
   function getBpMonth() {
@@ -2745,6 +2898,19 @@
       meth.innerHTML = mode === 'milk'
         ? '<b>Milk methodology:</b> Uses milking sessions and legacy single-line milk entries from the database, filtered by month and breed. Each saved session or legacy line counts as one record. Milk already flows into stock through normal milking saves.'
         : '<b>Meat methodology:</b> Live goat sales from the herd module and carcass intake from slaughter records. Carcass breed comes from the linked goat; records without a breed are excluded. *Margin is sale price minus recorded purchase cost only, not full lifetime cost.';
+    }
+    const breed = document.getElementById('bp-breed')?.value || '';
+    const herdLink = document.getElementById('bp-link-herd');
+  const breedLink = document.getElementById('bp-link-breeding');
+    if (herdLink) {
+      herdLink.href = breed ? `/Goat?q=${encodeURIComponent(breed)}` : '/Goat';
+      herdLink.title = breed ? `Search herd for ${breed}` : 'Open herd list';
+    }
+    if (breedLink) {
+      breedLink.href = '/Breeding?view=does';
+      breedLink.title = breed
+        ? `Breeding pipeline (filter does in Herd search for ${breed})`
+        : 'Open breeding does pipeline';
     }
   }
 
@@ -2976,19 +3142,81 @@
     const tag = document.getElementById('sl-sg-tag')?.value || '';
     const g = findGoatByTag(tag);
     const store = document.getElementById('sl-sg-store')?.value;
-    if (store && store.startsWith('__')) {
+    const carcassKg = +document.getElementById('sl-sg-kg')?.value || 0;
+    if (!store || store.startsWith('__')) {
       alert('Choose the meat chiller / freezer.');
       return;
     }
-    await post('/Products/SaveSlaughter', {
-      date: document.getElementById('sl-sg-date')?.value || today(),
-      goatId: g ? g.id : null,
-      tagText: tag,
-      carcassKg: +document.getElementById('sl-sg-kg')?.value || 0,
-      saleAmount: 0,
-      liveWeightKg: +document.getElementById('sl-sg-live')?.value || 0
-    });
-    reload();
+    if (carcassKg <= 0) {
+      alert('Enter carcass weight (kg).');
+      return;
+    }
+    try {
+      await postJson('/Products/SaveSlaughter', {
+        date: document.getElementById('sl-sg-date')?.value || today(),
+        goatId: g ? g.id : null,
+        tagText: tag,
+        carcassKg,
+        saleAmount: 0,
+        liveWeightKg: +document.getElementById('sl-sg-live')?.value || 0,
+        warehouseId: +store,
+        animalCost: +document.getElementById('sl-sg-acost')?.value || 0,
+        removeFromHerd: document.getElementById('sl-sg-herd')?.checked !== false,
+        notes: document.getElementById('sl-sg-note')?.value?.trim() || null
+      });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save carcass.');
+    }
+  });
+
+  document.getElementById('sl-sp-save')?.addEventListener('click', async () => {
+    const id = +document.getElementById('sl-sp-src')?.value;
+    if (!id) { alert('Choose a whole carcass.'); return; }
+    try {
+      await postJson('/Products/SaveMeatSplit', {
+        slaughterId: id,
+        date: document.getElementById('sl-sp-date')?.value || today(),
+        halfAKg: +document.getElementById('sl-sp-a')?.value || 0,
+        note: document.getElementById('sl-sp-note')?.value?.trim() || null
+      });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not split carcass.');
+    }
+  });
+
+  document.getElementById('sl-ct-save')?.addEventListener('click', async () => {
+    const id = +document.getElementById('sl-ct-src')?.value;
+    const store = document.getElementById('sl-ct-store')?.value;
+    if (!id) { alert('Choose the carcass to cut.'); return; }
+    if (!store || store.startsWith('__')) { alert('Choose where the cuts are stored.'); return; }
+    const cuts = readCutRows().filter(r => r.kg > 0 && r.productId).map(r => ({ productId: r.productId, kg: r.kg }));
+    if (!cuts.length) { alert('Weigh at least one cut.'); return; }
+    try {
+      await postJson('/Products/SaveMeatCut', {
+        slaughterId: id,
+        date: document.getElementById('sl-ct-date')?.value || today(),
+        cutWarehouseId: +store,
+        inputKg: +document.getElementById('sl-ct-in')?.value || 0,
+        costMethod: document.getElementById('sl-ct-method')?.value || 'weight',
+        note: document.getElementById('sl-ct-note')?.value?.trim() || null,
+        cuts
+      });
+      reload();
+    } catch (err) {
+      alert(err.message || 'Could not save cuts.');
+    }
+  });
+
+  document.getElementById('sl-ct-add')?.addEventListener('click', () => addCutRow());
+  ['sl-sp-src', 'sl-sp-a'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', spPreview);
+    document.getElementById(id)?.addEventListener('change', spPreview);
+  });
+  ['sl-ct-src', 'sl-ct-in', 'sl-ct-method'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', ctPreview);
+    document.getElementById(id)?.addEventListener('change', ctPreview);
   });
 
   document.getElementById('sl-sa-check')?.addEventListener('click', () => {

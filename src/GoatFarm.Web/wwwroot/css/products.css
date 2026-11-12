@@ -35,6 +35,7 @@
 #view-milk .tbl tr.pricing-row.editing{background:var(--green-tint,#e8f4ed);outline:2px solid var(--green,#2f6b45);outline-offset:-2px}
 
 .products-flow-note{margin:12px 0 18px;padding:12px 14px;border:1px solid #e3dccb;border-radius:14px;background:#fffdf8;color:#625f56;font-size:13px;line-height:1.5}.products-flow-note strong{color:#173d2b}.products-clarity-badge{display:inline-block;padding:4px 9px;border-radius:999px;background:#eef5ec;color:#31543e;font-weight:700;font-size:11px;margin-right:6px}
+.bp-crosslinks{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
 /* V232 Products: milk line, meat line, sales, stock — scoped to #view-milk */
 #view-milk .sl-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 16px}

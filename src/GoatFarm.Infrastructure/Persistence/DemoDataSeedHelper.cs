@@ -1,3 +1,4 @@
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -161,6 +162,9 @@ public static class DemoDataSeedHelper
                 TagText = meatGoat?.Tag ?? "S-099",
                 LiveWeightKg = 35,
                 CarcassKg = 18,
+                RemainingKg = 18,
+                CarcassForm = MeatCarcassForms.Whole,
+                HalfPieces = 1,
                 SaleAmount = 42000,
                 Notes = "Demo Eid cull"
             });

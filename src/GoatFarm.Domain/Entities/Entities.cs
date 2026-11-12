@@ -48,6 +48,10 @@ public class Goat : BaseEntity
     public int? KiddingRecordId { get; set; }
     public KiddingRecord? KiddingRecord { get; set; }
     public DateOnly? WeanDate { get; set; }
+    /// <summary>How weaning happened: auto, early, manual.</summary>
+    public string? WeanMethod { get; set; }
+    public KidMilkType KidMilkType { get; set; } = KidMilkType.Mother;
+    public KidHealthTag KidHealthTag { get; set; } = KidHealthTag.Good;
     public YoungGoatClass YoungClass { get; set; }
     public DateOnly? YoungClassDate { get; set; }
     /// <summary>Season birth batch name (prototype <c>goat.batch</c>).</summary>
@@ -115,6 +119,20 @@ public class GoatHeatEvent : BaseEntity
     public Goat Goat { get; set; } = null!;
     public DateOnly Date { get; set; }
     public string? Note { get; set; }
+}
+
+/// <summary>Pre-breeding buck exam (V243 <c>buckChecks</c>).</summary>
+public class BuckHealthCheck : BaseEntity
+{
+    public int BuckId { get; set; }
+    public Goat Buck { get; set; } = null!;
+    public DateOnly CheckDate { get; set; }
+    public decimal? WeightKg { get; set; }
+    public decimal? Bcs { get; set; }
+    public string Feet { get; set; } = "good";
+    public string Teeth { get; set; } = "good";
+    public string Testicles { get; set; } = "normal";
+    public string? Notes { get; set; }
 }
 
 public class DeathRecord : BaseEntity

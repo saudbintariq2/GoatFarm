@@ -304,6 +304,13 @@ public class SlaughterRecord : BaseEntity
     public decimal CarcassKg { get; set; }
     public decimal SaleAmount { get; set; }
     public string? Notes { get; set; }
+  /// <summary>whole | half — carcass still on the hook; depleted when RemainingKg is 0.</summary>
+    public string CarcassForm { get; set; } = "whole";
+    public decimal RemainingKg { get; set; }
+    public int HalfPieces { get; set; } = 1;
+    public int? WarehouseId { get; set; }
+    /// <summary>Rs per kg for cost allocation when cutting (from animal cost at slaughter).</summary>
+    public decimal UnitCostPerKg { get; set; }
 }
 
 public class ProductCostAllocation : BaseEntity

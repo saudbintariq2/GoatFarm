@@ -633,6 +633,407 @@ body.farm-pro .panel-head {
   padding: 16px 20px;
 }
 
+body.farm-pro .panel-head.breed-scan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+body.farm-pro .panel-head.breed-scan-head h2 {
+  margin: 0;
+}
+
+body.farm-pro .panel-head.breed-scan-head .sub {
+  flex: 1 1 200px;
+  margin: 0;
+}
+
+body.farm-pro .panel-head.breed-scan-head #scanClose,
+body.farm-pro .panel-head.breed-scan-head #scanReload {
+  margin-left: auto;
+}
+body.farm-pro .panel-head.breed-scan-head #scanReload {
+  margin-left: 0;
+}
+
+body.farm-pro .breed-flowline {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+body.farm-pro .breed-fnode {
+  flex: 1 0 104px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+  background: #fff;
+  cursor: pointer;
+  transition: 0.18s;
+  font: inherit;
+  color: inherit;
+}
+
+body.farm-pro .breed-fnode:hover,
+body.farm-pro .breed-fnode.breed-on {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--sage, #e8f0eb);
+}
+
+body.farm-pro .breed-fnode b {
+  display: block;
+  font: 600 26px Fraunces, Georgia, serif;
+  color: var(--green);
+}
+
+body.farm-pro .breed-fnode span {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+body.farm-pro .breed-farrow {
+  flex: 0 0 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.3;
+  padding: 0 4px;
+}
+
+body.farm-pro .breed-farrow::before {
+  content: "→";
+  font-size: 20px;
+  color: var(--clay, #b8956b);
+  line-height: 1;
+}
+
+body.farm-pro .breed-flow-branch {
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--ink2, #3d4540);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+body.farm-pro .breed-flow-pill {
+  display: inline-flex;
+  align-items: center;
+  font: 600 12px Inter, system-ui, sans-serif;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+body.farm-pro .breed-flow-pill--blue {
+  background: var(--blue-soft, #e8f1fa);
+  color: var(--blue);
+}
+
+body.farm-pro .breed-flow-pill--gold {
+  background: var(--gold-soft, #f5ead4);
+  color: #8a6418;
+}
+
+body.farm-pro .breed-flow-pill--red {
+  background: var(--red-soft, #fce8e6);
+  color: var(--red);
+}
+
+body.farm-pro #brRows tr.breed-doe-sel,
+body.farm-pro #heatRows tr.breed-doe-sel {
+  background: linear-gradient(90deg, rgba(45, 106, 79, 0.08), transparent);
+}
+
+body.farm-pro .breed-doe-profile-head {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+body.farm-pro .breed-doe-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 18px Inter, system-ui, sans-serif;
+  background: linear-gradient(135deg, #f3e6d3, #ead6bb);
+  color: #7a4a28;
+  flex-shrink: 0;
+}
+
+body.farm-pro .breed-doe-title {
+  font: 600 26px Fraunces, Georgia, serif;
+  margin: 0 0 4px;
+}
+
+body.farm-pro .breed-doe-profile-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+body.farm-pro .breed-doe-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin: 20px 0 0;
+}
+
+body.farm-pro .breed-doe-stat {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--fp-radius-md, 12px);
+  padding: 16px 18px;
+  box-shadow: var(--fp-shadow, 0 1px 3px rgba(0, 0, 0, 0.06));
+}
+
+body.farm-pro .breed-doe-stat b.breed-doe-stat-v {
+  display: block;
+  font: 600 30px Fraunces, Georgia, serif;
+  color: var(--green);
+  line-height: 1.1;
+}
+
+body.farm-pro .breed-doe-stat .breed-doe-stat-l {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+body.farm-pro .breed-doe-mainherd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8f6f2;
+  border: 1px dashed var(--line);
+  font-size: 13.5px;
+}
+
+body.farm-pro .breed-doe-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  body.farm-pro .breed-doe-grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+body.farm-pro .breed-doe-subpanel {
+  border: 1px solid var(--line);
+  border-radius: var(--fp-radius-md, 12px);
+  padding: 16px 18px;
+  background: #fff;
+}
+
+body.farm-pro .breed-doe-subpanel h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+body.farm-pro .breed-doe-subhead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+body.farm-pro .breed-doe-hist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+body.farm-pro .breed-doe-hist li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+body.farm-pro .breed-doe-hist li:last-child {
+  border-bottom: none;
+}
+
+body.farm-pro .breed-doe-hist li b {
+  display: block;
+  font-size: 13px;
+}
+
+body.farm-pro .breed-doe-hist li span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+body.farm-pro .breed-doe-hist li.breed-hist-preg b {
+  color: var(--green-dark);
+}
+
+body.farm-pro .breed-doe-hist li.breed-hist-wait b {
+  color: var(--blue);
+}
+
+body.farm-pro .breed-kidding-stats.stats {
+  margin-bottom: 18px;
+}
+
+body.farm-pro .panel-head.breed-kd-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+body.farm-pro .panel-head.breed-kd-head h2 {
+  margin: 0;
+}
+
+body.farm-pro .panel-head.breed-kd-head .sub {
+  flex: 1 1 180px;
+  margin: 0;
+}
+
+body.farm-pro .breed-kd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+body.farm-pro .breed-kd-chip {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+body.farm-pro .breed-kd-chip.breed-on {
+  border-color: var(--green);
+  background: var(--sage, #e8f0eb);
+  color: var(--green-dark);
+}
+
+body.farm-pro #kdTable tr.breed-mother-warn,
+body.farm-pro .tbl tr.breed-mother-warn {
+  background: linear-gradient(90deg, rgba(200, 90, 40, 0.08), transparent);
+}
+
+body.farm-pro .breed-wsetbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #e8f4fc, #f4faf5);
+  border: 1px solid #cfe3f0;
+}
+
+body.farm-pro .breed-wlab {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+body.farm-pro .breed-wset {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+body.farm-pro .breed-wset-off {
+  opacity: 0.65;
+}
+
+body.farm-pro .breed-wd-input {
+  width: 52px;
+  font: 600 13px inherit;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  text-align: center;
+}
+
+body.farm-pro .breed-sw {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green-dark);
+}
+
+body.farm-pro .breed-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+  background: #faf9f7;
+}
+
+body.farm-pro .breed-seg-btn {
+  border: none;
+  background: transparent;
+  font: 600 10px inherit;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+body.farm-pro .breed-seg-btn.breed-on {
+  background: var(--green-dark);
+  color: #fff;
+}
+
+body.farm-pro .breed-kk-tbl .breed-weankg {
+  width: 64px;
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  text-align: center;
+}
+
+body.farm-pro .breed-weankg.breed-need {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px rgba(138, 38, 28, 0.15);
+}
+
 body.farm-pro .panel-head h2 {
   font-size: 16px;
   font-weight: 700;
@@ -2024,6 +2425,976 @@ body.farm-pro .v206-bg-card {
   padding: 12px 14px;
   margin-bottom: 10px;
   background: #fff;
+}
+body.farm-pro .v206-bg-card h3 {
+  font-size: 15px;
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+body.farm-pro .v206-bg-bar {
+  height: 7px;
+  border-radius: 5px;
+  background: var(--line);
+  margin: 8px 0;
+  overflow: hidden;
+}
+body.farm-pro .v206-bg-bar i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+body.farm-pro .v206-bg-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+body.farm-pro .v206-bg-kpis div {
+  background: var(--green-tint);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+body.farm-pro .v206-bg-kpis b {
+  display: block;
+  font-size: 17px;
+  color: var(--ink);
+}
+body.farm-pro .v206-bg-card details summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  margin-top: 4px;
+}
+body.farm-pro .v206-bg-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+body.farm-pro .v206-bg-scroll table {
+  min-width: 520px;
+}
+body.farm-pro .breed-buck-season-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 10px;
+  flex-wrap: wrap;
+}
+body.farm-pro .breed-buck-season-h h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+body.farm-pro .breed-buck-season-line {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  min-width: 40px;
+}
+body.farm-pro .breed-buck-season-empty {
+  text-align: center;
+  padding: 26px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  margin-bottom: 12px;
+}
+body.farm-pro .breed-buck-season-empty p {
+  margin: 0 0 12px;
+}
+
+body.farm-pro .breed-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 4px;
+  background: #ece7dd;
+  border-radius: 12px;
+}
+body.farm-pro .breed-subnav-btn {
+  border: 0;
+  background: transparent;
+  padding: 10px 16px;
+  font: 600 14px var(--font-sans, Inter, system-ui, sans-serif);
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+body.farm-pro .breed-subnav-btn.on {
+  background: #fff;
+  color: var(--green-dark);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+body.farm-pro .breed-subnav-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--clay, #c05a21);
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+body.farm-pro .breed-view[hidden] {
+  display: none !important;
+}
+
+body.farm-pro .breed-today-stats.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+body.farm-pro .breed-today-stats .stat {
+  background: #fff;
+  border: 1px solid var(--line);
+  text-align: center;
+}
+body.farm-pro .breed-today-stats .stat .v {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--green-dark);
+  line-height: 1.1;
+}
+body.farm-pro .breed-today-stats .stat .v small {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+body.farm-pro .breed-today-stats .stat .l {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+body.farm-pro .breed-today-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) {
+  body.farm-pro .breed-today-grid {
+    grid-template-columns: 1fr;
+  }
+}
+body.farm-pro .breed-todo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+body.farm-pro .breed-todo-row {
+  display: grid;
+  grid-template-columns: 28px 88px 1fr auto;
+  gap: 10px 12px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 640px) {
+  body.farm-pro .breed-todo-row {
+    grid-template-columns: 28px 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  body.farm-pro .breed-todo-act {
+    grid-column: 2;
+  }
+}
+body.farm-pro .breed-todo-ic {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+}
+body.farm-pro .breed-todo-ic.no {
+  background: #fde8e6;
+  color: #8a261c;
+}
+body.farm-pro .breed-todo-ic.wt {
+  background: #f5e6d6;
+  color: #9a5b2e;
+}
+body.farm-pro .breed-todo-ic.ok {
+  background: #e3f2e6;
+  color: var(--green-dark);
+}
+body.farm-pro .breed-todo-when {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+body.farm-pro .breed-todo-when small {
+  display: block;
+  font-weight: 500;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+body.farm-pro .breed-todo-what b {
+  display: block;
+  font-size: 14px;
+}
+body.farm-pro .breed-todo-sub {
+  display: block;
+  margin-top: 2px;
+}
+body.farm-pro .panel-head.breed-season-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+body.farm-pro .panel-head.breed-season-head .btn {
+  margin-left: auto;
+}
+body.farm-pro .breed-season-tl-track {
+  position: relative;
+  height: 56px;
+  background: linear-gradient(90deg, #e8efe9 0%, #f0e8dc 45%, #e8efe9 100%);
+  border-radius: 10px;
+  margin: 4px 0 16px;
+  border: 1px solid var(--line);
+}
+body.farm-pro .breed-season-tl-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--green-dark);
+  transform: translateX(-50%);
+}
+body.farm-pro .breed-season-tl-today span {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green-dark);
+  white-space: nowrap;
+}
+body.farm-pro .breed-season-tl-pin {
+  position: absolute;
+  bottom: 6px;
+  transform: translateX(-50%);
+  text-align: center;
+  min-width: 48px;
+}
+body.farm-pro .breed-season-tl-ico {
+  display: block;
+  font-size: 16px;
+}
+body.farm-pro .breed-season-tl-dt {
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+body.farm-pro .breed-season-next {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+body.farm-pro .breed-season-next li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+body.farm-pro .breed-season-next li .muted {
+  margin-left: auto;
+}
+
+body.farm-pro .breed-ph {
+  margin-bottom: 16px;
+}
+body.farm-pro .breed-ph--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+body.farm-pro .breed-ph-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+body.farm-pro .breed-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+body.farm-pro .breed-ph-title {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 4px 0 6px;
+}
+body.farm-pro .breed-plan-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+body.farm-pro .breed-plan-tab {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font: 600 13px inherit;
+  cursor: pointer;
+}
+body.farm-pro .breed-plan-tab.on {
+  background: var(--green-dark);
+  color: #fff;
+  border-color: var(--green-dark);
+}
+body.farm-pro .breed-plan-tab b {
+  display: block;
+  font-size: 13px;
+}
+body.farm-pro .breed-plan-tab .muted {
+  display: block;
+  font-weight: 400;
+  margin-top: 2px;
+}
+body.farm-pro .breed-plan-tab.on .muted {
+  color: rgba(255, 255, 255, 0.85);
+}
+body.farm-pro .breed-plan-tab--add {
+  border-style: dashed;
+  color: var(--green-dark);
+  font-weight: 700;
+}
+body.farm-pro .breed-new-batch-panel {
+  margin-bottom: 14px;
+  border-color: var(--green-dark);
+}
+body.farm-pro .breed-np-in {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+}
+body.farm-pro .breed-np-calc {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+body.farm-pro .breed-np-calc div {
+  background: var(--green-tint);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+body.farm-pro .breed-np-calc b {
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+}
+body.farm-pro .breed-np-warn {
+  grid-column: 1 / -1;
+  background: #fdf6e3;
+  color: #7a5a17;
+  font-weight: 600;
+}
+body.farm-pro .breed-plan-tl-track {
+  position: relative;
+  height: 48px;
+  margin: 16px 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+body.farm-pro .breed-plan-tl-base {
+  position: absolute;
+  inset: 0;
+  background: #f4f1eb;
+}
+body.farm-pro .breed-plan-tl-bar {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  border-radius: 6px;
+  min-width: 2px;
+  opacity: 0.92;
+}
+body.farm-pro .breed-plan-tl-today {
+  z-index: 2;
+}
+body.farm-pro .breed-today-plan-tl .breed-plan-tl-track {
+  height: 48px;
+}
+body.farm-pro .breed-today-tl-labels {
+  position: relative;
+  height: 22px;
+  margin: 4px 0 8px;
+}
+body.farm-pro .breed-today-tl-lab {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+body.farm-pro .breed-today-tl-lab--end {
+  transform: translateX(-100%);
+}
+body.farm-pro .breed-today-legend {
+  margin-bottom: 12px;
+}
+body.farm-pro ul.breed-funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+body.farm-pro ul.breed-funnel li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+body.farm-pro ul.breed-funnel li b {
+  margin-left: auto;
+}
+body.farm-pro .breed-report-tiles .stat {
+  min-height: 88px;
+}
+body.farm-pro #breedViewReports {
+  display: block;
+  overflow: visible;
+  padding-bottom: 48px;
+}
+body.farm-pro #breed-rep .breed-rep-panel.panel {
+  overflow: visible;
+  margin-bottom: 20px;
+}
+body.farm-pro #breed-rep .breed-rep-grid2 {
+  margin-bottom: 4px;
+}
+body.farm-pro .breed-rep-ph {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+body.farm-pro .breed-rep-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+body.farm-pro .breed-rep-filt {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+}
+body.farm-pro .breed-rep-filt label {
+  display: block;
+  margin-bottom: 5px;
+}
+body.farm-pro .breed-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+body.farm-pro .breed-seg-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+body.farm-pro .breed-seg-btn.on {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+}
+body.farm-pro .breed-rep-head {
+  background: var(--green);
+  color: #e8f0ea;
+  border-radius: 16px;
+  padding: 16px 20px;
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+body.farm-pro .breed-rep-head b {
+  color: #fff;
+}
+body.farm-pro .breed-rep-score {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 12px;
+}
+body.farm-pro .breed-rep-tile {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+body.farm-pro .breed-rep-tile--ok {
+  border-color: #2d6b4a;
+}
+body.farm-pro .breed-rep-tile--close {
+  border-color: var(--amber);
+}
+body.farm-pro .breed-rep-tile--bad {
+  border-color: #c44;
+}
+body.farm-pro .breed-rep-tile-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+body.farm-pro .breed-rep-tile-val {
+  font: 600 32px Fraunces, serif;
+  line-height: 1.1;
+}
+body.farm-pro .breed-rep-tile-val small {
+  font-size: 16px;
+  font-weight: 600;
+  margin-left: 2px;
+}
+body.farm-pro .breed-rep-tile-blurb {
+  font-size: 12px;
+  color: var(--ink-soft);
+  min-height: 2.4em;
+}
+body.farm-pro .breed-rep-tile-bar {
+  position: relative;
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  margin: 6px 0;
+}
+body.farm-pro .breed-rep-tile-bar i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  border-radius: 3px;
+}
+body.farm-pro .breed-rep-tile-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+body.farm-pro .breed-rep-tgt {
+  width: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 4px;
+  font-size: 11px;
+  text-align: center;
+}
+body.farm-pro .breed-rep-fun-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+body.farm-pro .breed-rep-fun-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+body.farm-pro .breed-rep-fun-bar {
+  display: block;
+  height: 10px;
+  background: var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+body.farm-pro .breed-rep-fun-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+body.farm-pro .breed-rep-fun-lost {
+  color: #8a261c;
+  font-size: 12px;
+}
+body.farm-pro .breed-rep-say {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+body.farm-pro .breed-rep-stack {
+  display: flex;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+body.farm-pro .breed-rep-stack i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  min-width: 4px;
+}
+body.farm-pro .breed-rep-bm {
+  margin-bottom: 16px;
+}
+body.farm-pro .breed-rep-bmn {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+body.farm-pro .breed-rep-bmr {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+}
+body.farm-pro .breed-best {
+  font-size: 11px;
+}
+body.farm-pro .breed-rep-mbars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 160px;
+  padding-top: 8px;
+}
+body.farm-pro .breed-rep-mb {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  min-width: 0;
+}
+body.farm-pro .breed-rep-mb i {
+  display: block;
+  margin: 4px auto 0;
+  width: 70%;
+  max-width: 36px;
+  border-radius: 6px 6px 2px 2px;
+}
+body.farm-pro .breed-rep-mb i.breed-rep-exp {
+  opacity: 0.55;
+  border: 1px dashed var(--green);
+  background: transparent !important;
+}
+body.farm-pro .breed-rep-problems .breed-rep-pr {
+  display: grid;
+  grid-template-columns: auto 1fr 1.2fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+body.farm-pro .breed-rep-pr--zero {
+  opacity: 0.45;
+}
+body.farm-pro .breed-rep-rt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+body.farm-pro .breed-rep-rt td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+body.farm-pro .breed-rep-nr {
+  width: 28px;
+  color: var(--ink-soft);
+}
+body.farm-pro.breed-printing .breed-subnav,
+body.farm-pro.breed-printing #breedViewReports ~ *,
+body.farm-pro.breed-printing .breed-view:not(#breedViewReports) {
+  display: none !important;
+}
+body.farm-pro.breed-printing #breedViewReports {
+  display: block !important;
+}
+body.farm-pro .breed-plan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+body.farm-pro .breed-plan-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+body.farm-pro .breed-year-row {
+  cursor: pointer;
+}
+body.farm-pro .breed-year-row:hover {
+  background: var(--green-tint) !important;
+}
+body.farm-pro .breed-plan-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 18px;
+}
+body.farm-pro .breed-plan-cta .btn {
+  margin-left: auto;
+}
+body.farm-pro .breed-buck-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+body.farm-pro .breed-buck-card {
+  flex: 1 1 160px;
+  max-width: 240px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+body.farm-pro .breed-bg-meter {
+  height: 8px;
+  background: var(--line);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+body.farm-pro .breed-bg-meter-fill {
+  height: 100%;
+  width: 0;
+  background: var(--green-dark);
+  transition: width 0.2s ease;
+}
+
+body.farm-pro .scan-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 20px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+body.farm-pro .scan-top-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+body.farm-pro .scan-top-field > label.small {
+  display: block;
+  line-height: 1.3;
+}
+body.farm-pro .scan-top-field--groups {
+  flex: 1 1 260px;
+  min-width: min(100%, 200px);
+  max-width: 100%;
+}
+body.farm-pro .scan-top-field--date {
+  flex: 0 0 auto;
+}
+body.farm-pro .scan-top-field--find {
+  flex: 1 1 200px;
+  max-width: min(100%, 300px);
+}
+body.farm-pro .scan-gtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+body.farm-pro .scan-gtabs button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: 600 13px inherit;
+  cursor: pointer;
+}
+body.farm-pro .scan-gtabs button.on {
+  background: var(--green-dark);
+  color: #fff;
+  border-color: var(--green-dark);
+}
+body.farm-pro .scan-tbl-wrap {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: auto;
+  max-height: 420px;
+}
+body.farm-pro .scan-row-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+body.farm-pro .scan-row-pick button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+body.farm-pro .scan-row-pick button.on-preg {
+  background: var(--green-tint);
+  border-color: var(--green);
+  font-weight: 700;
+}
+body.farm-pro .scan-row-pick button.on-empty {
+  background: #fbe7e5;
+  border-color: #b3261e;
+  font-weight: 700;
+}
+body.farm-pro .scan-row-pick.on-unsure button[data-sc-unsure] {
+  background: #f7eed9;
+  border-color: #b8862b;
+  font-weight: 700;
+}
+body.farm-pro .scan-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+body.farm-pro input.scan-date,
+body.farm-pro input.scan-find {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+}
+body.farm-pro input.scan-date {
+  width: auto;
+  min-width: 11.5rem;
+}
+body.farm-pro input.scan-find {
+  min-width: 0;
+}
+body.farm-pro .scan-gtabs button .scan-tab-count {
+  margin-left: 6px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+body.farm-pro .scan-sheet-tbl .scan-rseg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+body.farm-pro .scan-sheet-tbl .scan-rseg button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+body.farm-pro .scan-sheet-tbl .scan-rseg button.on {
+  background: var(--green-tint);
+  border-color: var(--green);
+  font-weight: 700;
+}
+body.farm-pro .scan-sheet-tbl tr.scan-r-empty {
+  background: #fdf8f7;
+}
+body.farm-pro .scan-sheet-tbl tr.scan-r-preg {
+  background: #f7fbf8;
+}
+body.farm-pro .scan-sheet-tbl tr.scan-r-unsure {
+  background: #faf7ef;
+}
+body.farm-pro .scan-sheet-tbl tr.scan-hit {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+body.farm-pro .scan-det {
+  min-width: 200px;
+  font-size: 13px;
+}
+body.farm-pro .scan-det .scan-kp button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 9px;
+  margin: 0 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+body.farm-pro .scan-det .scan-kp button.on {
+  background: var(--green-dark);
+  color: #fff;
+  border-color: var(--green-dark);
+}
+body.farm-pro .scan-days-preg,
+body.farm-pro .scan-days-again {
+  width: 64px;
+  margin-left: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+body.farm-pro .scan-empty-next,
+body.farm-pro .scan-empty-batch {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  max-width: 100%;
+  margin: 2px 4px 2px 0;
+}
+body.farm-pro .scan-foot .scan-sum-n {
+  font-size: 17px;
+  margin-right: 8px;
+}
+body.farm-pro .scan-foot .chip {
+  margin-right: 6px;
+  font-size: 12px;
+}
+body.farm-pro .scan-chip-empty {
+  background: #fbe7e5;
+  color: #8a261c;
+}
+body.farm-pro .scan-chip-unsure {
+  background: #f7eed9;
+  color: #8a261c;
 }
 
 @media print {

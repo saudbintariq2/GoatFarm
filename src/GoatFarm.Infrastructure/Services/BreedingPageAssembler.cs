@@ -9,15 +9,47 @@ internal static class BreedingPageAssembler
 {
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
+    public static IReadOnlyList<BreedingDoeFlowStepViewModel> BuildDoeFlowSteps(IReadOnlyList<Goat> goats, DateOnly today)
+    {
+        var counts = BreedingDoeFlowHelper.Steps.ToDictionary(s => s.Key, _ => 0);
+        foreach (var g in goats)
+        {
+            var flow = BreedingDoeFlowHelper.FlowStage(g, today);
+            if (flow is not null && counts.ContainsKey(flow))
+                counts[flow]++;
+        }
+
+        return BreedingDoeFlowHelper.Steps
+            .Select(s => new BreedingDoeFlowStepViewModel
+            {
+                Key = s.Key,
+                Label = s.Label,
+                Count = counts[s.Key],
+                ArrowLabel = s.ArrowAfter
+            })
+            .ToList();
+    }
+
     public static IReadOnlyList<BreedingPipelineRowViewModel> BuildPipelineRows(IReadOnlyList<Goat> goats)
     {
         var today = Today;
         var rows = goats
-            .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && StageKey(g) is not null)
-            .Select(g => MapPipeline(g, today))
+            .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.IsArchived)
+            .Select(g =>
+            {
+                var flow = BreedingDoeFlowHelper.FlowStage(g, today);
+                if (flow is null) return null;
+                return MapPipeline(g, today, flow);
+            })
+            .Where(r => r is not null)
+            .Cast<BreedingPipelineRowViewModel>()
             .ToList();
-        var order = new Dictionary<string, int> { ["plan"] = 0, ["prep"] = 1, ["wait"] = 2, ["preg"] = 3 };
-        rows.Sort((a, b) => order.GetValueOrDefault(a.StageKey, 9).CompareTo(order.GetValueOrDefault(b.StageKey, 9)));
+        var flowOrder = BreedingDoeFlowHelper.Steps.Select((s, i) => (s.Key, i)).ToDictionary(x => x.Key, x => x.i);
+        rows.Sort((a, b) =>
+        {
+            var c = flowOrder.GetValueOrDefault(a.FlowStageKey, 9).CompareTo(flowOrder.GetValueOrDefault(b.FlowStageKey, 9));
+            return c != 0 ? c : string.Compare(a.Tag, b.Tag, StringComparison.OrdinalIgnoreCase);
+        });
         return rows;
     }
 
@@ -32,15 +64,23 @@ internal static class BreedingPageAssembler
         return null;
     }
 
-    private static BreedingPipelineRowViewModel MapPipeline(Goat g, DateOnly today)
+    private static BreedingPipelineRowViewModel MapPipeline(Goat g, DateOnly today, string flowStage)
     {
-        var stage = StageKey(g)!;
+        var stage = StageKey(g) ?? flowStage switch
+        {
+            "in_heat" or "getting_ready" => "prep",
+            "crossed" or "waiting_scan" => "wait",
+            "pregnant" or "dry" => "preg",
+            "kidded" => "prep",
+            _ => "prep"
+        };
         var (label, css) = stage switch
         {
             "plan" => ("Next cross planned", "chip-dry"),
             "prep" => ("Ready for cross", "chip-kid"),
             "wait" => ("Waiting for scan", "chip-buck"),
-            _ => ("Pregnant", "chip-preg")
+            "preg" => ("Pregnant", "chip-preg"),
+            _ => (BreedingDoeFlowHelper.FlowStageLabel(flowStage), BreedingDoeFlowHelper.FlowStageChipClass(flowStage))
         };
 
         var row = new BreedingPipelineRowViewModel
@@ -49,15 +89,16 @@ internal static class BreedingPageAssembler
             Tag = g.Tag,
             Name = g.Name,
             Owner = string.IsNullOrWhiteSpace(g.Owner) || g.Owner == "Farm" ? null : g.Owner,
+            FlowStageKey = flowStage,
             StageKey = stage,
-            StageLabel = label,
-            StageCssClass = css,
+            StageLabel = BreedingDoeFlowHelper.FlowStageLabel(flowStage),
+            StageCssClass = BreedingDoeFlowHelper.FlowStageChipClass(flowStage),
             MatedDate = g.MatedDate?.ToString("yyyy-MM-dd"),
             BuckTag = g.BuckTag,
             KidsCount = g.KidsCount
         };
 
-        if (stage == "plan")
+        if (stage == "plan" && g.NextCrossDate.HasValue)
         {
             var cross = g.NextCrossDate!.Value;
             var bu = BreedingSeasonHelper.BuildUpStart(cross, HerdRules.BuildUpDays);
@@ -74,7 +115,7 @@ internal static class BreedingPageAssembler
             row.DaysText = d < 0 ? $"overdue {-d}d" : $"in {d}d";
             if (d <= 14) row.DaysStyle = "color:var(--amber);font-weight:700";
         }
-        else if (stage == "prep")
+        else if (stage == "prep" && g.PrepCrossDate.HasValue)
         {
             var since = g.PrepCrossDate!.Value;
             var n = today.DayNumber - since.DayNumber;
@@ -93,7 +134,7 @@ internal static class BreedingPageAssembler
                 if (n >= 60) row.DaysStyle = "color:var(--amber);font-weight:700";
             }
         }
-        else if (stage == "wait")
+        else if (stage == "wait" && g.MatedDate.HasValue)
         {
             var mated = g.MatedDate!.Value;
             var since = today.DayNumber - mated.DayNumber;
@@ -104,7 +145,7 @@ internal static class BreedingPageAssembler
             row.KeyDateHtml = $"<b>{from:yyyy-MM-dd}</b><div class=\"name\">{scanNote}</div>";
             row.DaysText = since + "d since";
         }
-        else if (stage == "preg")
+        else if (stage == "preg" && g.MatedDate.HasValue)
         {
             var mated = g.MatedDate!.Value;
             var kd = BreedingHelper.ExpectedKidding(mated);
@@ -120,6 +161,21 @@ internal static class BreedingPageAssembler
         if (stage != "preg")
             row.KidsHtml = g.KidsCount is > 0 ? KidsCell(g) : "<span class=\"breed\" style=\"color:#bbb\">—</span>";
 
+        if (string.IsNullOrEmpty(row.KeyDateHtml))
+        {
+            row.KeyDateHtml = flowStage switch
+            {
+                "in_heat" => "<b>In heat</b><div class=\"name\">watch for breeding</div>",
+                "kidded" => "<b>With kids</b><div class=\"name\">ready for next season step</div>",
+                "dry" => "<b>Dry</b><div class=\"name\">dry-off before kidding</div>",
+                "crossed" => g.MatedDate.HasValue
+                    ? $"<b>Crossed {g.MatedDate:yyyy-MM-dd}</b><div class=\"name\">buck still with does</div>"
+                    : "<span class=\"breed\">—</span>",
+                _ => "<span class=\"breed\">—</span>"
+            };
+            row.DaysText = g.MatedDate.HasValue ? (today.DayNumber - g.MatedDate.Value.DayNumber) + "d since" : "—";
+        }
+
         return row;
     }
 
@@ -131,62 +187,370 @@ internal static class BreedingPageAssembler
         return $"<b>{BreedingHelper.KidsLabel(g.KidsCount.Value)}</b>{flag}";
     }
 
+    public static IReadOnlyList<BreedingSeasonStepViewModel> BuildTodaySeasonNextSteps(
+        BreedingSeasonSettings season,
+        string batchId,
+        DateOnly today)
+    {
+        var batch = season.Batches.FirstOrDefault(b => b.Id == batchId) ?? season.Batches[0];
+        var plan = BreedingSeasonHelper.SeasonPlan(batch, season, today);
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+        var dryCrossFrom = plan.CrossFrom.AddDays(-season.DryBeforeCross);
+        var dryCrossTo = plan.CrossTo.AddDays(-season.DryBeforeCross);
+
+        var phases = new (DateOnly Start, DateOnly End, string Icon, string Label)[]
+        {
+            (plan.BuildFrom, plan.CrossFrom, "🌾", "Extra feed"),
+            (dryCrossFrom, dryCrossTo, "🌙", "Stop milking"),
+            (plan.CrossFrom, plan.CrossTo, "♥", "Crossing"),
+            (plan.ScanFrom, plan.ScanTo, "🔍", "Scan"),
+            (plan.DryFrom, plan.DryTo, "🌙", "Dry off"),
+            (plan.KidFrom, plan.KidTo, "🍼", "Births"),
+            (plan.WeanFrom, plan.WeanTo, "🐣", "Weaning")
+        };
+
+        static string RangeText(DateOnly a, DateOnly b, System.Globalization.CultureInfo culture) =>
+            a.ToString("d MMM", culture) + " → " + b.ToString("d MMM", culture);
+
+        static string AwayText(DateOnly start, DateOnly end, DateOnly today)
+        {
+            var s = BreedingHelper.DaysUntil(start);
+            var e = BreedingHelper.DaysUntil(end);
+            if (s > 0) return "in " + s + (s == 1 ? " day" : " days");
+            if (e >= 0) return s == 0 ? "today" : "now · " + e + (e == 1 ? " day" : " days") + " left";
+            return "done · " + (-e) + (Math.Abs(e) == 1 ? " day" : " days") + " ago";
+        }
+
+        return phases
+            .Where(p => p.End >= today)
+            .Take(3)
+            .Select(p => new BreedingSeasonStepViewModel
+            {
+                Icon = p.Icon,
+                Label = p.Label,
+                WindowText = RangeText(p.Start, p.End, culture),
+                WhenDate = p.Start,
+                DaysText = AwayText(p.Start, p.End, today)
+            })
+            .ToList();
+    }
+
+    public static IReadOnlyList<BreedingTodayTimelineLabelViewModel> BuildTodayTimelineLabels(
+        BreedingSeasonSettings season,
+        string batchId,
+        DateOnly today)
+    {
+        var (todayPct, _) = BuildPlanTimeline(season, batchId, today);
+        var batch = season.Batches.FirstOrDefault(b => b.Id == batchId) ?? season.Batches[0];
+        var plan = BreedingSeasonHelper.SeasonPlan(batch, season, today);
+        var lo = plan.BuildFrom;
+        var hi = plan.WeanTo;
+        var span = Math.Max(1, hi.DayNumber - lo.DayNumber);
+        double Pc(DateOnly d) => Math.Clamp((d.DayNumber - lo.DayNumber) * 100.0 / span, 0, 100);
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+        return new[]
+        {
+            (plan.CrossFrom, "♥", false),
+            (plan.KidFrom, "🍼", false),
+            (plan.WeanFrom, "🥣", true)
+        }.Select(x => new BreedingTodayTimelineLabelViewModel
+        {
+            Icon = x.Item2,
+            DateText = x.Item2 + " " + x.Item1.ToString("d MMM", culture),
+            LeftPercent = Pc(x.Item1),
+            AlignEnd = x.Item3
+        }).ToList();
+    }
+
     public static IReadOnlyList<BreedingNowJobViewModel> BuildNowJobs(
         IReadOnlyList<Goat> live,
         BreedingSeasonSettings season,
-        DateOnly today)
+        DateOnly today,
+        IReadOnlyList<BreedingGroupDto> groups,
+        IReadOnlyDictionary<int, int> kiddingCounts,
+        IReadOnlyDictionary<int, decimal?> latestWeightKg,
+        IReadOnlySet<int> rescanGoatIds,
+        IReadOnlyList<Goat> kids)
     {
-        var jobs = new List<BreedingNowJobViewModel>();
-        void Add(string icon, string text, IEnumerable<Goat> does, string tone, string? filter = null) =>
-            jobs.Add(new BreedingNowJobViewModel
+        var drafts = new List<(DateOnly Sort, BreedingNowJobViewModel Job)>();
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+
+        void Add(
+            DateOnly sortDate,
+            string icon,
+            string title,
+            string subtext,
+            IEnumerable<Goat> does,
+            string tone,
+            string? filter = null,
+            string? breedView = null,
+            string actionLabel = "Open",
+            bool openScan = false)
+        {
+            var days = BreedingHelper.DaysUntil(sortDate);
+            var urgency = days < 0 ? "no" : days == 0 ? "no" : days <= 60 ? "wt" : "ok";
+            var whenLabel = days <= 0 ? "Today" : sortDate.ToString("d MMM", culture);
+            var whenSub = days < 0 ? "overdue" : days == 0 ? "today" : "in " + days + " days";
+            drafts.Add((sortDate, new BreedingNowJobViewModel
             {
                 Icon = icon,
-                Text = text,
+                Text = title,
+                Subtext = subtext,
                 Tone = tone,
                 Tags = does.Select(d => d.Tag).ToList(),
-                FilterLink = filter
-            });
+                FilterLink = filter,
+                SortDate = sortDate,
+                UrgencyKey = urgency,
+                WhenLabel = whenLabel,
+                WhenSubtext = whenSub,
+                ActionLabel = actionLabel,
+                BreedView = breedView,
+                OpenScan = openScan
+            }));
+        }
 
-        var scan = live.Where(g => g.MatedDate.HasValue && !g.KidsCount.HasValue &&
-            today.DayNumber - g.MatedDate.Value.DayNumber >= season.ScanAfter).ToList();
-        if (scan.Count > 0)
-            Add("🔍", scan.Count + " doe(s) ready for the ultrasound scan", scan, "var(--amber)", "br:scan");
+        foreach (var bb in season.Batches)
+        {
+            var plan = BreedingSeasonHelper.SeasonPlan(bb, season, today);
+            if (plan.CrossTo < today) continue;
 
-        var due14 = live.Where(g => g.MatedDate.HasValue && g.KidsCount is > 0 &&
-            BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate.Value)) is var d && d <= 14 && d >= 0).ToList();
-        if (due14.Count > 0)
-            Add("🍼", due14.Count + " doe(s) give birth within two weeks",
-                due14, "#8a261c", "br:due30");
+            var weighCutoff = plan.CrossFrom.AddDays(-season.BuildUp);
+            if (BreedingHelper.DaysUntil(weighCutoff) > 21) continue;
 
-        var over = live.Where(g => g.MatedDate.HasValue && g.KidsCount is > 0 &&
-            BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate.Value)) < 0).ToList();
-        if (over.Count > 0)
-            Add("⚠", over.Count + " doe(s) are past their due date", over, "#8a261c");
+            var young = live.Where(g =>
+                g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.MatedDate.HasValue &&
+                (string.IsNullOrWhiteSpace(g.BirthBatchName) ||
+                 string.Equals(g.BirthBatchName, bb.Name, StringComparison.OrdinalIgnoreCase)) &&
+                kiddingCounts.GetValueOrDefault(g.Id) == 0 &&
+                (g.PrepCrossDate.HasValue || g.NextCrossDate.HasValue ||
+                 (LastHeat(g) is { } lh && HerdRules.HeatExpected(lh, today))) &&
+                HerdRules.AgeDays(g, today) is >= 240).ToList();
+
+            young = young.Where(g =>
+            {
+                latestWeightKg.TryGetValue(g.Id, out var kg);
+                return kg is null or 0 || kg < season.WeanKg;
+            }).ToList();
+
+            if (young.Count > 0)
+            {
+                Add(weighCutoff, "⚖", "Weigh " + young.Count + " young doe(s)",
+                    "Under minimum weight — needed before " + bb.Name + " crossing (" + plan.CrossFrom.ToString("d MMM", culture) + ")",
+                    young, "var(--amber)", actionLabel: "Weigh");
+            }
+
+            var feedStart = plan.BuildFrom;
+            if (BreedingHelper.DaysUntil(feedStart) is <= 14 and >= -30)
+                Add(feedStart, "🌾", "Start extra feed", bb.Name + " · " + season.BuildUp + " days before crossing",
+                    [], "var(--amber)", breedView: "plan", actionLabel: "Plan");
+
+            var stopMilk = plan.CrossFrom.AddDays(-season.DryBeforeCross);
+            if (BreedingHelper.DaysUntil(stopMilk) is <= 7 and >= -3)
+                Add(stopMilk, "🌙", "Stop milking does for crossing", bb.Name + " · " + season.DryBeforeCross + " days before crossing",
+                    [], "#8a261c", breedView: "plan", actionLabel: "Plan");
+
+            if (BreedingHelper.DaysUntil(plan.KidFrom) is <= 10 and >= -7)
+                Add(plan.KidFrom.AddDays(-7), "🏠", "Get kidding pens ready",
+                    bb.Name + " · births from " + plan.KidFrom.ToString("d MMM", culture),
+                    [], "#8a261c", breedView: "kidding");
+        }
+
+        var byGoat = live.ToDictionary(g => g.Id);
+        foreach (var grp in groups.Where(g => string.Equals(g.Status, "active", StringComparison.OrdinalIgnoreCase)))
+        {
+            var buckIn = DateOnly.TryParse(grp.Start, out var sIn) ? sIn : (DateOnly?)null;
+            var buckOut = DateOnly.TryParse(grp.End, out var sOut) ? sOut : (DateOnly?)null;
+            var memberCount = grp.Members.Count;
+
+            if (grp.CrossDeferred && string.IsNullOrWhiteSpace(grp.Start) && buckIn is null)
+            {
+                var plannedIn = grp.Members
+                    .Select(m => byGoat.GetValueOrDefault(m.GoatId))
+                    .Where(g => g?.NextCrossDate is not null)
+                    .Select(g => g!.NextCrossDate!.Value)
+                    .DefaultIfEmpty(today)
+                    .Min();
+                if (BreedingHelper.DaysUntil(plannedIn) <= 7)
+                    Add(plannedIn, "🐐", "Put " + grp.Buck + " in with " + memberCount + " does",
+                        grp.Name, [], "var(--pink)", breedView: "bucks");
+            }
+            else if (!grp.CrossDeferred && buckIn.HasValue && BreedingHelper.DaysUntil(buckIn.Value) <= 45)
+            {
+                Add(buckIn.Value.AddDays(-14), "🩺", "Buck check for " + grp.Buck,
+                    "Needed before he goes in · " + grp.Name, [], "var(--blue)", breedView: "bucks", actionLabel: "Check");
+            }
+
+            if (buckIn.HasValue && grp.CrossDeferred && BreedingHelper.DaysUntil(buckIn.Value) <= 7)
+                Add(buckIn.Value, "🐐", "Put " + grp.Buck + " in with " + memberCount + " does", grp.Name, [],
+                    "var(--pink)", breedView: "bucks");
+
+            if (buckOut.HasValue && !string.IsNullOrWhiteSpace(grp.Start) && BreedingHelper.DaysUntil(buckOut.Value) <= 3)
+                Add(buckOut.Value, "🚪", "Take " + grp.Buck + " out", "After " + grp.StayDays + " days with the does", [],
+                    "var(--amber)", breedView: "bucks");
+
+            var waiting = grp.Members
+                .Select(m => byGoat.GetValueOrDefault(m.GoatId))
+                .Where(g => g is not null && PregnancyRules.IsAwaitingScan(g) && !rescanGoatIds.Contains(g!.Id))
+                .Cast<Goat>()
+                .ToList();
+            if (waiting.Count == 0) continue;
+
+            DateOnly scanWhen = today;
+            if (buckOut.HasValue)
+                scanWhen = buckOut.Value.AddDays(season.ScanAfter);
+            else if (waiting.Min(g => g.MatedDate) is { } md)
+                scanWhen = md.AddDays(season.ScanAfter);
+
+            if (BreedingHelper.DaysUntil(scanWhen) <= 14)
+            {
+                Add(scanWhen, "🔍", "Scan " + waiting.Count + " doe(s)",
+                    grp.Name + " · " + grp.Buck + " group",
+                    waiting, "var(--amber)", breedView: "does", actionLabel: "Open", openScan: true);
+            }
+        }
+
+        var handMated = live.Where(g => PregnancyRules.IsAwaitingScan(g) && !rescanGoatIds.Contains(g.Id) &&
+            !groups.Any(grp => grp.Members.Any(m => m.GoatId == g.Id))).ToList();
+        if (handMated.Count > 0 && handMated.Any(g => HerdRules.ScanDue(g, today)))
+            Add(today, "🔍", "Scan " + handMated.Count(h => HerdRules.ScanDue(h, today)) + " doe(s)",
+                "Hand-mated does · buck out + scan days",
+                handMated.Where(g => HerdRules.ScanDue(g, today)).ToList(), "var(--amber)", breedView: "does", actionLabel: "Open", openScan: true);
+
+        var rescans = live.Where(g => rescanGoatIds.Contains(g.Id) && PregnancyRules.IsAwaitingScan(g)).ToList();
+        if (rescans.Count > 0)
+            Add(today, "🔍", "Scan again — " + rescans.Count + " doe(s)", "Last scan was not sure",
+                rescans, "var(--amber)", breedView: "does", actionLabel: "Open", openScan: true);
+
+        var dryDoes = live.Where(g => PregnancyRules.IsConfirmedPregnant(g) && g.Status == GoatStatus.Milking)
+            .Select(g => (Goat: g, DryOn: BreedingHelper.ExpectedKidding(g.MatedDate!.Value).AddDays(-season.DryOff)))
+            .Where(x => BreedingHelper.DaysUntil(x.DryOn) is <= 14 and >= 0)
+            .ToList();
+        if (dryDoes.Count > 0)
+        {
+            var earliest = dryDoes.Min(x => x.DryOn);
+            Add(earliest, "🌙", "Dry off " + dryDoes.Count + " pregnant doe(s)", "Earliest dry-off window",
+                dryDoes.Where(x => x.DryOn == earliest).Select(x => x.Goat).ToList(), "#8a261c", breedView: "kidding");
+        }
 
         var dry = live.Where(g => HerdRules.NeedsDryOff(g, today)).ToList();
         if (dry.Count > 0)
-            Add("🌙", dry.Count + " doe(s) should stop being milked now", dry, "#8a261c", "dryoff");
+            Add(today, "🌙", "Dry off " + dry.Count + " milker(s)", "Due now", dry, "#8a261c", "dryoff", "does");
+
+        var due7 = live.Where(g => PregnancyRules.IsConfirmedPregnant(g) &&
+            BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate!.Value)) is var d7 && d7 <= 7 && d7 >= 0).ToList();
+        if (due7.Count > 0)
+        {
+            var due = due7.Min(g => BreedingHelper.ExpectedKidding(g.MatedDate!.Value));
+            Add(due, "🍼", due7.Count + " doe(s) due to kid", "Within 7 days — pens and colostrum ready",
+                due7, "#8a261c", breedView: "kidding");
+        }
+
+        var over = live.Where(g => PregnancyRules.IsConfirmedPregnant(g) &&
+            BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate!.Value)) < 0).ToList();
+        if (over.Count > 0)
+            Add(today, "⚠", over.Count + " doe(s) past due date", "Check kidding", over, "#8a261c", breedView: "kidding", actionLabel: "Show");
+
+        var weanSoon = kids.Where(k =>
+        {
+            var age = HerdRules.AgeDays(k, today);
+            if (!age.HasValue) return false;
+            var left = season.WeanDays - age.Value;
+            return left <= 7 && left >= 0;
+        }).ToList();
+        if (weanSoon.Count > 0)
+        {
+            var weanDates = weanSoon
+                .Select(k => HerdRules.BirthDate(k)?.AddDays(season.WeanDays))
+                .Where(d => d.HasValue)
+                .Select(d => d!.Value)
+                .ToList();
+            if (weanDates.Count > 0)
+            {
+                Add(weanDates.Min(), "🐣", weanSoon.Count + " kid(s) wean this week",
+                    "Add wean weights when they move off milk", weanSoon, "var(--amber)", breedView: "kidding");
+            }
+        }
 
         var heat = live.Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.MatedDate.HasValue &&
             LastHeat(g) is { } lh && HerdRules.HeatExpected(lh, today)).ToList();
         if (heat.Count > 0)
-            Add("♡", heat.Count + " doe(s) expected in heat now", heat, "var(--blue)", "heatdue");
+            Add(today, "♡", heat.Count + " doe(s) in heat now", "Record heat · ready to cross", heat, "var(--blue)", "heatdue", "does", "Show");
 
-        var crossNow = live.Where(g => g.NextCrossDate.HasValue && !g.MatedDate.HasValue &&
-            BreedingHelper.DaysUntil(g.NextCrossDate.Value) <= 7).ToList();
+        var crossNow = live.Where(g => g.NextCrossDate.HasValue && !g.MatedDate.HasValue).ToList();
         if (crossNow.Count > 0)
-            Add("♥", crossNow.Count + " doe(s) due to be crossed within a week", crossNow, "var(--pink)", "crossdue");
+        {
+            var crossDate = crossNow.Min(g => g.NextCrossDate!.Value);
+            Add(crossDate, "♥", crossNow.Count + " doe(s) due to cross", "Within the plan window",
+                crossNow, "var(--pink)", "crossdue", "bucks", "Open");
+        }
 
         var feedNow = live.Where(g => HerdRules.OnBuildUpFeed(g, today)).ToList();
         if (feedNow.Count > 0)
-            Add("🌾", feedNow.Count + " doe(s) should be on extra feed", feedNow, "var(--amber)", "buildup");
+            Add(today, "🌾", feedNow.Count + " doe(s) on extra feed", "Build-up ration", feedNow, "var(--amber)", "buildup", "does", "Show");
 
-        var ret = live.Where(g => g.MatedDate.HasValue && !g.KidsCount.HasValue &&
-            today.DayNumber - g.MatedDate.Value.DayNumber is var age && age >= 17 && age <= 24).ToList();
-        if (ret.Count > 0)
-            Add("👀", ret.Count + " doe(s) to watch for a return to heat", ret, "var(--blue)");
+        return drafts
+            .OrderBy(d => d.Sort)
+            .ThenBy(d => d.Job.Text, StringComparer.OrdinalIgnoreCase)
+            .Select(d => d.Job)
+            .ToList();
+    }
 
-        return jobs;
+    public static (string Name, double TodayPct, IReadOnlyList<BreedingTodayTimelineMarkerViewModel> Markers)
+        BuildTodayTimeline(BreedingSeasonSettings season, string batchId, DateOnly today)
+    {
+        var batch = season.Batches.FirstOrDefault(b => b.Id == batchId) ?? season.Batches.First();
+        var plan = BreedingSeasonHelper.SeasonPlan(batch, season, today);
+        var start = plan.BuildFrom;
+        var end = plan.WeanTo;
+        var span = Math.Max(1, end.DayNumber - start.DayNumber);
+        double Pct(DateOnly d) => Math.Clamp((d.DayNumber - start.DayNumber) * 100.0 / span, 0, 100);
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+        var markers = new[]
+        {
+            (plan.CrossFrom, "♥"),
+            (plan.KidFrom, "🍼"),
+            (plan.WeanFrom, "🥣")
+        }.Select(m => new BreedingTodayTimelineMarkerViewModel
+        {
+            Icon = m.Item2,
+            DateText = m.Item1.ToString("d MMM", culture),
+            LeftPercent = Pct(m.Item1)
+        }).ToList();
+        return (batch.Name, Pct(today), markers);
+    }
+
+    public static (double TodayPct, IReadOnlyList<BreedingPlanTimelineSegmentViewModel> Segments) BuildPlanTimeline(
+        BreedingSeasonSettings season,
+        string batchId,
+        DateOnly today)
+    {
+        var batch = season.Batches.FirstOrDefault(b => b.Id == batchId) ?? season.Batches.First();
+        var plan = BreedingSeasonHelper.SeasonPlan(batch, season, today);
+        var lo = plan.BuildFrom;
+        var hi = plan.WeanTo;
+        var span = Math.Max(1, hi.DayNumber - lo.DayNumber);
+        double Pc(DateOnly d) => Math.Clamp((d.DayNumber - lo.DayNumber) * 100.0 / span, 0, 100);
+        double W(DateOnly a, DateOnly b) => Math.Max(1, (b.DayNumber - a.DayNumber) * 100.0 / span);
+
+        var dryCrossFrom = plan.CrossFrom.AddDays(-season.DryBeforeCross);
+        var dryCrossTo = plan.CrossTo.AddDays(-season.DryBeforeCross);
+        var segs = new (DateOnly A, DateOnly B, string Col, string Name)[]
+        {
+            (plan.BuildFrom, plan.CrossFrom, "#D8C38F", "Extra feed"),
+            (dryCrossFrom, dryCrossTo, "#A9BFCB", "Stop milking"),
+            (plan.CrossFrom, plan.CrossTo, "#D9826B", "Crossing"),
+            (plan.ScanFrom, plan.ScanTo, "#8C9BD0", "Scan"),
+            (plan.DryFrom, plan.DryTo, "#A9BFCB", "Dry off"),
+            (plan.KidFrom, plan.KidTo, "#6FB07C", "Births"),
+            (plan.WeanFrom, plan.WeanTo, "#E5AE5C", "Weaning")
+        }.Select(s => new BreedingPlanTimelineSegmentViewModel
+        {
+            LeftPercent = Pc(s.A),
+            WidthPercent = W(s.A, s.B),
+            Color = s.Col,
+            Title = s.Name + ": " + s.A.ToString("d MMM") + " → " + s.B.ToString("d MMM")
+        }).ToList();
+        return (Pc(today), segs);
     }
 
     public static BreedingSeasonPanelViewModel BuildSeasonPanel(
@@ -214,12 +578,19 @@ internal static class BreedingPageAssembler
             SelectedBatchId = cur.Id,
             BatchCountText = inBatch + " doe(s) in this group" +
                 (unassigned > 0 ? " · " + unassigned + " not assigned" : ""),
-            Batches = batches.Select(b => new BreedingSeasonBatchViewModel
+            Batches = batches.Select(b =>
             {
-                Id = b.Id,
-                Name = b.Name,
-                From = b.From,
-                To = b.To
+                var bp = BreedingSeasonHelper.SeasonPlan(b, season, today);
+                var culture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+                return new BreedingSeasonBatchViewModel
+                {
+                    Id = b.Id,
+                    Name = b.Name,
+                    Icon = string.IsNullOrWhiteSpace(b.Icon) ? "⭐" : b.Icon,
+                    From = b.From,
+                    To = b.To,
+                    BirthWindowText = bp.KidFrom.ToString("d MMM", culture) + " → " + bp.KidTo.ToString("d MMM", culture)
+                };
             }).ToList()
         };
 
@@ -282,11 +653,19 @@ internal static class BreedingPageAssembler
         BreedingSeasonSettings season,
         string selectedBatchId,
         IReadOnlyList<Goat> live,
-        DateOnly today)
+        DateOnly today,
+        IReadOnlyList<BreedingGroupDto> breedingGroups)
     {
         return season.Batches.Select(bb =>
         {
             var q = BreedingSeasonHelper.SeasonPlan(bb, season, today);
+            var batchDoes = live.Where(g => string.Equals(g.BirthBatchName, bb.Name, StringComparison.OrdinalIgnoreCase))
+                .Select(g => g.Id).ToHashSet();
+            var buckGroups = breedingGroups.Count(g =>
+            {
+                if (!string.Equals(g.Status, "active", StringComparison.OrdinalIgnoreCase)) return false;
+                return g.Members.Any(m => batchDoes.Contains(m.GoatId));
+            });
             var jobs = new (string Label, DateOnly Date)[]
             {
                 ("extra feed", q.BuildFrom),
@@ -305,11 +684,15 @@ internal static class BreedingPageAssembler
             {
                 BatchId = bb.Id,
                 Name = bb.Name,
+                Icon = string.IsNullOrWhiteSpace(bb.Icon) ? "⭐" : bb.Icon,
                 Highlight = bb.Id == selectedBatchId,
-                DoeCount = live.Count(g => string.Equals(g.BirthBatchName, bb.Name, StringComparison.OrdinalIgnoreCase)),
+                DoeCount = batchDoes.Count,
+                BirthWindowText = $"{q.KidFrom:d MMM} → {q.KidTo:d MMM}",
                 CrossText = $"<b>{q.CrossFrom:d MMM}</b> <span class=\"breed\">→ {q.CrossTo:d MMM}</span>",
                 ScanText = q.ScanFrom.ToString("d MMM"),
                 DryText = q.DryFrom.ToString("d MMM"),
+                WeanText = q.WeanFrom.ToString("d MMM"),
+                BuckGroupCount = buckGroups,
                 BirthText = $"<b>{q.KidFrom:d MMM}</b> <span class=\"breed\">→ {q.KidTo:d MMM} {q.KidFrom.Year}</span>",
                 NextJobText = nx.Label is null ? "—" : nx.Label + " in " + nx.N + "d",
                 NextJobStyle = nx.N <= 21 ? "color:var(--amber);font-weight:700" : ""
@@ -399,16 +782,28 @@ internal static class BreedingPageAssembler
         IReadOnlyList<Goat> bucks,
         IReadOnlyList<Goat> live,
         IReadOnlyList<KiddingRecord> kiddingsYear,
+        IReadOnlyList<KiddingRecord> kiddingsAll,
+        IReadOnlyList<Goat> bornKids,
         IReadOnlyDictionary<string, int> emptyByBuckTag,
+        IReadOnlyList<BuckHealthCheck> buckChecks,
         DateOnly today)
     {
         return bucks.Select(x =>
         {
+            var check = BuckCheckHelper.LatestCheck(buckChecks, x.Id);
+            var checkOk = BuckCheckHelper.IsOk(check, today);
             var carrying = live.Count(z => z.MatedDate.HasValue &&
                 string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase));
             var kidYr = kiddingsYear.Count(k =>
                 (k.BreedingEvent?.Buck?.Tag ?? k.BreedingEvent?.BuckTagText ?? "")
                     .Equals(x.Tag, StringComparison.OrdinalIgnoreCase));
+            var kidsSired = kiddingsYear.Where(k =>
+                    (k.BreedingEvent?.Buck?.Tag ?? k.BreedingEvent?.BuckTagText ?? "")
+                        .Equals(x.Tag, StringComparison.OrdinalIgnoreCase))
+                .Sum(k => k.LiveKids);
+            var crossesYr = kidYr + live.Count(z =>
+                string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase) && z.MatedDate >= new DateOnly(today.Year, 1, 1));
+            var kpc = crossesYr > 0 ? (kidsSired / (double)crossesYr).ToString("0.0") : "—";
             var empty = emptyByBuckTag.GetValueOrDefault(x.Tag.ToLowerInvariant());
             var took = kidYr + live.Count(z =>
                 string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase) && z.KidsCount is > 0);
@@ -425,18 +820,45 @@ internal static class BreedingPageAssembler
             var load = carrying >= 25 ? ("Heavy — rest him", "#8a261c")
                 : carrying >= 15 ? ("Busy", "var(--amber)")
                 : ("Fine", "var(--green-dark)");
+
+            static bool KiddingByBuck(KiddingRecord k, string tag) =>
+                (k.BreedingEvent?.Buck?.Tag ?? k.BreedingEvent?.BuckTagText ?? "")
+                    .Equals(tag, StringComparison.OrdinalIgnoreCase);
+
+            var buckKiddings = kiddingsAll.Where(k => KiddingByBuck(k, x.Tag)).ToList();
+            var kidsOfBuck = bornKids.Where(k => BuckStatsHelper.KidSiredBy(k, x)).ToList();
+            var kpk = buckKiddings.Count > 0 ? buckKiddings.Average(k => k.LiveKids) : (double?)null;
+            var avgBirth = BuckStatsHelper.Average(kidsOfBuck.Select(BuckStatsHelper.BirthKg));
+            var avg90 = BuckStatsHelper.Average(kidsOfBuck.Select(BuckStatsHelper.Adjusted90DayKg));
+
             return new BreedingBuckRowViewModel
             {
                 Id = x.Id,
                 Tag = x.Tag,
                 Carrying = carrying,
                 CrossesThisYear = kidYr,
+                KidsSiredYear = kidsSired,
+                KidsSired = kidsOfBuck.Count,
+                KidsPerCrossText = kpc,
+                KidsPerKiddingText = BuckStatsHelper.FormatAvg(kpk),
+                AvgBirthKgText = BuckStatsHelper.FormatAvg(avgBirth),
+                Avg90DayKgText = BuckStatsHelper.FormatAvg(avg90),
+                ConceptionPercent = conc,
                 ConceptionText = conc is null ? "—" : conc + "%",
                 ConceptionStyle = conc is null ? ""
                     : conc >= 70 ? "font-weight:700;color:var(--green-dark)" : "font-weight:700;color:#8a261c",
                 LastUsed = dates.Count > 0 ? dates[^1].ToString("yyyy-MM-dd") : null,
                 LoadText = load.Item1,
-                LoadColor = load.Item2
+                LoadColor = load.Item2,
+                BuckCheckOk = checkOk,
+                LastCheckDate = check?.CheckDate.ToString("yyyy-MM-dd"),
+                BuckCheckLineHtml = checkOk
+                    ? "Buck check done " + check!.CheckDate.ToString("d MMM yyyy") +
+                      (check.Bcs is not null ? " · BCS " + check.Bcs.Value.ToString("0.#") : "") +
+                      (check.WeightKg is not null ? " · " + check.WeightKg.Value.ToString("0.#") + " kg" : "")
+                    : check is null
+                        ? "Buck check needed"
+                        : "Last check " + check.CheckDate.ToString("d MMM yyyy") + " — check again"
             };
         }).ToList();
     }

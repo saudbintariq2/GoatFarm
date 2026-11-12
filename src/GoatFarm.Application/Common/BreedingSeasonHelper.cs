@@ -133,4 +133,16 @@ public static class BreedingSeasonHelper
         if (n == 0) return "today";
         return "in " + n + (n == 1 ? " day" : " days");
     }
+
+    /// <summary>Today tab birth group: nearest crossing within the last ~60 days (V243 <c>vHome</c>).</summary>
+    public static string PickTodaySeasonBatchId(BreedingSeasonSettings season, DateOnly today)
+    {
+        var cutoff = today.AddDays(-60);
+        var pick = season.Batches
+            .Select(b => (Batch: b, Plan: SeasonPlan(b, season, today)))
+            .Where(x => x.Plan.CrossFrom >= cutoff)
+            .OrderBy(x => x.Plan.CrossFrom)
+            .FirstOrDefault();
+        return pick.Batch?.Id ?? season.Batches.FirstOrDefault()?.Id ?? "b1";
+    }
 }

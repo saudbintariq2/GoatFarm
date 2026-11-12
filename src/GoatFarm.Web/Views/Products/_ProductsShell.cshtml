@@ -2,6 +2,14 @@
   <div><div class="prod-eyebrow">FARM PRODUCTION</div><h1>Production &amp; Products</h1><p>Milk line, meat line, one sales desk and one stock ledger — every litre and kilo traceable, every sale posted once to Accounting.</p></div>
   <div class="prod-hero-kpis"><div><span>Sales this month</span><b id="productRevenueMonth">Rs 0</b></div><div><span>Milk in tanks</span><b id="productStockCount">0 L</b></div></div>
 </div>
+<div class="product-flow-guide" aria-label="Production flow">
+  <div><b>1</b><span>Milk &amp; meat in</span></div><i aria-hidden="true">→</i>
+  <div><b>2</b><span>Tanks &amp; chillers</span></div><i aria-hidden="true">→</i>
+  <div><b>3</b><span>Process &amp; cut</span></div><i aria-hidden="true">→</i>
+  <div><b>4</b><span>Sales desk</span></div><i aria-hidden="true">→</i>
+  <div><b>5</b><span>Accounting</span></div>
+</div>
+<p class="product-help-note">Every litre and kilo is recorded once here; Finance picks up sales and expenses without duplicate posting.</p>
 <div class="prod-tabs" id="productTabs" role="tablist">
   <button class="prod-tab active" data-ptab="milk">🥛 Milk &amp; Dairy</button>
   <button class="prod-tab" data-ptab="meat">🥩 Meat</button>
@@ -204,6 +212,7 @@
 <div class="field"><label>Breed</label><select id="bp-breed"><option value="">All breeds</option></select></div>
 <div class="field"><label>Result</label><select id="bp-mode"><option value="milk">🥛 Milk performance</option><option value="meat">🥩 Meat performance</option></select></div>
 <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-ghost btn-sm" id="bp-export">Export CSV</button></div>
+<div class="field"><label>Related</label><div class="bp-crosslinks"><a class="btn btn-ghost btn-sm" id="bp-link-herd" href="/Goat">Herd (breed)</a><a class="btn btn-ghost btn-sm" id="bp-link-breeding" href="/Breeding?view=does">Breeding pipeline</a></div></div>
 </div></div>
 <div id="bp-kpis" class="product-kpi-grid" style="margin-bottom:16px"></div>
 <div class="panel"><div class="panel-head"><h2 id="bp-chart-title">Milk by breed</h2><span class="sub">Recorded data only · no estimated production</span></div><div class="panel-body"><div id="bp-chart"></div></div></div>

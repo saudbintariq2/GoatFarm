@@ -1,4 +1,5 @@
 # Build results
+.build-out/
 [Bb]in/
 [Oo]bj/
 [Ll]og/

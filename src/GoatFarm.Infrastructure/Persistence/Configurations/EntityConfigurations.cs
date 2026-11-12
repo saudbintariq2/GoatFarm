@@ -22,6 +22,7 @@ public class GoatConfiguration : IEntityTypeConfiguration<Goat>
         builder.Property(x => x.SireTagText).HasMaxLength(50);
         builder.Property(x => x.DamTagText).HasMaxLength(50);
         builder.Property(x => x.BirthBatchName).HasMaxLength(100);
+        builder.Property(x => x.WeanMethod).HasMaxLength(20);
         builder.HasIndex(x => x.Tag).IsUnique();
         builder.HasIndex(x => x.BirthBatchName);
         builder.HasOne(x => x.CustomFeedingGroup)
@@ -398,6 +399,26 @@ public class GoatHeatEventConfiguration : IEntityTypeConfiguration<GoatHeatEvent
             .HasForeignKey(x => x.GoatId)
             .OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(x => new { x.GoatId, x.Date });
+    }
+}
+
+public class BuckHealthCheckConfiguration : IEntityTypeConfiguration<BuckHealthCheck>
+{
+    public void Configure(EntityTypeBuilder<BuckHealthCheck> builder)
+    {
+        builder.ToTable("BuckHealthChecks");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Feet).HasMaxLength(30);
+        builder.Property(x => x.Teeth).HasMaxLength(30);
+        builder.Property(x => x.Testicles).HasMaxLength(30);
+        builder.Property(x => x.Notes).HasMaxLength(2000);
+        builder.Property(x => x.WeightKg).HasPrecision(10, 2);
+        builder.Property(x => x.Bcs).HasPrecision(4, 1);
+        builder.HasOne(x => x.Buck)
+            .WithMany()
+            .HasForeignKey(x => x.BuckId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new { x.BuckId, x.CheckDate });
     }
 }
 

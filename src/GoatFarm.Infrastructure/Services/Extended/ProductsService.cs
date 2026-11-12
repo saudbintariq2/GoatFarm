@@ -231,13 +231,35 @@ public class ProductsService : IProductsService
         };
 
         var meatMonth = slaughters.Where(s => s.Date >= monthStart && s.Date <= monthEnd).ToList();
+        var inStock = allSlaughters.Where(s => s.RemainingKg > 0.001m).ToList();
+        var cutProductIds = catalog.Where(c =>
+            c.Category.Equals("meat", StringComparison.OrdinalIgnoreCase) &&
+            !c.Sku.Equals("MEAT", StringComparison.OrdinalIgnoreCase)).Select(c => c.Id).ToHashSet();
+        var cutBalances = balances.Where(b => cutProductIds.Contains(b.productId) && b.qty > 0.001m).ToList();
         var meatDash = new ProductsMeatDashboardViewModel
         {
-            WholeCount = slaughters.Count,
-            WholeKg = slaughters.Sum(s => s.CarcassKg),
+            WholeCount = inStock.Count(s => s.CarcassForm.Equals(MeatCarcassForms.Whole, StringComparison.OrdinalIgnoreCase)),
+            WholeKg = inStock.Where(s => s.CarcassForm.Equals(MeatCarcassForms.Whole, StringComparison.OrdinalIgnoreCase)).Sum(s => s.RemainingKg),
+            HalfCount = inStock.Where(s => s.CarcassForm.Equals(MeatCarcassForms.Half, StringComparison.OrdinalIgnoreCase)).Sum(s => s.HalfPieces),
+            HalfKg = inStock.Where(s => s.CarcassForm.Equals(MeatCarcassForms.Half, StringComparison.OrdinalIgnoreCase)).Sum(s => s.RemainingKg),
+            CutsKg = cutBalances.Sum(b => b.qty),
+            CutsLines = cutBalances.Count,
             SlaughteredMonth = meatMonth.Count,
             SlaughteredCarcassKgMonth = meatMonth.Sum(s => s.CarcassKg)
         };
+        var meatCutStock = cutBalances.Select(b =>
+        {
+            var p = catalog.First(c => c.Id == b.productId);
+            return new MeatCutStockRowViewModel
+            {
+                ProductId = b.productId,
+                WarehouseId = b.warehouseId,
+                Name = p.Name,
+                Unit = p.Unit,
+                Qty = b.qty,
+                UnitCost = p.DefaultPrice
+            };
+        }).ToList();
 
         var milkInTanks = rawTankLiters + pastTankLiters;
 
@@ -292,6 +314,7 @@ public class ProductsService : IProductsService
             }).ToList(),
             Sessions = MapSessions(sessions),
             Slaughters = slaughters.Select(MapSlaughterRow).ToList(),
+            MeatCutStock = meatCutStock,
             AnalyticsMilkingSessions = MapSessions(allSessions),
             AnalyticsLegacyMilk = allLegacyMilk.Select(p => new MilkLegacyRowViewModel
             {
@@ -501,19 +524,209 @@ public class ProductsService : IProductsService
 
     public async Task<object> SaveSlaughterAsync(SaveSlaughterViewModel model, CancellationToken cancellationToken = default)
     {
+        if (model.CarcassKg <= 0)
+            throw new InvalidOperationException("Enter carcass weight (kg).");
+
         SlaughterRecord row;
-        if (model.Id is > 0)
+        var isNew = model.Id is not > 0;
+        if (!isNew)
             row = await _context.SlaughterRecords.FirstAsync(s => s.Id == model.Id, cancellationToken);
-        else { row = new SlaughterRecord(); _context.SlaughterRecords.Add(row); }
+        else
+        {
+            row = new SlaughterRecord();
+            _context.SlaughterRecords.Add(row);
+        }
+
         row.Date = model.Date;
         row.GoatId = model.GoatId;
-        row.TagText = model.TagText;
+        row.TagText = model.TagText?.Trim();
         row.LiveWeightKg = model.LiveWeightKg;
         row.CarcassKg = model.CarcassKg;
         row.SaleAmount = model.SaleAmount;
+        if (!string.IsNullOrWhiteSpace(model.Notes))
+            row.Notes = model.Notes.Trim();
+
+        if (isNew)
+        {
+            row.CarcassForm = MeatCarcassForms.Whole;
+            row.RemainingKg = model.CarcassKg;
+            row.HalfPieces = 1;
+            row.WarehouseId = model.WarehouseId;
+            row.UnitCostPerKg = model.CarcassKg > 0 && model.AnimalCost > 0
+                ? model.AnimalCost / model.CarcassKg
+                : 0;
+        }
+
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (isNew && model.WarehouseId is > 0 && model.CarcassKg > 0)
+        {
+            var meat = await _context.ProductCatalogItems.FirstOrDefaultAsync(c => c.Sku == "MEAT", cancellationToken);
+            if (meat != null)
+            {
+                _context.StockMovements.Add(new StockMovement
+                {
+                    Date = model.Date,
+                    Type = StockMovementType.Receive,
+                    ProductId = meat.Id,
+                    WarehouseId = model.WarehouseId.Value,
+                    Qty = model.CarcassKg,
+                    UnitCost = row.UnitCostPerKg,
+                    Notes = $"Slaughter batch #{row.Id} · {row.TagText ?? "carcass"}",
+                    CreatedDate = DateTime.UtcNow,
+                    UpdatedDate = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        if (isNew && model.RemoveFromHerd && model.GoatId is > 0)
+        {
+            var goat = await _context.Goats.FirstOrDefaultAsync(g => g.Id == model.GoatId, cancellationToken);
+            if (goat is { IsArchived: false })
+            {
+                goat.IsArchived = true;
+                goat.ArchivedReason = "slaughtered";
+                goat.ArchivedDate = model.Date;
+                goat.UpdatedDate = DateTime.UtcNow;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         return new { id = row.Id };
+    }
+
+    public async Task<object> SaveMeatSplitAsync(SaveMeatSplitViewModel model, CancellationToken cancellationToken = default)
+    {
+        var row = await _context.SlaughterRecords.FirstOrDefaultAsync(s => s.Id == model.SlaughterId, cancellationToken)
+            ?? throw new InvalidOperationException("Choose a whole carcass.");
+
+        if (!row.CarcassForm.Equals(MeatCarcassForms.Whole, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Only a whole carcass can be split.");
+        if (row.RemainingKg <= 0.001m)
+            throw new InvalidOperationException("That carcass is no longer in stock.");
+
+        var total = row.RemainingKg;
+        var halfA = model.HalfAKg > 0 ? model.HalfAKg : total / 2;
+        if (halfA <= 0 || halfA >= total)
+            throw new InvalidOperationException($"Half A must be between 0 and {total:0.##} kg.");
+
+        row.CarcassForm = MeatCarcassForms.Half;
+        row.HalfPieces = 2;
+        if (!string.IsNullOrWhiteSpace(model.Note))
+            row.Notes = string.IsNullOrWhiteSpace(row.Notes) ? model.Note.Trim() : row.Notes + " · " + model.Note.Trim();
+        row.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return new { id = row.Id, halfAKg = halfA, halfBKg = total - halfA };
+    }
+
+    public async Task<object> SaveMeatCutAsync(SaveMeatCutViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (model.Cuts.Count == 0)
+            throw new InvalidOperationException("Weigh at least one cut.");
+
+        var row = await _context.SlaughterRecords.FirstOrDefaultAsync(s => s.Id == model.SlaughterId, cancellationToken)
+            ?? throw new InvalidOperationException("Choose the carcass to cut.");
+        if (row.RemainingKg <= 0.001m)
+            throw new InvalidOperationException("That carcass is no longer in stock.");
+
+        var store = await _context.Warehouses.FirstOrDefaultAsync(w => w.Id == model.CutWarehouseId && w.IsActive, cancellationToken)
+            ?? throw new InvalidOperationException("Choose where the cuts are stored.");
+        if (InferKind(store) != "meat_store")
+            throw new InvalidOperationException("Cuts must go to a meat chiller / freezer.");
+
+        var inKg = model.InputKg > 0 ? model.InputKg : row.RemainingKg;
+        if (inKg > row.RemainingKg + 0.01m)
+            throw new InvalidOperationException($"You cannot cut more than {row.RemainingKg:0.##} kg from this carcass.");
+
+        var cutLines = model.Cuts.Where(c => c.Kg > 0 && c.ProductId > 0).ToList();
+        var outKg = cutLines.Sum(c => c.Kg);
+        if (outKg <= 0)
+            throw new InvalidOperationException("Weigh at least one cut.");
+        if (outKg > inKg + 0.01m)
+            throw new InvalidOperationException($"Cuts weigh {outKg:0.##} kg, more than the {inKg:0.##} kg being cut.");
+
+        var meat = await _context.ProductCatalogItems.FirstOrDefaultAsync(c => c.Sku == "MEAT", cancellationToken)
+            ?? throw new InvalidOperationException("Meat product (MEAT) is not set up.");
+        var carcassWh = row.WarehouseId ?? throw new InvalidOperationException("This carcass has no store — re-record slaughter with a chiller.");
+
+        var totalCost = row.UnitCostPerKg * inKg;
+        var method = (model.CostMethod ?? "weight").Equals("value", StringComparison.OrdinalIgnoreCase) ? "value" : "weight";
+        var weights = cutLines.Select(c => c.Kg).ToList();
+        if (method == "value")
+        {
+            var catalog = await _context.ProductCatalogItems.AsNoTracking()
+                .Where(p => cutLines.Select(x => x.ProductId).Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
+            var valueWeights = cutLines.Select(c => c.Kg * catalog.GetValueOrDefault(c.ProductId)?.DefaultPrice ?? 0).ToList();
+            if (valueWeights.All(v => v > 0))
+                weights = valueWeights;
+            else
+                method = "weight";
+        }
+
+        var weightSum = weights.Sum();
+        var costs = new List<decimal>();
+        var remainingCost = totalCost;
+        for (var i = 0; i < cutLines.Count; i++)
+        {
+            if (i == cutLines.Count - 1)
+                costs.Add(remainingCost);
+            else
+            {
+                var share = weightSum > 0 ? totalCost * weights[i] / weightSum : 0;
+                share = Math.Round(share, 2, MidpointRounding.AwayFromZero);
+                costs.Add(share);
+                remainingCost -= share;
+            }
+        }
+
+        var meta = $"Cut from batch #{row.Id}";
+        if (!string.IsNullOrWhiteSpace(model.Note))
+            meta += " · " + model.Note.Trim();
+
+        _context.StockMovements.Add(new StockMovement
+        {
+            Date = model.Date,
+            Type = StockMovementType.Issue,
+            ProductId = meat.Id,
+            WarehouseId = carcassWh,
+            Qty = inKg,
+            UnitCost = row.UnitCostPerKg,
+            Notes = meta,
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        });
+
+        for (var i = 0; i < cutLines.Count; i++)
+        {
+            var line = cutLines[i];
+            var unitCost = line.Kg > 0 ? costs[i] / line.Kg : 0;
+            _context.StockMovements.Add(new StockMovement
+            {
+                Date = model.Date,
+                Type = StockMovementType.Receive,
+                ProductId = line.ProductId,
+                WarehouseId = store.Id,
+                Qty = line.Kg,
+                UnitCost = unitCost,
+                Notes = meta,
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            });
+        }
+
+        row.RemainingKg = Math.Max(0, row.RemainingKg - inKg);
+        if (row.RemainingKg <= 0.001m)
+            row.HalfPieces = 0;
+        if (!string.IsNullOrWhiteSpace(model.Note))
+            row.Notes = string.IsNullOrWhiteSpace(row.Notes) ? model.Note.Trim() : row.Notes + " · " + model.Note.Trim();
+        row.UpdatedDate = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return new { ok = true, cutsKg = outKg, wasteKg = inKg - outKg, costMethod = method };
     }
 
     public async Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default)
@@ -1085,16 +1298,25 @@ public class ProductsService : IProductsService
         Note = t.Note
     };
 
-    private static SlaughterRowViewModel MapSlaughterRow(SlaughterRecord s) => new()
+    private static SlaughterRowViewModel MapSlaughterRow(SlaughterRecord s)
     {
-        Id = s.Id,
-        DateDisplay = s.Date.ToString("yyyy-MM-dd"),
-        Tag = s.Goat?.Tag ?? s.TagText ?? "",
-        Breed = s.Goat?.Breed ?? "",
-        LiveWeightKg = s.LiveWeightKg,
-        CarcassKg = s.CarcassKg,
-        SaleAmount = s.SaleAmount
-    };
+        var remaining = s.RemainingKg > 0 ? s.RemainingKg : s.CarcassKg;
+        return new SlaughterRowViewModel
+        {
+            Id = s.Id,
+            DateDisplay = s.Date.ToString("yyyy-MM-dd"),
+            Tag = s.Goat?.Tag ?? s.TagText ?? "",
+            Breed = s.Goat?.Breed ?? "",
+            LiveWeightKg = s.LiveWeightKg,
+            CarcassKg = s.CarcassKg,
+            SaleAmount = s.SaleAmount,
+            CarcassForm = string.IsNullOrWhiteSpace(s.CarcassForm) ? MeatCarcassForms.Whole : s.CarcassForm,
+            RemainingKg = remaining,
+            HalfPieces = s.HalfPieces > 0 ? s.HalfPieces : 1,
+            WarehouseId = s.WarehouseId,
+            UnitCostPerKg = s.UnitCostPerKg
+        };
+    }
 
     private static List<MilkingSessionRowViewModel> MapSessions(IEnumerable<MilkingSession> sessions) =>
         sessions.Select(s => new MilkingSessionRowViewModel

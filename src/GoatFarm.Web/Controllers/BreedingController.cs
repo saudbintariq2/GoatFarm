@@ -17,15 +17,22 @@ public class BreedingController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(string? batch, CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(string? batch, string? buck, CancellationToken cancellationToken)
     {
         ViewData["ActiveTab"] = "breeding";
-        return View(await _breedingService.GetBreedingPageAsync(batch, cancellationToken));
+        return View(await _breedingService.GetBreedingPageAsync(batch, buck, cancellationToken));
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetData(string? batch, CancellationToken cancellationToken) =>
-        Json(await _breedingService.GetBreedingPageAsync(batch, cancellationToken));
+    public async Task<IActionResult> GetData(string? batch, string? buck, CancellationToken cancellationToken) =>
+        Json(await _breedingService.GetBreedingPageAsync(batch, buck, cancellationToken));
+
+    [HttpGet]
+    public async Task<IActionResult> DoeProfile(int id, CancellationToken cancellationToken)
+    {
+        var profile = await _breedingService.GetDoeProfileAsync(id, cancellationToken);
+        return profile is null ? NotFound(new { error = "Doe not found." }) : Json(profile);
+    }
 
     [HttpGet]
     public async Task<IActionResult> LookupTag(string tag, CancellationToken cancellationToken)
@@ -156,9 +163,70 @@ public class BreedingController : Controller
     public async Task<IActionResult> Groups(CancellationToken cancellationToken) =>
         Json(await _breedingService.GetBreedingGroupsAsync(cancellationToken));
 
+    [HttpGet]
+    public async Task<IActionResult> GroupCards(CancellationToken cancellationToken) =>
+        Json(await _breedingService.GetBreedingGroupCardsAsync(cancellationToken));
+
+    [HttpGet]
+    public async Task<IActionResult> ScanSheet(CancellationToken cancellationToken) =>
+        Json(await _breedingService.GetScanSheetAsync(cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> SaveScanBatch([FromBody] BulkScanSaveViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _breedingService.SaveScanBatchAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     [HttpPost]
     public Task<IActionResult> CreateGroup([FromBody] CreateBreedingGroupViewModel model, CancellationToken cancellationToken) =>
         Run(() => _breedingService.CreateBreedingGroupAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> CloseGroup([FromBody] CloseBreedingGroupViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.CloseBreedingGroupAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> TakeBuckOut([FromBody] CloseBreedingGroupViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.TakeBuckOutGroupAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> PutBuckIn([FromBody] BuckInBreedingGroupViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.PutBuckInGroupAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> RecordBuckCheck([FromBody] RecordBuckCheckViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordBuckCheckAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> UpdateKidField([FromBody] UpdateKidFieldViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.UpdateKidFieldAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> RecordKidWeanWeight([FromBody] RecordKidWeanWeightViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RecordKidWeanWeightAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> BulkWeanKids([FromBody] BulkWeanKidsViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.BulkWeanKidsAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> UpdateKidWeanRule([FromBody] UpdateKidWeanRuleViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.UpdateKidWeanRuleAsync(model, cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> RemoveGroupMember([FromBody] BreedingGroupMemberActionViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.RemoveBreedingGroupMemberAsync(model, cancellationToken));
+
+    [HttpDelete]
+    public Task<IActionResult> DeleteGroup(string id, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.DeleteBreedingGroupAsync(id, cancellationToken));
 
     private async Task<IActionResult> RunStage(Func<Task> action)
     {

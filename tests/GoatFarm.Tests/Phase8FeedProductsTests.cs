@@ -111,6 +111,79 @@ public class Phase8FeedProductsTests
   }
 
   [Fact]
+  public async Task SaveMeatSplit_ConvertsWholeToHalf()
+  {
+    var db = TestDb.Create();
+    db.ProductCatalogItems.Add(new ProductCatalogItem { Sku = "MEAT", Name = "Carcass", Unit = "kg", Category = "meat" });
+    var wh = new Warehouse { Name = "Chiller", Location = "meat_store", IsActive = true };
+    db.Warehouses.Add(wh);
+    await db.SaveChangesAsync();
+    var slaughter = new SlaughterRecord
+    {
+      Date = TestDb.Today,
+      TagText = "T-1",
+      CarcassKg = 20,
+      RemainingKg = 20,
+      CarcassForm = MeatCarcassForms.Whole,
+      HalfPieces = 1,
+      WarehouseId = wh.Id
+    };
+    db.SlaughterRecords.Add(slaughter);
+    await db.SaveChangesAsync();
+    var products = new ProductsService(db, new LedgerService(db), DeviceConfig());
+    await products.SaveMeatSplitAsync(new SaveMeatSplitViewModel
+    {
+      SlaughterId = slaughter.Id,
+      Date = TestDb.Today,
+      HalfAKg = 10
+    });
+    var row = await db.SlaughterRecords.SingleAsync();
+    Assert.Equal(MeatCarcassForms.Half, row.CarcassForm);
+    Assert.Equal(2, row.HalfPieces);
+    Assert.Equal(20, row.RemainingKg);
+  }
+
+  [Fact]
+  public async Task SaveMeatCut_IssuesCutStockAndReducesCarcass()
+  {
+    var db = TestDb.Create();
+    var meat = new ProductCatalogItem { Sku = "MEAT", Name = "Carcass", Unit = "kg", Category = "meat" };
+    var leg = new ProductCatalogItem { Sku = "LEG", Name = "Leg", Unit = "kg", Category = "meat", MeatType = "cuts" };
+    var wh = new Warehouse { Name = "Chiller", Location = "meat_store", IsActive = true };
+    db.ProductCatalogItems.AddRange(meat, leg);
+    db.Warehouses.Add(wh);
+    await db.SaveChangesAsync();
+    var slaughter = new SlaughterRecord
+    {
+      Date = TestDb.Today,
+      TagText = "T-2",
+      CarcassKg = 18,
+      RemainingKg = 18,
+      UnitCostPerKg = 100,
+      CarcassForm = MeatCarcassForms.Whole,
+      HalfPieces = 1,
+      WarehouseId = wh.Id
+    };
+    db.SlaughterRecords.Add(slaughter);
+    await db.SaveChangesAsync();
+    var products = new ProductsService(db, new LedgerService(db), DeviceConfig());
+    await products.SaveMeatCutAsync(new SaveMeatCutViewModel
+    {
+      SlaughterId = slaughter.Id,
+      Date = TestDb.Today,
+      CutWarehouseId = wh.Id,
+      InputKg = 10,
+      CostMethod = "weight",
+      Cuts = [new MeatCutLineViewModel { ProductId = leg.Id, Kg = 8 }]
+    });
+    var row = await db.SlaughterRecords.SingleAsync();
+    Assert.Equal(8, row.RemainingKg);
+    Assert.Single(await db.StockMovements.Where(m => m.Type == StockMovementType.Issue).ToListAsync());
+    Assert.Contains(await db.StockMovements.Where(m => m.Type == StockMovementType.Receive).ToListAsync(),
+      m => m.ProductId == leg.Id && m.Qty == 8);
+  }
+
+  [Fact]
   public async Task SaveProductSale_RejectsOversell()
   {
     var db = TestDb.Create();

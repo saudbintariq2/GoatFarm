@@ -1,0 +1,293 @@
+@model GoatFarm.Application.ViewModels.Breeding.BreedingReportsViewModel
+@{
+    var rep = Model;
+}
+<div id="breed-rep" class="breed-rep-root">
+<div class="breed-ph breed-rep-ph">
+    <div>
+        <div class="breed-eyebrow">Results</div>
+        <h1 class="breed-ph-title">Reports</h1>
+        <p class="breed muted small">How the breeding went — in plain words, with simple pictures.</p>
+    </div>
+    @if (rep.HasData)
+    {
+        <div class="breed-rep-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="breedRepPrint">🖨 Print</button>
+            <a class="btn btn-ghost btn-sm" href="/BackupCenter/ExportCsv?module=breeding" id="breedRepCsv">⬇ Breeding CSV</a>
+        </div>
+    }
+</div>
+@if (!rep.HasData)
+{
+    <div class="panel breed-rep-panel"><div class="panel-body empty">No crosses recorded yet. Reports fill in as soon as does are crossed, scanned and kidded.</div></div>
+}
+else
+{
+    <div class="breed-rep-filt">
+        <div>
+            <label class="breed muted small">Season</label>
+            <div class="breed-seg" id="breedRepSeason">
+                @foreach (var s in rep.Seasons)
+                {
+                    <button type="button" class="breed-seg-btn @(s.BatchId == rep.SelectedBatchId ? "on" : "")" data-rep-batch="@s.BatchId">@s.Label@(s.Done ? "" : " · now")</button>
+                }
+            </div>
+        </div>
+        <div>
+            <label class="breed muted small">Buck</label>
+            <div class="breed-seg" id="breedRepBuck">
+                <button type="button" class="breed-seg-btn @(rep.SelectedBuck == "all" ? "on" : "")" data-rep-buck="all">All bucks</button>
+                @foreach (var b in rep.BuckOptions)
+                {
+                    <button type="button" class="breed-seg-btn @(rep.SelectedBuck == b ? "on" : "")" data-rep-buck="@b">@b</button>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="breed-rep-head">@Html.Raw(rep.HeadlineHtml)</div>
+
+    <div class="panel breed-rep-panel" id="breedRepScorecard">
+        <div class="panel-head"><h2>📋 Scorecard</h2><span class="sub">@(rep.CanEditTargets ? "tap a target to change it" : "targets set by the owner")</span></div>
+        <div class="panel-body">
+            <div class="breed-rep-score">
+                @foreach (var t in rep.Scorecard)
+                {
+                    <div class="breed-rep-tile breed-rep-tile--@t.Status">
+                        <div class="breed-rep-tile-name">@t.Name</div>
+                        <div class="breed-rep-tile-val">
+                            @if (t.Value is null)
+                            {
+                                <span class="breed muted">@(rep.SeasonDone ? "—" : (t.Key is "kpd" or "surv" or "kgd" or "interval" or "age" ? "not kidded yet" : "—"))</span>
+                            }
+                            else
+                            {
+                                @($"{t.Value:0.##}")<small>@t.Unit</small>
+                            }
+                        </div>
+                        <div class="breed-rep-tile-blurb">@(string.IsNullOrWhiteSpace(t.Blurb) ? "\u00a0" : t.Blurb)</div>
+                        <div class="breed-rep-tile-bar"><i style="width:@(t.BarPercent)%"></i></div>
+                        <div class="breed-rep-tile-foot">
+                            <span>@t.StatusIcon @t.StatusLabel</span>
+                            <span class="breed muted small">target @(t.HigherIsBetter ? "" : "≤ ")<input class="breed-rep-tgt" type="text" inputmode="decimal" data-k="@t.Key" value="@t.Target.ToString("0.##")" @(rep.CanEditTargets ? "" : "disabled") />@t.Unit.Trim()</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="breed-today-grid breed-rep-grid2">
+        <div class="panel breed-rep-panel" id="breedRepFunnel">
+            <div class="panel-head"><h2>🔻 From crossing to weaning</h2><span class="sub">where we lose does and kids</span></div>
+            <div class="panel-body">
+                <div class="breed-rep-fun">
+                    <div class="breed-rep-fun-title">Does</div>
+                    @for (var i = 0; i < rep.DoeFunnel.Count; i++)
+                    {
+                        var row = rep.DoeFunnel[i];
+                        var pct = i > 0 && rep.DoeFunnel[0].Value > 0 ? (int)Math.Round(row.Value / (double)rep.DoeFunnel[0].Value * 100) : 0;
+                        <div class="breed-rep-fun-row">
+                            <span class="breed-rep-fun-lbl">@row.Label</span>
+                            <span class="breed-rep-fun-bar"><i style="width:@(Math.Max(row.Value > 0 ? 2 : 0, row.BarPercent))%;background:@row.BarColor"></i></span>
+                            <span class="breed-rep-fun-val">@row.Value @if (pct > 0) { <small>@pct%</small> }</span>
+                            @if (row.Lost > 0) { <span class="breed-rep-fun-lost">−@row.Lost</span> } else { <span class="breed-rep-fun-lost" aria-hidden="true"></span> }
+                        </div>
+                    }
+                </div>
+                @if (rep.ShowKidFunnel)
+                {
+                    <div class="breed-rep-fun" style="margin-top:14px">
+                        <div class="breed-rep-fun-title">Kids</div>
+                        @for (var i = 0; i < rep.KidFunnel.Count; i++)
+                        {
+                            var row = rep.KidFunnel[i];
+                            var pct = i > 0 && rep.KidFunnel[0].Value > 0 ? (int)Math.Round(row.Value / (double)rep.KidFunnel[0].Value * 100) : 0;
+                            <div class="breed-rep-fun-row">
+                                <span class="breed-rep-fun-lbl">@row.Label</span>
+                                <span class="breed-rep-fun-bar"><i style="width:@(Math.Max(row.Value > 0 ? 2 : 0, row.BarPercent))%;background:@row.BarColor"></i></span>
+                                <span class="breed-rep-fun-val">@row.Value @if (pct > 0) { <small>@pct%</small> }</span>
+                                @if (row.Lost > 0) { <span class="breed-rep-fun-lost">−@row.Lost</span> } else { <span class="breed-rep-fun-lost" aria-hidden="true"></span> }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="breed muted small" style="margin:14px 0 0">Kids part appears after kidding.</p>
+                }
+                <div class="breed-plan-legend" style="margin-top:10px">
+                    <span><i style="background:#1E4635"></i>Does</span>
+                    @if (rep.ShowKidFunnel) { <span><i style="background:#3d7a5c"></i>Kids</span> }
+                    <span>−N = lost at that step</span>
+                </div>
+            </div>
+        </div>
+        <div class="panel breed-rep-panel" id="breedRepLitter">
+            <div class="panel-head"><h2>🍼 Litter size</h2><span class="sub">how many kids per kidding</span></div>
+            <div class="panel-body">
+                @if (rep.Litter.HasKiddings)
+                {
+                    <p class="breed-rep-say">@Html.Raw(rep.Litter.SummaryHtml)</p>
+                    <div class="breed-rep-stack">
+                        @foreach (var seg in rep.Litter.Segments)
+                        {
+                            <i style="flex:@seg.Count;background:@seg.Color" title="@seg.Label: @seg.Count">@(seg.Percent > 12 ? seg.Percent + "%" : "")</i>
+                        }
+                    </div>
+                    <div class="breed-plan-legend">
+                        @foreach (var seg in rep.Litter.Segments)
+                        {
+                            <span><i style="background:@seg.Color"></i>@seg.Label · <b>@seg.Count</b></span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="breed-rep-say breed muted">@Html.Raw(rep.Litter.SummaryHtml)</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="panel breed-rep-panel" id="breedRepBucks">
+        <div class="panel-head"><h2>🐐 Bucks compared</h2><span class="sub">longer bar = better</span></div>
+        <div class="panel-body">
+            @if (rep.BuckOptions.Count > 0)
+            {
+                <div class="breed-plan-legend" style="margin-bottom:12px">
+                    @foreach (var b in rep.BuckOptions)
+                    {
+                        var c = rep.BuckBars.FirstOrDefault(x => x.BuckTag == b)?.Color ?? "#1E4635";
+                        <span><i style="background:@c"></i>@b</span>
+                    }
+                </div>
+            }
+            @if (rep.BuckCompare.Count == 0)
+            {
+                <p class="breed muted">Record crosses with a buck tag to compare bucks here.</p>
+            }
+            else
+            {
+                @foreach (var m in rep.BuckCompare)
+                {
+                    <div class="breed-rep-bm">
+                        <div class="breed-rep-bmn">@m.Name</div>
+                        @foreach (var bar in m.Bars)
+                        {
+                            <div class="breed-rep-bmr">
+                                <span class="breed-rep-bmk">@bar.BuckTag</span>
+                                <span class="breed-rep-fun-bar"><i style="width:@(bar.BarPercent)%;background:@bar.Color"></i></span>
+                                <span class="breed-rep-fun-val">
+                                    @bar.Display
+                                    @if (bar.IsBest) { <span class="breed-best">🏅 best</span> }
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="breed-today-grid breed-rep-grid2">
+        <div class="panel breed-rep-panel" id="breedRepMonths">
+            <div class="panel-head"><h2>📅 Kids born per month</h2></div>
+            <div class="panel-body">
+                @if (rep.Months.HasData)
+                {
+                    <p class="breed-rep-say">@Html.Raw(rep.Months.SummaryHtml)</p>
+                    <div class="breed-rep-mbars">
+                        @foreach (var mb in rep.Months.Bars)
+                        {
+                            <div class="breed-rep-mb" title="@mb.ShortLabel @mb.MonthKey: @mb.Value">
+                                <span class="breed-rep-mv">@mb.Value</span>
+                                <i class="@(mb.ExpectedStyle ? "breed-rep-exp" : "")" style="height:@(Math.Max(mb.Value > 0 ? 3 : 0, mb.BarPercent * 1.5))px;background:#1E4635"></i>
+                                <span class="breed-rep-ml">@mb.ShortLabel</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="breed muted">@rep.Months.SummaryHtml</p>
+                }
+            </div>
+        </div>
+        <div class="panel breed-rep-panel" id="breedRepProblems">
+            <div class="panel-head"><h2>⚠ Problems</h2><span class="sub">count this season</span></div>
+            <div class="panel-body breed-rep-problems">
+                @foreach (var p in rep.Problems)
+                {
+                    <div class="breed-rep-pr @(p.Count is null or 0 ? "breed-rep-pr--zero" : "")">
+                        <span>@p.Icon</span>
+                        <span>@p.Label</span>
+                        <span class="breed-rep-fun-bar"><i style="width:@(p.BarPercent)%"></i></span>
+                        <b>@(p.Count is null ? "—" : p.Count.ToString())</b>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="breed-today-grid breed-rep-grid2">
+        <div class="panel breed-rep-panel" id="breedRepMothers">
+            <div class="panel-head"><h2>🏆 Best mothers</h2><span class="sub">by mother score · all seasons</span></div>
+            <div class="panel-body">
+                @if (rep.BestMothers.Count == 0)
+                {
+                    <p class="breed muted">Mother scores appear after kiddings are recorded with mothering and milk points.</p>
+                }
+                else
+                {
+                    <table class="breed-rep-rt">
+                        <tbody>
+                        @for (var i = 0; i < rep.BestMothers.Count; i++)
+                        {
+                            var m = rep.BestMothers[i];
+                            <tr>
+                                <td class="breed-rep-nr">@(i + 1)</td>
+                                <td><b class="breed-goat-link" data-doe-profile="@m.DoeId" role="button" tabindex="0">@m.Tag</b><div class="breed muted small">@m.Breed</div></td>
+                                <td>@(m.Kiddings)&#215;</td>
+                                <td class="breed muted small">@m.LastBornText</td>
+                                <td>@m.ScoreText</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+        <div class="panel breed-rep-panel" id="breedRepCull">
+            <div class="panel-head"><h2>🚩 Think about culling</h2><span class="sub">cull rules + your decisions</span></div>
+            <div class="panel-body">
+                @if (rep.CullWatch.Count == 0)
+                {
+                    <p class="breed muted">No does to think about. 🎉</p>
+                }
+                else
+                {
+                    <table class="breed-rep-rt">
+                        <tbody>
+                        @foreach (var c in rep.CullWatch)
+                        {
+                            <tr>
+                                <td>
+                                    <b class="breed-goat-link" data-doe-profile="@c.DoeId" role="button" tabindex="0">@c.Tag</b>
+                                    <div class="breed muted small">@(c.Kiddings)&#215; kiddings @(c.InSeason ? "" : "· not in this season")</div>
+                                </td>
+                                <td>
+                                    @foreach (var r in c.Reasons)
+                                    {
+                                        <span class="pill pill-red" style="margin:2px 4px 2px 0">@r</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+}
+</div>

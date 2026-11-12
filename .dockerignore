@@ -1,3 +1,4 @@
+.build-out/
 **/bin/
 **/obj/
 _publish-test/

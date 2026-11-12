@@ -555,6 +555,7 @@ public class ProductsPageViewModel
     public IReadOnlyList<StockMovementRowViewModel> Movements { get; set; } = [];
     public IReadOnlyList<MilkingSessionRowViewModel> Sessions { get; set; } = [];
     public IReadOnlyList<SlaughterRowViewModel> Slaughters { get; set; } = [];
+    public IReadOnlyList<MeatCutStockRowViewModel> MeatCutStock { get; set; } = [];
     public IReadOnlyList<ProductSaleRowViewModel> Sales { get; set; } = [];
     public IReadOnlyList<ProductMilkingGoatRowViewModel> HerdGoats { get; set; } = [];
     public IReadOnlyList<MoneyAccountRowViewModel> MoneyAccounts { get; set; } = [];
@@ -826,6 +827,21 @@ public class SlaughterRowViewModel
     public decimal LiveWeightKg { get; set; }
     public decimal CarcassKg { get; set; }
     public decimal SaleAmount { get; set; }
+    public string CarcassForm { get; set; } = "whole";
+    public decimal RemainingKg { get; set; }
+    public int HalfPieces { get; set; } = 1;
+    public int? WarehouseId { get; set; }
+    public decimal UnitCostPerKg { get; set; }
+}
+
+public class MeatCutStockRowViewModel
+{
+    public int ProductId { get; set; }
+    public int WarehouseId { get; set; }
+    public string Name { get; set; } = "";
+    public string Unit { get; set; } = "kg";
+    public decimal Qty { get; set; }
+    public decimal UnitCost { get; set; }
 }
 
 public class ProductSaleRowViewModel
@@ -910,6 +926,35 @@ public class SaveSlaughterViewModel
     public decimal LiveWeightKg { get; set; }
     public decimal CarcassKg { get; set; }
     public decimal SaleAmount { get; set; }
+    public int? WarehouseId { get; set; }
+    public decimal AnimalCost { get; set; }
+    public bool RemoveFromHerd { get; set; } = true;
+    public string? Notes { get; set; }
+}
+
+public class SaveMeatSplitViewModel
+{
+    public int SlaughterId { get; set; }
+    public DateOnly Date { get; set; }
+    public decimal HalfAKg { get; set; }
+    public string? Note { get; set; }
+}
+
+public class MeatCutLineViewModel
+{
+    public int ProductId { get; set; }
+    public decimal Kg { get; set; }
+}
+
+public class SaveMeatCutViewModel
+{
+    public int SlaughterId { get; set; }
+    public DateOnly Date { get; set; }
+    public int CutWarehouseId { get; set; }
+    public decimal InputKg { get; set; }
+    public string CostMethod { get; set; } = "weight";
+    public string? Note { get; set; }
+    public List<MeatCutLineViewModel> Cuts { get; set; } = [];
 }
 
 public class SaveProductSaleViewModel

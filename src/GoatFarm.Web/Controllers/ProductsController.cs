@@ -91,7 +91,44 @@ public class ProductsController : Controller
     public async Task<IActionResult> SaveSlaughter([FromBody] SaveSlaughterViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _products.SaveSlaughterAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _products.SaveSlaughterAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveMeatSplit([FromBody] SaveMeatSplitViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _audit.LogAsync(FarmTabs.Products, AuditAction.Create, "Meat carcass split", UserId, UserDisplay, cancellationToken: cancellationToken);
+            return Json(await _products.SaveMeatSplitAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SaveMeatCut([FromBody] SaveMeatCutViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _audit.LogAsync(FarmTabs.Products, AuditAction.Create, "Meat carcass cut", UserId, UserDisplay, cancellationToken: cancellationToken);
+            return Json(await _products.SaveMeatCutAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost]

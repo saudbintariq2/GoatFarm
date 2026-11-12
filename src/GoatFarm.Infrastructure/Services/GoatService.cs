@@ -1,6 +1,8 @@
+using System.Text.Json;
 using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Goats;
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 using GoatFarm.Infrastructure.Persistence;
@@ -1142,12 +1144,26 @@ public class GoatService : IGoatService
         }
     }
 
-    private async Task<IReadOnlyList<string>> GetBirthBatchesAsync(CancellationToken cancellationToken) =>
-        await _context.Goats.Where(g => !g.IsArchived && g.BirthBatchName != null && g.BirthBatchName != "")
+    private async Task<IReadOnlyList<string>> GetBirthBatchesAsync(CancellationToken cancellationToken)
+    {
+        var fromGoats = await _context.Goats.Where(g => !g.IsArchived && g.BirthBatchName != null && g.BirthBatchName != "")
             .Select(g => g.BirthBatchName!)
-            .Distinct()
-            .OrderBy(n => n)
             .ToListAsync(cancellationToken);
+        var fromSeason = new List<string>();
+        var row = await _context.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == AppSettingKeys.BreedingSeason, cancellationToken);
+        if (row is not null)
+        {
+            var season = JsonSerializer.Deserialize<BreedingSeasonSettings>(row.Value);
+            if (season?.Batches is { Count: > 0 })
+                fromSeason.AddRange(season.Batches.Select(b => b.Name));
+        }
+
+        return fromGoats.Concat(fromSeason)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
     private async Task<IReadOnlyList<string>> GetSireFilterTagsAsync(CancellationToken cancellationToken)
     {

@@ -37,3 +37,20 @@ public enum KiddingEase
     Assisted = 1,
     Difficult = 2
 }
+
+/// <summary>V243 kid milk feeding on the Kidding tab.</summary>
+public enum KidMilkType
+{
+    Mother = 0,
+    Powder = 1,
+    Mixed = 2,
+    Foster = 3
+}
+
+/// <summary>V243 <c>kidHealth</c> — separate from lifecycle health state.</summary>
+public enum KidHealthTag
+{
+    Good = 0,
+    Weak = 1,
+    Sick = 2
+}

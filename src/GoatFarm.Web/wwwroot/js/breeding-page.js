@@ -4,14 +4,710 @@ window.BreedingPage = (() => {
   const $ = id => document.getElementById(id);
   const today = () => new Date().toISOString().slice(0, 10);
   const normalizeTag = v => String(v ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
-  const batchParam = () => {
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  let currentView = 'today';
+  const buildBreedingUrl = () => {
+    const p = new URLSearchParams();
+    if (currentView && currentView !== 'today') p.set('view', currentView);
     const sel = $('se-batch');
-    return sel?.value ? '?batch=' + encodeURIComponent(sel.value) : '';
+    if (sel?.value) p.set('batch', sel.value);
+    const q = p.toString();
+    return '/Breeding' + (q ? '?' + q : '');
   };
   const reload = msg => {
     sessionStorage.setItem('goatToast', msg);
-    location.href = '/Breeding' + batchParam();
+    location.href = buildBreedingUrl();
   };
+
+  function setBreedingView(view) {
+    currentView = view || 'today';
+    document.querySelectorAll('.breed-subnav-btn').forEach(b => {
+      b.classList.toggle('on', b.dataset.breedView === currentView);
+    });
+    document.querySelectorAll('.breed-view').forEach(sec => {
+      const on = sec.dataset.breedView === currentView;
+      sec.classList.toggle('on', on);
+      if (on) sec.removeAttribute('hidden');
+      else sec.setAttribute('hidden', '');
+    });
+    const url = new URL(location.href);
+    if (currentView === 'today') url.searchParams.delete('view');
+    else url.searchParams.set('view', currentView);
+    history.replaceState(null, '', url.pathname + url.search);
+    if (view === 'does') {
+      const p = new URLSearchParams(location.search);
+      if (p.get('scan')) openScanPanel(false);
+      else if (!$('scanPanel')?.hidden) loadScanSheet().catch(() => {});
+      const first = document.querySelector('#brRows tr[data-br-id]');
+      if (first) loadDoeProfile(+first.dataset.brId);
+    }
+    if (view === 'bucks') renderGroupCards().catch(() => {});
+    if (view === 'kidding') {
+      $('birthPanel')?.classList.remove('perm-hidden');
+    }
+  }
+
+  function filterDueToKid() {
+    const f = document.querySelector('.breed-kd-chip.breed-on[data-kd-filter]')?.dataset.kdFilter || 'all';
+    const rows = [...document.querySelectorAll('#kdTable tr[data-kd-row]')];
+    rows.forEach(tr => {
+      let show = true;
+      if (f === 'soon') show = tr.dataset.kdSoon === '1';
+      else if (f === 'dry') show = tr.dataset.kdDry === '1';
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+
+  function filterKidsGround() {
+    const f = document.querySelector('.breed-kd-chip.breed-on[data-kk-filter]')?.dataset.kkFilter || 'all';
+    const rows = [...document.querySelectorAll('#kkTable tr[data-kk-row]')];
+    rows.forEach(tr => {
+      let show = true;
+      if (f === 'milk') show = tr.dataset.kkMilk === '1';
+      else if (f === 'week') show = tr.dataset.kkWeek === '1';
+      else if (f === 'weaned') show = tr.dataset.kkWeaned === '1';
+      else if (f === 'weak') show = tr.dataset.kkWeak === '1';
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+
+  const kkSelected = new Set();
+
+  function syncKkWeanBtn() {
+    const btn = $('kkWeanEarly');
+    if (!btn) return;
+    btn.disabled = kkSelected.size === 0;
+    btn.textContent = kkSelected.size
+      ? `Wean ${kkSelected.size} now (early)`
+      : 'Wean early';
+  }
+
+  function wireKidsTable() {
+    document.querySelectorAll('.breed-kk-sel').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = +cb.dataset.kkSel;
+        if (cb.checked) kkSelected.add(id);
+        else kkSelected.delete(id);
+        syncKkWeanBtn();
+      });
+    });
+    $('kkWeanEarly')?.addEventListener('click', async () => {
+      if (!kkSelected.size) return;
+      try {
+        await gr().api('/Breeding/BulkWeanKids', {
+          method: 'POST',
+          body: JSON.stringify({ goatIds: [...kkSelected], weanDate: today() })
+        });
+        reload(`Weaned ${kkSelected.size} kid(s) — add wean weights`);
+      } catch { /* shown */ }
+    });
+    document.querySelectorAll('.breed-seg[data-kk-field]').forEach(seg => {
+      seg.querySelectorAll('.breed-seg-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = +seg.dataset.kkId;
+          const field = seg.dataset.kkField;
+          const val = btn.dataset.val;
+          try {
+            await gr().api('/Breeding/UpdateKidField', {
+              method: 'POST',
+              body: JSON.stringify({ goatId: id, field, value: val })
+            });
+            seg.querySelectorAll('.breed-seg-btn').forEach(b => {
+              b.classList.toggle('breed-on', b === btn);
+            });
+          } catch { /* shown */ }
+        });
+      });
+    });
+    document.querySelectorAll('[data-kk-weankg]').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const kg = +inp.value;
+        if (!(kg > 0)) return;
+        const id = +inp.dataset.kkWeankg;
+        try {
+          await gr().api('/Breeding/RecordKidWeanWeight', {
+            method: 'POST',
+            body: JSON.stringify({ goatId: id, kg })
+          });
+          inp.classList.remove('breed-need');
+          gr().showToast?.('Wean weight saved');
+        } catch { /* shown */ }
+      });
+    });
+    const saveWeanRule = async body => {
+      try {
+        await gr().api('/Breeding/UpdateKidWeanRule', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        gr().showToast?.('Wean settings saved');
+      } catch { /* shown */ }
+    };
+    document.querySelectorAll('[data-kk-wd]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const days = +inp.value;
+        if (days > 0) saveWeanRule({ weanDays: days });
+      });
+    });
+    document.querySelectorAll('[data-kk-wa]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        saveWeanRule({ autoWean: cb.checked });
+        cb.closest('.breed-wset')?.classList.toggle('breed-wset-off', !cb.checked);
+      });
+    });
+  }
+
+  function wireKiddingFilters() {
+    document.querySelectorAll('[data-kd-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-kd-filter]').forEach(b => b.classList.remove('breed-on'));
+        btn.classList.add('breed-on');
+        filterDueToKid();
+      });
+    });
+    document.querySelectorAll('[data-kk-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-kk-filter]').forEach(b => b.classList.remove('breed-on'));
+        btn.classList.add('breed-on');
+        filterKidsGround();
+      });
+    });
+  }
+
+  function wireSubNav() {
+    document.querySelectorAll('.breed-subnav-btn').forEach(b => {
+      b.addEventListener('click', () => setBreedingView(b.dataset.breedView));
+    });
+    document.querySelectorAll('[data-breed-goto]').forEach(b => {
+      b.addEventListener('click', () => {
+        const view = b.dataset.breedGoto;
+        setBreedingView(view);
+        if (b.dataset.breedScan === '1' && view === 'does') {
+          const url = new URL(location.href);
+          url.searchParams.set('scan', '1');
+          history.replaceState(null, '', url.pathname + url.search);
+        }
+      });
+    });
+    const params = new URLSearchParams(location.search);
+    const v = params.get('view');
+    if (v && document.querySelector(`.breed-view[data-breed-view="${v}"]`)) setBreedingView(v);
+    else setBreedingView('today');
+  }
+
+  function normalizeSeasonBatch(b) {
+    if (!b || typeof b !== 'object') return null;
+    const id = String(b.id ?? b.Id ?? '').trim();
+    const name = String(b.name ?? b.Name ?? '').trim();
+    const icon = String(b.icon ?? b.Icon ?? '⭐').trim() || '⭐';
+    if (!id && !name) return null;
+    return { id: id || name, name: name || id || 'Birth group', icon };
+  }
+
+  function parseSeasonBatches() {
+    const box = $('bg-groups');
+    if (!box?.dataset.batches) return [];
+    try {
+      const raw = JSON.parse(box.dataset.batches) || [];
+      return raw.map(normalizeSeasonBatch).filter(Boolean);
+    } catch { return []; }
+  }
+
+  function groupCardHtml(grp) {
+    const pct = Math.min(100, Math.round(grp.memberCount / Math.max(1, grp.max) * 100));
+    const statusChip = grp.status === 'active' ? 'chip-milk' : 'chip-dry';
+    const statusLbl = grp.status === 'active' ? 'Active' : 'Closed';
+    const range = !grp.start
+      ? (grp.crossDeferred ? 'Buck not in yet' : '—')
+      : (grp.end ? `${esc(grp.start)} → out ${esc(grp.end)}` : esc(grp.start));
+    const rate = grp.conceptionPercent == null ? '—' : `${grp.conceptionPercent}%`;
+    const pending = (grp.members || []).filter(m => m.outcomeKey === 'pending').length;
+    const rows = (grp.members || []).map(m =>
+      `<tr><td><b>${esc(m.tag)}</b></td><td><span class="breed">${esc(m.breed)}</span></td><td>${esc(grp.start || '—')}</td><td>${esc(m.outcomeText)}</td>
+      <td>${m.canRemove ? `<button type="button" class="btn btn-ghost btn-sm" data-bg-rm="${esc(grp.id)}|${m.goatId}">Remove</button>` : ''}</td></tr>`
+    ).join('');
+    const acts = [];
+    if (grp.canBuckIn) acts.push(`<button type="button" class="btn btn-green btn-sm" data-bg-buckin="${esc(grp.id)}">Put buck in today</button>`);
+    if (grp.canClose) acts.push(`<button type="button" class="btn btn-ghost btn-sm" data-bg-close="${esc(grp.id)}">Take buck out — close</button>`);
+    if (grp.canDelete) acts.push(`<button type="button" class="btn btn-ghost btn-sm" data-bg-del="${esc(grp.id)}" style="color:var(--red)">Delete group</button>`);
+    return `<div class="v206-bg-card" data-bg-id="${esc(grp.id)}">
+      <h3>${esc(grp.name)} <span class="chip ${statusChip}">${statusLbl}</span>
+      <span class="breed" style="font-weight:500">Buck ${esc(grp.buck)} · ${range} · ${grp.stayDays || 42}d with does</span></h3>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:6px"><b>${grp.memberCount} does assigned</b><b style="color:var(--green-dark)">${grp.memberCount}/${grp.max}</b></div>
+      <div class="v206-bg-bar"><i style="width:${pct}%"></i></div>
+      <div class="v206-bg-kpis">
+        ${pending ? `<div><b>${pending}</b>buck not in</div>` : ''}
+        <div><b>${grp.waitingScan}</b>awaiting scan</div>
+        <div><b>${grp.pregnant}</b>pregnant</div>
+        <div><b>${grp.empty}</b>empty</div>
+        <div><b>${grp.kidded}</b>kidded</div>
+        <div><b>${grp.kidsAlive}</b>kids alive</div>
+        <div><b>${rate}</b>conception</div>
+        ${grp.gone ? `<div><b>${grp.gone}</b>left / moved</div>` : ''}
+      </div>
+      <details><summary>Individual does (${grp.memberCount})</summary>
+      <div class="v206-bg-scroll"><table class="tbl"><thead><tr><th>Doe</th><th>Breed</th><th>Crossed</th><th>Result</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      </details>
+      ${acts.length ? `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${acts.join('')}</div>` : ''}
+    </div>`;
+  }
+
+  function openNewGroupForBatch(batchId) {
+    const sel = $('bg-batch');
+  if (sel && batchId) sel.value = batchId;
+    $('bgPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('bg-buck')?.focus();
+  }
+
+  function openBuckCheckPanel(buckId) {
+    const panel = $('buckCheckPanel');
+    if (!panel) return;
+    panel.hidden = false;
+    if (buckId && $('bc-check-buck')) $('bc-check-buck').value = String(buckId);
+    if ($('bc-check-date') && !$('bc-check-date').value) $('bc-check-date').value = today();
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeBuckCheckPanel() {
+    const panel = $('buckCheckPanel');
+    if (panel) panel.hidden = true;
+  }
+
+  async function saveBuckCheck(confirmProblem) {
+    const grApi = gr();
+    const buckId = +($('bc-check-buck')?.value);
+    const checkDate = $('bc-check-date')?.value || today();
+    if (!buckId) { await grApi.showModal('Choose the buck.'); return; }
+    const bcsVal = $('bc-check-bcs')?.value;
+    const body = {
+      buckId,
+      checkDate,
+      weightKg: $('bc-check-kg')?.value ? +$('bc-check-kg').value : null,
+      bcs: bcsVal ? +bcsVal : null,
+      feet: $('bc-check-feet')?.value || 'good',
+      teeth: $('bc-check-teeth')?.value || 'good',
+      testicles: $('bc-check-test')?.value || 'normal',
+      notes: $('bc-check-note')?.value?.trim() || null,
+      confirmProblem: !!confirmProblem
+    };
+    const res = await fetch('/Breeding/RecordBuckCheck', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      reload('Buck check saved');
+      return;
+    }
+    const err = await res.json().catch(() => ({}));
+    const msg = err.error || err.title || 'Could not save buck check';
+    if (res.status === 409 && err.requiresConfirmation && !confirmProblem) {
+      const warn = (err.warnings || []).join('\n') || msg;
+      if (await grApi.showConfirm(warn + '\n\nSave anyway?')) await saveBuckCheck(true);
+      return;
+    }
+    await grApi.showModal(msg);
+  }
+
+  function wireBuckCheck() {
+    $('bucksOpenCheck')?.addEventListener('click', () => {
+      const first = $('bc-check-buck')?.value;
+      openBuckCheckPanel(first ? +first : null);
+    });
+    $('buckCheckClose')?.addEventListener('click', closeBuckCheckPanel);
+    $('bc-check-save')?.addEventListener('click', () => saveBuckCheck(false));
+    document.getElementById('breedViewBucks')?.addEventListener('click', e => {
+      const chk = e.target.closest?.('[data-buck-check]');
+      if (chk) {
+        e.preventDefault();
+        openBuckCheckPanel(+chk.dataset.buckCheck);
+        return;
+      }
+      const add = e.target.closest?.('[data-bg-add-batch]');
+      if (add) openNewGroupForBatch(add.dataset.bgAddBatch);
+    });
+  }
+
+  async function renderGroupCards() {
+    const box = $('bg-groups');
+    if (!box) return;
+    const batches = parseSeasonBatches();
+    let cards;
+    try {
+      cards = await gr().api('/Breeding/GroupCards');
+    } catch {
+      box.innerHTML = '<div class="empty">Could not load groups.</div>';
+      return;
+    }
+    cards = cards || [];
+    const byBatch = new Map();
+    cards.forEach(c => {
+      const k = c.birthBatchId ?? c.BirthBatchId ?? '';
+      if (!byBatch.has(k)) byBatch.set(k, []);
+      byBatch.get(k).push(c);
+    });
+    if (!batches.length) {
+      box.innerHTML = cards.length
+        ? cards.map(groupCardHtml).join('')
+        : '<div class="sub muted">No season birth groups yet — add them on the Season plan tab.</div>';
+      return;
+    }
+    let html = '';
+    batches.forEach(batch => {
+      const gs = (byBatch.get(batch.id) || []).slice()
+        .sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1));
+      const n = gs.length;
+      html += `<div class="breed-buck-season-h"><h3>${esc(batch.icon || '⭐')} ${esc(batch.name)}</h3><span class="breed-buck-season-line"></span><span class="sub muted small">${n} buck group${n === 1 ? '' : 's'}</span></div>`;
+      if (!n) {
+        html += `<div class="breed-buck-season-empty"><p class="muted">No bucks in this group yet.</p><button type="button" class="btn btn-green btn-sm" data-bg-add-batch="${esc(batch.id)}">＋ Add buck group</button></div>`;
+      } else {
+        html += gs.map(groupCardHtml).join('');
+      }
+    });
+    const known = new Set(batches.map(b => b.id));
+    const orphan = cards.filter(c => c.birthBatchId && !known.has(c.birthBatchId));
+    if (orphan.length) {
+      html += `<div class="breed-buck-season-h"><h3>Other</h3><span class="breed-buck-season-line"></span><span class="sub muted small">${orphan.length} buck group${orphan.length === 1 ? '' : 's'}</span></div>`;
+      html += orphan.map(groupCardHtml).join('');
+    }
+    box.innerHTML = html;
+  }
+
+  async function onGroupAction(e) {
+    const btn = e.target.closest?.('button');
+    if (!btn || !btn.closest('#bg-groups')) return;
+    const grApi = gr();
+    try {
+      if (btn.dataset.bgBuckin) {
+        if (!await grApi.showConfirm('Put the buck in today and record a cross for every doe still waiting?')) return;
+        try {
+          await grApi.api('/Breeding/PutBuckIn', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgBuckin, confirmWarnings: true }) });
+        } catch (err) {
+          if (err?.requiresConfirmation) {
+            if (!await grApi.showConfirm((err.warnings || []).join('\n\n') + '\n\nContinue?')) return;
+            await grApi.api('/Breeding/PutBuckIn', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgBuckin, confirmWarnings: true }) });
+          } else throw err;
+        }
+        reload('Buck in recorded — does are waiting for scan');
+        return;
+      }
+      if (btn.dataset.bgClose) {
+        const r = await grApi.showModal('Date buck was taken out', { prompt: true, defaultValue: today() });
+        if (r == null) return;
+        await grApi.api('/Breeding/TakeBuckOut', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgClose, endDate: r || today() }) });
+        reload('Group closed');
+        return;
+      }
+      if (btn.dataset.bgDel) {
+        if (!await grApi.showConfirm('Delete this breeding group and clear crosses for does still awaiting scan?')) return;
+        await grApi.api('/Breeding/DeleteGroup?id=' + encodeURIComponent(btn.dataset.bgDel), { method: 'DELETE' });
+        reload('Group deleted');
+        return;
+      }
+      if (btn.dataset.bgRm) {
+        const [gid, goatId] = btn.dataset.bgRm.split('|');
+        if (!await grApi.showConfirm('Remove this doe from the group and clear her cross?')) return;
+        await grApi.api('/Breeding/RemoveGroupMember', { method: 'POST', body: JSON.stringify({ groupId: gid, goatId: +goatId }) });
+        reload('Doe removed from group');
+      }
+    } catch { /* toast */ }
+  }
+
+  let scanSheet = null;
+  let scanGroupKey = '';
+  const scanPicks = new Map();
+
+  const fmtScanDate = iso => {
+    if (!iso) return '—';
+    const d = new Date(iso + 'T12:00:00');
+    return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const birthBatches = () => scanSheet?.birthBatches || [];
+
+  const defaultNextBatchId = doe => {
+    const batches = birthBatches();
+    if (!batches.length) return '';
+    const name = (doe.birthBatchName || '').toLowerCase();
+    const idx = batches.findIndex(b => (b.name || '').toLowerCase() === name);
+    const next = batches[(idx < 0 ? 0 : idx + 1) % batches.length];
+    return next?.id || batches[0].id;
+  };
+
+  const scanGroupsList = () => {
+    const groups = [...(scanSheet?.groups || [])];
+    if (scanSheet?.ungrouped?.length) {
+      groups.push({ id: '_hand', name: 'Hand mated', buck: '—', buckStillWithDoes: false, does: scanSheet.ungrouped });
+    }
+    return groups;
+  };
+
+  const activeScanGroup = () => scanGroupsList().find(g => g.id === scanGroupKey);
+
+  function openScanPanel(scroll) {
+    const panel = $('scanPanel');
+    if (!panel) return;
+    panel.hidden = false;
+    loadScanSheet().catch(() => {});
+    if (scroll) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeScanPanel() {
+    $('scanPanel')?.setAttribute('hidden', '');
+  }
+
+  function picksForGroup(groupId) {
+    const g = scanGroupsList().find(x => x.id === groupId);
+    if (!g) return 0;
+    return (g.does || []).filter(d => scanPicks.has(d.id)).length;
+  }
+
+  function setScanPick(id, patch) {
+    const cur = scanPicks.get(id) || {};
+    const next = { ...cur, ...patch };
+    if (!next.r) scanPicks.delete(id);
+    else scanPicks.set(id, next);
+    return next;
+  }
+
+  async function loadScanSheet() {
+    if (!$('scTable')) return;
+    scanSheet = await gr().api('/Breeding/ScanSheet');
+    const groups = scanGroupsList();
+    const tabs = $('scGroups');
+    if (!tabs) return;
+    if (!groups.length) {
+      tabs.replaceChildren();
+      $('scTable').innerHTML = '<div class="empty" style="padding:16px">Nobody is waiting for a scan.</div>';
+      updateScanUi();
+      return;
+    }
+    if (!scanGroupKey || !groups.some(g => g.id === scanGroupKey)) scanGroupKey = groups[0].id;
+    tabs.innerHTML = groups.map(g => {
+      const done = picksForGroup(g.id);
+      const total = g.does?.length || 0;
+      const label = g.id === '_hand'
+        ? 'Hand mated'
+        : `${esc(g.buck || g.name)}${g.birthBatchIcon ? ' · ' + esc(g.birthBatchIcon) : ''}`;
+      return `<button type="button" data-sc-group="${esc(g.id)}" class="${g.id === scanGroupKey ? 'on' : ''}" role="tab">${label}<span class="scan-tab-count">${done}/${total}</span></button>`;
+    }).join('');
+    tabs.querySelectorAll('[data-sc-group]').forEach(b => {
+      b.addEventListener('click', () => {
+        scanGroupKey = b.dataset.scGroup;
+        tabs.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.scGroup === scanGroupKey));
+        renderScanTable();
+      });
+    });
+    renderScanTable();
+  }
+
+  function activeScanDoes() {
+    return activeScanGroup()?.does || [];
+  }
+
+  function renderDetailsCell(d, pick, buckStill) {
+    if (!pick?.r) return '<span class="sub muted">← pick a result</span>';
+    if (pick.r === 'preg') {
+      const k = pick.kids ?? 2;
+      const kidBtns = [1, 2, 3, 4].map(n =>
+        `<button type="button" class="${k === n ? 'on' : ''}" data-sc-kpick="${d.id}" data-k="${n}">${n === 4 ? '4+' : n}</button>`
+      ).join('');
+      return `<span class="sub muted">Kids</span> <span class="scan-kp">${kidBtns}</span>
+        <input type="number" class="scan-days-preg" data-sc-days="${d.id}" min="0" max="180" placeholder="days" title="Days pregnant (optional)" value="${esc(pick.daysPregnant || '')}">`;
+    }
+    if (pick.r === 'empty') {
+      const nx = pick.emptyNext || 'next';
+      const backOpt = buckStill ? `<option value="back"${nx === 'back' ? ' selected' : ''}>🐐 Back with buck</option>` : '';
+      const batches = birthBatches();
+      const batchOpts = batches.map(b =>
+        `<option value="${esc(b.id)}"${b.id === (pick.emptyBatchId || defaultNextBatchId(d)) ? ' selected' : ''}>${esc(b.icon)} ${esc(b.name)}</option>`
+      ).join('');
+      return `<select class="scan-empty-next" data-sc-enext="${d.id}">
+        <option value="next"${nx === 'next' ? ' selected' : ''}>📅 Next birth group</option>
+        <option value="heat"${nx === 'heat' ? ' selected' : ''}>👀 Watch for heat</option>
+        <option value="cull"${nx === 'cull' ? ' selected' : ''}>🚩 Cull list</option>
+        ${backOpt}
+      </select>
+      ${nx === 'next' && batches.length ? `<select class="scan-empty-batch" data-sc-ebatch="${d.id}">${batchOpts}</select>` : ''}`;
+    }
+    if (pick.r === 'unsure') {
+      return `<span class="sub muted">Scan again in</span>
+        <input type="number" class="scan-days-again" data-sc-again="${d.id}" min="1" max="90" value="${pick.again ?? 14}">
+        <span class="sub muted">days</span>`;
+    }
+    return '';
+  }
+
+  function renderScanTable() {
+    const box = $('scTable');
+    if (!box) return;
+    const find = normalizeTag($('scFind')?.value).toLowerCase();
+    let does = activeScanDoes();
+    if (find) does = does.filter(d => d.tag.toLowerCase().includes(find));
+    if (!does.length) {
+      box.innerHTML = '<div class="empty" style="padding:16px">No does waiting in this group.</div>';
+      updateScanUi();
+      return;
+    }
+    const buckStill = !!activeScanGroup()?.buckStillWithDoes;
+    box.innerHTML = `<table class="tbl scan-sheet-tbl"><thead><tr>
+      <th>Doe</th><th>Crossed</th><th>Result</th><th>Details</th></tr></thead><tbody>${
+      does.map(d => {
+        const pick = scanPicks.get(d.id);
+        const hit = find && d.tag.toLowerCase().includes(find);
+        const rowCls = `${pick?.r ? 'scan-r-' + pick.r : ''}${hit ? ' scan-hit' : ''}`;
+        const seg = (code, icon, label) =>
+          `<button type="button" class="${pick?.r === code ? 'on' : ''}" data-sc-res="${d.id}" data-r="${code}">${icon} ${label}</button>`;
+        const rescan = d.awaitingRescan ? ' · rescan' : '';
+        return `<tr class="${rowCls}" id="sc-row-${d.id}" data-sc-row="${d.id}">
+          <td><b>${esc(d.tag)}</b><div class="sub muted">${esc(d.breed || '')} · ${esc(d.kiddingsText || (d.kiddings === 0 ? 'first time' : ''))}</div></td>
+          <td class="small">${fmtScanDate(d.matedDate)}<div class="muted">${esc(d.buckTag || '')}${rescan}</div></td>
+          <td><div class="scan-rseg">${seg('preg', '🤰', 'Pregnant')}${seg('empty', '⭕', 'Empty')}${seg('unsure', '❓', 'Not sure')}</div></td>
+          <td class="scan-det">${renderDetailsCell(d, pick, buckStill)}</td>
+        </tr>`;
+      }).join('')
+    }</tbody></table>`;
+
+    const syncTabCounts = () => {
+      $('scGroups')?.querySelectorAll('[data-sc-group]').forEach(tab => {
+        const g = scanGroupsList().find(x => x.id === tab.dataset.scGroup);
+        const count = tab.querySelector('.scan-tab-count');
+        if (!g || !count) return;
+        const done = (g.does || []).filter(x => scanPicks.has(x.id)).length;
+        count.textContent = `${done}/${g.does?.length || 0}`;
+      });
+    };
+
+    box.querySelectorAll('[data-sc-res]').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = +b.dataset.scRes;
+        const r = b.dataset.r;
+        const cur = scanPicks.get(id);
+        const doe = does.find(x => x.id === id);
+        if (cur?.r === r) scanPicks.delete(id);
+        else {
+          scanPicks.set(id, {
+            r,
+            kids: r === 'preg' ? (cur?.kids ?? 2) : undefined,
+            again: r === 'unsure' ? (cur?.again ?? 14) : undefined,
+            emptyNext: r === 'empty' ? (cur?.emptyNext ?? 'next') : undefined,
+            emptyBatchId: r === 'empty' ? (cur?.emptyBatchId ?? (doe ? defaultNextBatchId(doe) : '')) : undefined,
+            daysPregnant: cur?.daysPregnant
+          });
+        }
+        renderScanTable();
+        syncTabCounts();
+      });
+    });
+    box.querySelectorAll('[data-sc-kpick]').forEach(b => {
+      b.addEventListener('click', () => { setScanPick(+b.dataset.scKpick, { kids: +b.dataset.k }); renderScanTable(); });
+    });
+    box.querySelectorAll('[data-sc-days]').forEach(inp => {
+      inp.addEventListener('input', () => setScanPick(+inp.dataset.scDays, { daysPregnant: inp.value }));
+    });
+    box.querySelectorAll('[data-sc-enext]').forEach(sel => {
+      sel.addEventListener('change', () => { setScanPick(+sel.dataset.scEnext, { emptyNext: sel.value }); renderScanTable(); });
+    });
+    box.querySelectorAll('[data-sc-ebatch]').forEach(sel => {
+      sel.addEventListener('change', () => setScanPick(+sel.dataset.scEbatch, { emptyBatchId: sel.value }));
+    });
+    box.querySelectorAll('[data-sc-again]').forEach(inp => {
+      inp.addEventListener('input', () => setScanPick(+inp.dataset.scAgain, { again: Math.max(1, +inp.value || 14) }));
+    });
+    updateScanUi();
+  }
+
+  function updateScanUi() {
+    const list = activeScanDoes();
+    const done = list.filter(d => scanPicks.has(d.id));
+    const c = kind => done.filter(d => scanPicks.get(d.id)?.r === kind).length;
+    const sum = $('scSum');
+    if (sum) {
+      sum.innerHTML = list.length
+        ? `<b class="scan-sum-n">${done.length} of ${list.length}</b> recorded
+          <span class="chip chip-preg">🤰 ${c('preg')} pregnant</span>
+          <span class="chip scan-chip-empty">⭕ ${c('empty')} empty</span>
+          <span class="chip scan-chip-unsure">❓ ${c('unsure')} not sure</span>`
+        : '';
+    }
+    const save = $('scSave');
+    const allPreg = $('scAllPreg');
+    if (save) {
+      save.disabled = done.length === 0;
+      save.textContent = done.length ? `Save ${done.length} result${done.length > 1 ? 's' : ''}` : 'Save results';
+    }
+    if (allPreg) allPreg.style.display = list.length && done.length < list.length ? '' : 'none';
+  }
+
+  function wireScanPanel() {
+    if (!$('scTable')) return;
+    $('doesOpenScan')?.addEventListener('click', () => openScanPanel(true));
+    $('scanClose')?.addEventListener('click', closeScanPanel);
+    $('scanReload')?.addEventListener('click', () => { scanPicks.clear(); loadScanSheet().catch(() => {}); });
+    $('scFind')?.addEventListener('input', () => renderScanTable());
+    $('scFind')?.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const q = normalizeTag($('scFind')?.value).toLowerCase();
+      if (!q) return;
+      for (const g of scanGroupsList()) {
+        const hit = (g.does || []).find(d => d.tag.toLowerCase() === q || d.tag.toLowerCase().includes(q));
+        if (!hit) continue;
+        scanGroupKey = g.id;
+        $('scFind').value = hit.tag;
+        renderScanTable();
+        document.getElementById('sc-row-' + hit.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        loadScanSheet().catch(() => {});
+        return;
+      }
+      gr().showModal('No doe with tag <b>' + esc(q) + '</b> is waiting for a scan.');
+    });
+    $('scClear')?.addEventListener('click', () => { scanPicks.clear(); renderScanTable(); loadScanSheet().catch(() => {}); });
+    $('scAllPreg')?.addEventListener('click', () => {
+      activeScanDoes().forEach(d => { if (!scanPicks.has(d.id)) scanPicks.set(d.id, { r: 'preg', kids: 2 }); });
+      renderScanTable();
+      loadScanSheet().catch(() => {});
+    });
+    $('scSave')?.addEventListener('click', async () => {
+      const list = activeScanDoes().filter(d => scanPicks.has(d.id));
+      if (!list.length) return;
+      const scanDate = $('scDate')?.value || today();
+      const results = list.map(d => {
+        const p = scanPicks.get(d.id);
+        if (p.r === 'unsure') {
+          return { goatId: d.id, kidsCount: 0, notSure: true, rescanInDays: p.again ?? 14 };
+        }
+        if (p.r === 'empty') {
+          return {
+            goatId: d.id,
+            kidsCount: 0,
+            notSure: false,
+            emptyNextStep: p.emptyNext || 'next',
+            emptyBirthBatchId: p.emptyBatchId || defaultNextBatchId(d)
+          };
+        }
+        return {
+          goatId: d.id,
+          kidsCount: p.kids ?? 2,
+          notSure: false,
+          daysPregnant: p.daysPregnant ? +p.daysPregnant : null
+        };
+      });
+      try {
+        const res = await gr().api('/Breeding/SaveScanBatch', {
+          method: 'POST',
+          body: JSON.stringify({ scanDate, results })
+        });
+        let msg = `Saved ${res.saved} scan(s)`;
+        if (res.errors?.length) msg += ' — ' + res.errors.slice(0, 3).join('; ');
+        scanPicks.clear();
+        reload(msg);
+      } catch { /* shown */ }
+    });
+  }
 
   const STAGE_OPTS = {
     plan: '<option value="">Change…</option><option value="cross">Record cross now</option><option value="replan">Change the date</option><option value="prep2">Mark ready for cross</option><option value="mistake">Remove the plan</option>',
@@ -46,16 +742,154 @@ window.BreedingPage = (() => {
     } catch { /* errors shown by goat-card */ }
   }
 
+  let doeFlowFilter = null;
+  let selectedDoeId = null;
+
+  function highlightSelectedDoe(id) {
+    document.querySelectorAll('#brRows tr[data-br-id], #heatRows tr[data-doe-profile]').forEach(tr => {
+      const tid = +(tr.dataset.brId || tr.dataset.doeProfile || 0);
+      tr.classList.toggle('breed-doe-sel', tid === id);
+    });
+  }
+
+  function renderDoeProfileHtml(p) {
+    const title = esc(p.tag) + (p.name ? ' · ' + esc(p.name) : '');
+    const hist = (p.history || []).length
+      ? '<ul class="breed-doe-hist">' + p.history.map(h =>
+        `<li class="${esc(h.cssClass)}"><b>${esc(h.headline)}</b><span>${esc(h.detail)}</span></li>`).join('') + '</ul>'
+      : '<p class="muted small" style="margin:0">Not crossed yet.</p>';
+    const dueVal = p.dueRangeText ? esc(p.dueRangeText) : '—';
+    const tagShort = esc(String(p.tag).slice(0, 13));
+    const sireTag = esc(p.sireTag || '—');
+    const damTag = esc(p.damTag || '—');
+    const sirePed = esc(p.sirePedigree || '—');
+    const damPed = esc(p.damPedigree || '—');
+    return `<div class="breed-doe-profile">
+      <div class="breed-doe-profile-head">
+        <div class="breed-doe-avatar" aria-hidden="true">${esc(p.avatarText)}</div>
+        <div>
+          <h2 class="breed-doe-title">${title}</h2>
+          <div class="muted small">${esc(p.breed || '')} · Female · ${esc(p.ageText)} · ${esc(p.birthBatchLabel || '—')}</div>
+        </div>
+        <div class="breed-doe-profile-actions">
+          <span class="chip ${esc(p.flowStageCssClass)}">${esc(p.flowStageLabel)}</span>
+          <button type="button" class="btn btn-green btn-sm" data-doe-status="${p.id}">Change status</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-goatcard="${p.id}">Goat card</button>
+        </div>
+      </div>
+      <div class="breed-doe-stats">
+        <div class="breed-doe-stat"><b class="breed-doe-stat-v">${p.kiddingsTotal}×</b>
+          <div class="breed-doe-stat-l">Kidded (${p.kiddingsHere} here + ${p.kiddingsBeforePurchase} before purchase)</div></div>
+        <div class="breed-doe-stat"><b class="breed-doe-stat-v">${p.kidsBorn}</b>
+          <div class="breed-doe-stat-l">Kids born (${p.kidsAlive} alive)</div></div>
+        <div class="breed-doe-stat"><b class="breed-doe-stat-v">${p.timesPregnant}×</b>
+          <div class="breed-doe-stat-l">Times pregnant</div></div>
+        <div class="breed-doe-stat"><b class="breed-doe-stat-v" style="font-size:20px">${dueVal}</b>
+          <div class="breed-doe-stat-l">${esc(p.dueStatLabel)}</div></div>
+      </div>
+      <div class="breed-doe-mainherd">
+        <span>📋 <b>Main herd shows:</b></span>
+        <span class="chip ${esc(p.flowStageCssClass)}">${esc(p.flowStageLabel)}</span>
+        <span class="muted">${esc(p.birthBatchLabel || '—')}</span>
+        <span class="chip chip-kid">${esc(p.mainHerdKiddingText)}</span>
+        <span class="muted" style="margin-left:auto">updates by itself when you change status here</span>
+      </div>
+      <div class="breed-doe-grid2">
+        <div class="breed-doe-subpanel">
+          <div class="breed-doe-subhead"><h3>Breeding history</h3><span class="muted small">every cross, never deleted</span></div>
+          ${hist}
+        </div>
+        <div class="breed-doe-subpanel">
+          <div class="breed-doe-subhead"><h3>Family</h3>
+            <button type="button" class="btn btn-ghost btn-sm" style="margin-left:auto" data-goatcard="${p.id}">🌳 Full tree</button></div>
+          <svg viewBox="0 0 320 190" width="100%" role="img" aria-label="Sire and dam">
+            <rect x="6" y="70" width="108" height="50" rx="12" fill="#E6EFE8"/>
+            <text x="60" y="91" text-anchor="middle" font-size="13" font-weight="700" fill="#1E4635">${tagShort}</text>
+            <text x="60" y="108" text-anchor="middle" font-size="11" fill="#46504a">${p.kiddingsTotal}× · ${p.kidsBorn} kids</text>
+            <path d="M114 95 C140 95 140 45 166 45 M114 95 C140 95 140 145 166 145" stroke="#D9D2C5" stroke-width="2" fill="none"/>
+            <rect x="166" y="20" width="146" height="50" rx="12" fill="#fff" stroke="#E7E1D6"/>
+            <text x="239" y="41" text-anchor="middle" font-size="12" font-weight="600" fill="#1B2420">Sire ${sireTag}</text>
+            <text x="239" y="58" text-anchor="middle" font-size="11" fill="#7c847f">${sirePed}</text>
+            <rect x="166" y="120" width="146" height="50" rx="12" fill="#fff" stroke="#E7E1D6"/>
+            <text x="239" y="141" text-anchor="middle" font-size="12" font-weight="600" fill="#1B2420">Dam ${damTag}</text>
+            <text x="239" y="158" text-anchor="middle" font-size="11" fill="#7c847f">${damPed}</text>
+          </svg>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  async function loadDoeProfile(id) {
+    if (!id) return;
+    selectedDoeId = id;
+    highlightSelectedDoe(id);
+    const panel = $('doeProfilePanel');
+    const mount = $('doeProfileMount');
+    if (!panel || !mount) return;
+    panel.hidden = false;
+    mount.innerHTML = '<p class="muted small" style="margin:0">Loading…</p>';
+    try {
+      const p = await gr().api('/Breeding/DoeProfile?id=' + encodeURIComponent(id));
+      mount.innerHTML = renderDoeProfileHtml(p);
+      mount.querySelector('[data-doe-status]')?.addEventListener('click', async e => {
+        e.preventDefault();
+        const gc = window.GoatCard;
+        if (!gc?.open) {
+          await gr().showModal('Goat card did not load — refresh the page.');
+          return;
+        }
+        await gc.open({ id: p.id });
+        await gc.runAction?.('status');
+      });
+      setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30);
+    } catch {
+      mount.innerHTML = '<p class="empty">Could not load this doe.</p>';
+    }
+  }
+
+  function wireDoeProfilePick() {
+    document.addEventListener('click', e => {
+      const root = e.target.closest('#breedViewDoes');
+      if (!root) return;
+      if (e.target.closest('select, [data-bract], button[data-heat]')) return;
+      const pick = e.target.closest('[data-doe-profile]');
+      if (!pick) return;
+      const id = +pick.getAttribute('data-doe-profile');
+      if (!id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      loadDoeProfile(id);
+    }, true);
+  }
+
+  function syncDoeFlowUi() {
+    document.querySelectorAll('.breed-fnode[data-flow]').forEach(btn => {
+      const on = doeFlowFilter && btn.dataset.flow === doeFlowFilter;
+      btn.classList.toggle('breed-on', !!on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function wireDoeFlow() {
+    document.querySelectorAll('.breed-fnode[data-flow]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.flow;
+        doeFlowFilter = doeFlowFilter === key ? null : key;
+        syncDoeFlowUi();
+        filterPipeline();
+      });
+    });
+  }
+
   function filterPipeline() {
     const f = $('brFilter')?.value || 'all';
     const rows = [...document.querySelectorAll('#brRows tr[data-br-stage]')];
     let n = 0;
     rows.forEach(tr => {
       const st = tr.dataset.brStage;
-      const mated = tr.dataset.brMated;
-      const kids = tr.dataset.brKids;
       let show = true;
-      if (f === 'plan') show = st === 'plan';
+      if (doeFlowFilter) show = tr.dataset.brFlow === doeFlowFilter;
+      else if (f === 'plan') show = st === 'plan';
       else if (f === 'prep') show = st === 'prep';
       else if (f === 'wait') show = st === 'wait';
       else if (f === 'preg') show = st === 'preg';
@@ -128,7 +962,10 @@ window.BreedingPage = (() => {
     try {
       const res = await gr().api('/Breeding/UpdateSeason', { method: 'POST', body: JSON.stringify(body) });
       const batch = res?.newBatchId || res?.selectedBatchId || $('se-batch')?.value || '';
-      location.href = '/Breeding?batch=' + encodeURIComponent(batch);
+      const p = new URLSearchParams();
+      if (currentView !== 'today') p.set('view', currentView);
+      if (batch) p.set('batch', batch);
+      location.href = '/Breeding' + (p.toString() ? '?' + p.toString() : '');
     } catch {
       gr().showToast?.('Could not save season settings.');
     }
@@ -180,10 +1017,41 @@ window.BreedingPage = (() => {
     }
     html += ` · ${list.length} eligible does free`;
     el.innerHTML = html;
+    const meter = $('bg-meter');
+    const fill = $('bg-meter-fill');
+    if (meter && fill) {
+      meter.hidden = false;
+      const pct = Math.min(100, Math.round(selected / max * 100));
+      fill.style.width = pct + '%';
+      fill.style.background = over ? 'var(--red)' : pct >= 85 ? 'var(--amber)' : 'var(--green-dark)';
+    }
+  }
+
+  function filterBgDoes() {
+    const q = ($('bg-find')?.value || '').trim().toLowerCase();
+    const readyOnly = !!$('bg-ready-only')?.checked;
+    document.querySelectorAll('.breed-bg-doe').forEach(lab => {
+      const tag = lab.dataset.bgTag || '';
+      const ready = lab.dataset.bgReady === '1';
+      const show = (!q || tag.includes(q)) && (!readyOnly || ready);
+      lab.style.display = show ? '' : 'none';
+    });
+  }
+
+  function syncBuckOutDate() {
+    const start = $('bg-date')?.value;
+    const stay = Math.max(1, +($('bg-stay')?.value) || 42);
+    if (!start || !$('bg-out')) return;
+    const d = new Date(start + 'T12:00:00');
+    d.setDate(d.getDate() + stay);
+    $('bg-out').value = d.toISOString().slice(0, 10);
   }
 
   function wireBgPanel() {
     if (!$('bg-does')) return;
+  $('bg-date')?.addEventListener('change', syncBuckOutDate);
+    $('bg-stay')?.addEventListener('input', syncBuckOutDate);
+    syncBuckOutDate();
     $('bg-pick')?.addEventListener('click', () => {
       const n = +($('bg-n')?.value) || +($('bg-max')?.value) || 15;
       const list = bgDoeCheckboxes();
@@ -193,13 +1061,91 @@ window.BreedingPage = (() => {
     });
     $('bg-max')?.addEventListener('input', updateBgCount);
     bgDoeCheckboxes().forEach(c => c.addEventListener('change', updateBgCount));
+    $('bg-find')?.addEventListener('input', filterBgDoes);
+    $('bg-ready-only')?.addEventListener('change', filterBgDoes);
+    $('bg-all-ready')?.addEventListener('click', () => {
+      document.querySelectorAll('.breed-bg-doe').forEach(lab => {
+        if (lab.style.display === 'none') return;
+        const cb = lab.querySelector('[data-bgdoe]');
+        if (lab.dataset.bgReady === '1' && cb) cb.checked = true;
+      });
+      updateBgCount();
+    });
+    $('bg-clear')?.addEventListener('click', () => {
+      bgDoeCheckboxes().forEach(c => { c.checked = false; });
+      updateBgCount();
+    });
+    $('bucksJumpCreate')?.addEventListener('click', () => openNewGroupForBatch($('bg-batch')?.value));
     updateBgCount();
+    filterBgDoes();
+  }
+
+  function navigateReports({ batch, buck }) {
+    const p = new URLSearchParams(location.search);
+    p.set('view', 'reports');
+    if (batch) p.set('batch', batch);
+    if (buck && buck !== 'all') p.set('buck', buck);
+    else p.delete('buck');
+    location.href = '/Breeding?' + p.toString();
+  }
+
+  function wireReports() {
+    $('breedRepSeason')?.addEventListener('click', e => {
+      const btn = e.target.closest('[data-rep-batch]');
+      if (!btn) return;
+      navigateReports({ batch: btn.dataset.repBatch, buck: 'all' });
+    });
+    $('breedRepBuck')?.addEventListener('click', e => {
+      const btn = e.target.closest('[data-rep-buck]');
+      if (!btn) return;
+      const batch = document.querySelector('#breedRepSeason .breed-seg-btn.on')?.dataset.repBatch
+        || new URLSearchParams(location.search).get('batch')
+        || $('se-batch')?.value;
+      navigateReports({ batch, buck: btn.dataset.repBuck });
+    });
+    $('breedRepPrint')?.addEventListener('click', () => {
+      document.body.classList.add('breed-printing');
+      setTimeout(() => {
+        window.print();
+        document.body.classList.remove('breed-printing');
+      }, 50);
+    });
+    document.querySelectorAll('.breed-rep-tgt').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const v = parseFloat(inp.value);
+        if (!(v > 0)) return;
+        const batch = $('se-batch')?.value;
+        try {
+          await gr().api('/Breeding/UpdateSeason', {
+            method: 'POST',
+            body: JSON.stringify({
+              selectedBatchId: batch,
+              reportTargetKey: inp.dataset.k,
+              reportTargetValue: v
+            })
+          });
+          gr().showToast?.('Target updated');
+        } catch { /* shown */ }
+      });
+    });
   }
 
   function init() {
-    if (!$('brRows')) return;
+    if (!$('breedSubnav')) return;
+    wireSubNav();
+    wireReports();
+    wireScanPanel();
+    renderGroupCards().catch(() => {});
     wireStageSelects();
-    $('brFilter')?.addEventListener('change', filterPipeline);
+    wireDoeFlow();
+    wireDoeProfilePick();
+    wireKiddingFilters();
+    wireKidsTable();
+    $('brFilter')?.addEventListener('change', () => {
+      doeFlowFilter = null;
+      syncDoeFlowUi();
+      filterPipeline();
+    });
     $('heatFilter')?.addEventListener('change', filterHeat);
     filterPipeline();
     filterHeat();
@@ -269,18 +1215,127 @@ window.BreedingPage = (() => {
     });
 
     $('se-batch')?.addEventListener('change', () => {
-      location.href = '/Breeding?batch=' + encodeURIComponent($('se-batch').value);
+      const p = new URLSearchParams();
+      if (currentView !== 'today') p.set('view', currentView);
+      p.set('batch', $('se-batch').value);
+      location.href = '/Breeding?' + p.toString();
     });
     $('se-rename')?.addEventListener('click', async () => {
       const n = await gr().showModal('Name this group', { prompt: true, defaultValue: $('se-batch')?.selectedOptions[0]?.text || '' });
       if (!n) return;
       await postSeason({ selectedBatchId: $('se-batch')?.value, batchName: n });
     });
-    $('se-add')?.addEventListener('click', async () => {
-      const n = await gr().showModal('Name the new group', { prompt: true, defaultValue: 'Second group' });
-      if (!n) return;
-      await postSeason({ newBatchName: n });
+    const seasonRules = () => {
+      const el = document.getElementById('breed-season-rules');
+      if (!el) return { build: 60, scan: 45, wean: 90, gest: 150 };
+      return {
+        build: +el.dataset.build || 60,
+        scan: +el.dataset.scan || 45,
+        wean: +el.dataset.wean || 90,
+        gest: +el.dataset.gest || 150
+      };
+    };
+
+    const addDaysIso = (iso, days) => {
+      const d = new Date(iso + 'T12:00:00');
+      d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+
+    const fmtShort = iso => {
+      if (!iso) return '—';
+      return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const calcNewBirthGroup = () => {
+      const box = $('se-np-calc');
+      const from = $('se-np-from')?.value;
+      if (!box || !from) {
+        if (box) box.innerHTML = '';
+        return;
+      }
+      const rules = seasonRules();
+      const cross = addDaysIso(from, -rules.gest);
+      const feed = addDaysIso(cross, -rules.build);
+      const scan = addDaysIso(cross, rules.scan);
+      const wean = addDaysIso(from, rules.wean);
+      const past = cross < today();
+      box.innerHTML =
+        `<div>Start extra feed<b>${fmtShort(feed)}</b></div>` +
+        `<div>Cross the does<b>${fmtShort(cross)}</b></div>` +
+        `<div>Scan<b>${fmtShort(scan)}</b></div>` +
+        `<div>Wean<b>${fmtShort(wean)}</b></div>` +
+        (past ? '<div class="breed-np-warn">Crossing date has passed<b>Will plan for next year</b></div>' : '');
+    };
+
+    const openNewBirthGroupPanel = () => {
+      const panel = $('se-new-batch-panel');
+      if (!panel) return;
+      const yr = new Date().getFullYear();
+      if ($('se-np-from')) $('se-np-from').value = yr + '-12-01';
+      if ($('se-np-to')) $('se-np-to').value = yr + '-12-15';
+      if ($('se-np-name')) $('se-np-name').value = '';
+      if ($('se-np-copy') && $('se-batch')?.value) $('se-np-copy').value = $('se-batch').value;
+      panel.removeAttribute('hidden');
+      calcNewBirthGroup();
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const closeNewBirthGroupPanel = () => {
+      $('se-new-batch-panel')?.setAttribute('hidden', '');
+    };
+
+    const saveNewBirthGroup = async () => {
+      const name = $('se-np-name')?.value?.trim();
+      const from = $('se-np-from')?.value;
+      const to = $('se-np-to')?.value;
+      if (!from || !to) {
+        await gr().showModal('Pick the birth window.');
+        return;
+      }
+      if (to < from) {
+        await gr().showModal('The window must end after it starts.');
+        return;
+      }
+      await postSeason({
+        selectedBatchId: $('se-np-copy')?.value || $('se-batch')?.value,
+        copyFromBatchId: $('se-np-copy')?.value,
+        newBatchName: name || 'New group',
+        newBatchIcon: $('se-np-emo')?.value || '⭐',
+        batchFrom: from.slice(5),
+        batchTo: to.slice(5)
+      });
+    };
+
+    ['se-add', 'se-add-chip'].forEach(id => $(id)?.addEventListener('click', openNewBirthGroupPanel));
+    $('se-np-close')?.addEventListener('click', closeNewBirthGroupPanel);
+    $('se-np-cancel')?.addEventListener('click', closeNewBirthGroupPanel);
+    $('se-np-save')?.addEventListener('click', () => saveNewBirthGroup().catch(() => {}));
+    ['se-np-from', 'se-np-to', 'se-np-copy'].forEach(id => {
+      $(id)?.addEventListener('input', calcNewBirthGroup);
+      $(id)?.addEventListener('change', calcNewBirthGroup);
     });
+    $('se-copy')?.addEventListener('click', async () => {
+      if (!await gr().showConfirm('Duplicate this birth group with the same birth window dates?')) return;
+      await postSeason({ selectedBatchId: $('se-batch')?.value, duplicateBatch: true });
+    });
+    document.querySelectorAll('.breed-plan-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.seBatch;
+        if (!id || !$('se-batch')) return;
+        $('se-batch').value = id;
+        $('se-batch').dispatchEvent(new Event('change'));
+      });
+    });
+    document.querySelectorAll('.breed-year-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const id = row.dataset.seOpen;
+        if (!id || !$('se-batch')) return;
+        $('se-batch').value = id;
+        $('se-batch').dispatchEvent(new Event('change'));
+      });
+    });
+    $('planToBucks')?.addEventListener('click', () => setBreedingView('bucks'));
     $('se-del')?.addEventListener('click', async () => {
       const sel = $('se-batch');
       const batchCount = sel?.options.length || 0;
@@ -340,30 +1395,50 @@ window.BreedingPage = (() => {
     });
 
     const params = new URLSearchParams(location.search);
-    if (params.get('birth')) openBirth(params.get('birth'), params.get('kids') || '1');
+    if (params.get('birth')) {
+      setBreedingView('kidding');
+      openBirth(params.get('birth'), params.get('kids') || '1');
+    } else if (params.get('scan')) {
+      setBreedingView('does');
+      openScanPanel(false);
+      const tag = params.get('scan');
+      if (tag && tag !== '1' && $('scFind')) $('scFind').value = tag;
+      loadScanSheet().then(() => renderScanTable()).catch(() => {});
+    }
+
+    document.querySelectorAll('[data-birth-open]').forEach(b => {
+      b.addEventListener('click', () => openBirth(b.dataset.birthOpen, b.dataset.birthKids || '1'));
+    });
 
     wireBgPanel();
+    wireBuckCheck();
+
+    $('bg-groups')?.addEventListener('click', onGroupAction);
 
     $('bg-create')?.addEventListener('click', async () => {
       const ids = [...document.querySelectorAll('[data-bgdoe]:checked')].map(c => +c.dataset.bgdoe);
       const buck = normalizeTag($('bg-buck')?.value);
       const startDate = $('bg-date')?.value;
+      const defer = !!$('bg-defer')?.checked;
       if (!buck) { await gr().showModal('Enter the buck tag'); return; }
-      if (!startDate) { await gr().showModal('Pick a cross date'); return; }
+      if (!defer && !startDate) { await gr().showModal('Pick the buck-in date'); return; }
       if (!ids.length) { await gr().showModal('Tick at least one doe'); return; }
+      const body = {
+        birthBatchId: $('bg-batch')?.value || null,
+        buckTag: buck,
+        startDate: startDate || today(),
+        stayDays: +($('bg-stay')?.value) || 42,
+        deferCross: defer,
+        max: +$('bg-max')?.value || 15,
+        doeIds: ids
+      };
       try {
-        await gr().api('/Breeding/CreateGroup', {
-          method: 'POST',
-          body: JSON.stringify({
-            buckTag: buck,
-            startDate,
-            max: +$('bg-max')?.value || 15,
-            doeIds: ids
-          })
-        });
-        reload('Breeding group created');
+        await gr().api('/Breeding/CreateGroup', { method: 'POST', body: JSON.stringify(body) });
+        reload(defer ? 'Group saved — put the buck in when ready' : 'Breeding group created');
       } catch { /* shown */ }
     });
+
+    if (currentView === 'bucks') renderGroupCards().catch(() => {});
   }
 
   return { init, openBirth };

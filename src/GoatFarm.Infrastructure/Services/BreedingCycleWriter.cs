@@ -130,6 +130,6 @@ internal static class BreedingCycleWriter
         doe.UpdatedDate = now;
     }
 
-    private static string AppendNote(string? existing, string note) =>
+    public static string AppendNote(string? existing, string note) =>
         string.IsNullOrWhiteSpace(existing) ? note : $"{existing}; {note}";
 }

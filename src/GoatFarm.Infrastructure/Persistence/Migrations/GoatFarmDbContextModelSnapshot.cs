@@ -17,7 +17,7 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.22")
+                .HasAnnotation("ProductVersion", "9.0.23")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -290,6 +290,60 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.HasIndex("DoeId", "Outcome");
 
                     b.ToTable("BreedingEvents", (string)null);
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.BuckHealthCheck", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Bcs")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("numeric(4,1)");
+
+                    b.Property<int>("BuckId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("CheckDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Feet")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Teeth")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Testicles")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("WeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuckId", "CheckDate");
+
+                    b.ToTable("BuckHealthChecks", (string)null);
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.BudgetLine", b =>
@@ -1136,6 +1190,12 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsTemporaryTag")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("KidHealthTag")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("KidMilkType")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("KiddingRecordId")
                         .HasColumnType("integer");
 
@@ -1189,6 +1249,10 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     b.Property<DateOnly?>("WeanDate")
                         .HasColumnType("date");
+
+                    b.Property<string>("WeanMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int>("YoungClass")
                         .HasColumnType("integer");
@@ -2222,6 +2286,10 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CarcassForm")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<decimal>("CarcassKg")
                         .HasColumnType("numeric");
 
@@ -2234,11 +2302,17 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<int?>("GoatId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("HalfPieces")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("LiveWeightKg")
                         .HasColumnType("numeric");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
+
+                    b.Property<decimal>("RemainingKg")
+                        .HasColumnType("numeric");
 
                     b.Property<decimal>("SaleAmount")
                         .HasColumnType("numeric");
@@ -2246,8 +2320,14 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<string>("TagText")
                         .HasColumnType("text");
 
+                    b.Property<decimal>("UnitCostPerKg")
+                        .HasColumnType("numeric");
+
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -3162,6 +3242,17 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Navigation("Buck");
 
                     b.Navigation("Doe");
+                });
+
+            modelBuilder.Entity("GoatFarm.Domain.Entities.BuckHealthCheck", b =>
+                {
+                    b.HasOne("GoatFarm.Domain.Entities.Goat", "Buck")
+                        .WithMany()
+                        .HasForeignKey("BuckId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Buck");
                 });
 
             modelBuilder.Entity("GoatFarm.Domain.Entities.ClientProductPrice", b =>

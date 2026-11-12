@@ -76,6 +76,82 @@ public class BreedingServiceTests
     }
 
     [Fact]
+    public async Task CreateGroup_DeferCross_ThenPutBuckIn()
+    {
+        var (svc, _, db) = Create();
+        var d1 = await AddAsync(db, TestDb.Doe("D1"));
+        await AddAsync(db, TestDb.Buck("B1"));
+
+        await svc.CreateBreedingGroupAsync(new CreateBreedingGroupViewModel
+        {
+            BuckTag = "B1",
+            StartDate = TestDb.Today,
+            DeferCross = true,
+            DoeIds = [d1.Id]
+        });
+
+        var cards = await svc.GetBreedingGroupCardsAsync();
+        Assert.True(cards[0].CanBuckIn);
+
+        await svc.PutBuckInGroupAsync(new BuckInBreedingGroupViewModel
+        {
+            GroupId = cards[0].Id,
+            InDate = TestDb.Today,
+            ConfirmWarnings = true
+        });
+
+        var saved = await db.Goats.SingleAsync(g => g.Id == d1.Id);
+        Assert.Equal(BreedingStage.ScanPending, saved.BreedingStage);
+        Assert.Equal(TestDb.Today, saved.MatedDate);
+    }
+
+    [Fact]
+    public async Task SaveScanBatch_NotSure_KeepsDoeWaitingAndAddsTask()
+    {
+        var (svc, _, db) = Create();
+        var doe = await AddAsync(db, TestDb.Doe("D1"));
+        await svc.RecordCrossAsync(new RecordCrossViewModel { Tag = "D1", Date = TestDb.Today.AddDays(-40) });
+
+        var result = await svc.SaveScanBatchAsync(new BulkScanSaveViewModel
+        {
+            ScanDate = TestDb.Today,
+            Results = [new BulkScanResultItemViewModel { GoatId = doe.Id, NotSure = true, RescanInDays = 10 }]
+        });
+
+        Assert.Equal(1, result.Saved);
+        var saved = await db.Goats.SingleAsync(g => g.Id == doe.Id);
+        Assert.Null(saved.KidsCount);
+        Assert.Single(db.FarmTasks.Where(t => t.GoatId == doe.Id));
+    }
+
+    [Fact]
+    public async Task SaveScanBatch_SavesMultipleWaitingDoes()
+    {
+        var (svc, _, db) = Create();
+        var d1 = await AddAsync(db, TestDb.Doe("D1"));
+        var d2 = await AddAsync(db, TestDb.Doe("D2"));
+        await svc.RecordCrossAsync(new RecordCrossViewModel { Tag = "D1", Date = TestDb.Today.AddDays(-50), BuckTag = "B1" });
+        await svc.RecordCrossAsync(new RecordCrossViewModel { Tag = "D2", Date = TestDb.Today.AddDays(-48), BuckTag = "B1" });
+        await AddAsync(db, TestDb.Buck("B1"));
+
+        var result = await svc.SaveScanBatchAsync(new BulkScanSaveViewModel
+        {
+            ScanDate = TestDb.Today,
+            Results =
+            [
+                new BulkScanResultItemViewModel { GoatId = d1.Id, KidsCount = 2 },
+                new BulkScanResultItemViewModel { GoatId = d2.Id, KidsCount = 0 }
+            ]
+        });
+
+        Assert.Equal(2, result.Saved);
+        var s1 = await db.Goats.SingleAsync(g => g.Id == d1.Id);
+        var s2 = await db.Goats.SingleAsync(g => g.Id == d2.Id);
+        Assert.Equal(2, s1.KidsCount);
+        Assert.Null(s2.MatedDate);
+    }
+
+    [Fact]
     public async Task PositiveScan_ConfirmsPregnancy()
     {
         var (svc, _, db) = Create();
