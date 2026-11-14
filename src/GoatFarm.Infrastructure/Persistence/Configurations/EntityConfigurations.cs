@@ -22,6 +22,7 @@ public class GoatConfiguration : IEntityTypeConfiguration<Goat>
         builder.Property(x => x.SireTagText).HasMaxLength(50);
         builder.Property(x => x.DamTagText).HasMaxLength(50);
         builder.Property(x => x.BirthBatchName).HasMaxLength(100);
+        builder.Property(x => x.MotherGroupId).HasMaxLength(20);
         builder.Property(x => x.WeanMethod).HasMaxLength(20);
         builder.HasIndex(x => x.Tag).IsUnique();
         builder.HasIndex(x => x.BirthBatchName);
@@ -82,6 +83,8 @@ public class KiddingRecordConfiguration : IEntityTypeConfiguration<KiddingRecord
         builder.ToTable("KiddingRecords");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Notes).HasMaxLength(1000);
+        builder.Property(x => x.DamHealthIssues).HasMaxLength(500);
+        builder.Property(x => x.KeepReason).HasMaxLength(200);
         builder.HasIndex(x => x.ClientRequestId).IsUnique();
         builder.HasIndex(x => x.KiddingDate);
         builder.HasOne(x => x.Doe)

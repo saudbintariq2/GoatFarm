@@ -246,6 +246,23 @@ public class GoatController : Controller
     }
 
     [HttpPost]
+    public async Task<IActionResult> SetKiddingsBeforePurchase(
+        [FromBody] SetKiddingsBeforePurchaseViewModel model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _goatService.SetKiddingsBeforePurchaseAsync(model, cancellationToken);
+            return Ok(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
     public async Task<IActionResult> RecordHeat([FromBody] RecordHeatViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

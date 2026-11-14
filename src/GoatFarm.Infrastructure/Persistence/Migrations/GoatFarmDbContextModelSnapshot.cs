@@ -1149,6 +1149,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<bool?>("ColostrumGiven")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Comment")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -1199,11 +1202,18 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<int?>("KiddingRecordId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("KiddingsBeforePurchase")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("KidsCount")
                         .HasColumnType("integer");
 
                     b.Property<DateOnly?>("MatedDate")
                         .HasColumnType("date");
+
+                    b.Property<string>("MotherGroupId")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Name")
                         .HasMaxLength(100)
@@ -1565,6 +1575,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BodyCondition")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("BreedingEventId")
                         .HasColumnType("integer");
 
@@ -1574,16 +1587,36 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DamHealth")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DamHealthIssues")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("DoeId")
                         .HasColumnType("integer");
 
                     b.Property<int>("Ease")
                         .HasColumnType("integer");
 
+                    b.Property<int>("KeepDecision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("KeepReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateOnly>("KiddingDate")
                         .HasColumnType("date");
 
                     b.Property<int>("LiveKids")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MilkProduction")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Mothering")
                         .HasColumnType("integer");
 
                     b.Property<string>("Notes")

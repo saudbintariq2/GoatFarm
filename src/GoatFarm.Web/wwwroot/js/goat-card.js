@@ -265,8 +265,15 @@
     if (g.gender === 'Female' && g.statusKey !== 'kid') {
       const kd = profile.kiddings || [];
       const live = kd.reduce((a, k) => a + (k.liveKids || 0), 0);
+      const before = Math.max(0, +g.kiddingsBeforePurchase || 0);
+      const canEditKbp = FarmPerms.can('herd', 'edit');
       html += `<div style="font-weight:700;margin-top:6px">Breeding record</div>
-        <div class="breed">${kd.length} birth(s) · ${live} kids born alive · ${profile.emptyScanCount || 0} empty scan(s) · ${profile.abortionCount || 0} abortion(s)</div>`;
+        <div class="breed">${kd.length} birth(s) on farm · ${before} before purchase · ${live} kids born alive here · ${profile.emptyScanCount || 0} empty scan(s) · ${profile.abortionCount || 0} abortion(s)</div>
+        <div class="field" style="margin-top:8px;max-width:240px">
+          <label for="gmKiddingsBefore">Kiddings before purchase</label>
+          <input type="number" id="gmKiddingsBefore" min="0" step="1" value="${before}"${canEditKbp ? '' : ' disabled'}>
+          <span class="breed" style="font-size:11px;display:block;margin-top:4px">Used in herd kiddings total (here + before purchase).</span>
+        </div>`;
       if (kd.length) {
         html += `<table class="tbl" style="margin-top:6px"><thead><tr><th>Date</th><th>Sire</th><th class="num-cell">Alive</th><th class="num-cell">Still</th></tr></thead><tbody>
           ${kd.map(k => `<tr><td>${esc(k.dateDisplay)}</td><td>${k.sireGoatId ? `<a href="#" data-goatcard="${k.sireGoatId}">${esc(k.sireTag || '—')}</a>` : esc(k.sireTag || '—')}</td>
@@ -369,6 +376,24 @@
       e.preventDefault();
       runAction('editparents');
     });
+    const kbp = document.getElementById('gmKiddingsBefore');
+    if (kbp) {
+      kbp.onchange = async () => {
+        if (!FarmPerms.can('herd', 'edit')) return;
+        const v = Math.max(0, Math.floor(+kbp.value || 0));
+        try {
+          await api('/Goat/SetKiddingsBeforePurchase', {
+            method: 'POST',
+            body: JSON.stringify({ goatId: profile.subjectGoatId, kiddingsBeforePurchase: v })
+          });
+          toast('Saved kiddings before purchase.');
+          await refreshCard();
+        } catch (err) {
+          toast(err?.error || 'Could not save.', 'error');
+          kbp.value = Math.max(0, +profile.goat?.kiddingsBeforePurchase || 0);
+        }
+      };
+    }
     document.getElementById('gmActions')?.querySelectorAll('[data-act]').forEach(b => {
       b.onclick = e => {
         e.preventDefault();
@@ -473,14 +498,41 @@
     const kidsCount = SCAN_KIDS_BY_RESULT[r.result];
     if (kidsCount === undefined) return false;
     const when = r.date || today();
+    let emptyNextStep;
+    let emptyBirthBatchId;
+    if (kidsCount === 0) {
+      const buckStill = !!g.buckTag;
+      const emptyOpts = [
+        'Next birth group',
+        'Watch for heat',
+        'Cull list',
+        ...(buckStill ? ['Back with buck'] : [])
+      ];
+      const er = await ask('Empty scan — ' + g.tag + ' — what next?', [
+        { key: 'next', label: 'Next step', type: 'select', options: emptyOpts, value: emptyOpts[0] }
+      ]);
+      if (!er) return false;
+      emptyNextStep = ({
+        'Next birth group': 'next',
+        'Watch for heat': 'heat',
+        'Cull list': 'cull',
+        'Back with buck': 'back'
+      })[er.next] || 'next';
+    }
     try {
       await api('/Breeding/RecordUltrasound', {
         method: 'POST',
-        body: JSON.stringify({ tag: g.tag, kidsCount, date: when })
+        body: JSON.stringify({
+          tag: g.tag,
+          kidsCount,
+          date: when,
+          emptyNextStep,
+          emptyBirthBatchId
+        })
       });
     } catch { return false; }
     const msg = kidsCount === 0
-      ? g.tag + ' — not pregnant, moved back to Dry'
+      ? g.tag + ' — not pregnant; next step saved'
       : g.tag + ' — ' + kidsScanLabel(kidsCount) + ', due ~' + addDaysIso(mated, GESTATION_DAYS);
     if (afterSuccess) sessionStorage.setItem('goatToast', msg);
     else toast(msg);
@@ -548,8 +600,8 @@
         key: 'ease',
         label: 'How was the birth?',
         type: 'select',
-        options: ['Normal', 'Assisted', 'Difficult / vet needed'],
-        value: 'Normal'
+        options: ['Easy', 'Slight help', 'Hard pull', 'Vet', 'Caesarean'],
+        value: 'Easy'
       },
       { key: 'note', label: 'Note (optional)', type: 'text', placeholder: 'e.g. large single kid' }
     ]);
@@ -568,7 +620,10 @@
     const kids = [];
     for (let i = 0; i < fem; i++) kids.push({ gender: 'Female' });
     for (let i = 0; i < male; i++) kids.push({ gender: 'Male' });
-    const easeMap = { Normal: 'Normal', Assisted: 'Assisted', 'Difficult / vet needed': 'Difficult' };
+    const easeMap = {
+      Easy: 'Easy', 'Slight help': 'SlightHelp', 'Hard pull': 'HardPull', Vet: 'Vet', Caesarean: 'Caesarean',
+      Normal: 'Easy', Assisted: 'SlightHelp', 'Difficult / vet needed': 'HardPull'
+    };
     try {
       await api('/Breeding/RecordBirth', {
         method: 'POST',

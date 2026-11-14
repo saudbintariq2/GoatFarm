@@ -16,7 +16,7 @@ public static class BreedingDoeProfileBuilder
     {
         var flowKey = BreedingDoeFlowHelper.FlowStage(goat, today) ?? "getting_ready";
         var kiddingsHere = kiddings.Count;
-        var before = 0;
+        var before = Math.Max(0, goat.KiddingsBeforePurchase);
         var kidsBorn = kiddings.Sum(k => k.LiveKids + k.Stillborn);
         var timesPregnant = events.Count(e =>
             e.Outcome is BreedingOutcome.ConfirmedPregnant or BreedingOutcome.Kidded

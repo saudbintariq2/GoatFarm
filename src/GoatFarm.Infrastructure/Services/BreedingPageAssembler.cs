@@ -30,7 +30,10 @@ internal static class BreedingPageAssembler
             .ToList();
     }
 
-    public static IReadOnlyList<BreedingPipelineRowViewModel> BuildPipelineRows(IReadOnlyList<Goat> goats)
+    public static IReadOnlyList<BreedingPipelineRowViewModel> BuildPipelineRows(
+        IReadOnlyList<Goat> goats,
+        IReadOnlyDictionary<int, int> kiddingsHere,
+        IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe)
     {
         var today = Today;
         var rows = goats
@@ -39,7 +42,7 @@ internal static class BreedingPageAssembler
             {
                 var flow = BreedingDoeFlowHelper.FlowStage(g, today);
                 if (flow is null) return null;
-                return MapPipeline(g, today, flow);
+                return MapPipeline(g, today, flow, kiddingsHere, kiddingsByDoe);
             })
             .Where(r => r is not null)
             .Cast<BreedingPipelineRowViewModel>()
@@ -64,7 +67,12 @@ internal static class BreedingPageAssembler
         return null;
     }
 
-    private static BreedingPipelineRowViewModel MapPipeline(Goat g, DateOnly today, string flowStage)
+    private static BreedingPipelineRowViewModel MapPipeline(
+        Goat g,
+        DateOnly today,
+        string flowStage,
+        IReadOnlyDictionary<int, int> kiddingsHere,
+        IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe)
     {
         var stage = StageKey(g) ?? flowStage switch
         {
@@ -97,6 +105,13 @@ internal static class BreedingPageAssembler
             BuckTag = g.BuckTag,
             KidsCount = g.KidsCount
         };
+
+        var here = kiddingsHere.GetValueOrDefault(g.Id);
+        var total = here + Math.Max(0, g.KiddingsBeforePurchase);
+        row.KiddingsTotal = total;
+        row.KiddingsDisplay = total == 0 ? "0×" : $"{total}×";
+        if (kiddingsByDoe.TryGetValue(g.Id, out var kd) && MotherScoreHelper.DoeAverage(kd) is { } avg)
+            row.MotherScoreHtml = MotherScoreHelper.StarsHtml(avg);
 
         if (stage == "plan" && g.NextCrossDate.HasValue)
         {
@@ -148,9 +163,9 @@ internal static class BreedingPageAssembler
         else if (stage == "preg" && g.MatedDate.HasValue)
         {
             var mated = g.MatedDate!.Value;
-            var kd = BreedingHelper.ExpectedKidding(mated);
-            var d = BreedingHelper.DaysUntil(kd);
-            row.KeyDateHtml = $"<b>{kd:yyyy-MM-dd}</b><div class=\"name\">{mated.AddDays(BreedingHelper.KiddingWindowStart):yyyy-MM-dd} → {mated.AddDays(BreedingHelper.KiddingWindowEnd):yyyy-MM-dd}</div>";
+            var dueKid = BreedingHelper.ExpectedKidding(mated);
+            var d = BreedingHelper.DaysUntil(dueKid);
+            row.KeyDateHtml = $"<b>{dueKid:yyyy-MM-dd}</b><div class=\"name\">{mated.AddDays(BreedingHelper.KiddingWindowStart):yyyy-MM-dd} → {mated.AddDays(BreedingHelper.KiddingWindowEnd):yyyy-MM-dd}</div>";
             row.DaysText = d < 0 ? $"overdue {-d}d" : $"in {d}d";
             row.DaysStyle = d < 0 ? "color:#8a261c;font-weight:700"
                 : d <= 14 ? "color:var(--amber);font-weight:700"
@@ -569,6 +584,10 @@ internal static class BreedingPageAssembler
         var panel = new BreedingSeasonPanelViewModel
         {
             BuildUp = season.BuildUp,
+            BuckCheckDays = season.BuckCheckDays,
+            WeighYoungDoesDays = season.WeighYoungDoesDays,
+            MinYoungDoeKg = season.MinYoungDoeKg,
+            KiddingPensDays = season.KiddingPensDays,
             ScanAfter = season.ScanAfter,
             DryOff = season.DryOff,
             WeanDays = season.WeanDays,
@@ -596,10 +615,17 @@ internal static class BreedingPageAssembler
 
         var dryCrossFrom = plan.CrossFrom.AddDays(-season.DryBeforeCross);
         var dryCrossTo = plan.CrossTo.AddDays(-season.DryBeforeCross);
+        var buckCheck = plan.CrossFrom.AddDays(-season.BuckCheckDays);
+        var weighYoung = plan.CrossFrom.AddDays(-season.WeighYoungDoesDays);
+        var pensReady = plan.KidFrom.AddDays(-season.KiddingPensDays);
         var steps = new (string Icon, string Label, string Rule, string Window, DateOnly When, bool Anchor)[]
         {
             ("🌾", "Start extra feed", season.BuildUp + " days <b>before crossing</b>",
                 plan.BuildFrom.ToString("yyyy-MM-dd"), plan.BuildFrom, false),
+            ("🩺", "Check the bucks", season.BuckCheckDays + " days <b>before crossing</b>",
+                buckCheck.ToString("yyyy-MM-dd"), buckCheck, false),
+            ("⚖️", "Weigh young does", season.WeighYoungDoesDays + " days <b>before crossing</b> — need at least " + season.MinYoungDoeKg + " kg",
+                weighYoung.ToString("yyyy-MM-dd"), weighYoung, false),
             ("🌙", "Stop milking", season.DryBeforeCross + " days <b>before crossing</b>",
                 $"{dryCrossFrom:yyyy-MM-dd} → {dryCrossTo:yyyy-MM-dd}", dryCrossFrom, false),
             ("♥", "Cross the does", $"<span class=\"breed\">{BreedingHelper.GestationDays} days <b>before birth</b> — a goat's pregnancy</span>",
@@ -608,9 +634,11 @@ internal static class BreedingPageAssembler
                 $"{plan.ScanFrom:yyyy-MM-dd} → {plan.ScanTo:yyyy-MM-dd}", plan.ScanFrom, false),
             ("🌙", "Dry off the milkers", season.DryOff + " days <b>before birth</b>",
                 $"{plan.DryFrom:yyyy-MM-dd} → {plan.DryTo:yyyy-MM-dd}", plan.DryFrom, false),
+            ("🏠", "Get kidding pens ready", season.KiddingPensDays + " days <b>before birth</b>",
+                pensReady.ToString("yyyy-MM-dd"), pensReady, false),
             ("🍼", "Birth window", "<b>you choose this</b>",
                 $"{plan.KidFrom:yyyy-MM-dd} → {plan.KidTo:yyyy-MM-dd}", plan.KidFrom, true),
-            ("🐣", "Wean the kids", season.WeanDays + " days <b>after birth</b>, or once they reach " + season.WeanKg + " kg",
+            ("🐣", "Wean the kids", season.WeanDays + " days <b>after birth</b> — kids move to <b>Weaned</b> by themselves on this day",
                 $"{plan.WeanFrom:yyyy-MM-dd} → {plan.WeanTo:yyyy-MM-dd}", plan.WeanFrom, false)
         };
 

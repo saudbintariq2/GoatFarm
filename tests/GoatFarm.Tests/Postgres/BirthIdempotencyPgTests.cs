@@ -41,7 +41,11 @@ public class BirthIdempotencyPgTests
             ClientRequestId = Guid.NewGuid(),
             DoeTag = "RACE-DOE",
             KiddingDate = TestDb.Today,
-            Kids = [new BirthKidViewModel { Gender = GoatGender.Female }, new BirthKidViewModel { Gender = GoatGender.Male }]
+            Kids =
+            [
+                new BirthKidViewModel { Gender = GoatGender.Female, WeightKg = 3.0m },
+                new BirthKidViewModel { Gender = GoatGender.Male, WeightKg = 3.2m }
+            ]
         };
 
         async Task<RecordBirthResultViewModel> Submit()

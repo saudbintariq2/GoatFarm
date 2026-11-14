@@ -89,7 +89,7 @@ public static class BreedingReportAggregator
             if (n > 0)
                 o.Lit[Math.Min(4, n) - 1]++;
 
-            if (k.Ease is KiddingEase.Difficult or KiddingEase.Assisted)
+            if (k.Ease is KiddingEase.HardPull or KiddingEase.Vet or KiddingEase.Caesarean or KiddingEase.SlightHelp)
                 o.Hard++;
 
             var mk = k.KiddingDate.ToString("yyyy-MM");

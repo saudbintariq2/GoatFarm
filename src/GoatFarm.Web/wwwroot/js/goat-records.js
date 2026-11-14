@@ -420,10 +420,60 @@ const GoatRecords = (() => {
     location.reload();
   }
 
+  async function runBreedingUndo(spec) {
+    if (!spec?.kind) return;
+    try {
+      if (spec.kind === 'crosses' && spec.doeIds?.length) {
+        await api('/Breeding/UndoGroupCrosses', { method: 'POST', body: JSON.stringify({ doeIds: spec.doeIds }) });
+      } else if (spec.kind === 'reopen' && spec.groupId) {
+        await api('/Breeding/ReopenGroup', { method: 'POST', body: JSON.stringify({ groupId: spec.groupId }) });
+      } else if (spec.kind === 'deleteGroup' && spec.groupId) {
+        await api('/Breeding/DeleteGroup?id=' + encodeURIComponent(spec.groupId), { method: 'DELETE' });
+      }
+      sessionStorage.removeItem('goatToastUndo');
+      reloadWithToast('Undone');
+    } catch {
+      /* shown */
+    }
+  }
+
+  function showToastWithUndo(message, onUndo) {
+    const host = document.getElementById('toastHost');
+    if (!host) {
+      showToast(message);
+      return;
+    }
+    const el = document.createElement('div');
+    el.className = 'toast toast-success toast-has-undo';
+    el.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-undo-btn">Undo</button>`;
+    el.querySelector('.toast-msg').innerHTML = message;
+    el.querySelector('.toast-undo-btn').addEventListener('click', () => {
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 200);
+      onUndo();
+    });
+    host.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => {
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 280);
+    }, 6000);
+  }
+
   function flashStoredToast() {
     const message = sessionStorage.getItem('goatToast');
     if (!message) return;
+    const undoRaw = sessionStorage.getItem('goatToastUndo');
     sessionStorage.removeItem('goatToast');
+    if (undoRaw) {
+      let spec;
+      try { spec = JSON.parse(undoRaw); } catch { spec = null; }
+      if (spec) {
+        showToastWithUndo(message, () => runBreedingUndo(spec));
+        return;
+      }
+      sessionStorage.removeItem('goatToastUndo');
+    }
     showToast(message);
   }
 

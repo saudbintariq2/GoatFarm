@@ -99,7 +99,7 @@ internal static class BreedingReportsAssembler
 
         return new BreedingReportsViewModel
         {
-            HasData = o.Crossed > 0 || o.Preg > 0 || o.Kidded > 0 || seasonKiddings.Count > 0,
+            HasData = true,
             SeasonDone = done,
             SelectedBatchId = batch.Id,
             SelectedBuck = selectedBuck,
@@ -435,7 +435,7 @@ internal static class BreedingReportsAssembler
             var reasons = new List<string>();
             if (emptyByGoat.GetValueOrDefault(g.Id) >= 2)
                 reasons.Add("Empty at scan " + emptyByGoat[g.Id] + " times");
-            if (kd.Count(k => k.Ease == KiddingEase.Difficult) >= 2)
+            if (kd.Count(k => k.Ease is KiddingEase.Vet or KiddingEase.Caesarean) >= 2)
                 reasons.Add("Difficult birth twice");
             if (!string.IsNullOrWhiteSpace(g.Comment) && g.Comment.Contains("Cull list", StringComparison.OrdinalIgnoreCase))
                 reasons.Add("On cull list");

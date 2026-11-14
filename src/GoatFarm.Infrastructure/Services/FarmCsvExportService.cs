@@ -111,30 +111,45 @@ public class FarmCsvExportService : IFarmCsvExportService
 
     public async Task<byte[]> ExportBreedingAsync(CancellationToken cancellationToken = default)
     {
-        var does = await _context.Goats.AsNoTracking()
-            .Where(g => !g.IsArchived && g.Gender == GoatGender.Female)
-            .OrderBy(g => g.Tag)
-            .Select(g => new { g.Tag, g.Status, g.MatedDate, g.KidsCount, g.NextCrossDate })
+        var events = await _context.BreedingEvents.AsNoTracking()
+            .Include(e => e.Doe)
+            .Include(e => e.Buck)
+            .Where(e => e.Outcome != BreedingOutcome.Cancelled)
+            .OrderByDescending(e => e.MatedDate)
+            .ThenByDescending(e => e.Id)
             .ToListAsync(cancellationToken);
+
+        var kiddingByEvent = await _context.KiddingRecords.AsNoTracking()
+            .Where(k => k.BreedingEventId != null)
+            .ToDictionaryAsync(k => k.BreedingEventId!.Value, cancellationToken);
+
         var sb = new StringBuilder();
-        sb.AppendLine("Tag,Status,MatedDate,KidsCount,NextCrossDate,ConfirmedPregnant");
-        foreach (var g in does)
+        sb.AppendLine("DoeTag,BuckTag,MatedDate,DueDate,ScanDate,KidsOnScan,Outcome,OutcomeDate,KiddingDate,BornAlive,Stillborn,BirthEase,MotherScore,KeepDecision,BirthGroup,Notes");
+        foreach (var e in events)
         {
-            var goat = new Domain.Entities.Goat
-            {
-                Tag = g.Tag,
-                Gender = GoatGender.Female,
-                MatedDate = g.MatedDate,
-                KidsCount = g.KidsCount,
-                IsArchived = false
-            };
-            sb.Append(CsvHelper.Cell(g.Tag)).Append(',')
-                .Append(CsvHelper.Cell(g.Status.ToString())).Append(',')
-                .Append(g.MatedDate?.ToString("yyyy-MM-dd") ?? "").Append(',')
-                .Append(g.KidsCount?.ToString() ?? "").Append(',')
-                .Append(g.NextCrossDate?.ToString("yyyy-MM-dd") ?? "").Append(',')
-                .AppendLine(PregnancyRules.IsConfirmedPregnant(goat) ? "yes" : "no");
+            if (e.Doe.IsArchived) continue;
+            var buck = e.Buck?.Tag ?? e.BuckTagText ?? "";
+            var due = BreedingHelper.ExpectedKidding(e.MatedDate);
+            kiddingByEvent.TryGetValue(e.Id, out var kid);
+            var mScore = kid is not null ? MotherScoreHelper.ScoreForKidding(kid) : null;
+            sb.Append(CsvHelper.Cell(e.Doe.Tag)).Append(',')
+                .Append(CsvHelper.Cell(buck)).Append(',')
+                .Append(e.MatedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)).Append(',')
+                .Append(due.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)).Append(',')
+                .Append(e.ScanDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "").Append(',')
+                .Append(e.ScanKids?.ToString() ?? "").Append(',')
+                .Append(CsvHelper.Cell(e.Outcome.ToString())).Append(',')
+                .Append(e.OutcomeDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "").Append(',')
+                .Append(kid?.KiddingDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "").Append(',')
+                .Append(kid?.LiveKids.ToString() ?? "").Append(',')
+                .Append(kid?.Stillborn.ToString() ?? "").Append(',')
+                .Append(kid is null ? "" : CsvHelper.Cell(kid.Ease.ToString())).Append(',')
+                .Append(mScore?.ToString("0.##", CultureInfo.InvariantCulture) ?? "").Append(',')
+                .Append(kid is null ? "" : CsvHelper.Cell(kid.KeepDecision.ToString())).Append(',')
+                .Append(CsvHelper.Cell(e.Doe.BirthBatchName ?? "")).Append(',')
+                .AppendLine(CsvHelper.Cell(e.Notes));
         }
+
         return CsvHelper.ToFile(sb.ToString());
     }
 

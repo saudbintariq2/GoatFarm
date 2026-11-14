@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandeel Farms — Breeding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F1EA; --surface:#FFFFFF; --surface2:#FBF9F5;
+  --ink:#1B2420; --ink2:#46504a; --muted:#7c847f; --line:#E7E1D6; --line2:#EFEAE1;
+  --green:#1E4635; --green2:#2E6A50; --sage:#E6EFE8; --sage2:#D3E6D7;
+  --clay:#C05A21; --clay-soft:#F8E9DF; --gold:#B8862B; --gold-soft:#F7EED9;
+  --red:#B3261E; --red-soft:#FBE7E5; --blue:#4F6D8F; --blue-soft:#E7EEF5;
+  --shadow:0 1px 2px rgba(27,36,32,.04),0 6px 20px -8px rgba(27,36,32,.10);
+  --shadow-h:0 2px 4px rgba(27,36,32,.05),0 14px 32px -12px rgba(27,36,32,.20);
+  --r:16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.serif{font-family:Fraunces,Georgia,serif;font-weight:600;letter-spacing:-.01em;margin:0}
+button{font-family:inherit}
+
+/* ============ LAYOUT ============ */
+.app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+aside{background:var(--green);color:#E8F0EA;padding:22px 16px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px}
+.brand{display:flex;gap:12px;align-items:center;padding:0 8px 22px}
+.brand .logo{width:40px;height:40px;border-radius:12px;background:#F4F1EA;color:var(--green);display:grid;place-items:center;font:700 16px Fraunces}
+.brand b{display:block;font:600 17px Fraunces;color:#fff}
+.brand small{opacity:.65;font-size:12px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:12px;background:none;border:0;color:#CFDDD3;padding:11px 12px;border-radius:12px;font:500 14.5px Inter;cursor:pointer;text-align:left;transition:background .2s,color .2s}
+.nav button svg{width:19px;height:19px;flex:0 0 19px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+.nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav button.on{background:#F4F1EA;color:var(--green);font-weight:600}
+.nav .count{margin-left:auto;font-size:11px;background:var(--clay);color:#fff;border-radius:10px;padding:1px 7px;font-weight:700}
+.side-foot{margin-top:auto;border-top:1px solid rgba(255,255,255,.12);padding:14px 8px 0;font-size:12.5px;color:#BFD0C4}
+.switch{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.switch input{display:none}
+.switch .tg{width:34px;height:20px;border-radius:20px;background:rgba(255,255,255,.2);position:relative;transition:.2s}
+.switch .tg:after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:.2s}
+.switch input:checked+.tg{background:var(--clay)}
+.switch input:checked+.tg:after{left:17px}
+
+main{padding:34px 40px 60px;max-width:1180px;width:100%}
+.ph{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+.ph h1{font-size:32px;line-height:1.1}
+.ph p{margin:6px 0 0;color:var(--muted)}
+.ph .act{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}
+
+.view{display:none}
+.view.on{display:block;animation:rise .45s cubic-bezier(.2,.7,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ============ SURFACES ============ */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 24px;margin-bottom:20px;box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.card-h h2{font-size:20px}
+.card-h .sub{color:var(--muted);font-size:13px}
+.card-h .r{margin-left:auto}
+.eyebrow{font:600 11.5px Inter;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.muted{color:var(--muted)}.small{font-size:13px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:20px}
+.grid2>.card{margin-bottom:0}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow)}
+.stat .v{font:600 30px Fraunces;color:var(--green);line-height:1.1}
+.stat .l{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+/* buttons, pills */
+.btn{border:0;background:var(--green);color:#fff;padding:11px 18px;border-radius:11px;font:600 14px Inter;cursor:pointer;transition:transform .15s,box-shadow .2s,background .2s;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{background:var(--green2);box-shadow:0 8px 18px -8px rgba(30,70,53,.55);transform:translateY(-1px)}
+.btn.ghost{background:var(--surface);color:var(--green);border:1px solid var(--line)}
+.btn.ghost:hover{border-color:var(--green);box-shadow:none}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:9px}
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 12px Inter;padding:3px 10px;border-radius:20px;background:var(--sage);color:var(--green);white-space:nowrap}
+.pill.gray{background:#EEECE7;color:#5f6662}
+.pill.red{background:var(--red-soft);color:var(--red)}
+.pill.gold{background:var(--gold-soft);color:#8a6418}
+.pill.clay{background:var(--clay-soft);color:var(--clay)}
+.pill.blue{background:var(--blue-soft);color:var(--blue)}
+.pill .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* tables */
+.tbl{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse}
+th{font:600 11.5px Inter;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:bottom;white-space:nowrap}
+th small{display:block;text-transform:none;letter-spacing:0;font-weight:400;font-size:11.5px}
+td{padding:14px;border-bottom:1px solid var(--line2);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+th.r,td.r{text-align:right}
+tbody tr{transition:background .15s}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--surface2)}
+tbody tr.sel td{background:var(--sage)}
+
+/* inputs */
+input.n{width:64px;text-align:center;font:600 16px Inter;padding:9px 6px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink);transition:border .15s,box-shadow .15s}
+input.d,select.s,input.t,textarea{font:500 14.5px Inter;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink);transition:border .15s,box-shadow .15s}
+input.t{width:140px}
+textarea{width:100%;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green2);box-shadow:0 0 0 4px var(--sage);background:#fff}
+
+/* ============ SEASON PLAN ============ */
+.seg{display:inline-flex;background:#ECE7DD;border-radius:12px;padding:4px;gap:4px}
+.seg button{border:0;background:none;padding:9px 16px;font:600 14px Inter;border-radius:9px;cursor:pointer;color:var(--ink2);transition:.2s}
+.seg button.on{background:var(--surface);color:var(--green);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.plan td.step{font-weight:600;font-size:15.5px;white-space:nowrap}
+.plan td.step .e{display:inline-block;width:26px}
+.plan td.rule{color:var(--ink2)}
+.plan td.date{color:var(--ink2);font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.plan td.days{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.plan td.days.past{color:#a3a9a5;font-weight:500}
+.plan td.days.now{color:var(--clay)}
+.plan tr.cross td{background:#F3F7F3}
+.plan tr.birth td{background:var(--sage)}
+.plan tr.cross td.rule{color:var(--muted)}
+.tl{position:relative;height:70px;margin:26px 8px 0}
+.tl .base{position:absolute;top:26px;left:0;right:0;height:10px;background:#EEEAE2;border-radius:10px}
+.tl .bar{position:absolute;top:26px;height:10px;border-radius:10px;transform-origin:left;animation:grow .8s cubic-bezier(.2,.7,.2,1) both}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.tl .today{position:absolute;top:14px;width:2px;height:34px;background:var(--clay);border-radius:2px}
+.tl .today:before{content:"";position:absolute;left:-5px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--clay);animation:breathe 2.4s ease-in-out infinite}
+.tl .today span{position:absolute;top:-26px;left:50%;transform:translateX(-50%);font:700 11px Inter;color:var(--clay);white-space:nowrap}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(192,90,33,.35)}50%{box-shadow:0 0 0 8px rgba(192,90,33,0)}}
+.tl .lab{position:absolute;top:44px;font-size:11.5px;color:var(--muted);white-space:nowrap;transform:translateX(-50%)}
+.tl .lab.end{transform:translateX(-100%)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-top:12px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+/* ============ BUCKS ============ */
+.bucks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:18px;margin-bottom:22px}
+.buck{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:var(--shadow);transition:box-shadow .25s,transform .25s;position:relative;overflow:hidden}
+.buck:hover{box-shadow:var(--shadow-h);transform:translateY(-2px)}
+.buck .top{display:flex;gap:14px;align-items:center}
+.avatar{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--sage),var(--sage2));display:grid;place-items:center;font:700 15px Fraunces;color:var(--green)}
+.buck h3{font-size:21px}
+.buck .meta{font-size:13px;color:var(--muted)}
+.buck .top .pill{margin-left:auto}
+.kv{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0 14px;padding:14px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.kv div b{display:block;font:600 20px Fraunces;color:var(--ink)}
+.kv div span{font-size:12px;color:var(--muted)}
+.ring{--p:0;width:44px;height:44px;border-radius:50%;background:conic-gradient(var(--green) calc(var(--p)*1%),#EAE6DE 0);display:grid;place-items:center;font:700 11px Inter;color:var(--green)}
+.ring:after{content:attr(data-v);width:34px;height:34px;border-radius:50%;background:#fff;display:grid;place-items:center}
+.checkline{display:flex;align-items:center;gap:10px;font-size:13.5px}
+.checkline .r{margin-left:auto}
+
+/* group cards */
+.season-h{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
+.season-h h3{font-size:17px}
+.season-h .line{flex:1;height:1px;background:var(--line)}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden;transition:box-shadow .25s}
+.group:hover{box-shadow:var(--shadow-h)}
+.g-head{display:flex;align-items:center;gap:14px;padding:18px 22px;cursor:pointer;flex-wrap:wrap}
+.g-head h3{font-size:18px}
+.g-head .meta{color:var(--muted);font-size:13px}
+.g-head .next{margin-left:auto;text-align:right;font-size:13px}
+.g-head .next b{display:block;color:var(--clay);font-size:14.5px}
+.g-head .chev{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--surface2);transition:transform .25s}
+.group.open .chev{transform:rotate(180deg)}
+.track{display:grid;grid-template-columns:repeat(6,1fr);padding:0 22px 18px;gap:0}
+.tk{position:relative;text-align:center;font-size:12px;color:var(--muted)}
+.tk:before{content:"";position:absolute;top:11px;left:-50%;right:50%;height:3px;background:#ECE7DD}
+.tk:first-child:before{display:none}
+.tk .c{width:24px;height:24px;border-radius:50%;background:#fff;border:2px solid #DCD5C8;margin:0 auto 6px;position:relative;z-index:1;display:grid;place-items:center;font:700 11px Inter;color:#fff}
+.tk.done:before,.tk.now:before{background:var(--green)}
+.tk.done .c{background:var(--green);border-color:var(--green)}
+.tk.now .c{border-color:var(--clay);background:#fff;animation:breathe 2.4s ease-in-out infinite}
+.tk.now .c:after{content:"";width:8px;height:8px;border-radius:50%;background:var(--clay)}
+.tk b{display:block;color:var(--ink);font-size:12.5px;font-weight:600}
+.g-body{display:none;border-top:1px solid var(--line2);padding:18px 22px;background:var(--surface2)}
+.group.open .g-body{display:block;animation:rise .35s ease}
+.alert{display:flex;gap:10px;align-items:center;background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:500;margin-bottom:12px}
+
+/* sentence forms */
+.panel{background:linear-gradient(180deg,#fff, var(--surface2));border:1px solid var(--line);border-radius:var(--r);padding:26px;box-shadow:var(--shadow);margin-bottom:22px}
+.panel[hidden]{display:none}
+.say{font:400 19px/2.7 Fraunces,Georgia,serif;color:var(--ink)}
+.say input,.say select{font-family:Inter;vertical-align:middle;margin:0 3px}
+.calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px}
+.calc div{background:var(--sage);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--green)}
+.calc div b{display:block;font:600 17px Fraunces;color:var(--ink);margin-top:2px}
+.checks{list-style:none;padding:0;margin:0}
+.checks li{display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line2);font-size:14.5px}
+.checks li:last-child{border:0}
+.checks .a{margin-left:auto}
+.ic{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:700 13px Inter;flex:0 0 26px}
+.ic.ok{background:var(--sage);color:var(--green)}
+.ic.no{background:var(--red-soft);color:var(--red)}
+.ic.wt{background:var(--gold-soft);color:#8a6418}
+
+/* to-do */
+.todo{list-style:none;margin:0;padding:0}
+.todo li{display:grid;grid-template-columns:auto 86px 1fr auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line2)}
+.todo li:last-child{border:0}
+.todo .when{font:600 14px Inter}
+.todo .when small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.todo .what b{font-weight:600}
+.todo .what span.ds{display:block;font-size:12.5px;color:var(--muted)}
+
+/* chips filter */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:var(--surface);padding:7px 13px;border-radius:20px;font:500 13px Inter;cursor:pointer;color:var(--ink2);transition:.15s}
+.chips button.on{background:var(--green);color:#fff;border-color:var(--green)}
+
+/* profile */
+.profile{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.profile .avatar{width:64px;height:64px;font-size:18px;border-radius:18px;background:linear-gradient(135deg,#F3E6D3,#EAD6BB);color:#7A4A28}
+.profile h2{font-size:26px}
+.hist{list-style:none;margin:0;padding:0;position:relative}
+.hist:before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.hist li{position:relative;padding:0 0 18px 30px}
+.hist li:before{content:"";position:absolute;left:0;top:5px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--green)}
+.hist li.empty:before{border-color:#C9C2B5}
+.hist li.cur:before{border-color:var(--clay)}
+.hist b{font-weight:600}
+.hist span{display:block;font-size:13px;color:var(--muted)}
+
+/* developer marks */
+.tag{display:none;font:700 10px Inter;background:var(--gold);color:#fff;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle;letter-spacing:.02em}
+.tag.fix{background:var(--red)}
+.dev{display:none;font-size:12.5px;border-left:3px solid var(--clay);background:var(--clay-soft);padding:9px 12px;margin-top:14px;color:#5a3a24;border-radius:0 10px 10px 0}
+.dev b{color:var(--clay)}
+body.devon .tag{display:inline-block}
+body.devon .dev{display:block}
+
+/* responsive */
+@media(max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  aside,main{min-width:0}
+  aside{position:sticky;top:0;height:auto;flex-direction:row;align-items:center;padding:10px 12px;z-index:5;overflow-x:auto;gap:4px}
+  .brand{padding:0 8px 0 0}.brand div{display:none}
+  .nav{flex-direction:row}
+  .nav button{white-space:nowrap;padding:9px 12px}
+  .nav button span.lbl{display:inline}
+  .side-foot{margin:0 0 0 8px;border:0;padding:0;white-space:nowrap}
+  main{padding:22px 16px 50px}
+  .ph h1{font-size:26px}
+  .todo li{grid-template-columns:auto 1fr auto}.todo .when{grid-column:2}.todo .what{grid-column:2/4}
+  .track{grid-template-columns:repeat(6,minmax(70px,1fr));overflow-x:auto}
+  .say{font-size:17px}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ============ TOP BAR (replaces side menu) ============ */
+.app{display:block}
+.top{background:var(--green);color:#E8F0EA;position:sticky;top:0;z-index:20;box-shadow:0 6px 20px -12px rgba(0,0,0,.4)}
+.topin{max-width:1180px;margin:0 auto;padding:14px 40px 0;display:flex;align-items:center;gap:16px}
+.top .brand{padding:0;display:flex}
+.top .brand div{display:block}
+.top .brand .logo{display:grid}
+.crumb{font-size:13px;color:#BFD0C4}
+.crumb b{color:#fff;font:600 18px Fraunces;margin-left:4px}
+.top .switch{margin-left:auto;font-size:12.5px;color:#BFD0C4}
+.top .nav{max-width:1180px;margin:0 auto;padding:12px 40px 0;display:flex;flex-direction:row;gap:4px;overflow-x:auto;scrollbar-width:none}
+.top .nav::-webkit-scrollbar{display:none}
+.top .nav button{white-space:nowrap;border-radius:12px 12px 0 0;padding:11px 16px 12px;color:#CFDDD3}
+.top .nav button.on{background:var(--bg);color:var(--green)}
+main{margin:0 auto}
+/* plan groups */
+.gstrip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.gchip{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 16px;cursor:pointer;min-width:170px;text-align:left;box-shadow:var(--shadow);transition:.2s}
+.gchip b{font:600 15.5px Fraunces;color:var(--ink)}
+.gchip span{font-size:12px;color:var(--muted)}
+.gchip:hover{transform:translateY(-2px);box-shadow:var(--shadow-h)}
+.gchip.on{background:var(--green);border-color:var(--green)}
+.gchip.on b{color:#fff}.gchip.on span{color:#BFD0C4}
+.gchip.add{border:1.5px dashed #CFC6B6;background:transparent;box-shadow:none;justify-content:center;align-items:center;color:var(--green);font-weight:600}
+.title-in{font:600 24px Fraunces;border:1px solid transparent;background:transparent;padding:4px 8px;border-radius:10px;color:var(--ink);width:min(380px,100%)}
+.title-in:hover{border-color:var(--line)}
+.emo{font-size:22px;padding:4px;border:1px solid transparent;background:transparent;border-radius:10px;cursor:pointer}
+.emo:hover{border-color:var(--line)}
+.note{background:var(--gold-soft);color:#7a5a17;border-radius:10px;padding:10px 14px;font-size:13.5px;margin-top:12px}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:14px}
+.flow div{background:var(--surface2);border:1px solid var(--line2);border-radius:12px;padding:14px}
+.flow b{display:block;font:600 15px Fraunces;margin-bottom:4px;color:var(--green)}
+.flow span{font-size:13px;color:var(--ink2)}
+@media(max-width:900px){
+  .topin{padding:12px 16px 0}.top .nav{padding:10px 12px 0}
+  .crumb{display:none}
+}
+
+/* scan options + doe flow */
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px}
+.optc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:14px 16px;cursor:pointer;transition:.18s;font:inherit;color:var(--ink)}
+.optc:hover{border-color:var(--green2);transform:translateY(-1px)}
+.optc .oi{font-size:24px}
+.optc b{font:600 16px Fraunces}
+.optc span:last-child{font-size:12.5px;color:var(--muted)}
+.optc.on{border-color:var(--green);background:var(--sage);box-shadow:0 0 0 3px var(--sage2)}
+.optc.on[data-r="empty"]{border-color:var(--red);background:var(--red-soft);box-shadow:0 0 0 3px #f6d3cf}
+.optc.on[data-r="unsure"]{border-color:var(--gold);background:var(--gold-soft);box-shadow:0 0 0 3px #efe0bd}
+.optc[disabled]{opacity:.45;cursor:not-allowed;transform:none}
+.sub2{margin-top:18px;padding:16px;background:var(--surface2);border:1px solid var(--line2);border-radius:14px;animation:rise .3s ease}
+.sub2 .lbl{font:600 13px Inter;color:var(--ink2);margin-bottom:8px}
+.numpick{display:inline-flex;gap:6px}
+.numpick button{width:46px;height:42px;border-radius:10px;border:1px solid var(--line);background:#fff;font:600 16px Inter;cursor:pointer;color:var(--ink)}
+.numpick button.on{background:var(--green);color:#fff;border-color:var(--green)}
+.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.flowline{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:4px 2px 8px}
+.fnode{flex:1 0 104px;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center;background:#fff;cursor:pointer;transition:.18s}
+.fnode:hover,.fnode.on{border-color:var(--green);box-shadow:0 0 0 3px var(--sage)}
+.fnode b{display:block;font:600 26px Fraunces;color:var(--green)}
+.fnode span{font-size:12.5px;font-weight:600}
+.farrow{flex:0 0 74px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;color:var(--muted);text-align:center;line-height:1.3;padding:0 4px}
+.farrow:before{content:"→";font-size:20px;color:var(--clay);line-height:1}
+.branch{margin-top:12px;font-size:13.5px;color:var(--ink2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(30px);background:var(--ink);color:#fff;padding:12px 16px 12px 18px;border-radius:12px;font-size:14px;display:flex;gap:14px;align-items:center;opacity:0;pointer-events:none;transition:.3s;z-index:50;box-shadow:0 12px 30px -10px rgba(0,0,0,.5);max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translateX(-50%);pointer-events:auto}
+.toast button{background:none;border:0;color:#F1C9A8;font:700 13px Inter;cursor:pointer}
+
+/* status modal */
+#doeRows td{white-space:nowrap}
+.modal{position:fixed;inset:0;background:rgba(27,36,32,.45);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal.show{opacity:1;pointer-events:auto}
+.sheet{background:var(--surface);border-radius:20px;width:min(760px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:24px;box-shadow:0 30px 60px -20px rgba(0,0,0,.4);transform:translateY(14px);transition:transform .25s}
+.modal.show .sheet{transform:none}
+.sheet .opts{grid-template-columns:repeat(auto-fill,minmax(min(150px,100%),1fr));gap:8px}
+.sheet .optc{padding:10px 12px}
+.sheet .optc .oi{font-size:20px}
+.sheet .optc b{font-size:14.5px}
+.say2{font-size:15px;line-height:2.4}
+.say2 input,.say2 select{margin:0 3px}
+.sub2 .lbl{margin-top:6px}
+.stsel{font-size:13px;padding:6px 8px;max-width:170px}
+.pill.pink{background:#FBE6EC;color:#A3375A}
+@media(max-width:640px){.modal{align-items:flex-end;padding:0}.sheet{border-radius:20px 20px 0 0;max-height:92vh}}
+/* doe picker */
+.stepT{display:flex;align-items:center;gap:10px;font:600 17px Fraunces;color:var(--ink);margin:6px 0 10px}
+.stepT span{width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font:700 13px Inter}
+.pbar{position:sticky;top:112px;z-index:3;display:flex;gap:18px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
+.pcount{display:flex;align-items:baseline;gap:8px}
+.pcount b{font:600 34px Fraunces;color:var(--green);line-height:1;transition:color .2s}
+.pcount span{font-size:13px;color:var(--muted)}
+.pbar.over .pcount b{color:var(--clay)}
+.pmeter{flex:1;min-width:180px}
+.pm-track{position:relative;height:10px;background:#EEEAE2;border-radius:10px;margin-bottom:6px}
+.pm-fill{position:absolute;left:0;top:0;bottom:0;border-radius:10px;background:var(--green);transition:width .3s,background .3s;max-width:100%}
+.pbar.over .pm-fill{background:var(--clay)}
+.pm-lim{position:absolute;top:-4px;width:2px;height:18px;background:var(--ink);border-radius:2px}
+.ptools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(210px,100%),1fr));gap:10px}
+.dpick{position:relative;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px 11px 44px;background:#fff;cursor:pointer;transition:.15s;text-align:left;font:inherit;color:var(--ink)}
+.dpick:hover{border-color:var(--green2)}
+.dpick .bx{position:absolute;left:12px;top:12px;width:22px;height:22px;border-radius:7px;border:2px solid #CFC6B6;display:grid;place-items:center;color:#fff;font:700 13px Inter;transition:.15s}
+.dpick b{font-size:14.5px}
+.dpick .m{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.dpick .why{display:inline-block;margin-top:6px;font:600 11.5px Inter;padding:2px 8px;border-radius:12px;background:var(--sage);color:var(--green)}
+.dpick.sel{border-color:var(--green);background:#F3F8F4}
+.dpick.sel .bx{background:var(--green);border-color:var(--green)}
+.dpick.no{cursor:not-allowed;background:#FAF8F4;opacity:.75}
+.dpick.no .bx{border-style:dashed}
+.dpick.no .why{background:var(--red-soft);color:var(--red)}
+.dpick.flash{animation:flash .6s}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(46,106,80,.6)}100%{box-shadow:0 0 0 12px rgba(46,106,80,0)}}
+@media(max-width:900px){.pbar{top:96px}}
+
+/* list-style picker + group tables */
+.ptable{border:1px solid var(--line);border-radius:14px;overflow:auto;max-height:520px;background:#fff}
+.ptable table{border-collapse:separate;border-spacing:0}
+.ptable thead th{position:sticky;top:0;background:var(--surface2);z-index:2;cursor:pointer;user-select:none;padding:12px 14px}
+.ptable thead th.ns{cursor:default}
+.ptable thead th .ar{opacity:.35;margin-left:4px}
+.ptable thead th.on .ar{opacity:1;color:var(--green)}
+.ptable td{padding:11px 14px;border-bottom:1px solid var(--line2);font-size:14px;white-space:nowrap}
+.ptable tbody tr{cursor:pointer;transition:background .12s}
+.ptable tbody tr:hover td{background:#FAF8F4}
+.ptable tbody tr.sel td{background:#F1F7F2}
+.ptable tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+.ptable tbody tr.no{cursor:not-allowed}
+.ptable tbody tr.no td{color:#9aa19c}
+.ptable tbody tr.no td b{color:#7c847f}
+.cb{width:22px;height:22px;border-radius:7px;border:2px solid #CFC6B6;display:inline-grid;place-items:center;color:#fff;font:700 13px Inter;transition:.15s;vertical-align:middle;background:#fff}
+.cb.on{background:var(--green);border-color:var(--green)}
+.cb.part{background:var(--green);border-color:var(--green)}
+.cb.dis{border-style:dashed;background:#F4F1EA}
+.wbar{display:inline-block;width:46px;height:6px;border-radius:6px;background:#EEEAE2;margin-left:8px;vertical-align:middle;overflow:hidden}
+.wbar i{display:block;height:100%;border-radius:6px;background:var(--green)}
+.wbar.lo i{background:var(--red)}
+.okp{display:inline-flex;align-items:center;gap:5px;font:600 12px Inter;padding:3px 10px;border-radius:20px;background:var(--sage);color:var(--green)}
+.nop{display:inline-flex;align-items:center;gap:5px;font:600 12px Inter;padding:3px 10px;border-radius:20px;background:var(--red-soft);color:var(--red)}
+.gsum{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.gsum .tot{font:600 15px Fraunces;margin-right:6px}
+.gtable{border:1px solid var(--line);border-radius:14px;overflow:auto;background:#fff}
+.gtable td{white-space:nowrap;font-size:14px;padding:11px 14px}
+.gtable th{background:var(--surface2);padding:11px 14px}
+.gtable td.nr{color:var(--muted);font-size:12px;width:28px}
+.gtable tbody tr:hover td{background:#FAF8F4}
+
+/* buck in / out side by side */
+.inout{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch;margin-bottom:18px}
+.io{display:flex;gap:14px;align-items:center;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;flex-wrap:wrap}
+.io .ioi{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;background:var(--surface2);flex:0 0 44px}
+.io small{display:block;font:600 11.5px Inter;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.io b{display:block;font:600 19px Fraunces;color:var(--ink)}
+.io .st{font-size:12.5px;color:var(--muted)}
+.io.done{border-color:var(--sage2);background:#F5FAF6}
+.io.done .ioi{background:var(--sage)}
+.io.done .st{color:var(--green);font-weight:600}
+.io.now{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-soft)}
+.io .btn{margin-left:auto}
+.iomid{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;color:var(--muted);text-align:center;min-width:90px}
+.iomid b{font:600 16px Fraunces;color:var(--ink)}
+.iomid:before{content:"⟶";font-size:22px;color:var(--clay);line-height:1}
+.ioform{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin:6px 0 4px}
+.ioform .io{padding:12px 14px}
+.ioform input.d{font-size:15px}
+.mh{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px;padding:12px 14px;border-radius:12px;background:var(--surface2);border:1px dashed var(--line);font-size:13.5px}
+.mh b{font-weight:600}
+@media(max-width:700px){.inout,.ioform{grid-template-columns:1fr}.iomid{flex-direction:row;gap:8px}.iomid:before{content:"↓"}}
+
+/* scan sheet */
+.scanTop{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.scanTop label{display:block;margin-bottom:5px}
+.gtabs{display:flex;gap:6px;flex-wrap:wrap}
+.gtabs button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font:600 13.5px Inter;cursor:pointer;color:var(--ink);display:flex;gap:8px;align-items:center}
+.gtabs button span{font:600 11px Inter;background:var(--surface2);border-radius:8px;padding:1px 7px;color:var(--muted)}
+.gtabs button.on{background:var(--green);color:#fff;border-color:var(--green)}
+.gtabs button.on span{background:rgba(255,255,255,.18);color:#fff}
+.scanTbl{border:1px solid var(--line);border-radius:14px;overflow:auto;background:#fff;max-height:560px}
+.scanTbl table{border-collapse:separate;border-spacing:0}
+.scanTbl th{position:sticky;top:0;z-index:2;background:var(--surface2);padding:11px 14px}
+.scanTbl td{padding:10px 14px;border-bottom:1px solid var(--line2);vertical-align:middle;white-space:nowrap}
+.scanTbl tr.r-preg td{background:#F3F8F4}
+.scanTbl tr.r-empty td{background:#FDF5F4}
+.scanTbl tr.r-unsure td{background:#FCF8EE}
+.scanTbl tr.r-preg td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+.scanTbl tr.r-empty td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+.scanTbl tr.r-unsure td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+.scanTbl tr.hit td{animation:flash 1.2s}
+.rseg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.rseg button{border:0;background:none;padding:8px 12px;font:600 13px Inter;cursor:pointer;color:var(--ink2);border-right:1px solid var(--line);transition:.15s;white-space:nowrap}
+.rseg button:last-child{border-right:0}
+.rseg button:hover{background:var(--surface2)}
+.rseg button.on[data-r=preg]{background:var(--green);color:#fff}
+.rseg button.on[data-r=empty]{background:var(--red);color:#fff}
+.rseg button.on[data-r=unsure]{background:var(--gold);color:#fff}
+.kp{display:inline-flex;gap:4px;margin-right:8px}
+.kp button{width:34px;height:32px;border-radius:8px;border:1px solid var(--line);background:#fff;font:600 13px Inter;cursor:pointer}
+.kp button.on{background:var(--green);color:#fff;border-color:var(--green)}
+input.n.dd{width:64px;padding:6px;font-size:13.5px}
+select.sm2{padding:6px 8px;font-size:13px}
+.scanFoot{position:sticky;bottom:0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-top:12px;box-shadow:0 -8px 20px -14px rgba(0,0,0,.25)}
+@media(max-width:700px){
+  .scanTbl thead{display:none}
+  .scanTbl table,.scanTbl tbody,.scanTbl tr,.scanTbl td{display:block;width:100%}
+  .scanTbl tr{border-bottom:1px solid var(--line);padding:6px 0}
+  .scanTbl td{border:0;padding:6px 14px;white-space:normal}
+  .scanTbl td:first-child{box-shadow:none!important}
+  .rseg{display:flex}.rseg button{flex:1;padding:10px 6px}
+}
+
+/* kidding lists */
+.ltable{border:1px solid var(--line);border-radius:14px;overflow:auto;background:#fff}
+.ltable table{border-collapse:separate;border-spacing:0}
+.ltable th{background:var(--surface2);padding:11px 14px;position:sticky;top:0;z-index:1}
+.ltable td{padding:11px 14px;border-bottom:1px solid var(--line2);vertical-align:middle;white-space:nowrap;font-size:14px}
+.ltable tr.open td{background:#F3F8F4}
+.ltable tr.sel td{background:#F1F7F2}
+.ltable tr.r-empty td{background:#FDF5F4}
+.ltable tr.r-unsure td{background:#FCF8EE}
+.ltable tr.kform td{background:#F7FAF7;padding:0;white-space:normal}
+.seg2{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff;flex-wrap:nowrap}
+.kbox .seg2{flex-wrap:wrap}
+.seg2 button{border:0;border-right:1px solid var(--line);background:none;padding:6px 10px;font:600 12.5px Inter;cursor:pointer;color:var(--ink2);white-space:nowrap}
+.seg2 button:last-child{border-right:0}
+.seg2 button:hover{background:var(--surface2)}
+.seg2 button.on{background:var(--green);color:#fff}
+.seg2 button.on[data-c="Watch"],.seg2 button.on[data-c="Weak"],.seg2 button.on[data-c="Slight help"],.seg2 button.on[data-c="OK"]{background:var(--gold)}
+.seg2 button.on[data-c="Sick"],.seg2 button.on[data-c="Cull"],.seg2 button.on[data-c="Hard pull"],.seg2 button.on[data-c="Vet / caesarean"],.seg2 button.on[data-c="Poor"],.seg2 button.on[data-c="Rejects kids"],.seg2 button.on[data-c="No"]{background:var(--red)}
+.kbox{display:grid;grid-template-columns:1fr 1fr;gap:18px 28px;padding:20px 22px;border-top:2px solid var(--green);animation:rise .3s ease}
+.kcol.full,.kfoot.full{grid-column:1/-1}
+.kh{font:600 16px Fraunces;color:var(--green);margin-bottom:10px}
+.krow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.krow>label{min-width:118px;font-size:13px;color:var(--muted);font-weight:600}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.stepper button{width:34px;height:34px;border:0;background:var(--surface2);font:700 16px Inter;cursor:pointer;color:var(--green)}
+.stepper b{min-width:34px;text-align:center;font:600 16px Fraunces}
+.ichips{display:flex;gap:6px;flex-wrap:wrap}
+.ichips button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 11px;font:500 12.5px Inter;cursor:pointer}
+.ichips button.on{background:var(--red-soft);border-color:var(--red);color:var(--red);font-weight:600}
+.kt{width:100%;border:1px solid var(--line);border-radius:12px;border-collapse:separate;border-spacing:0;background:#fff;overflow:hidden}
+.kt th{background:var(--surface2);padding:9px 12px}
+.kt td{padding:8px 12px;border-bottom:1px solid var(--line2);white-space:nowrap}
+input.dd.need{border-color:var(--clay);background:#FFF8F3}
+.kfoot{display:flex;gap:10px;align-items:center;justify-content:flex-end;border-top:1px solid var(--line2);padding-top:14px}
+.kfoot .small{margin-right:auto;color:var(--clay)}
+@media(max-width:800px){.kbox{grid-template-columns:1fr;padding:16px}.krow>label{min-width:100%}}
+
+.ptsel{font-size:13px;padding:6px 8px;font-weight:600}
+.ptsel.p1,.ptsel.p2{color:var(--red);border-color:#f0c9c5;background:#FEF6F5}
+.ptsel.p3{color:#8a6418}
+.ptsel.p4,.ptsel.p5{color:var(--green)}
+.mscore{display:inline-flex;align-items:center;gap:2px;font-size:13px;color:var(--gold);white-space:nowrap}
+.mscore .st0{color:#E3DDD1}
+.mscore b{font:600 14px Inter;color:var(--ink);margin-left:4px}
+.mscore.lo b{color:var(--red)}.mscore.hi b{color:var(--green)}
+.kcount{display:inline-block;font:700 13px Inter;background:var(--blue-soft);color:var(--blue);border-radius:8px;padding:2px 9px}
+.kcount.big{font-size:14px;padding:4px 12px}
+
+.mgchips{margin-bottom:4px}
+.mgchips button{display:inline-flex;align-items:center;gap:7px}
+.mgchips button span{font:600 11px Inter;background:var(--surface2);border-radius:8px;padding:1px 7px;color:var(--muted)}
+.mgchips button.on span{background:rgba(255,255,255,.2);color:#fff}
+.mgchips .dot{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.mgchips button.on{background:var(--c,var(--green));border-color:var(--c,var(--green))}
+.mgchips button.on .dot{background:#fff}
+.addg{border:1.5px dashed #CFC6B6;background:none;border-radius:20px;padding:6px 13px;font:600 13px Inter;color:var(--green);cursor:pointer}
+.mgnew{display:inline-flex;gap:6px;align-items:center}
+.mgp{display:inline-flex;align-items:center;gap:6px;font:600 12px Inter;padding:3px 10px;border-radius:20px;background:color-mix(in srgb,var(--c) 12%,#fff);color:var(--c);white-space:nowrap}
+.mgp:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
+.mgbar{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding:10px 14px;border-radius:12px;background:var(--green);color:#fff}
+.mgbar.show{display:flex;animation:rise .25s ease}
+.mgbar .muted{color:#CFDDD3}
+.mgbar .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+.mgbar .btn:not(.ghost){background:#F4F1EA;color:var(--green)}
+.mgsel{font-size:13px;padding:6px 8px;font-weight:600;border-width:1.5px}
+
+.wsetbar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 14px;margin-bottom:12px;border-radius:12px;background:var(--surface2);border:1px solid var(--line2);font-size:13.5px}
+.wsetbar .wlab{font:600 14px Fraunces;color:var(--green)}
+.wset{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wset.off{opacity:.6}
+.sw2{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--muted)}
+.sw2 input{display:none}
+.sw2 span{width:32px;height:18px;border-radius:18px;background:#D6CFC2;position:relative;transition:.2s}
+.sw2 span:after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.2s}
+.sw2 input:checked+span{background:var(--green)}
+.sw2 input:checked+span:after{left:16px}
+.ltable tr.wd td{background:#FAFAF7}
+
+/* reports */
+#v-rep .grid2{margin-bottom:20px}
+#rTop,#rCull,#rBucks,#rFunnel{overflow-x:auto}
+#v-rep .card{min-width:0}
+.rfilt>div{min-width:0;max-width:100%}
+.rfilt .seg{flex-wrap:wrap;max-width:100%}
+.rfilt .seg button{padding:8px 12px}
+.rfilt{display:flex;gap:18px;flex-wrap:wrap;margin:-8px 0 16px}
+.rfilt label{display:block;margin-bottom:5px}
+.rhead{background:var(--green);color:#E8F0EA;border-radius:16px;padding:16px 20px;font-size:16px;line-height:1.6;margin-bottom:20px}
+.rhead b{color:#fff}
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:12px}
+.stile{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff;display:flex;flex-direction:column;gap:4px}
+.stile .sn{font-size:13px;font-weight:600;color:var(--ink2)}
+.stile .sv{font:600 32px Fraunces;color:var(--ink);line-height:1.1}
+.stile .sv small{font-size:16px;color:var(--muted)}
+.stile .ss{font-size:12.5px;color:var(--muted);min-height:18px}
+.sbar{position:relative;height:6px;border-radius:6px;background:#EEEAE2;margin:6px 0 4px}
+.sbar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:#9aa19c}
+.sbar b{position:absolute;top:-4px;width:2px;height:14px;background:var(--ink);border-radius:2px}
+.stile.ok .sbar i{background:#1F8A5B}.stile.close .sbar i{background:#C98A1A}.stile.bad .sbar i{background:#B3261E}
+.sf{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.sst{font:600 12px Inter;padding:2px 9px;border-radius:12px;background:#EEECE7;color:#5f6662}
+.stile.ok .sst{background:var(--sage);color:var(--green)}.stile.close .sst{background:var(--gold-soft);color:#8a6418}.stile.bad .sst{background:var(--red-soft);color:var(--red)}
+.tgt{width:44px;border:1px dashed var(--line);border-radius:6px;padding:1px 4px;font:600 12px Inter;text-align:center;background:transparent;color:var(--ink2)}
+.fun{margin-bottom:14px}
+.ft{font:600 14px Fraunces;color:var(--ink);margin-bottom:6px}
+.fr,.bmr{display:grid;grid-template-columns:130px 1fr 74px 40px;gap:10px;align-items:center;padding:4px 0}
+.fl,.bmk{font-size:13px;color:var(--ink2)}
+.fb{display:block;height:14px;background:#F1EEE8;border-radius:4px;overflow:hidden}
+.fb i{display:block;height:100%;border-radius:0 4px 4px 0;transition:width .5s}
+.fv{font:600 14px Inter;color:var(--ink);white-space:nowrap}
+.fv small{font-weight:500;color:var(--muted)}
+.fd{font:600 12px Inter;color:var(--red)}
+.rsay{margin:0 0 12px;font-size:14px;color:var(--ink2)}
+.stack{display:flex;gap:2px;height:34px;border-radius:6px;overflow:hidden;margin-bottom:10px}
+.stack i{display:flex;align-items:center;justify-content:center;min-width:4px}
+.stack i span{font:600 12px Inter;color:#fff}
+.bcmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:14px 28px}
+.bmn{font:600 13.5px Inter;margin-bottom:4px}
+.bmr{grid-template-columns:54px 1fr 120px}
+.best{font:600 11px Inter;color:var(--green);background:var(--sage);border-radius:10px;padding:1px 6px}
+.mbars{display:flex;align-items:flex-end;gap:18px;height:200px;padding:0 6px;border-bottom:1px solid var(--line)}
+.mb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
+.mb i{width:min(56px,70%);border-radius:4px 4px 0 0}
+.mb i.exp{opacity:.45;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.55) 0 3px,transparent 3px 7px)!important}
+.mv{font:600 13px Inter}
+.ml{font-size:12px;color:var(--muted);position:relative;top:22px;height:0}
+#rMonth{padding-bottom:22px}
+.plist .pr{display:grid;grid-template-columns:28px 170px 1fr 34px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line2)}
+.plist .pr:last-child{border:0}
+.plist .pr .fb i{background:#B3261E}
+.plist .pr b{text-align:right;font:600 15px Inter}
+.plist .pr.z b{color:var(--green)}
+.rt{width:100%}
+.rt td{padding:9px 8px;border-bottom:1px solid var(--line2)}
+.rtip{position:fixed;z-index:60;background:var(--ink);color:#fff;font-size:12.5px;padding:6px 10px;border-radius:8px;pointer-events:none;opacity:0;transition:opacity .12s;max-width:260px}
+.rtip.show{opacity:1}
+@media(max-width:640px){.fr{grid-template-columns:96px 1fr 60px 30px}.bmr{grid-template-columns:48px 1fr 96px}.plist .pr{grid-template-columns:24px 1fr 60px 28px}}
+@media print{.top,.rfilt button:not(.on),.ph .act,.dev,.toast{display:none!important}.view{display:none!important}#v-rep{display:block!important}.card{box-shadow:none;break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ================= SIDEBAR ================= -->
+<header class="top">
+  <div class="topin">
+    <div class="brand"><div class="logo">SF</div><div><b>Sandeel Farms</b><small>Farm management</small></div></div>
+    <span class="crumb">/ <b>Breeding</b></span>
+    <label class="switch"><input type="checkbox" id="devt"><span class="tg"></span>Developer notes</label>
+  </div>
+  <nav class="nav" id="nav">
+    <button data-v="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Today<span class="count">5</span></button>
+    <button data-v="plan"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Season plan</button>
+    <button data-v="bucks"><svg viewBox="0 0 24 24"><path d="M5 5c2 0 3 2 4 4M19 5c-2 0-3 2-4 4"/><path d="M8 9h8l-1 7a3 3 0 0 1-6 0z"/></svg>Bucks</button>
+    <button data-v="does"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="4"/><path d="M5 21c1-4 4-6 7-6s6 2 7 6"/></svg>Does</button>
+    <button data-v="kids"><svg viewBox="0 0 24 24"><path d="M12 21c-4 0-7-3-7-7 0-5 7-11 7-11s7 6 7 11c0 4-3 7-7 7z"/></svg>Kidding &amp; kids</button>
+    <button data-v="rep"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</button>
+    <button data-v="dev" id="devNav" style="display:none"><svg viewBox="0 0 24 24"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6"/></svg>Change list</button>
+  </nav>
+</header>
+
+
+<main>
+
+<!-- ================= TODAY ================= -->
+<section class="view on" id="v-home">
+  <div class="ph"><div><div class="eyebrow" id="todayEyebrow"></div><h1>Good day, Ishtiaq</h1><p>Here is what the herd needs from you.</p></div></div>
+  <div class="stats">
+    <div class="stat"><div class="v">38</div><div class="l">Pregnant (scanned)</div></div>
+    <div class="stat"><div class="v">41</div><div class="l">Crossed · waiting scan</div></div>
+    <div class="stat"><div class="v">9</div><div class="l">Getting ready</div></div>
+    <div class="stat"><div class="v">2</div><div class="l">Bucks · 3 groups</div></div>
+    <div class="stat"><div class="v">11.8<small style="font-size:16px"> kg</small></div><div class="l">Weaned per doe crossed <span class="tag">#9</span></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-h"><h2>To do</h2><span class="sub">soonest first</span></div>
+      <ul class="todo" id="todo"></ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>This season</h2><span class="sub" id="homeSeason"></span><button class="btn ghost sm r" data-go="plan">Open plan</button></div>
+      <div class="tl" id="tlHome"></div>
+      <div class="checks" style="margin-top:18px" id="homeNext"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SEASON PLAN ================= -->
+<section class="view" id="v-plan">
+  <div class="ph"><div><div class="eyebrow">Planning</div><h1>Season plan</h1><p>Make your birth groups — 2, 3, 4, as many as you need. Each group has its own dates and rules.</p></div></div>
+
+  <div class="gstrip" id="planTabs"></div>
+
+  <div class="panel" id="addPlan" hidden>
+    <div class="card-h"><h2>New birth group</h2><button class="btn ghost sm r" data-close="addPlan">Close</button></div>
+    <div class="say">
+      Call it <input class="t" id="npName" style="width:220px" placeholder="e.g. December births">
+      <select class="s" id="npEmo"><option>❄️</option><option>☀️</option><option>🌧️</option><option>🍂</option><option>🌸</option><option>⭐</option></select>.<br>
+      Kids should be born between <input type="date" class="d" id="npFrom"> and <input type="date" class="d" id="npTo">.<br>
+      Start with the same rules as <select class="s" id="npCopy"></select>.
+    </div>
+    <div class="calc" id="npCalc"></div>
+    <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap"><button class="btn" id="npSave">Create group</button><button class="btn ghost" data-close="addPlan">Cancel</button></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <button class="emo" id="planEmo" title="Change icon"></button>
+      <input class="title-in" id="planName" title="Rename group">
+      <span class="sub" id="planSub"></span>
+      <div class="r" style="display:flex;gap:8px"><button class="btn ghost sm" id="planCopy">Duplicate</button><button class="btn ghost sm" id="planDel" style="color:var(--red)">Delete</button></div>
+    </div>
+    <div id="planMsg"></div>
+    <div class="tbl"><table class="plan">
+      <thead><tr><th>Step</th><th>Rule — change any number</th><th>Date it happens</th><th class="r">Days from today<small id="todayLbl"></small></th></tr></thead>
+      <tbody id="planBody"></tbody>
+    </table></div>
+    <div class="tl" id="tl"></div>
+    <div class="legend"><span><i style="background:#D8C38F"></i>Feeding</span><span><i style="background:#A9BFCB"></i>Milking stops / dry off</span><span><i style="background:#D9826B"></i>Crossing</span><span><i style="background:#8C9BD0"></i>Scan</span><span><i style="background:#6FB07C"></i>Births</span><span><i style="background:#E5AE5C"></i>Weaning</span></div>
+    <div class="dev"><b>Dev:</b> new table <code>birthGroups</code> (id, name, icon, birth from/to, rules JSON). Users can add / rename / duplicate / delete (delete blocked while buck groups or does are linked). Every buck group and doe links to one birth group (shown in the existing herd screen, see #13). If a window has ended this year, roll it to next year. Needs <code>breed:edit</code> (#4).</div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>All groups at a glance</h2><span class="sub">tap a row to open it</span></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Group</th><th>Kids born</th><th>Cross</th><th>Scan</th><th>Dry off</th><th>Wean</th><th>Buck groups</th><th>Does</th></tr></thead>
+      <tbody id="allPlans"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div><b class="serif" style="font-size:17px" id="planGroupsTxt"></b><div class="muted small">Put bucks with does for this group on the Bucks page.</div></div>
+    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="planToBucks">＋ Add buck group</button></div>
+  </div>
+</section>
+
+<!-- ================= BUCKS (everything buck-related) ================= -->
+<section class="view" id="v-bucks">
+  <div class="ph"><div><div class="eyebrow">Bucks &amp; breeding groups</div><h1>Bucks</h1><p>Your bucks, their groups, checks and results — all in one place.</p></div>
+    <div class="act"><button class="btn ghost" id="openCheck">🩺 Record buck check</button><button class="btn" id="openGroup">＋ New breeding group</button></div></div>
+
+  <!-- new group panel -->
+  <div class="panel" id="groupPanel" hidden>
+    <div class="card-h"><h2 id="gpTitle">New breeding group</h2><span class="tag">#6</span><button class="btn ghost sm r" data-close="groupPanel">Close</button></div>
+
+    <div class="stepT"><span>1</span>Buck and dates</div>
+    <div class="say">
+      Buck <select class="s" id="gBuck"></select>
+      for <select class="s" id="gSeason"></select>,
+      <select class="s" id="gMeth"><option value="Pen">running with the does</option><option value="Hand">hand mating</option></select>.
+    </div>
+    <div class="ioform">
+      <div class="io"><span class="ioi">🐐</span><div><small>Buck in</small><input type="date" class="d" id="gIn"></div></div>
+      <div class="iomid"><span>with the does</span><b><input class="n" id="gStay" value="42" style="width:58px;padding:5px"> days</b></div>
+      <div class="io"><span class="ioi">🚪</span><div><small>Buck out</small><input type="date" class="d" id="gOut"></div></div>
+    </div>
+    <div class="calc" id="gCalc"></div>
+
+    <div class="stepT" style="margin-top:28px"><span>2</span>Pick the does</div>
+    <div class="pbar">
+      <div class="pcount"><b id="pCount">0</b><span>does selected</span></div>
+      <div class="pmeter"><div class="pm-track"><div class="pm-fill" id="pFill"></div><div class="pm-lim" id="pLim"></div></div>
+        <div class="small" id="pMsg"></div></div>
+      <label class="small muted" style="white-space:nowrap">Limit for this buck <input class="n" id="gMax" value="15" style="width:56px;padding:6px"></label>
+    </div>
+    <div class="ptools">
+      <input class="t" id="pSearch" placeholder="🔍 Type or scan a tag, press Enter" style="flex:1;min-width:200px">
+      <select class="s" id="pMG" title="Mother group"></select>
+      <div class="chips" id="pFilter"></div>
+      <button class="btn ghost sm" id="pAll">Select all ready in list</button>
+      <button class="btn ghost sm" id="pNone">Clear</button>
+    </div>
+    <div class="ptable" id="pList"></div>
+    <div class="dev"><b>Dev:</b> doe picker reads the herd. Can pick = stage Getting ready / In heat / Empty, not in another buck group, age ≥ 300 d, weight ≥ breed minimum (#10), not a daughter of this buck (inbreeding). Blocked does show the reason. Limit default 15 per buck (setting); going over is allowed with a warning and logged as an override. Scan / type a tag + Enter selects it (RFID). Saved does get the buck group id, buck, cross range and due range (#5, #6).</div>
+
+    <div class="stepT" style="margin-top:28px"><span>3</span>Before he goes in</div>
+    <ul class="checks" id="gCheck"></ul>
+    <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;align-items:center"><button class="btn" id="gSave">Save group</button><button class="btn ghost" data-close="groupPanel">Cancel</button><span class="small muted" id="gSaveMsg"></span></div>
+    <div class="dev"><b>Dev #6:</b> store buck in + buck out (default stay 42). <b>#11:</b> buck check within 60 days. <b>#4:</b> needs <code>breed:create</code>; edit / delete need <code>breed:edit</code> / <code>breed:del</code>.</div>
+  </div>
+
+  <!-- buck check panel -->
+  <div class="panel" id="checkPanel" hidden>
+    <div class="card-h"><h2>Buck check</h2><span class="tag">#11</span><button class="btn ghost sm r" data-close="checkPanel">Close</button></div>
+    <div class="say">
+      <select class="s"><option>BK-11</option><option>BK-07</option></select> was checked on <input type="date" class="d" id="cDate">.
+      He weighs <input class="n" value="62"> kg, body condition <input class="n" value="3"> / 5.<br>
+      Feet <select class="s"><option>good</option><option>needs trim</option><option>problem</option></select>,
+      teeth <select class="s"><option>good</option><option>worn</option></select>,
+      testicles <select class="s"><option>normal</option><option>small / uneven</option><option>problem</option></select>.
+    </div>
+    <textarea rows="2" placeholder="Note (optional)" style="margin-top:8px"></textarea>
+    <div style="margin-top:16px"><button class="btn">Save check</button></div>
+  </div>
+
+  <div class="bucks" id="buckCards"></div>
+
+  <div id="groupList"></div>
+
+  <div class="card" style="margin-top:22px">
+    <div class="card-h"><h2>🏆 Buck ranking</h2><span class="sub">all seasons</span><span class="tag">#9</span></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Buck</th><th>Conception</th><th>Kids per kidding</th><th>Avg birth kg</th><th>Avg 90-day kg</th><th>Kids sired</th></tr></thead>
+      <tbody>
+        <tr><td><b>BK-07</b></td><td>82%</td><td>1.8</td><td>3.0</td><td>15.1</td><td>38</td></tr>
+        <tr><td><b>BK-11</b></td><td>64%</td><td>1.5</td><td>2.6</td><td>12.9</td><td>21</td></tr>
+      </tbody>
+    </table></div>
+    <div class="dev"><b>Dev #9:</b> needs #5, #7, #8 first. Per breed and per birth group.</div>
+  </div>
+</section>
+
+<!-- ================= DOES ================= -->
+<section class="view" id="v-does">
+  <div class="ph"><div><div class="eyebrow">Herd</div><h1>Does</h1><p>Tap a doe to see her card, history and family.</p></div>
+    <div class="act"><button class="btn" id="openScan">🔍 Record scan</button></div></div>
+
+  <div class="panel scanp" id="scanPanel" hidden>
+    <div class="card-h"><h2>Record scan</h2><span class="sub">one buck group at a time</span><button class="btn ghost sm r" data-close="scanPanel">Close</button></div>
+    <div class="scanTop">
+      <div><label class="small muted">Buck group</label><div class="gtabs" id="scGroups"></div></div>
+      <div><label class="small muted">Scan date</label><input type="date" class="d" id="scDate"></div>
+      <div style="flex:1;min-width:200px"><label class="small muted">Find a doe</label><input class="t" id="scFind" placeholder="🔍 Type or scan a tag" style="width:100%"></div>
+    </div>
+    <div class="scanTbl" id="scTable"></div>
+    <div class="scanFoot">
+      <div id="scSum" class="small"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+        <button class="btn ghost sm" id="scAllPreg">Rest → 🤰 Pregnant</button>
+        <button class="btn ghost sm" id="scClear">Clear</button>
+        <button class="btn" id="scSave" disabled>Save results</button>
+      </div>
+    </div>
+    <div class="dev"><b>Dev:</b> scan screen = table of does still waiting scan, per buck group (Crossed or Waiting scan). One tap per doe: Pregnant / Empty / Not sure. Pregnant → kids seen (1-4+) + optional days pregnant (mated = scan − days, #6). Empty → next step (next birth group · watch for heat · cull list · back with buck if still in). Not sure → rescan in N days. "Save results" saves all rows at once, one <code>matings</code> row each (#5), status + main herd updated, Undo 5 s. Pregnant only after scan (rule kept). Needs <code>breed:edit</code> (#4).</div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>How a doe moves</h2><span class="sub">tap a stage to see those does</span></div>
+    <div class="flowline" id="flowline"></div>
+    <div class="branch">
+      <span><b>If the scan is empty</b>, you choose:</span> <span class="pill blue">back with the buck</span> <span class="pill gold">next birth group</span> <span class="pill gold">watch for heat</span> <span class="pill red">cull list</span>
+    </div>
+    <div class="dev"><b>Dev:</b> stage moves — Getting ready → Waiting scan when added to a buck group · Waiting scan → Pregnant / Empty by scan only · Pregnant → Dry automatically on the dry-off date (task on Today) · Dry → Kidded when kidding is recorded · Kidded → Getting ready after weaning. Every move writes eventLog.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <div class="chips" id="stageChips"><button class="on" data-f="all">All</button><button data-f="Pregnant">Pregnant</button><button data-f="Waiting scan">Waiting scan</button><button data-f="Getting ready">Getting ready</button></div>
+      <div class="r"><select class="s" id="kidFilter"><option value="all">Kiddings: all</option><option value="0">First-timers</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5+</option></select><span class="tag">#12</span></div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Doe</th><th>Breed</th><th>Age</th><th>Kiddings <span class="tag">#12</span></th><th>Mother score</th><th>Status</th><th>Buck</th><th>Crossed</th><th>Due</th><th></th></tr></thead>
+      <tbody id="doeRows"></tbody>
+    </table></div>
+    <div class="dev"><b>Dev #12:</b> kiddings = kidding records (all-stillborn counts, abortions don't) + "before purchase". <b>#6:</b> pen-mated does show a range until heat or scan. <b>#4:</b> stage change needs <code>breed:edit</code>. <b>#3:</b> Breeding CSV export uses old field names (DEF-08).</div>
+  </div>
+
+  <div id="profile"></div>
+</section>
+
+<!-- ================= KIDDING & KIDS ================= -->
+<section class="view" id="v-kids">
+  <div class="ph"><div><div class="eyebrow">Births</div><h1>Kidding &amp; kids</h1><p>Record a birth straight from the list, then check the mother and her kids.</p></div></div>
+
+  <div class="stats" id="kStats"></div>
+
+  <div class="card">
+    <div class="card-h"><h2>🍼 Due to kid</h2><span class="sub">tap “Record kidding” on her row</span>
+      <div class="chips r" id="kdFilter"></div></div>
+    <div class="ltable" id="kdTable"></div>
+    <div class="dev"><b>Dev #2 / #7:</b> kidding form opens inside the row. Saves: date, born alive, stillborn, <b>ease + note (fix #2, DEF-04)</b>, mothering, dam body condition, <b>dam health after kidding</b> (Good / Watch / Sick + issues), <b>keep decision</b> (Keep / Watch / Cull + reason). Each live kid: sex, birth kg (required, saved as first weight type <code>birth</code>), colostrum, raised by, kid health. Doe → Kidded, kidding count +1 (#12), matings row closed (#5), main herd updated (#13).</div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>🩺 Mother check</h2><span class="sub">does that kidded — change health or decision any time</span></div>
+    <div class="ltable" id="kmTable"></div>
+    <div class="dev"><b>Dev:</b> health + decision editable after kidding (history kept). "Cull" adds her to the cull list after her kids are weaned. Feeds Reports › Best mothers and cull rules (#9).</div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>👪 Mother groups</h2><span class="sub">group mothers by how many kids they give — then pick a group for the next buck</span>
+      <button class="btn ghost sm r" id="mgAuto">⚡ Group by kids born</button></div>
+    <div class="chips mgchips" id="mgChips"></div>
+    <div class="mgbar" id="mgBar"><b id="mgCount"></b><span class="muted small">→ move to</span><select class="s" id="mgMoveTo"></select><button class="btn sm" id="mgMove">Move</button><button class="btn ghost sm" id="mgClear">Clear</button></div>
+    <div class="ltable" id="mgTable" style="margin-top:12px"></div>
+    <div class="dev"><b>Dev — mother groups:</b> new table <code>motherGroups</code> (id, name, colour, order) — user can add / rename; defaults 4+ kids · 3 kids · 2 kids · 1 kid. Each doe gets <code>motherGroupId</code> (nullable). "Group by kids born" = suggestion from the last litter size (born, incl. stillborn), only fills does with no group — never overwrites a manual choice. Tick rows → "Move to" moves many at once. In <b>Bucks › Pick the does</b> there is a "Mother group" filter so a whole group can go to one buck.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>📋 What the main herd will show</h2><span class="sub">preview — the same row your existing herd screen gets after you save here</span></div>
+    <div class="ltable" id="hpTable"></div>
+    <div class="kh" style="margin:18px 0 8px">Kids in the main herd</div>
+    <div class="ltable" id="hpKids"></div>
+    <div class="dev"><b>Dev — connecting to the main herd (#13):</b>
+      <ol style="margin:6px 0 0;padding-left:18px;line-height:1.7">
+        <li><b>One source of truth:</b> kidding records live in <code>kiddings</code> (doeId, date, born, alive, stillborn, ease, mothering 1–5, milk 1–5, bcs 1–5, health, issues[], keepDecision, reason, note) linked to the <code>matings</code> row (#5). Kids are normal herd animals with <code>damId</code>, <code>birthWeight</code> (weight type <code>birth</code>).</li>
+        <li><b>Herd fields are calculated, not typed:</b> <code>kiddings</code> = count(kiddings) + kiddingsBeforePurchase · <code>lastKiddingDate</code> · <code>lastLitter</code> (born / alive) · <code>kidsBornTotal / kidsAliveTotal</code> · <code>motherScore</code> = average over all her kiddings of (mothering + milk + ease pts + health pts) ÷ 4 · <code>bcs</code>, <code>health</code>, <code>keepDecision</code> = latest · <code>motherGroupId</code> · <code>breedStatus</code>.</li>
+        <li><b>When it updates:</b> in the same save (one transaction) as "Save kidding", Mother check edits, scan results and status changes → recalc those fields on the doe → herd row shows it at once. Also write <code>eventLog</code>. Offline queue: same rule when it syncs.</li>
+        <li><b>Herd screen:</b> add the columns above (read-only there; edit only in Breeding) + filters: Mother group, Kiddings (0 / 1 / 2 / 3 / 4 / 5+), Mother score ≥, Decision = Cull. Tapping a row opens the doe's breeding card.</li>
+        <li><b>Does keep their full record:</b> times pregnant (every scan = pregnant, incl. ones later lost), kiddings, every litter, scores and decisions — shown as a breeding history list on the herd card.</li>
+        <li><b>Kids:</b> each kid is a herd animal from birth with <code>damId</code>, sex, birth date/kg, <code>milkType</code> (Mother / Powder / Mixed / Foster), health, and <code>kidStatus</code> On milk → Weaned (auto on wean day, see Kids). Herd filters: On milk / Weaned / Milk type.</li>
+        <li><b>Buy / sell / death / moves stay in the herd</b> as today. A sold or dead doe keeps her kidding history (read-only).</li>
+      </ol></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>🐐 Kids</h2><span class="sub" id="wRule"></span>
+      <div class="r" style="display:flex;gap:8px;align-items:center"><div class="chips" id="kkFilter"></div><button class="btn ghost sm" id="kWean" disabled>Wean early</button></div></div>
+    <div class="wsetbar" id="wSet"></div>
+    <div class="ltable" id="kkTable"></div>
+    <div class="dev"><b>Dev #8 + auto-wean:</b> kid field <code>milkType</code> = Mother / Powder / Mixed / Foster (set at kidding, changeable while on milk). Kid status <code>On milk → Weaned</code> moves <b>automatically</b> when today ≥ birth date + <code>weanDays</code> of the kid's birth group (Season plan rule, editable here or there; per-group on/off switch). Run it in a daily job (and on app open / sync) — write eventLog "auto-weaned". "Wean early" = manual, same result with today's date. Changing wean days affects kids still on milk only. After weaning, ask for wean weight (type <code>wean</code>); 90-day kg = birth + (wean − birth) ÷ age × 90.</div>
+  </div>
+</section>
+
+<!-- ================= REPORTS ================= -->
+<section class="view" id="v-rep">
+  <div class="ph"><div><div class="eyebrow">Results</div><h1>Reports</h1><p>How the breeding went — in plain words, with simple pictures.</p></div>
+    <div class="act"><button class="btn ghost" onclick="window.print()">🖨 Print</button><button class="btn ghost" id="repCsv">⬇ Breeding CSV <span class="tag fix">FIX #3</span></button></div></div>
+
+  <div class="rfilt">
+    <div><label class="small muted">Season</label><div class="seg" id="rSeason"></div></div>
+    <div><label class="small muted">Buck</label><div class="seg" id="rBuck"></div></div>
+  </div>
+
+  <div class="rhead" id="rHead"></div>
+
+  <div class="card">
+    <div class="card-h"><h2>📋 Scorecard</h2><span class="sub">tap a target to change it</span></div>
+    <div class="score" id="rScore"></div>
+    <div class="dev"><b>Dev #9:</b> each tile = KPI + plain sentence + target (saved in settings) + status (✓ On target / ⚠ Close / ✕ Needs work; within 5% of target = Close). In-progress seasons show "not kidded yet" instead of a number. All from <code>matings</code> + <code>kiddings</code> + kid weights; filter by birth group, buck (and breed later).</div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-h"><h2>🔻 From crossing to weaning</h2><span class="sub">where we lose does and kids</span></div>
+      <div id="rFunnel"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>🍼 Litter size</h2><span class="sub">how many kids per kidding</span></div>
+      <div id="rLitter"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>🐐 Bucks compared</h2><span class="sub">longer bar = better</span></div>
+    <div id="rBucks"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-h"><h2>📅 Kids born per month</h2></div>
+      <div id="rMonth"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>⚠ Problems</h2><span class="sub">count this season</span></div>
+      <div id="rProb"></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-h"><h2>🏆 Best mothers</h2><span class="sub">by mother score</span></div>
+      <div id="rTop"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>🚩 Think about culling</h2><span class="sub">cull rules + your decisions</span></div>
+      <div id="rCull"></div>
+      <div class="dev"><b>Dev:</b> suggest when: decision = Cull · mothering ≤ 2 in two kiddings · Vet birth twice · empty at scan twice · mother score &lt; 3. Show the reason; owner decides.</div>
+    </div>
+  </div>
+  <div id="rTip" class="rtip"></div>
+</section>
+
+
+<!-- ================= CHANGE LIST (developer only) ================= -->
+<section class="view" id="v-dev">
+  <div class="ph"><div><div class="eyebrow">For the developer</div><h1>Change list</h1><p>V242 → next version</p></div></div>
+  <div class="card">
+    <div class="tbl"><table>
+      <thead><tr><th>#</th><th>Type</th><th>Change</th><th>When</th><th>Page</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><span class="pill red">Fix</span></td><td>"Entered by mistake" crash (DEF-01)</td><td>Now</td><td>Bucks › group</td></tr>
+        <tr><td>2</td><td><span class="pill red">Fix</span></td><td>Kidding ease + note not saved (DEF-04)</td><td>Now</td><td>Kidding</td></tr>
+        <tr><td>3</td><td><span class="pill red">Fix</span></td><td>Breeding CSV empty (DEF-08)</td><td>Now</td><td>Reports</td></tr>
+        <tr><td>4</td><td><span class="pill red">Fix</span></td><td>Missing permission checks (GAP-P05)</td><td>Now</td><td>Plan, Bucks, Does</td></tr>
+        <tr><td>5</td><td><span class="pill gold">New</span></td><td>Breeding history — <code>matings</code> table</td><td>Before April</td><td>Does › card</td></tr>
+        <tr><td>6</td><td><span class="pill gold">New</span></td><td>Buck in / out, due range, scan days</td><td>Before April</td><td>Bucks, Does</td></tr>
+        <tr><td>7</td><td><span class="pill gold">New</span></td><td>Birth kg, mothering, body condition, colostrum, raised by</td><td>Before April</td><td>Kidding</td></tr>
+        <tr><td>12</td><td><span class="pill gold">New</span></td><td>Kidding count everywhere</td><td>Before April</td><td>Does, tree</td></tr>
+        <tr><td>8</td><td><span class="pill gold">New</span></td><td>Wean kg + 90-day kg</td><td>Later</td><td>Kidding</td></tr>
+        <tr><td>9</td><td><span class="pill gold">New</span></td><td>New KPIs, buck + mother ranking</td><td>Later</td><td>Reports, Bucks</td></tr>
+        <tr><td>10</td><td><span class="pill gold">New</span></td><td>Minimum weight per breed before first cross</td><td>Later</td><td>Plan, Bucks</td></tr>
+        <tr><td>11</td><td><span class="pill gold">New</span></td><td>Buck check, rest days</td><td>Later</td><td>Bucks</td></tr>
+        <tr><td>23</td><td><span class="pill gold">New</span></td><td><b>Easy reports</b>: season + buck filter, one-line summary, scorecard with plain sentences + editable targets + status, crossing→weaning funnel, litter sizes, bucks side by side, kids per month (expected for running season), problems count, best mothers, cull suggestions, print + CSV.</td><td>With #9</td><td>Reports</td></tr>
+        <tr><td>22</td><td><span class="pill gold">New</span></td><td><b>Kids: milk type + auto-wean</b>. Milk = Mother / Powder / Mixed / Foster. Kids go On milk → Weaned by themselves on the wean day from the Season plan (per birth group, on/off), or "Wean early". Herd shows times pregnant, kiddings and kid status / milk type.</td><td>With #8</td><td>Kidding, herd</td></tr>
+        <tr><td>21</td><td><span class="pill gold">New</span></td><td><b>Mother groups + main herd link</b>: user-made mother groups (defaults 4+ / 3 / 2 / 1 kids), tick mothers → Move to group, "Group by kids born" suggestion, group filter in the buck doe picker. Main herd row gets kiddings, last kidding, kids born/alive, mother score, BCS, health, decision, mother group — calculated in the same save (see notes in Kidding › What the main herd will show).</td><td>With #12, #13</td><td>Kidding, Bucks, herd</td></tr>
+        <tr><td>20</td><td><span class="pill gold">New</span></td><td><b>Mother points</b>: dropdowns with points — Mothering 1–5, Milk 1–5, Body condition 1–5 — in the kidding form and editable in Mother check. <b>Mother score</b> = average of mothering, milk, birth ease (Easy 5 · Slight 4 · Hard 2 · Vet 1) and health (Good 5 · Watch 3 · Sick 1), shown as stars + number; average across all her kiddings on the doe. <b>Kiddings</b> column (1×, 2×, 3×… and "this is her 3rd kidding") in Due to kid, Mother check and Does; Does filter up to 5+.</td><td>With #7, #12</td><td>Kidding, Does</td></tr>
+        <tr><td>19</td><td><span class="pill gold">New</span></td><td><b>Kidding as lists</b>: Due to kid (sorted by due date, days left, overdue in red) → "Record kidding" opens the form inside the row (birth, mother after kidding, kids table). New: <b>dam health after kidding</b> (Good / Watch / Sick + problem chips) and <b>keep decision</b> (Keep / Watch / Cull + reason). Mother check list to update health/decision later. Kids list with health, wean kg, 90-day kg and bulk wean.</td><td>With #7</td><td>Kidding</td></tr>
+        <tr><td>18</td><td><span class="pill gold">New</span></td><td><b>Scan sheet</b> replaces the one-doe scan form: pick buck group → table of every doe waiting scan → one tap Pregnant / Empty / Not sure per row → extra details appear in the same row → "Save N results" saves the whole group at once.</td><td>With #5</td><td>Does, Bucks</td></tr>
+        <tr><td>17</td><td><span class="pill gold">New</span></td><td><b>Buck in / Buck out side by side</b> on every group card, with "Put buck in today" (does → Crossed) and "Take buck out today" (Crossed → Waiting scan, scan date = out + 45). New-group form has Buck in and Buck out dates next to each other; days in between auto. Every status change (scan, status menu, buck in/out) writes to the existing herd screen at the same moment (#13).</td><td>With #6</td><td>Bucks, herd</td></tr>
+        <tr><td>16</td><td><span class="pill gold">New</span></td><td><b>Doe picker in buck groups</b> (list / table, sortable columns, select-all box): tick does (or scan tag + Enter), live counter vs limit (default 15, editable — going over allowed with warning), blocked does show why (other group, too young, under weight, no weight, daughter of this buck, pregnant/kidded). "Add / remove does" on every group. Saving sets buck group, buck, cross + due ranges on each doe.</td><td>With #6</td><td>Bucks</td></tr>
+        <tr><td>15</td><td><span class="pill gold">New</span></td><td><b>Change status menu</b> on every doe (Does table, doe card, buck group): Getting ready · In heat · Crossed · Waiting scan · Pregnant · Empty · Dry · Kidded · Lost kids · Cull list · Entered by mistake. Each asks only what it needs and updates dates, buck group and history.</td><td>With #5</td><td>Does, Bucks</td></tr>
+        <tr><td>14</td><td><span class="pill gold">New</span></td><td><b>Scan flow</b>: result buttons Pregnant / Empty / Not sure; pregnant asks kids seen + optional days; empty asks next step (back with buck if still in · next birth group · watch for heat · cull list); not sure → rescan reminder. Save moves the stage, writes the mating row, jumps to next waiting doe, Undo for 5 s. Stage menu in a buck group only shows moves that make sense for her stage.</td><td>With #5</td><td>Does, Bucks</td></tr>
+        <tr><td>13</td><td><span class="pill gold">New</span></td><td><b>Existing herd screen</b> (no new herd page): add columns <code>Birth group</code>, <code>Breeding status</code>, <code>Next job + date</code>, <code>Kiddings</code> and a birth-group filter — all read-only, filled from breeding. Kids store the birth group they were born in. Buy / sell / death / moves stay in the herd as today.</td><td>With #6</td><td>Herd</td></tr>
+        <tr><td>—</td><td><span class="pill">Layout</span></td><td>Tabs on top: Today · Season plan · Bucks · Does · Kidding · Reports. User-made birth groups (add / rename / duplicate / delete), each with its own editable plan. Sentence-style forms.</td><td>With #6</td><td>All</td></tr>
+      </tbody>
+    </table></div>
+    <h3 style="font-size:17px;margin:22px 0 8px">Do not change</h3>
+    <ul class="muted" style="margin:0;padding-left:20px;line-height:1.9">
+      <li>Pregnant only after ultrasound scan.</li>
+      <li>Gestation 150 days, heat cycle 21 days, returned to heat after 17+ days.</li>
+      <li>September and Spring stay as the starting birth groups (more can now be added).</li>
+      <li>Inbreeding check and cull rules. 15 does per buck stays the default limit (can now be raised per group with a warning).</li>
+      <li>RFID / tag-scan input, offline queue, phone codes, double-entry checks.</li>
+    </ul>
+    <p class="muted small" style="margin-top:16px">All data on this page is sample data.</p>
+  </div>
+</section>
+
+</main>
+</div>
+
+<div class="modal" id="stModal"><div class="sheet">
+  <div class="card-h" style="margin-bottom:6px"><h2 id="stTitle">Change status</h2><button class="btn ghost sm r" data-stclose>Close</button></div>
+  <div id="stFrom" style="margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+  <div class="eyebrow">Move her to</div>
+  <div class="opts" id="stPick"></div>
+  <div id="stFields"></div>
+  <div style="display:flex;gap:10px;margin-top:18px"><button class="btn" id="stSave" disabled>Save</button><button class="btn ghost" data-stclose>Cancel</button></div>
+  <div class="dev"><b>Dev:</b> one "Change status" menu on every doe (Does table, doe card, buck group rows). Each choice asks only what it needs (date, buck, kids seen…), writes eventLog + matings row (#5), and shows Undo for 5 s. Pregnant still needs scan details (rule kept). "Entered by mistake" = fix #1. Needs <code>breed:edit</code> (#4).</div>
+</div></div>
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo">Undo</button></div>
+<script>
+/* ================= DATE HELPERS ================= */
+const DAY=864e5, GEST=150;
+const _n=new Date(), TODAY=Date.UTC(_n.getFullYear(),_n.getMonth(),_n.getDate());
+const P=s=>{const [y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d)};
+const add=(t,n)=>t+n*DAY;
+const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const f=(t,y)=>{const d=new Date(t);return d.getUTCDate()+' '+M[d.getUTCMonth()]+(y?' '+d.getUTCFullYear():'')};
+const iso=t=>new Date(t).toISOString().slice(0,10);
+const rng=(a,b)=>a===b?f(a,1):f(a)+' → '+f(b,1);
+const dd=t=>Math.round((t-TODAY)/DAY);
+const inTxt=n=>n===0?'today':n>0?'in '+n+' day'+(n>1?'s':''):(-n)+' days ago';
+function away(a,b){const s=dd(a),e=dd(b);
+  if(s>0)return['','in '+s+' days'];
+  if(e>=0)return['now',s===0?'today':'now · '+e+' days left'];
+  return['past','done · '+(-e)+' days ago'];}
+const $=id=>document.getElementById(id);
+$('todayLbl').textContent='counted from today, '+f(TODAY,1);
+$('todayEyebrow').textContent=new Date(TODAY).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+
+/* ================= BIRTH GROUPS (user can add as many as needed) ================= */
+const baseRules={feed:60,check:30,weigh:30,minkg:28,milk:14,scan:45,dry:60,pens:7,wean:90,weankg:13};
+let plans=[
+  {id:'sept',  name:'September births',e:'🍂',from:'2026-09-01',to:'2026-09-15',r:{...baseRules}},
+  {id:'spring',name:'Spring births',   e:'🌸',from:'2027-02-22',to:'2027-04-05',r:{...baseRules}},
+];
+let cur='sept', pid=1;
+const plan=id=>plans.find(p=>p.id===id)||plans[0];
+const pLabel=id=>{const p=plan(id);return p.e+' '+p.name};
+
+const rows=[
+ {id:'feed', e:'🌾',name:'Start extra feed',      rule:'<N> days <b>before crossing</b>', at:(c,b,r)=>[c[0]-r.feed*DAY,c[0]-r.feed*DAY],col:'#D8C38F'},
+ {id:'check',e:'🩺',name:'Check the bucks',       rule:'<N> days <b>before crossing</b> — feet, teeth, testicles, weight', at:(c,b,r)=>[c[0]-r.check*DAY,c[0]-r.check*DAY],tag:'#11'},
+ {id:'weigh',e:'⚖️',name:'Weigh young does',      rule:'<N> days <b>before crossing</b> — need at least <K> kg',k:'minkg', at:(c,b,r)=>[c[0]-r.weigh*DAY,c[0]-r.weigh*DAY],tag:'#10'},
+ {id:'milk', e:'🌙',name:'Stop milking',          rule:'<N> days <b>before crossing</b>', at:(c,b,r)=>[c[0]-r.milk*DAY,c[1]-r.milk*DAY],col:'#A9BFCB'},
+ {id:'cross',e:'❤️',name:'Cross the does',        rule:'150 days <b>before birth</b> — a goat\'s pregnancy',cls:'cross', at:c=>c,col:'#D9826B'},
+ {id:'scan', e:'🔍',name:'Ultrasound scan',       rule:'<N> days <b>after crossing</b>', at:(c,b,r)=>[c[0]+r.scan*DAY,c[1]+r.scan*DAY],col:'#8C9BD0'},
+ {id:'dry',  e:'🌙',name:'Dry off the milkers',   rule:'<N> days <b>before birth</b>', at:(c,b,r)=>[b[0]-r.dry*DAY,b[1]-r.dry*DAY],col:'#A9BFCB'},
+ {id:'pens', e:'🏠',name:'Get kidding pens ready',rule:'<N> days <b>before birth</b> — clean, dry straw, warm corner', at:(c,b,r)=>[b[0]-r.pens*DAY,b[0]-r.pens*DAY],tag:'NEW'},
+ {id:'birth',e:'🍼',name:'Birth window',          rule:'BIRTH',cls:'birth', at:(c,b)=>b,col:'#6FB07C'},
+ {id:'wean', e:'🐣',name:'Wean the kids',         rule:'<N> days <b>after birth</b> kids move to <b>Weaned</b> by themselves (can wean early from <K> kg)',k:'weankg', at:(c,b,r)=>[b[0]+r.wean*DAY,b[1]+r.wean*DAY],col:'#E5AE5C'},
+];
+function birthWin(id){const p=plan(id||cur);let a=P(p.from),b=P(p.to);
+  while(b<TODAY){const A=new Date(a),B=new Date(b);
+    a=Date.UTC(A.getUTCFullYear()+1,A.getUTCMonth(),A.getUTCDate());
+    b=Date.UTC(B.getUTCFullYear()+1,B.getUTCMonth(),B.getUTCDate());}
+  return[a,b];}
+function points(id){const r=plan(id).r,b=birthWin(id),c=[b[0]-GEST*DAY,b[1]-GEST*DAY];
+  return rows.map(x=>{const[a,e]=x.at(c,b,r);return{x,a,e}});}
+const ptOf=(id,k)=>points(id).find(p=>p.x.id===k);
+
+function renderPlanTabs(){
+  $('planTabs').innerHTML=plans.map(p=>{const b=birthWin(p.id);
+    return `<button class="gchip${p.id===cur?' on':''}" data-p="${p.id}"><b>${p.e} ${p.name}</b><span>Kids ${f(b[0])} → ${f(b[1],1)}</span></button>`}).join('')
+    +`<button class="gchip add" id="addPlanBtn">＋ Add birth group</button>`;
+  document.querySelectorAll('#planTabs .gchip[data-p]').forEach(b=>b.onclick=()=>{cur=b.dataset.p;buildPlan();});
+  $('addPlanBtn').onclick=openAddPlan;
+}
+function buildPlan(){
+  const p=plan(cur);
+  $('planName').value=p.name; $('planEmo').textContent=p.e; $('planMsg').innerHTML='';
+  $('planBody').innerHTML=rows.map(x=>{
+    const rule=x.rule==='BIRTH'
+      ?`<b>you choose this</b> — <input type="date" class="d" data-b="from" value="${p.from}"> to <input type="date" class="d" data-b="to" value="${p.to}">`
+      :x.rule.replace('<N>',`<input class="n" data-r="${x.id}" value="${p.r[x.id]}">`).replace('<K>',`<input class="n" data-r="${x.k}" value="${p.r[x.k]}">`);
+    return `<tr class="${x.cls||''}"><td class="step"><span class="e">${x.e}</span>${x.name}${x.tag?`<span class="tag">${x.tag}</span>`:''}</td><td class="rule">${rule}</td><td class="date" id="d-${x.id}"></td><td class="days r" id="t-${x.id}"></td></tr>`;
+  }).join('');
+  calcPlan();
+}
+function calcPlan(){
+  const pts=points(cur),b=birthWin(cur);
+  pts.forEach(p=>{$('d-'+p.x.id).textContent=rng(p.a,p.e);const[cl,t]=away(p.a,p.e);const el=$('t-'+p.x.id);el.className='days r '+cl;el.textContent=t;});
+  $('planSub').textContent='kids born '+rng(b[0],b[1]);
+  drawTL('tl',pts);
+  const n=groups.filter(g=>g.season===cur).length;
+  $('planGroupsTxt').textContent=n+' buck group'+(n===1?'':'s')+' in '+pLabel(cur);
+  renderPlanTabs(); renderAllPlans(); refreshAll();
+}
+function renderAllPlans(){
+  $('allPlans').innerHTML=plans.map(p=>{const pt=k=>ptOf(p.id,k);const b=birthWin(p.id);
+    const nG=groups.filter(g=>g.season===p.id).length, nD=does.filter(d=>d.plan===p.id).length;
+    return `<tr class="click${p.id===cur?' sel':''}" data-p="${p.id}"><td><b>${p.e} ${p.name}</b></td><td>${rng(b[0],b[1])}</td><td>${f(pt('cross').a)}</td><td>${f(pt('scan').a)}</td><td>${f(pt('dry').a)}</td><td>${f(pt('wean').a)}</td><td>${nG}</td><td>${nD}</td></tr>`}).join('');
+  document.querySelectorAll('#allPlans tr').forEach(r=>r.onclick=()=>{cur=r.dataset.p;buildPlan();window.scrollTo({top:0,behavior:'smooth'})});
+}
+function drawTL(id,pts){
+  const lo=Math.min(...pts.map(p=>p.a),TODAY),hi=Math.max(...pts.map(p=>p.e));
+  const pc=t=>((t-lo)/(hi-lo)*100).toFixed(2)+'%';
+  let h='<div class="base"></div>';
+  pts.filter(p=>p.x.col).forEach((p,i)=>{const w=Math.max((p.e-p.a)/(hi-lo)*100,1);
+    h+=`<div class="bar" title="${p.x.name}: ${rng(p.a,p.e)}" style="left:${pc(p.a)};width:${w}%;background:${p.x.col};animation-delay:${i*60}ms"></div>`;});
+  ['cross','birth','wean'].forEach(k=>{const p=pts.find(q=>q.x.id===k);h+=`<div class="lab${k==='wean'?' end':''}" style="left:${pc(p.a)}">${p.x.e} ${f(p.a)}</div>`});
+  h+=`<div class="today" style="left:${pc(TODAY)}"><span>Today</span></div>`;
+  $(id).innerHTML=h;
+}
+$('planBody').addEventListener('input',e=>{const t=e.target,p=plan(cur);
+  if(t.dataset.r){const v=parseFloat(t.value);if(!isNaN(v))p.r[t.dataset.r]=v;}
+  if(t.dataset.b&&t.value)p[t.dataset.b]=t.value;
+  calcPlan();});
+$('planName').addEventListener('input',e=>{plan(cur).name=e.target.value||'Untitled group';renderPlanTabs();renderAllPlans();refreshAll();});
+const EMOS=['🍂','🌸','❄️','☀️','🌧️','⭐','🌙','🌾'];
+$('planEmo').onclick=()=>{const p=plan(cur);p.e=EMOS[(EMOS.indexOf(p.e)+1)%EMOS.length];$('planEmo').textContent=p.e;renderPlanTabs();renderAllPlans();refreshAll();};
+$('planCopy').onclick=()=>{const p=plan(cur);const n={...p,id:'p'+(++pid),name:p.name+' (copy)',r:{...p.r}};plans.push(n);cur=n.id;buildPlan();};
+$('planDel').onclick=()=>{
+  const nG=groups.filter(g=>g.season===cur).length,nD=does.filter(d=>d.plan===cur).length;
+  if(plans.length<2){$('planMsg').innerHTML='<div class="note">You need at least one birth group.</div>';return;}
+  if(nG||nD){$('planMsg').innerHTML=`<div class="alert">Can't delete — ${nG} buck group(s) and ${nD} doe(s) are in this group. Move them first.</div>`;return;}
+  plans=plans.filter(p=>p.id!==cur);cur=plans[0].id;buildPlan();};
+
+/* add birth group */
+function openAddPlan(){
+  $('npCopy').innerHTML=plans.map(p=>`<option value="${p.id}">${p.e} ${p.name}</option>`).join('');
+  if(!$('npFrom').value){$('npFrom').value='2026-12-01';$('npTo').value='2026-12-15';}
+  calcNew(); const pn=$('addPlan'); pn.hidden=false; pn.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function calcNew(){
+  const a=$('npFrom').value,b=$('npTo').value; if(!a||!b){$('npCalc').innerHTML='';return;}
+  const r=plan($('npCopy').value).r, c=add(P(a),-GEST);
+  let warn=''; if(c<TODAY) warn='<div style="background:var(--gold-soft);color:#7a5a17">Crossing date has passed<b>Will plan for next year</b></div>';
+  $('npCalc').innerHTML=`<div>Start extra feed<b>${f(add(c,-r.feed),1)}</b></div><div>Cross the does<b>${f(c,1)}</b></div><div>Scan<b>${f(add(c,r.scan),1)}</b></div><div>Wean<b>${f(add(P(a),r.wean),1)}</b></div>`+warn;
+}
+['npFrom','npTo','npCopy'].forEach(id=>$(id).addEventListener('input',calcNew));
+$('npSave').onclick=()=>{
+  const name=$('npName').value.trim()||'New group',a=$('npFrom').value,b=$('npTo').value; if(!a||!b)return;
+  const n={id:'p'+(++pid),name,e:$('npEmo').value,from:a,to:b,r:{...plan($('npCopy').value).r}};
+  plans.push(n);cur=n.id;$('addPlan').hidden=true;$('npName').value='';buildPlan();
+};
+$('planToBucks').onclick=()=>{go('bucks');openNewGroup(cur);};
+
+/* ================= BUCKS ================= */
+const bucks=[
+  {tag:'BK-07',breed:'Beetal',age:'3 y 4 m',status:'Resting',carry:14,conc:82,rest:4,check:'2026-09-12',sired:38},
+  {tag:'BK-11',breed:'Beetal',age:'2 y 1 m',status:'Resting',carry:9,conc:64,rest:33,check:null,sired:21},
+];
+const groups=[
+  {buck:'BK-07',season:'spring',inD:'2026-09-25',stay:42,method:'Pen',does:[
+    ['B-0142','Pregnant','25 Sep → 6 Nov','22 Feb → 5 Apr',2],
+    ['B-0187','Waiting scan','25 Sep → 6 Nov','22 Feb → 5 Apr',null],
+    ['B-0219','Waiting scan','25 Sep → 6 Nov','22 Feb → 5 Apr',null]],more:11},
+  {buck:'BK-11',season:'spring',inD:'2026-10-01',stay:7,method:'Hand',does:[
+    ['M-0031','Pregnant','8 Oct','7 Mar',3],
+    ['B-0203','Waiting scan','2 Oct','1 Mar',null,true]],more:7},
+  {buck:'BK-11',season:'sept',inD:'2027-04-04',stay:42,method:'Pen',planned:true,does:[],more:0,max:15,
+    block:['BK-11 has no buck check yet','3 young does have no weight']},
+];
+const stagePill=s=>s==='In heat'?'<span class="pill clay"><span class="d"></span>In heat</span>':s==='Crossed'?'<span class="pill pink"><span class="d"></span>Crossed</span>':s==='Dry'?'<span class="pill gray"><span class="d"></span>Dry</span>':s==='Kidded'?'<span class="pill clay"><span class="d"></span>Kidded</span>':s==='Cull list'?'<span class="pill red"><span class="d"></span>Cull list</span>':s==='Pregnant'?'<span class="pill"><span class="d"></span>Pregnant</span>':s==='Waiting scan'?'<span class="pill blue"><span class="d"></span>Waiting scan</span>':s==='Breeding buck'||s==='Resting'?'<span class="pill gray"><span class="d"></span>'+s+'</span>':s==='Suckling'?'<span class="pill clay"><span class="d"></span>Suckling</span>':'<span class="pill gold"><span class="d"></span>'+s+'</span>';
+function renderBucks(){
+  $('buckCards').innerHTML=bucks.map(b=>{const ok=!!b.check;
+    const gs=[...new Set(groups.filter(g=>g.buck===b.tag).map(g=>pLabel(g.season)))].join(' · ');
+    return `<div class="buck"><div class="top"><div class="avatar">${b.tag.slice(3)}</div><div><h3>${b.tag}</h3><div class="meta">${b.breed} · ${b.age}</div></div><span class="pill gray">${b.status}</span></div>
+    <div class="kv"><div><b>${b.carry}</b><span>does carrying</span></div><div><b>${b.rest} d</b><span>rested <span class="tag">#11</span></span></div><div style="display:flex;gap:10px;align-items:center"><div class="ring" style="--p:${b.conc}" data-v="${b.conc}%"></div><span>conception</span></div></div>
+    <div class="checkline" style="margin-bottom:10px"><span class="muted small">Groups: ${gs||'—'}</span></div>
+    <div class="checkline"><span class="ic ${ok?'ok':'no'}">${ok?'✓':'!'}</span>${ok?'Buck check done '+f(P(b.check)):'<b style="color:var(--red)">Buck check needed</b>'}<span class="tag">#11</span>
+    <span class="r">${ok?'<span class="muted small">'+b.sired+' kids sired</span>':'<button class="btn sm" onclick="openP(\'checkPanel\')">Check now</button>'}</span></div></div>`;
+  }).join('');
+}
+function gDates(g){const r=plan(g.season).r,i=P(g.inD),o=add(i,g.stay);
+  return[['Buck in',i],['Buck out',o],['Scan',add(o,r.scan)],['Dry off',add(i,GEST-r.dry)],['Kidding',add(i,GEST)],['Wean',add(i,GEST+r.wean)]];}
+function gNext(g){const d=gDates(g),ni=d.findIndex(x=>x[1]>=TODAY);return ni<0?[d.length-1,d[d.length-1]]:[ni,d[ni]];}
+const openG=new Map();
+function isOpen(g,gi,p){const k=groups.indexOf(g);return openG.has(k)?openG.get(k):((gi===0&&p.id==='spring')||!!g.block);}
+function renderGroups(){
+  let h='';
+  plans.forEach(p=>{
+    const gs=groups.filter(g=>g.season===p.id);
+    h+=`<div class="season-h"><h3>${p.e} ${p.name}</h3><span class="line"></span><span class="muted small">${gs.length} buck group${gs.length===1?'':'s'}</span></div>`;
+    if(!gs.length){h+=`<div class="card" style="text-align:center;padding:26px"><p class="muted" style="margin:0 0 12px">No bucks in this group yet.</p><button class="btn sm" onclick="openNewGroup('${p.id}')">＋ Add buck group</button></div>`;return;}
+    gs.forEach((g,gi)=>{
+      const d=gDates(g),[ni,nx]=gNext(g);
+      const n=does.filter(x=>x.g===groups.indexOf(g)).length+(g.more||0);
+      const kidTo=add(P(g.inD),g.stay+GEST);
+      h+=`<div class="group${isOpen(g,gi,p)?' open':''}" data-gi="${groups.indexOf(g)}">
+        <div class="g-head"><div class="avatar" style="width:42px;height:42px;font-size:13px;border-radius:12px">${g.buck.slice(3)}</div>
+          <div><h3>${g.buck}${g.planned?' <span class="pill gold">Planned</span>':''}</h3><div class="meta">${n} does · ${g.method==='Pen'?'runs with does':'hand mating'} · kids ${f(d[4][1])} → ${f(kidTo,1)}</div></div>
+          <div class="next">${g.block?'<span class="pill red">'+g.block.length+' to fix</span>':''}<b>${nx[0]} · ${f(nx[1])}</b>${inTxt(dd(nx[1]))}</div>
+          <div class="chev">⌄</div></div>
+        <div class="track">${d.map((x,i)=>`<div class="tk ${i<ni?'done':i===ni?'now':''}"><div class="c">${i<ni?'✓':''}</div><b>${x[0]}</b>${f(x[1])}</div>`).join('')}</div>
+        <div class="g-body">
+          ${(()=>{const gi=groups.indexOf(g),i=P(g.inD),o=add(i,g.stay),inD=i<=TODAY,outD=o<=TODAY;
+            return `<div class="inout">
+              <div class="io ${inD?'done':'now'}"><span class="ioi">🐐</span><div><small>Buck in</small><b>${f(i,1)}</b><span class="st">${inD?'✓ Done':inTxt(dd(i))}</span></div>${inD?'':`<button class="btn sm" onclick="event.stopPropagation();buckIn(${gi})">Put buck in today</button>`}</div>
+              <div class="iomid"><b>${g.stay} days</b><span>with the does</span></div>
+              <div class="io ${outD?'done':inD?'now':''}"><span class="ioi">🚪</span><div><small>Buck out</small><b>${f(o,1)}</b><span class="st">${outD?'✓ Done':inD?'Planned · '+inTxt(dd(o)):'Planned'}</span></div>${inD&&!outD?`<button class="btn sm" onclick="event.stopPropagation();buckOut(${gi})">Take buck out today</button>`:''}</div>
+            </div>`;})()}
+          ${g.block?g.block.map(t=>`<div class="alert">⚠ ${t}</div>`).join('')+'<p class="muted small" style="margin:0">Fix these before the buck goes in. Does are picked closer to the date.</p>':''}
+          ${(()=>{const gd=does.filter(x=>x.g===groups.indexOf(g));if(!gd.length)return '<p class="muted" style="margin:6px 0 0">No does picked yet.</p>';
+            const cnt={};gd.forEach(x=>cnt[x.stage]=(cnt[x.stage]||0)+1);
+            return `<div class="gsum"><span class="tot">${gd.length+(g.more||0)} does</span>${Object.entries(cnt).map(([k,v])=>stagePill(k).replace('</span>'+k,'</span>'+v+' '+k)).join('')}<span class="muted small" style="margin-left:auto">limit ${g.max||15}${gd.length+(g.more||0)>(g.max||15)?' · <b style="color:var(--clay)">over</b>':''}</span></div>
+            <div class="gtable"><table><thead><tr><th>#</th><th>Doe</th><th>Age</th><th>Kiddings</th><th>Stage</th><th>Crossed</th><th>Due</th><th>Kids seen</th><th></th></tr></thead><tbody>
+            ${gd.map((x,k)=>`<tr><td class="nr">${k+1}</td><td><b>${x.tag}</b> <span class="muted small">${x.breed}</span></td><td>${x.ageD?ageTxt(x.ageD):x.age}</td><td>${x.kid===0?'<span class="pill gold">first time</span>':x.kid+'×'}</td>
+              <td>${stagePill(x.stage)}${x.note?'<div class="small muted" style="margin-top:3px">'+x.note+'</div>':''}</td><td>${x.cr}</td><td>${x.due}</td><td>${x.seen??'—'}</td>
+              <td class="r">${statusSelect(x)}${x.fix?'<span class="tag fix">FIX #1</span>':''}</td></tr>`).join('')}
+            </tbody></table></div>${g.more?`<p class="muted small" style="margin:10px 0 0">+ ${g.more} more does not shown in this sample</p>`:''}`;})()}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">${g.planned?`<button class="btn sm" onclick="openGroupEdit(${groups.indexOf(g)})">＋ Pick does</button>`:`<button class="btn ghost sm" onclick="openGroupEdit(${groups.indexOf(g)})">＋ Add / remove does</button>`+'<button class="btn sm" onclick="go(\'does\');openScan(null,'+groups.indexOf(g)+')">🔍 Record scan</button>'}<button class="btn ghost sm">Edit</button></div>
+          <div class="dev"><b>Dev #6:</b> buck in + buck out; due range = in + 150 → out + 150; scan = out + 45 (from this birth group's rules). <b>#1:</b> "Entered by mistake" crashes (DEF-01, ~L9615) — clear the cross, restore status, write eventLog, block if she kidded. <b>#4:</b> stage change needs <code>breed:edit</code>.</div>
+        </div></div>`;
+    });
+  });
+  $('groupList').innerHTML=h;
+  document.querySelectorAll('.g-head').forEach(x=>x.onclick=()=>{const el=x.parentElement,k=+el.dataset.gi;el.classList.toggle('open');openG.set(k,el.classList.contains('open'));});
+}
+
+/* new / edit buck group — with doe picker */
+let pVis=[], editGi=null, picked=new Set(), pF='ready', pSort={k:'ok',d:1};
+const ageTxt=d=>{const m=Math.floor(d/30.4);return m>=12?Math.floor(m/12)+' y'+(m%12?' '+m%12+' m':''):m+' m'};
+function fillPlanSelect(){const v=$('gSeason').value;
+  $('gSeason').innerHTML=plans.map(p=>`<option value="${p.id}">${p.e} ${p.name}</option>`).join('');
+  if(plans.some(p=>p.id===v))$('gSeason').value=v;}
+function fillBuckSelect(){const v=$('gBuck').value;
+  $('gBuck').innerHTML=bucks.map(b=>`<option value="${b.tag}">${b.tag}${b.check?'':' — needs buck check'}</option>`).join('');
+  if(v)$('gBuck').value=v;}
+function elig(d){
+  const bk=$('gBuck').value,r=plan($('gSeason').value).r;
+  if(d.g!=null&&d.g!==editGi)return 'In '+d.buck+'\'s group';
+  if(d.g==null&&!['Getting ready','In heat','Empty'].includes(d.stage))return d.stage;
+  if(d.ageD<300)return 'Too young ('+d.ageD+' days)';
+  if(d.w==null)return 'Weigh first — no weight';
+  if(d.w<r.minkg)return d.w+' kg — needs '+r.minkg+' kg';
+  if(d.sire===bk)return 'Daughter of '+bk+' — inbreeding';
+  return '';
+}
+function openNewGroup(pid){
+  editGi=null;picked=new Set();pF='ready';
+  $('gpTitle').textContent='New breeding group';
+  fillPlanSelect();fillBuckSelect();
+  if(pid)$('gSeason').value=pid;
+  $('gIn').value='';$('gStay').value=42;$('gMax').value=15;$('pSearch').value='';
+  calcGroup();openP('groupPanel');
+}
+function openGroupEdit(gi){
+  const g=groups[gi];editGi=gi;pF='ready';
+  picked=new Set(does.filter(d=>d.g===gi).map(d=>d.tag));
+  $('gpTitle').textContent='Edit group — '+g.buck+' · '+pLabel(g.season);
+  fillPlanSelect();fillBuckSelect();
+  $('gBuck').value=g.buck;$('gSeason').value=g.season;$('gIn').value=g.inD;$('gStay').value=g.stay;$('gMeth').value=g.method;$('gMax').value=g.max||15;$('pSearch').value='';
+  calcGroup();go('bucks');setTimeout(()=>openP('groupPanel'),50);
+}
+function calcGroup(){
+  fillPlanSelect();fillBuckSelect();
+  const s=$('gSeason').value,r=plan(s).r;
+  if(!$('gIn').value)$('gIn').value=iso(birthWin(s)[0]-GEST*DAY);
+  const i=P($('gIn').value),stay=+$('gStay').value||0,o=add(i,stay);$('gOut').value=iso(o);
+  $('gCalc').innerHTML=[['Scan',f(add(o,r.scan),1)],['Dry off from',f(add(i,GEST-r.dry),1)],['Kids due',f(add(i,GEST))+' → '+f(add(o,GEST),1)]].map(x=>`<div>${x[0]}<b>${x[1]}</b></div>`).join('');
+  // drop picks that became blocked (e.g. buck changed)
+  [...picked].forEach(t=>{const d=does.find(x=>x.tag===t);if(!d||elig(d))picked.delete(t);});
+  drawPicker();
+}
+function drawPicker(){
+  const q=$('pSearch').value.trim().toUpperCase();
+  const all=does.filter(d=>d.ageD!=null);
+  const ready=all.filter(d=>!elig(d));
+  const F=[['ready','Can pick ('+ready.length+')'],['sel','Selected ('+picked.size+')'],['first','First-timers'],['all','All does ('+all.length+')']];
+  $('pFilter').innerHTML=F.map(x=>`<button data-f="${x[0]}" class="${x[0]===pF?'on':''}">${x[1]}</button>`).join('');
+  let list=all.filter(d=>pF==='all'||(pF==='ready'&&!elig(d))||(pF==='sel'&&picked.has(d.tag))||(pF==='first'&&d.kid===0));
+  const mgv=$('pMG').value;$('pMG').innerHTML='<option value="">👪 Mother group: any</option>'+mgroups.map(g=>`<option value="${g.id}">👪 ${g.name} (${does.filter(d=>d.mg===g.id).length})</option>`).join('');$('pMG').value=mgv;
+  if(mgv)list=list.filter(d=>d.mg===mgv);
+  if(q)list=all.filter(d=>d.tag.includes(q));
+  pVis=list;
+  const pl=$('gSeason').value;
+  const r0=plan(pl).r, sk=pSort.k, sd=pSort.d;
+  const val={tag:d=>d.tag,age:d=>d.ageD,w:d=>d.w??-1,kid:d=>d.kid,ok:d=>elig(d)?1:0,grp:d=>d.plan};
+  list=[...list].sort((a,b)=>{const x=val[sk](a),y=val[sk](b);return (x>y?1:x<y?-1:0)*sd;});
+  const okL=list.filter(d=>!elig(d)),allOn=okL.length&&okL.every(d=>picked.has(d.tag)),some=okL.some(d=>picked.has(d.tag));
+  const th=(k,l)=>`<th data-k="${k}" class="${sk===k?'on':''}">${l}<span class="ar">${sk===k?(sd>0?'▲':'▼'):'↕'}</span></th>`;
+  $('pList').innerHTML=list.length?`<table><thead><tr><th class="ns" style="width:44px"><span class="cb${allOn?' on':some?' part':''}" id="pHead" title="Select all in this list">${allOn?'✓':some?'–':''}</span></th>
+    ${th('tag','Doe')}${th('age','Age')}${th('w','Weight')}${th('kid','Kiddings')}${th('grp','Birth group')}<th class="ns">Now</th>${th('ok','Can she go in?')}</tr></thead><tbody>
+    ${list.map(d=>{const why=elig(d),sel=picked.has(d.tag),lo=d.w!=null&&d.w<r0.minkg;
+      return `<tr class="${sel?'sel':''}${why?' no':''}" data-t="${d.tag}"><td><span class="cb${sel?' on':''}${why?' dis':''}">${sel?'✓':''}</span></td>
+      <td><b>${d.tag}</b> <span class="muted small">${d.breed}</span></td><td>${ageTxt(d.ageD)}</td>
+      <td>${d.w!=null?`${d.w} kg<span class="wbar${lo?' lo':''}"><i style="width:${Math.min(100,d.w/45*100)}%"></i></span>`:'<span class="muted">—</span>'}</td>
+      <td>${d.kid===0?'<span class="pill gold">first time</span>':d.kid+'×'}${d.mg?'<div style="margin-top:3px">'+mgPill(d.mg)+'</div>':''}</td>
+      <td>${plan(d.plan).e} ${plan(d.plan).name}</td><td>${stagePill(d.stage)}</td>
+      <td>${why?`<span class="nop">✕ ${why}</span>`:`<span class="okp">✓ ${d.stage==='In heat'?'In heat — ready':'Ready'}</span>`}</td></tr>`}).join('')}
+    </tbody></table>`:'<p class="muted" style="padding:16px;margin:0">No does match.</p>';
+  document.querySelectorAll('#pList thead th[data-k]').forEach(h=>h.onclick=()=>{const k=h.dataset.k;pSort=pSort.k===k?{k,d:-pSort.d}:{k,d:1};drawPicker();});
+  if($('pHead'))$('pHead').onclick=()=>{allOn?okL.forEach(d=>picked.delete(d.tag)):okL.forEach(d=>picked.add(d.tag));drawPicker();};
+  document.querySelectorAll('#pList tbody tr').forEach(b=>b.onclick=()=>{const t=b.dataset.t,d=does.find(x=>x.tag===t);
+    if(elig(d)){toast(`<b>${t}</b> can't go in: ${elig(d)}`);return;}
+    picked.has(t)?picked.delete(t):picked.add(t);drawPicker();});
+  document.querySelectorAll('#pFilter button').forEach(b=>b.onclick=()=>{pF=b.dataset.f;$('pSearch').value='';drawPicker();});
+  // counter + limit
+  const n=picked.size,max=+$('gMax').value||15,top=Math.max(max+3,n+2,18);
+  $('pCount').textContent=n;
+  $('pFill').style.width=Math.min(100,n/top*100)+'%';$('pLim').style.left=(max/top*100)+'%';
+  const over=n>max;$('groupPanel').querySelector('.pbar').classList.toggle('over',over);
+  $('pMsg').innerHTML=n===0?'<span class="muted">Tap does below to add them</span>':over?`<b style="color:var(--clay)">${n-max} over your limit of ${max}</b> — allowed, but conception may drop`:`<span style="color:var(--green)">${max-n} more can go with this buck</span>`;
+  // checks
+  const b=bucks.find(x=>x.tag===$('gBuck').value),r=plan(pl).r;
+  const needW=all.filter(d=>d.plan===pl&&d.g==null&&d.stage==='Getting ready'&&(d.w==null||d.w<r.minkg)).length;
+  const it=[[!!b.check,b.check?'Buck check done '+f(P(b.check)):'Buck check not done',b.check?'':'<button class="btn sm" onclick="openP(\'checkPanel\')">Check now</button>'],
+    [b.rest>=21?true:'w','Buck rested '+b.rest+' days',b.rest>=21?'':'<span class="muted small">short rest</span>'],
+    [n===0?false:over?'w':true,n===0?'No does picked yet':n+' does — limit '+max+' per buck',over?'<span class="muted small">over the limit — your choice</span>':''],
+    [needW?'w':true,needW?needW+' does in this birth group still need weighing (min '+r.minkg+' kg)':'All picked does are heavy enough',''],
+    [true,'Inbreeding check — daughters of '+b.tag+' are blocked',''],[true,'All picked does are 300+ days old','']];
+  $('gCheck').innerHTML=it.map(([ok,t,a])=>`<li><span class="ic ${ok===true?'ok':ok==='w'?'wt':'no'}">${ok===true?'✓':'!'}</span>${t}<span class="a">${a}</span></li>`).join('');
+  $('gSave').disabled=n===0;
+  $('gSave').textContent=n?`Save group with ${n} does${over?' (over limit)':''}`:'Save group';
+  $('gSaveMsg').textContent=b.check?'':'Buck check still needed before he goes in.';
+}
+function saveGroup(){
+  if(!picked.size)return;
+  const gsnap=JSON.stringify(groups),snap=JSON.stringify(does),bk=$('gBuck').value,s=$('gSeason').value,inD=$('gIn').value,stay=+$('gStay').value||42;
+  const i=P(inD),o=add(i,stay),started=i<=TODAY,b=bucks.find(x=>x.tag===bk);
+  const g={buck:bk,season:s,inD,stay,method:$('gMeth').value,max:+$('gMax').value||15,more:editGi!=null?groups[editGi].more||0:0,planned:!started,
+    block:b.check?null:[bk+' has no buck check yet']};
+  let gi=editGi;
+  if(gi==null){groups.push(g);gi=groups.length-1;}else groups[gi]=g;
+  does.forEach(d=>{
+    if(d.g===gi&&!picked.has(d.tag)){d.g=null;d.buck='—';d.cr='—';d.due='—';d.stage='Getting ready';d.note='Taken out of '+bk+'\'s group';}
+    if(picked.has(d.tag)){d.g=gi;d.buck=bk;d.plan=s;
+      if(started){if(['Getting ready','In heat','Empty'].includes(d.stage)){d.stage='Crossed';d.hist.unshift(['cur',f(i)+' → '+f(o,1)+' · '+bk,(g.method==='Pen'?'Runs with buck':'Hand mating')+' — waiting scan']);}
+        d.cr=f(i)+' → '+f(o);d.due=f(add(i,GEST))+' → '+f(add(o,GEST));d.note=null;}
+      else{d.stage='Getting ready';d.cr='—';d.due='—';d.note='Goes in with '+bk+' on '+f(i);}
+    }});
+  const n=picked.size;$('groupPanel').hidden=true;
+  renderBucks();rerenderDoes();renderAllPlans();
+  toast(`${editGi==null?'Group saved':'Group updated'} — <b>${n} does</b> with ${bk}`,snap);
+  $('toastUndo').onclick=()=>{does.splice(0,does.length,...JSON.parse(snap));groups.splice(0,groups.length,...JSON.parse(gsnap));$('toast').classList.remove('show');renderBucks();rerenderDoes();renderAllPlans();};
+  setTimeout(()=>{const cards=document.querySelectorAll('#groupList .group');const c=[...cards].find(x=>x.dataset.gi==gi);if(c){c.classList.add('open');openG.set(gi,true);c.scrollIntoView({behavior:'smooth',block:'center'});}},80);
+}
+['gBuck','gStay','gIn','gMeth'].forEach(id=>$(id).addEventListener('input',calcGroup));
+$('gOut').addEventListener('input',()=>{if(!$('gOut').value||!$('gIn').value)return;const n=dd(P($('gOut').value))-dd(P($('gIn').value));if(n>0){$('gStay').value=n;calcGroup();}});
+$('gSeason').addEventListener('input',()=>{if(editGi==null)$('gIn').value='';calcGroup()});
+$('gMax').addEventListener('input',drawPicker);
+$('pSearch').addEventListener('input',drawPicker);
+$('pSearch').addEventListener('keydown',e=>{if(e.key!=='Enter')return;const q=e.target.value.trim().toUpperCase(),d=does.find(x=>x.tag===q);
+  if(!d){toast(`No doe with tag <b>${q}</b>`);return;}
+  const why=elig(d);if(why){toast(`<b>${d.tag}</b> can't go in: ${why}`);return;}
+  picked.add(d.tag);e.target.value='';pF='sel';drawPicker();
+  const c=document.querySelector(`#pList tr[data-t="${d.tag}"]`);if(c){c.classList.add('flash');c.scrollIntoView({block:'nearest'});}toast(`<b>${d.tag}</b> added — ${picked.size} selected`);});
+$('pAll').onclick=()=>{pVis.filter(d=>!elig(d)).forEach(d=>picked.add(d.tag));drawPicker();};
+$('pMG').onchange=()=>{if($('pMG').value)pF='all';drawPicker();};
+$('pNone').onclick=()=>{picked.clear();drawPicker();};
+$('gSave').onclick=saveGroup;
+
+
+/* buck in / out from a group card */
+function buckIn(gi){const g=groups[gi],snap=JSON.stringify(does),gs=JSON.stringify(groups);
+  g.inD=iso(TODAY);g.planned=false;const i=TODAY,o=add(i,g.stay);let n=0;
+  does.forEach(d=>{if(d.g!==gi)return;n++;if(['Getting ready','In heat'].includes(d.stage)){d.stage='Crossed';d.hist.unshift(['cur',f(i)+' → '+f(o,1)+' · '+g.buck,(g.method==='Pen'?'Runs with buck':'Hand mating')+' — waiting scan']);}
+    d.cr=f(i)+' → '+f(o);d.due=f(add(i,GEST))+' → '+f(add(o,GEST));d.note=null;});
+  renderBucks();rerenderDoes();renderAllPlans();
+  toast(`🐐 ${g.buck} is in — <b>${n} does</b> now Crossed`,snap);
+  $('toastUndo').onclick=()=>{does.splice(0,does.length,...JSON.parse(snap));groups.splice(0,groups.length,...JSON.parse(gs));$('toast').classList.remove('show');renderBucks();rerenderDoes();renderAllPlans();};}
+function buckOut(gi){const g=groups[gi],snap=JSON.stringify(does),gs=JSON.stringify(groups);
+  const i=P(g.inD);g.stay=Math.max(1,dd(TODAY)-dd(i));const o=add(i,g.stay),sc=add(o,plan(g.season).r.scan);let n=0;
+  does.forEach(d=>{if(d.g!==gi)return;
+    if(d.stage==='Crossed'){d.stage='Waiting scan';n++;}
+    if(d.cr.includes('→')){d.cr=f(i)+' → '+f(o);d.due=f(add(i,GEST))+' → '+f(add(o,GEST));}
+    if(d.stage==='Waiting scan')d.note='Scan due '+f(sc);});
+  renderBucks();rerenderDoes();renderAllPlans();
+  toast(`🚪 ${g.buck} is out — <b>${n} does</b> waiting scan on ${f(sc)}`,snap);
+  $('toastUndo').onclick=()=>{does.splice(0,does.length,...JSON.parse(snap));groups.splice(0,groups.length,...JSON.parse(gs));$('toast').classList.remove('show');renderBucks();rerenderDoes();renderAllPlans();};}
+/* ================= DOES ================= */
+const does=[
+  {tag:'B-0142',ageD:1520,w:41,breed:'Beetal',age:'4 y 2 m',kid:3,here:2,stage:'Pregnant',plan:'spring',g:0,seen:2,buck:'BK-07',cr:'25 Sep → 6 Nov',due:'22 Feb → 5 Apr',kids:5,alive:4,
+   hist:[['cur','25 Sep → 6 Nov 2026 · BK-07','Scanned 2 kids · pregnant'],['','5 Apr 2026 · BK-07','Kidded 4 Sep · 2 born, 2 alive'],['','3 May 2025 · BK-02','Kidded 30 Sep · 3 born, 2 alive'],['empty','12 Apr 2025 · BK-02','Scanned empty']],sire:'BK-02',dam:'B-0060'},
+  {tag:'B-0187',ageD:430,w:31,breed:'Beetal',age:'1 y 2 m',kid:0,stage:'Waiting scan',plan:'spring',g:0,buck:'BK-07',cr:'25 Sep → 6 Nov',due:'22 Feb → 5 Apr',hist:[['cur','25 Sep → 6 Nov 2026 · BK-07','First cross — waiting scan']],sire:'BK-02',dam:'B-0142'},
+  {tag:'B-0219',ageD:920,w:36,breed:'Beetal',age:'2 y 6 m',kid:1,stage:'Waiting scan',plan:'spring',g:0,buck:'BK-07',cr:'25 Sep → 6 Nov',due:'22 Feb → 5 Apr',hist:[['cur','25 Sep → 6 Nov 2026 · BK-07','Waiting scan']],sire:'BK-02',dam:'B-0060'},
+  {tag:'M-0031',ageD:1100,w:33,breed:'Makhee Cheeni',age:'3 y',kid:2,stage:'Pregnant',plan:'spring',g:1,seen:3,buck:'BK-11',cr:'8 Oct',due:'7 Mar',hist:[['cur','8 Oct 2026 · BK-11','Scanned 3 kids · pregnant']],sire:'—',dam:'—'},
+  {tag:'B-0203',ageD:730,w:35,breed:'Beetal',age:'2 y',kid:1,stage:'Waiting scan',plan:'spring',g:1,fix:1,buck:'BK-11',cr:'2 Oct',due:'1 Mar',hist:[['cur','2 Oct 2026 · BK-11','Hand mated — waiting scan']],sire:'BK-02',dam:'B-0060'},
+  {tag:'B-0230',ageD:335,w:24,breed:'Beetal',age:'11 m',kid:0,stage:'Getting ready',plan:'sept',g:null,buck:'—',cr:'—',due:'—',note:'24 kg — needs 28 kg',hist:[],sire:'BK-07',dam:'B-0142'},
+  {tag:'B-0231',ageD:305,w:null,breed:'Beetal',age:'10 m',kid:0,stage:'Getting ready',plan:'sept',g:null,buck:'—',cr:'—',due:'—',note:'No weight yet',hist:[],sire:'BK-07',dam:'B-0060'},
+  {tag:'B-0098',ageD:1340,w:38,breed:'Beetal',age:'3 y 8 m',kid:3,stage:'Kidded',plan:'sept',g:null,buck:'—',cr:'—',due:'—',note:'Kids 80 days — wean soon',hist:[['','3 Apr 2026 · BK-07','Kidded 1 Sep · 2 born, 2 alive']],sire:'BK-02',dam:'B-0060'},
+];
+const extraDoes=[['B-0240','Beetal',980,36,2,'sept','BK-02','B-0060'],['B-0241','Beetal',1150,39,3,'sept','BK-02','B-0142'],['B-0242','Beetal',760,33,1,'sept','BK-02','B-0060'],['B-0243','Beetal',420,30,0,'sept','BK-07','B-0142'],['B-0244','Beetal',410,29,0,'sept','BK-11','B-0060'],['B-0245','Beetal',1300,41,4,'sept','BK-02','B-0060'],['B-0246','Beetal',890,35,2,'sept','BK-02','B-0098'],['B-0247','Beetal',520,31,1,'sept','BK-02','B-0142'],['B-0248','Beetal',640,34,1,'sept','BK-02','B-0060'],['B-0249','Beetal',1050,38,3,'sept','BK-02','B-0098'],['M-0050','Makhee Cheeni',900,32,2,'sept','—','—'],['M-0051','Makhee Cheeni',700,30,1,'sept','—','—'],['M-0052','Makhee Cheeni',1200,35,3,'sept','—','—'],['M-0053','Makhee Cheeni',380,26,0,'sept','—','—'],['B-0250','Beetal',280,22,0,'sept','BK-07','B-0142'],['B-0251','Beetal',990,37,2,'spring','BK-02','B-0060'],['B-0252','Beetal',860,36,2,'spring','BK-02','B-0098'],['B-0253','Beetal',1100,40,3,'spring','BK-02','B-0060'],['B-0254','Beetal',830,34,1,'sept','BK-02','B-0098']];
+extraDoes.forEach(([tag,breed,ageD,w,kid,pl,sire,dam])=>does.push({tag,breed,ageD,w,kid,age:ageTxt(ageD),stage:'Getting ready',plan:pl,g:null,buck:'—',cr:'—',due:'—',hist:[],sire,dam}));
+let fStage='all',fKid='all',selDoe='B-0142';
+function renderDoes(){
+  const list=does.filter(d=>(fStage==='all'||d.stage===fStage)&&(fKid==='all'||(fKid==='5'?d.kid>=5:d.kid==fKid)));
+  $('doeRows').innerHTML=list.map(d=>`<tr class="click${d.tag===selDoe?' sel':''}" data-t="${d.tag}"><td><b>${d.tag}</b></td><td>${d.breed}</td><td>${d.age}</td><td>${kidPill(d.kid||0)}</td><td>${msPill(msOf(d))}</td><td>${stagePill(d.stage)}${d.note?'<div class="small" style="color:var(--red);margin-top:4px">'+d.note+'</div>':''}</td><td>${d.buck}</td><td>${d.cr}</td><td>${d.due}</td><td class="r">${statusSelect(d)}</td></tr>`).join('')||'<tr><td colspan="10" class="muted">No does match.</td></tr>';
+  document.querySelectorAll('#doeRows tr.click').forEach(r=>r.onclick=()=>{selDoe=r.dataset.t;renderDoes();$('profile').scrollIntoView({behavior:'smooth',block:'start'})});
+  renderProfile();
+}
+function renderProfile(){
+  const d=does.find(x=>x.tag===selDoe);if(!d)return;
+  const bought=d.kid-(d.here??d.kid);
+  $('profile').innerHTML=`<div class="card"><div class="profile"><div class="avatar">${d.tag.split('-')[1].slice(-3)}</div><div><h2>${d.tag}</h2><div class="muted">${d.breed} · Female · ${d.age} · ${pLabel(d.plan)}</div></div><span style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">${stagePill(d.stage)}<button class="btn sm" onclick="openStatus('${d.tag}')">Change status</button></span></div>
+   <div class="stats" style="margin:20px 0 0"><div class="stat"><div class="v">${d.kid}×</div><div class="l">Kidded${d.here!=null?' ('+d.here+' here + <input class="n" value="'+bought+'" style="width:44px;padding:2px;font-size:13px"> before purchase)':''} <span class="tag">#12</span></div></div>
+   <div class="stat"><div class="v">${d.kids??0}</div><div class="l">Kids born${d.alive!=null?' ('+d.alive+' alive)':''}</div></div>
+   <div class="stat"><div class="v" style="font-size:22px">${d.due}</div><div class="l">${d.buck!=='—'?'Due · '+d.buck:'Not crossed yet'}</div></div></div>
+   <div class="mh"><span>📋 <b>Main herd shows:</b></span>${stagePill(d.stage)}<span>${pLabel(d.plan)}</span>${kidPill(d.kid||0)}${msPill(msOf(d))}${d.ki?'<span class="muted">BCS '+d.ki.bcs+'/5 · '+d.ki.health+'</span>':''}${d.mg?mgPill(d.mg):''}${(()=>{if(d.g==null)return d.note?'<span class="muted">· '+d.note+'</span>':'';const ds=gDates(groups[d.g]),from=['Pregnant','Dry'].includes(d.stage)?3:d.stage==='Waiting scan'?2:0,nx=ds.slice(from).find(x=>x[1]>=TODAY)||ds[ds.length-1];return '<span class="muted">· Next: '+nx[0]+' '+f(nx[1])+'</span>';})()}<span class="muted" style="margin-left:auto">updates by itself when you change status here</span><span class="tag">#13</span></div></div>
+   <div class="grid2"><div class="card"><div class="card-h"><h2>Breeding history</h2><span class="tag">#5</span></div>
+   ${d.hist.length?'<ul class="hist">'+d.hist.map(h=>`<li class="${h[0]}"><b>${h[1]}</b><span>${h[2]}</span></li>`).join('')+'</ul>':'<p class="muted">Not crossed yet.</p>'}
+   <div class="dev"><b>Dev #5:</b> new <code>matings</code> table, one row per cross (today it is wiped after scan/kidding). Migrate old kiddings, empty scans, abortions, open crosses.</div></div>
+   <div class="card"><div class="card-h"><h2>Family</h2></div>
+   <svg viewBox="0 0 320 190" width="100%" style="font-family:Inter">
+    <rect x="6" y="70" width="108" height="50" rx="12" fill="#E6EFE8"/><text x="60" y="91" text-anchor="middle" font-size="13" font-weight="700" fill="#1E4635">${d.tag}</text><text x="60" y="108" text-anchor="middle" font-size="11" fill="#46504a">${d.kid}× · ${d.kids??0} kids</text>
+    <path d="M114 95 C140 95 140 45 166 45 M114 95 C140 95 140 145 166 145" stroke="#D9D2C5" stroke-width="2" fill="none"/>
+    <rect x="166" y="20" width="146" height="50" rx="12" fill="#fff" stroke="#E7E1D6"/><text x="239" y="41" text-anchor="middle" font-size="12" font-weight="600" fill="#1B2420">Sire ${d.sire}</text><text x="239" y="58" text-anchor="middle" font-size="11" fill="#7c847f">sired 61 kids</text>
+    <rect x="166" y="120" width="146" height="50" rx="12" fill="#fff" stroke="#E7E1D6"/><text x="239" y="141" text-anchor="middle" font-size="12" font-weight="600" fill="#1B2420">Dam ${d.dam}</text><text x="239" y="158" text-anchor="middle" font-size="11" fill="#7c847f">6× · 13 kids</text>
+   </svg><div class="dev"><b>Dev #12:</b> <code>pedigreeSVG</code> (L8747): "N× · K kids" under females, "sired K kids" under males.</div></div></div>`;
+}
+$('stageChips').onclick=e=>{const b=e.target.closest('button');if(!b)return;fStage=b.dataset.f;syncChips();renderDoes();renderFlow();};
+$('kidFilter').oninput=e=>{fKid=e.target.value;renderDoes()};
+
+/* ================= SCAN FLOW ================= */
+const STAGES=['Getting ready','In heat','Crossed','Waiting scan','Pregnant','Dry','Kidded'];
+const MOVES=['heat seen','with a buck','buck out','scan: pregnant','dry-off date','record kidding'];
+const waiting=()=>does.filter(d=>d.stage==='Waiting scan'||d.stage==='Crossed');
+function toast(msg,snap){const t=$('toast');$('toastMsg').innerHTML=msg+(snap?' <span style="opacity:.65">· Main herd updated</span>':'');t.classList.add('show');
+  $('toastUndo').style.display=snap?'':'none';
+  $('toastUndo').onclick=()=>{does.splice(0,does.length,...JSON.parse(snap));t.classList.remove('show');rerenderDoes();};
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),5000);}
+function rerenderDoes(){renderDoes();renderGroups();renderFlow();renderAllPlans();if(typeof renderKidding==='function')renderKidding();}
+
+/* ---- scan sheet: one buck group, one row per doe ---- */
+let scG=null, scRes={}, scFocus=null;
+const gKey=d=>d.g==null?'none':String(d.g);
+function scanGroups(){const m={};waiting().forEach(d=>{(m[gKey(d)]=m[gKey(d)]||[]).push(d)});return m;}
+function openScan(tag,gi){
+  const m=scanGroups();
+  if(tag){const d=does.find(x=>x.tag===tag);if(d)scG=gKey(d);scFocus=tag;}
+  else if(gi!=null)scG=String(gi);
+  if(!m[scG])scG=Object.keys(m)[0]||null;
+  if(!$('scDate').value)$('scDate').value=iso(TODAY);
+  drawScan();openP('scanPanel');
+}
+function drawScan(){
+  const m=scanGroups(),keys=Object.keys(m);
+  if(scG&&!m[scG])scG=keys[0]||null;
+  $('scGroups').innerHTML=keys.length?keys.map(k=>{const g=k==='none'?null:groups[+k];const left=m[k].length,done=m[k].filter(d=>scRes[d.tag]).length;
+    return `<button class="${k===scG?'on':''}" data-k="${k}">${g?g.buck+' · '+plan(g.season).e:'No buck group'}<span>${done}/${left}</span></button>`}).join(''):'<span class="muted small">Nobody is waiting for a scan 🎉</span>';
+  document.querySelectorAll('#scGroups button').forEach(b=>b.onclick=()=>{scG=b.dataset.k;drawScan();});
+  const list=scG?m[scG]:[],q=$('scFind').value.trim().toUpperCase();
+  const g=scG&&scG!=='none'?groups[+scG]:null,buckIn=g&&add(P(g.inD),g.stay)>=P($('scDate').value||iso(TODAY));
+  const others=d=>plans.filter(p=>p.id!==d.plan).concat(plans.filter(p=>p.id===d.plan));
+  $('scTable').innerHTML=list.length?`<table><thead><tr><th>Doe</th><th>Crossed</th><th>Result</th><th>Details</th></tr></thead><tbody>
+  ${list.map(d=>{const r=scRes[d.tag]||{},hit=q&&d.tag.includes(q);
+    let det='<span class="muted small">← pick a result</span>';
+    if(r.r==='preg')det=`<span class="small muted">Kids</span> <span class="kp">${[1,2,3,4].map(n=>`<button data-t="${d.tag}" data-k="${n}" class="${(r.k||2)===n?'on':''}">${n===4?'4+':n}</button>`).join('')}</span>
+      <input class="n dd" data-t="${d.tag}" data-f="days" placeholder="days" value="${r.days||''}" title="Days pregnant (optional)">`;
+    if(r.r==='empty')det=`<select class="s sm2" data-t="${d.tag}" data-f="next">${[['next','📅 Next birth group'],['heat','👀 Watch for heat'],['cull','🚩 Cull list']].concat(buckIn?[['back','🐐 Back with buck']]:[]).map(o=>`<option value="${o[0]}"${(r.next||'next')===o[0]?' selected':''}>${o[1]}</option>`).join('')}</select>
+      ${(r.next||'next')==='next'?`<select class="s sm2" data-t="${d.tag}" data-f="plan">${others(d).map(p=>`<option value="${p.id}"${(r.plan||others(d)[0].id)===p.id?' selected':''}>${p.e} ${p.name}</option>`).join('')}</select>`:''}`;
+    if(r.r==='unsure')det=`<span class="small muted">Scan again in</span> <input class="n dd" data-t="${d.tag}" data-f="again" value="${r.again||14}"> <span class="small muted">days</span>`;
+    return `<tr class="${r.r?'r-'+r.r:''}${hit?' hit':''}" id="sc-${d.tag}"><td><b>${d.tag}</b><div class="small muted">${d.breed} · ${d.kid===0?'first time':d.kid+'× kidded'}</div></td>
+      <td class="small">${d.cr}<div class="muted">${d.buck}</div></td>
+      <td><div class="rseg">${[['preg','🤰','Pregnant'],['empty','⭕','Empty'],['unsure','❓','Not sure']].map(o=>`<button data-t="${d.tag}" data-r="${o[0]}" class="${r.r===o[0]?'on':''}">${o[1]} ${o[2]}</button>`).join('')}</div></td>
+      <td class="det">${det}</td></tr>`}).join('')}</tbody></table>`:'<p class="muted" style="padding:18px;margin:0">No does waiting in this group.</p>';
+  // wiring
+  document.querySelectorAll('#scTable .rseg button').forEach(b=>b.onclick=()=>{const t=b.dataset.t,r=scRes[t]||{};
+    if(r.r===b.dataset.r)delete scRes[t];else scRes[t]={...r,r:b.dataset.r,k:r.k||2};drawScan();});
+  document.querySelectorAll('#scTable .kp button').forEach(b=>b.onclick=()=>{scRes[b.dataset.t].k=+b.dataset.k;drawScan();});
+  document.querySelectorAll('#scTable [data-f]').forEach(el=>el.oninput=el.onchange=()=>{scRes[el.dataset.t][el.dataset.f]=el.value;if(el.tagName==='SELECT')drawScan();else sumScan();});
+  if(scFocus){const r=$('sc-'+scFocus);if(r){r.classList.add('hit');setTimeout(()=>r.scrollIntoView({block:'center',behavior:'smooth'}),60);}scFocus=null;}
+  sumScan();
+}
+function sumScan(){
+  const m=scanGroups(),list=scG?m[scG]||[]:[],done=list.filter(d=>scRes[d.tag]);
+  const c=k=>done.filter(d=>scRes[d.tag].r===k).length;
+  $('scSum').innerHTML=list.length?`<b class="serif" style="font-size:18px">${done.length} of ${list.length}</b> recorded &nbsp; <span class="pill">🤰 ${c('preg')} pregnant</span> <span class="pill red">⭕ ${c('empty')} empty</span> <span class="pill gold">❓ ${c('unsure')} not sure</span>`:'';
+  $('scSave').disabled=!done.length;$('scSave').textContent=done.length?`Save ${done.length} result${done.length>1?'s':''}`:'Save results';
+  $('scAllPreg').style.display=list.length&&done.length<list.length?'':'none';
+}
+function saveScan(){
+  const m=scanGroups(),list=(scG?m[scG]:[]).filter(d=>scRes[d.tag]);if(!list.length)return;
+  const snap=JSON.stringify(does),s=P($('scDate').value||iso(TODAY));let np=0,ne=0,nu=0;
+  list.forEach(d=>{const r=scRes[d.tag],cur=d.hist.find(h=>h[0]==='cur');d.note=null;
+    if(r.r==='preg'){np++;const n=+r.days;d.stage='Pregnant';d.seen=r.k||2;
+      if(n){d.cr=f(add(s,-n));d.due=f(add(s,GEST-n));}
+      if(cur)cur[2]='Scanned '+f(s)+' · '+(d.seen===4?'4+':d.seen)+' kids · pregnant';}
+    if(r.r==='empty'){ne++;if(cur){cur[0]='empty';cur[2]='Scanned empty '+f(s);}const nx=r.next||'next';
+      if(nx==='back'){d.stage='Crossed';d.note='Back with '+d.buck;}
+      else{const pl=nx==='next'?(r.plan||(plans.find(p=>p.id!==d.plan)||plans[0]).id):d.plan;
+        d.g=null;d.buck='—';d.cr='—';d.due='—';d.seen=null;d.plan=pl;
+        d.stage=nx==='cull'?'Cull list':'Getting ready';d.note=nx==='heat'?'Watch for heat':nx==='cull'?'Empty':'Next: '+pLabel(pl);}}
+    if(r.r==='unsure'){nu++;d.stage='Waiting scan';d.note='Scan again '+f(add(s,+r.again||14));}
+    delete scRes[d.tag];});
+  rerenderDoes();drawScan();
+  toast(`Scan saved — <b>${np} pregnant</b>${ne?', '+ne+' empty':''}${nu?', '+nu+' to rescan':''}`,snap);
+}
+$('scDate').oninput=drawScan;
+$('scFind').oninput=drawScan;
+$('scFind').onkeydown=e=>{if(e.key!=='Enter')return;const q=e.target.value.trim().toUpperCase(),d=waiting().find(x=>x.tag===q);
+  if(!d){toast(`<b>${q}</b> is not waiting for a scan`);return;}e.target.value='';openScan(d.tag);};
+$('scAllPreg').onclick=()=>{const m=scanGroups();(m[scG]||[]).forEach(d=>{if(!scRes[d.tag])scRes[d.tag]={r:'preg',k:2};});drawScan();};
+$('scClear').onclick=()=>{scRes={};drawScan();};
+$('scSave').onclick=saveScan;
+
+/* ================= CHANGE STATUS (any doe, any time) ================= */
+const ST=[
+  ['Getting ready','🌱','Ready for the next cross'],
+  ['In heat','🔥','Showing heat today'],
+  ['Crossed','❤️','With a buck / mated'],
+  ['Waiting scan','⏳','Buck out, scan due'],
+  ['Pregnant','🤰','Scan says pregnant'],
+  ['Empty','⭕','Scan says not pregnant'],
+  ['Dry','🌙','Milking stopped'],
+  ['Kidded','🍼','Gave birth'],
+  ['Lost kids','💔','Aborted / lost pregnancy'],
+  ['Cull list','🚩','Plan to remove'],
+  ['Entered by mistake','↩️','Undo her last cross'],
+];
+let stDoe=null,stTo=null,stKids=2;
+function statusSelect(d){
+  return `<select class="s stsel" onclick="event.stopPropagation()" onchange="openStatus('${d.tag}',this.value);this.selectedIndex=0">
+    <option value="">Change status…</option>${ST.filter(s=>s[0]!==d.stage).map(s=>`<option value="${s[0]}">${s[1]} ${s[0]}</option>`).join('')}</select>`;
+}
+function openStatus(tag,to){
+  stDoe=does.find(x=>x.tag===tag);stTo=to||null;if(!stDoe)return;
+  $('stTitle').innerHTML=`Change status — ${tag}`;
+  drawStatus();$('stModal').classList.add('show');
+}
+function closeStatus(){$('stModal').classList.remove('show');}
+const opt=(arr,sel)=>arr.map(a=>{const[v,l]=Array.isArray(a)?a:[a,a];return `<option value="${v}"${v===sel?' selected':''}>${l}</option>`}).join('');
+const planOpts=sel=>opt(plans.map(p=>[p.id,p.e+' '+p.name]),sel);
+const buckOpts=sel=>opt(bucks.map(b=>[b.tag,b.tag+(b.check?'':' (no buck check)')]),sel);
+function drawStatus(){
+  const d=stDoe,t=iso(TODAY);
+  $('stFrom').innerHTML=`Now: ${stagePill(d.stage)}${stTo?` <span style="color:var(--clay);font-weight:700">→</span> ${stTo==='Entered by mistake'?'<span class="pill gray">Undo cross</span>':stagePill(stTo)}`:''}`;
+  $('stPick').innerHTML=ST.filter(s=>s[0]!==d.stage).map(s=>`<button class="optc${stTo===s[0]?' on':''}" data-s="${s[0]}"><span class="oi">${s[1]}</span><b>${s[0]}</b><span>${s[2]}</span></button>`).join('');
+  document.querySelectorAll('#stPick .optc').forEach(b=>b.onclick=()=>{stTo=b.dataset.s;drawStatus();});
+  let h='';
+  switch(stTo){
+    case 'Getting ready': h=`<div class="say2">Plan her for <select class="s" id="st_plan">${planOpts(d.plan)}</select></div>`+(d.g!=null?`<div class="muted small">She will be taken out of ${d.buck}'s group.</div>`:'');break;
+    case 'In heat': h=`<div class="say2">Seen in heat on <input type="date" class="d" id="st_date" value="${t}"></div><div class="say2">Cross her now with <select class="s" id="st_buck"><option value="">— not yet —</option>${buckOpts('')}</select></div>`;break;
+    case 'Crossed': h=`<div class="say2">Crossed with <select class="s" id="st_buck">${buckOpts(d.buck!=='—'?d.buck:'BK-07')}</select> on <input type="date" class="d" id="st_date" value="${t}"></div><div class="say2">Method <select class="s" id="st_meth">${opt(['Hand mating','Pen (runs with buck)'])}</select> · for <select class="s" id="st_plan">${planOpts(d.plan)}</select></div>`;break;
+    case 'Waiting scan': h=`<div class="say2">Buck taken out on <input type="date" class="d" id="st_date" value="${t}"></div>`;break;
+    case 'Pregnant': h=`<div class="say2">Scanned on <input type="date" class="d" id="st_date" value="${t}"></div><div class="lbl">Kids seen</div><div class="numpick" id="st_k">${[1,2,3,4].map(n=>`<button data-n="${n}" class="${n===stKids?'on':''}">${n===4?'4+':n}</button>`).join('')}</div><div class="say2">About <input class="n" id="st_days" placeholder="—"> days pregnant <span class="muted small">(optional)</span></div><div class="muted small">Rule kept: pregnant only after an ultrasound scan.</div>`;break;
+    case 'Empty': h=`<div class="say2">Scanned on <input type="date" class="d" id="st_date" value="${t}"></div><div class="say2">Next <select class="s" id="st_next">${opt([['next','📅 Next birth group'],['heat','👀 Watch for heat'],['back','🐐 Back with the buck'],['cull','🚩 Cull list']])}</select> <select class="s" id="st_plan">${planOpts(plans.find(p=>p.id!==d.plan)?.id)}</select></div>`;break;
+    case 'Dry': h=`<div class="say2">Dried off on <input type="date" class="d" id="st_date" value="${t}"></div>`+(d.stage!=='Pregnant'?`<div class="note">She is not marked pregnant — are you sure?</div>`:'');break;
+    case 'Kidded': h=`<div class="say2">Kidded on <input type="date" class="d" id="st_date" value="${t}"> · <input class="n" id="st_alive" value="2"> alive, <input class="n" id="st_still" value="0"> stillborn</div><div class="muted small">For birth weights, ease and mothering use the full form: <a href="#" onclick="closeStatus();go('kids');return false">Kidding &amp; kids →</a></div>`+(!['Pregnant','Dry'].includes(d.stage)?`<div class="note">She is not marked pregnant — are you sure?</div>`:'');break;
+    case 'Lost kids': h=`<div class="say2">Lost the kids on <input type="date" class="d" id="st_date" value="${t}"></div><div class="say2">Then plan her for <select class="s" id="st_plan">${planOpts(d.plan)}</select></div>`;break;
+    case 'Cull list': h=`<div class="say2">Reason <select class="s" id="st_reason">${opt(['Empty twice','Poor mother','Hard births','Old age','Health','Other'])}</select></div>`;break;
+    case 'Entered by mistake': h=`<div class="say2">This removes her last cross${d.cr!=='—'?' ('+d.cr+' · '+d.buck+')':''} and puts her back to <b>Getting ready</b>.</div><span class="tag fix">FIX #1</span>`;break;
+  }
+  $('stFields').innerHTML=h?`<div class="sub2">${h}</div>`:'';
+  document.querySelectorAll('#st_k button').forEach(b=>b.onclick=()=>{stKids=+b.dataset.n;drawStatus();});
+  $('stSave').disabled=!stTo;
+}
+function saveStatus(){
+  const d=stDoe;if(!d||!stTo)return;
+  const v=id=>$(id)?$(id).value:null, dt=v('st_date')?P(v('st_date')):TODAY;
+  const snap=JSON.stringify(does),cur=d.hist.find(h=>h[0]==='cur');let msg=`<b>${d.tag}</b> → ${stTo}`;
+  const leave=()=>{d.g=null;d.buck='—';d.cr='—';d.due='—';d.seen=null;};
+  const cross=(bk,meth,pl)=>{if(cur)cur[0]='';d.buck=bk;d.plan=pl||d.plan;
+    const gi=groups.findIndex(g=>g.buck===bk&&g.season===d.plan);d.g=gi<0?null:gi;
+    d.cr=f(dt);d.due=f(add(dt,GEST));d.seen=null;d.stage='Crossed';
+    d.hist.unshift(['cur',f(dt,1)+' · '+bk,meth+' — waiting scan']);};
+  d.note=null;
+  switch(stTo){
+    case 'Getting ready': leave();d.plan=v('st_plan');d.stage='Getting ready';d.note='For '+pLabel(d.plan);break;
+    case 'In heat': if(v('st_buck')){cross(v('st_buck'),'Hand mating (heat seen)');msg=`<b>${d.tag}</b> in heat → crossed with ${v('st_buck')}`;}
+                    else{d.stage='In heat';d.note='Heat seen '+f(dt);} break;
+    case 'Crossed': cross(v('st_buck'),v('st_meth'),v('st_plan'));msg=`<b>${d.tag}</b> crossed with ${d.buck} · scan ${f(add(dt,plan(d.plan).r.scan))}`;break;
+    case 'Waiting scan': d.stage='Waiting scan';d.note='Scan due '+f(add(dt,plan(d.plan).r.scan));break;
+    case 'Pregnant':{const n=+v('st_days');d.stage='Pregnant';d.seen=stKids;
+      if(n){d.cr=f(add(dt,-n));d.due=f(add(dt,GEST-n));}
+      if(cur)cur[2]='Scanned '+(stKids===4?'4+':stKids)+' kids · pregnant';break;}
+    case 'Empty':{if(cur){cur[0]='empty';cur[2]='Scanned empty';}const nx=v('st_next');
+      if(nx==='back'){d.stage='Crossed';d.note='Back with '+d.buck;}
+      else{leave();if(nx==='next'){d.plan=v('st_plan');d.stage='Getting ready';d.note='Next: '+pLabel(d.plan);}
+        if(nx==='heat'){d.stage='Getting ready';d.note='Watch for heat';}
+        if(nx==='cull'){d.stage='Cull list';d.note='Empty';}}
+      msg=`<b>${d.tag}</b> empty — ${d.note}`;break;}
+    case 'Dry': d.stage='Dry';d.note='Dried off '+f(dt);break;
+    case 'Kidded':{const a=+v('st_alive')||0,s=+v('st_still')||0;d.stage='Kidded';d.kid=(d.kid||0)+1;if(d.here!=null)d.here++;
+      d.kids=(d.kids||0)+a+s;d.alive=(d.alive||0)+a;
+      if(cur){cur[0]='';cur[2]='Kidded '+f(dt)+' · '+(a+s)+' born, '+a+' alive';}
+      d.g=null;d.due=f(dt);d.note='Kids born '+f(dt);msg=`<b>${d.tag}</b> kidded — ${a} alive`;break;}
+    case 'Lost kids': if(cur){cur[0]='empty';cur[2]='Lost the kids '+f(dt);}leave();d.plan=v('st_plan');d.stage='Getting ready';d.note='Lost kids '+f(dt);break;
+    case 'Cull list': d.stage='Cull list';d.note=v('st_reason');leave();break;
+    case 'Entered by mistake': d.hist=d.hist.filter(h=>h!==cur);leave();d.stage='Getting ready';msg=`Cross removed — <b>${d.tag}</b> back to Getting ready`;break;
+  }
+  closeStatus();rerenderDoes();toast(msg,snap);
+}
+$('stSave').onclick=saveStatus;
+document.querySelectorAll('[data-stclose]').forEach(b=>b.onclick=closeStatus);
+$('stModal').onclick=e=>{if(e.target.id==='stModal')closeStatus();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeStatus();});
+
+/* flow summary */
+function renderFlow(){
+  $('flowline').innerHTML=STAGES.map((s,i)=>`<div class="fnode${fStage===s?' on':''}" data-s="${s}"><b>${does.filter(d=>d.stage===s).length}</b><span>${s}</span></div>`+(i<STAGES.length-1?`<div class="farrow">${MOVES[i]}</div>`:'')).join('');
+  document.querySelectorAll('.fnode').forEach(n=>n.onclick=()=>{fStage=fStage===n.dataset.s?'all':n.dataset.s;syncChips();renderDoes();renderFlow();});
+}
+function syncChips(){
+  const all=['all',...STAGES,'Cull list'];
+  $('stageChips').innerHTML=all.map(s=>`<button data-f="${s}" class="${s===fStage?'on':''}">${s==='all'?'All':s}</button>`).join('');
+}
+
+/* ================= KIDDING & KIDS ================= */
+const kidBorn=a=>iso(add(TODAY,-a));
+const kids=[
+  {tag:'B-0142-K1',dam:'B-0142',sex:'F',born:kidBorn(80),bkg:3.1,wkg:14.0,hl:'Good',raised:'Mother',plan:'sept'},
+  {tag:'B-0142-K2',dam:'B-0142',sex:'M',born:kidBorn(80),bkg:2.8,wkg:12.6,hl:'Good',raised:'Mother',plan:'sept'},
+  {tag:'M-0031-K1',dam:'M-0031',sex:'F',born:kidBorn(95),bkg:2.4,wkg:11.9,hl:'Good',raised:'Mother',plan:'sept'},
+  {tag:'B-0098-K1',dam:'B-0098',sex:'F',born:kidBorn(71),bkg:3.2,wkg:null,hl:'Good',raised:'Mother',plan:'sept'},
+  {tag:'B-0098-K2',dam:'B-0098',sex:'M',born:kidBorn(71),bkg:3.0,wkg:null,hl:'Good',raised:'Mother',plan:'sept'},
+  {tag:'B-0120-K1',dam:'B-0120',sex:'M',born:kidBorn(78),bkg:2.6,wkg:null,hl:'Good',raised:'Mother',plan:'sept'},
+  {tag:'B-0120-K2',dam:'B-0120',sex:'F',born:kidBorn(78),bkg:2.4,wkg:null,hl:'Weak',raised:'Powder',plan:'sept'},
+  {tag:'B-0120-K3',dam:'B-0120',sex:'F',born:kidBorn(78),bkg:2.2,wkg:null,hl:'Good',raised:'Foster',plan:'sept'},
+  {tag:'B-0125-K1',dam:'B-0125',sex:'M',born:kidBorn(67),bkg:2.9,wkg:null,hl:'Good',raised:'Powder',plan:'sept'},
+];
+// mothers that already kidded (sample)
+[['B-0098',71,2,2,'Easy',5,'Good',[],3,'Keep','',5],['B-0120',78,3,3,'Slight help',4,'Watch',['Mastitis'],2,'Watch','Mastitis — check again',2],['B-0125',67,2,1,'Hard pull',1,'Good',[],3,'Cull','Rejects kids',3],['B-0130',60,4,4,'Slight help',5,'Good',[],3,'Keep','',5],['B-0131',64,1,1,'Easy',4,'Good',[],4,'Keep','',4],['B-0132',58,2,2,'Easy',4,'Good',[],3,'Keep','',4]]
+ .forEach(([t,a,born,alive,ease,moth,health,iss,bcs,keep,why,milk])=>{
+   let d=does.find(x=>x.tag===t);
+   if(!d){d={tag:t,breed:'Beetal',ageD:1400,w:37,kid:2,age:ageTxt(1400),plan:'sept',g:null,buck:'—',cr:'—',due:'—',hist:[],sire:'BK-02',dam:'B-0060'};does.push(d);}
+   d.stage='Kidded';d.note=null;d.ki={date:kidBorn(a),born,alive,ease,moth,milk,health,issues:iss,bcs,keep,why};});
+// past mother scores (sample) for does that kidded before
+does.forEach((d,i)=>{if(!d.ki&&d.kid>0&&d.ms==null)d.ms=[4.5,3.8,4.0,3.5,4.8,4.3,3.3,4.0][i%8];});
+const MOTH_P=[[5,'5 — Excellent'],[4,'4 — Good'],[3,'3 — OK'],[2,'2 — Poor'],[1,'1 — Rejects kids']];
+const MILK_P=[[5,'5 — Plenty'],[4,'4 — Good'],[3,'3 — Enough'],[2,'2 — Low'],[1,'1 — No milk']];
+const BCS_P=[[1,'1 — Very thin'],[2,'2 — Thin'],[3,'3 — Good'],[4,'4 — Fat'],[5,'5 — Very fat']];
+const EASE_PT={'Easy':5,'Slight help':4,'Hard pull':2,'Vet / caesarean':1},HEALTH_PT={Good:5,Watch:3,Sick:1};
+const ptSel=(f,opts,v,extra='')=>`<select class="s ptsel p${v}" data-pf="${f}" ${extra}>${opts.map(o=>`<option value="${o[0]}"${+o[0]===+v?' selected':''}>${o[1]}</option>`).join('')}</select>`;
+const kScore=k=>((+k.moth+(+k.milk||3)+(EASE_PT[k.ease]||3)+(HEALTH_PT[k.health]||3))/4);
+const msOf=d=>d.ki?kScore(d.ki):d.ms??null;
+const msPill=v=>v==null?'<span class="muted">—</span>':`<span class="mscore ${v>=4?'hi':v>=3?'mid':'lo'}">${'★'.repeat(Math.round(v))}<span class="st0">${'★'.repeat(5-Math.round(v))}</span> <b>${v.toFixed(1)}</b></span>`;
+const ord=n=>n+(['th','st','nd','rd'][(n%100-20)%10]||['th','st','nd','rd'][n%100]||'th');
+const kidPill=n=>n===0?'<span class="pill gold">first time</span>':`<span class="kcount">${n}×</span>`;
+const EASE=['Easy','Slight help','Hard pull','Vet / caesarean'];
+const MOTH=['Great','Good','OK','Poor','Rejects kids'];
+const HEALTH=[['Good','😀'],['Watch','👀'],['Sick','🤒']];
+const ISSUES=['Retained placenta','Mastitis','Milk fever','Low milk','Prolapse','Weak / down'];
+const KEEP=[['Keep','✅'],['Watch','👀'],['Cull','🚩']];
+let kdF='all',kkF='all',kOpen=null,kF=null,wSel=new Set();
+function dueOf(d){if(d.dueT)return d.dueT;if(d.g!=null&&groups[d.g])return add(P(groups[d.g].inD),GEST);return null;}
+const seg=(f,opts,val,extra='')=>`<div class="seg2" data-kf="${f}" ${extra}>${opts.map(o=>{const[v,ic]=Array.isArray(o)?o:[o,''];return `<button data-v="${v}" class="${v===val?'on':''}" data-c="${v}">${ic?ic+' ':''}${v}</button>`}).join('')}</div>`;
+const kAge=k=>dd(TODAY)-dd(P(k.born));
+function kStat(k){const r=plan(k.plan||'sept').r,W=r.wean,a=kAge(k),auto=r.autoWean!==false,date=add(P(k.born),W);
+  if(k.weaned)return {s:'Weaned',how:'early',date:P(k.wDate||iso(TODAY))};
+  if(auto&&a>=W)return {s:'Weaned',how:'auto',date};
+  return {s:'On milk',left:Math.max(0,W-a),date,auto};}
+const adjKg=k=>k.wkg?(k.bkg+(k.wkg-k.bkg)/Math.max(1,kAge(k))*90).toFixed(1):'—';
+
+function newForm(d){return {date:iso(TODAY),alive:d.seen&&d.seen<4?d.seen:2,still:0,ease:'Easy',moth:4,milk:4,health:'Good',issues:[],bcs:3,keep:'Keep',why:'',note:'',
+  kids:Array.from({length:d.seen&&d.seen<4?d.seen:2},()=>({sex:'F',kg:'',col:'Yes',raised:'Mother',hl:'Good'}))};}
+function renderKidding(){
+  const pl=plans.find(p=>p.id==='sept')||plans[0],r=pl.r;
+  const dueL=does.filter(d=>['Pregnant','Dry'].includes(d.stage));
+  const kidded=does.filter(d=>d.ki);
+  const dueSoon=dueL.filter(d=>{const t=dueOf(d);return t&&dd(t)<=30;});
+  const alive=kids.length, watch=kidded.filter(d=>d.ki.health!=='Good'||d.ki.keep!=='Keep').length;
+  $('kStats').innerHTML=`<div class="stat"><div class="v">${dueL.length}</div><div class="l">Pregnant / dry — waiting to kid</div></div>
+   <div class="stat"><div class="v">${dueSoon.length}</div><div class="l">Due in the next 30 days</div></div>
+   <div class="stat"><div class="v">${kidded.length}</div><div class="l">Kidded (mothers with kids)</div></div>
+   <div class="stat"><div class="v">${alive}</div><div class="l">Kids on the ground</div></div>
+   <div class="stat"><div class="v" style="color:${watch?'var(--clay)':'var(--green)'}">${watch}</div><div class="l">Mothers to watch / cull</div></div>`;
+  // ---- due table
+  const F=[['all','All ('+dueL.length+')'],['soon','Due in 30 days'],['dry','Dry']];
+  $('kdFilter').innerHTML=F.map(x=>`<button data-f="${x[0]}" class="${x[0]===kdF?'on':''}">${x[1]}</button>`).join('');
+  document.querySelectorAll('#kdFilter button').forEach(b=>b.onclick=()=>{kdF=b.dataset.f;renderKidding();});
+  let L=dueL.filter(d=>kdF==='all'||(kdF==='soon'&&dueSoon.includes(d))||(kdF==='dry'&&d.stage==='Dry'));
+  L.sort((a,b)=>(dueOf(a)||9e15)-(dueOf(b)||9e15));
+  $('kdTable').innerHTML=L.length?`<table><thead><tr><th>Doe</th><th>Kiddings</th><th>Mother score</th><th>Buck</th><th>Stage</th><th>Due</th><th>Kids seen</th><th></th></tr></thead><tbody>${L.map(d=>{
+    const t=dueOf(d),n=t?dd(t):null,open=kOpen===d.tag;
+    return `<tr class="${open?'open':''}"><td><b>${d.tag}</b><div class="small muted">${d.breed}</div></td><td>${kidPill(d.kid||0)}<div class="small muted">next is ${ord((d.kid||0)+1)}</div></td><td>${msPill(msOf(d))}</td><td>${d.buck}</td><td>${stagePill(d.stage)}</td>
+      <td>${d.due}<div class="small ${n!=null&&n<=7?'':'muted'}" style="${n!=null&&n<0?'color:var(--red);font-weight:600':n!=null&&n<=7?'color:var(--clay);font-weight:600':''}">${n==null?'':n<0?(-n)+' days overdue':n===0?'today':'in '+n+' days'}</div></td>
+      <td>${d.seen?(d.seen===4?'4+':d.seen):'—'}</td>
+      <td class="r"><button class="btn sm${open?' ghost':''}" onclick="toggleKid('${d.tag}')">${open?'Close':'🍼 Record kidding'}</button></td></tr>
+      ${open?`<tr class="kform"><td colspan="8">${kidForm(d)}</td></tr>`:''}`}).join('')}</tbody></table>`:'<p class="muted" style="padding:16px;margin:0">No does here.</p>';
+  wireKidForm();
+  // ---- mother check
+  $('kmTable').innerHTML=kidded.length?`<table><thead><tr><th>Mother</th><th>Kiddings</th><th>Kidded</th><th>Kids</th><th>Birth</th><th>Mothering</th><th>Milk</th><th>Body cond.</th><th>Health</th><th>Score</th><th>Decision</th></tr></thead><tbody>${kidded.sort((a,b)=>P(b.ki.date)-P(a.ki.date)).map(d=>{const k=d.ki;
+    return `<tr class="${k.keep==='Cull'?'r-empty':k.health!=='Good'||k.keep==='Watch'?'r-unsure':''}"><td><b>${d.tag}</b><div class="small muted">${d.breed}</div></td>
+     <td><span class="kcount">${d.kid||1}×</span><div class="small muted">this was her ${ord(d.kid||1)}</div></td>
+     <td>${f(P(k.date))}<div class="small muted">${inTxt(dd(P(k.date)))}</div></td>
+     <td>${k.alive} alive${k.born>k.alive?` <span class="small muted">/ ${k.born} born</span>`:''}</td>
+     <td><span class="pill ${k.ease==='Easy'?'':k.ease==='Slight help'?'gold':'red'}">${k.ease}</span></td>
+     <td>${ptSel('moth',MOTH_P,k.moth,`data-t="${d.tag}"`)}</td><td>${ptSel('milk',MILK_P,k.milk||3,`data-t="${d.tag}"`)}</td><td>${ptSel('bcs',BCS_P,k.bcs,`data-t="${d.tag}"`)}</td>
+     <td>${seg('mh',HEALTH,k.health,`data-t="${d.tag}"`)}${k.issues.length?`<div class="small" style="color:var(--red);margin-top:4px">${k.issues.join(', ')}</div>`:''}</td>
+     <td>${msPill(kScore(k))}</td>
+     <td>${seg('mk',KEEP,k.keep,`data-t="${d.tag}"`)}${k.why?`<div class="small muted" style="margin-top:4px">${k.why}</div>`:''}</td></tr>`}).join('')}</tbody></table>`:'<p class="muted" style="padding:16px;margin:0">No kiddings yet.</p>';
+  document.querySelectorAll('#kmTable [data-pf]').forEach(sl=>sl.onchange=()=>{const d=does.find(x=>x.tag===sl.dataset.t),snap=JSON.stringify(does);d.ki[sl.dataset.pf]=+sl.value;renderKidding();renderDoes();toast(`<b>${d.tag}</b> ${sl.options[sl.selectedIndex].text} · score ${kScore(d.ki).toFixed(1)}`,snap);});
+  document.querySelectorAll('#kmTable .seg2 button').forEach(b=>b.onclick=()=>{const w=b.parentElement,d=does.find(x=>x.tag===w.dataset.t),snap=JSON.stringify(does);
+    if(w.dataset.kf==='mh')d.ki.health=b.dataset.v;else{d.ki.keep=b.dataset.v;if(b.dataset.v==='Cull'&&!d.ki.why)d.ki.why='Cull after weaning';if(b.dataset.v==='Keep')d.ki.why='';}
+    renderKidding();toast(`<b>${d.tag}</b> → ${w.dataset.kf==='mh'?'health '+d.ki.health:d.ki.keep}`,snap);});
+  // ---- kids
+  const kp=[...new Set(kids.map(k=>k.plan||'sept'))].filter(id=>plans.some(p=>p.id===id));
+  $('wRule').textContent='';
+  $('wSet').innerHTML=`<span class="wlab">🔁 Auto-wean</span>`+kp.map(id=>{const P_=plan(id),on=P_.r.autoWean!==false;
+    return `<span class="wset${on?'':' off'}"><b>${P_.e} ${P_.name}</b> kids move to <b>Weaned</b> at <input class="n dd" data-wd="${id}" value="${P_.r.wean}"> days
+      <label class="sw2"><input type="checkbox" data-wa="${id}" ${on?'checked':''}><span></span>${on?'auto':'off'}</label></span>`}).join('')
+    +`<span class="muted small">same number as Season plan › “Wean the kids” — change it in either place</span>`;
+  document.querySelectorAll('#wSet [data-wd]').forEach(i=>i.onchange=()=>{const v=parseInt(i.value);if(v>0){plan(i.dataset.wd).r.wean=v;if(cur===i.dataset.wd)buildPlan();else{renderKidding();}toast(`Kids now wean at <b>${v} days</b> — ${pLabel(i.dataset.wd)}`);}});
+  document.querySelectorAll('#wSet [data-wa]').forEach(c=>c.onchange=()=>{plan(c.dataset.wa).r.autoWean=c.checked;renderKidding();});
+  const KS=kids.map(k=>[k,kStat(k)]);
+  const soon=x=>x[1].s==='On milk'&&x[1].left<=7;
+  const KF=[['all','All ('+kids.length+')'],['milk','🍼 On milk ('+KS.filter(x=>x[1].s==='On milk').length+')'],['week','Weaning this week ('+KS.filter(soon).length+')'],['weaned','Weaned ('+KS.filter(x=>x[1].s==='Weaned').length+')'],['weak','Weak ('+kids.filter(k=>k.hl!=='Good').length+')']];
+  $('kkFilter').innerHTML=KF.map(x=>`<button data-f="${x[0]}" class="${x[0]===kkF?'on':''}">${x[1]}</button>`).join('');
+  document.querySelectorAll('#kkFilter button').forEach(b=>b.onclick=()=>{kkF=b.dataset.f;renderKidding();});
+  const KL=KS.filter(([k,st])=>kkF==='all'||(kkF==='milk'&&st.s==='On milk')||(kkF==='week'&&soon([k,st]))||(kkF==='weaned'&&st.s==='Weaned')||(kkF==='weak'&&k.hl!=='Good'));
+  $('kkTable').innerHTML=KL.length?`<table><thead><tr><th style="width:44px"></th><th>Kid</th><th>Mother</th><th>Sex</th><th>Age</th><th>Milk</th><th>Health</th><th>Birth kg</th><th>Wean kg</th><th>90-day kg</th><th>Status</th></tr></thead><tbody>${KL.map(([k,st])=>{const sel=wSel.has(k.tag),wd=st.s==='Weaned';
+    return `<tr class="${sel?'sel':''}${wd?' wd':''}"><td>${wd?'':`<span class="cb${sel?' on':''}" data-w="${k.tag}">${sel?'✓':''}</span>`}</td><td><b>${k.tag}</b></td><td>${k.dam}</td><td>${k.sex==='F'?'♀ Doeling':'♂ Buckling'}</td><td>${kAge(k)} d</td>
+      <td>${wd?`<span class="muted small">was ${k.raised.toLowerCase()}</span>`:seg('km',['Mother','Powder','Mixed','Foster'],k.raised,`data-t="${k.tag}"`)}</td>
+      <td>${seg('kh',['Good','Weak','Sick'],k.hl,`data-t="${k.tag}"`)}</td><td>${k.bkg}</td>
+      <td><input class="n dd${wd&&!k.wkg?' need':''}" data-wk="${k.tag}" value="${k.wkg??''}" placeholder="kg"></td><td><b class="serif">${adjKg(k)}</b></td>
+      <td>${wd?`<span class="pill">✓ Weaned</span><div class="small muted">${st.how==='auto'?'auto':'early'} · ${f(st.date)}</div>${!k.wkg?'<div class="small" style="color:var(--clay)">add wean weight</div>':''}`
+        :`<span class="pill clay">🍼 On milk</span><div class="small ${st.left<=7?'':'muted'}" style="${st.left<=7?'color:var(--clay);font-weight:600':''}">${st.auto?'weans '+(st.left===0?'today':'in '+st.left+' d')+' · '+f(st.date):'auto-wean off'}</div>`}</td></tr>`}).join('')}</tbody></table>`:'<p class="muted" style="padding:16px;margin:0">No kids here.</p>';
+  document.querySelectorAll('#kkTable .cb').forEach(c=>c.onclick=()=>{const t=c.dataset.w;wSel.has(t)?wSel.delete(t):wSel.add(t);renderKidding();});
+  document.querySelectorAll('#kkTable [data-wk]').forEach(i=>i.onchange=()=>{const k=kids.find(x=>x.tag===i.dataset.wk);k.wkg=parseFloat(i.value)||null;renderKidding();});
+  document.querySelectorAll('#kkTable .seg2 button').forEach(b=>b.onclick=()=>{const w=b.parentElement,k=kids.find(x=>x.tag===w.dataset.t);if(w.dataset.kf==='km')k.raised=b.dataset.v;else k.hl=b.dataset.v;renderKidding();});
+  if(typeof renderMG==='function'){renderMG();renderHerdPrev();}
+  $('kWean').disabled=!wSel.size;$('kWean').textContent=wSel.size?`Wean ${wSel.size} now (early)`:'Wean early';
+}
+function kidForm(d){const k=kF;
+  return `<div class="kbox">
+  <div class="kcol">
+    <div class="kh">Birth</div>
+    <div class="krow"><label>Date</label><input type="date" class="d" data-kv="date" value="${k.date}"></div>
+    <div class="krow"><label>Born alive</label>${step('alive',k.alive)}<label style="margin-left:14px">Stillborn</label>${step('still',k.still)}</div>
+    <div class="krow"><label>Birth was <span class="tag fix">FIX #2</span></label>${seg('ease',EASE,k.ease)}</div>
+    <div class="krow"><label>Note</label><input class="t" data-kv="note" value="${k.note}" placeholder="e.g. second kid came backwards" style="flex:1"></div>
+  </div>
+  <div class="kcol">
+    <div class="kh">Mother after kidding</div>
+    <div class="krow"><label>This is her</label><span class="kcount big">${ord((d.kid||0)+1)} kidding</span><span class="muted small">${d.kid?'kidded '+d.kid+'× before':'first time mother'}${msOf(d)!=null?' · past score '+msOf(d).toFixed(1):''}</span></div>
+    <div class="krow"><label>Mothering <span class="tag">#7</span></label>${ptSel('moth',MOTH_P,k.moth)}</div>
+    <div class="krow"><label>Milk</label>${ptSel('milk',MILK_P,k.milk)}</div>
+    <div class="krow"><label>Health</label>${seg('health',HEALTH,k.health)}</div>
+    ${k.health!=='Good'?`<div class="krow"><label>Problem</label><div class="ichips">${ISSUES.map(i=>`<button data-iss="${i}" class="${k.issues.includes(i)?'on':''}">${i}</button>`).join('')}</div></div>`:''}
+    <div class="krow"><label>Body condition <span class="tag">#7</span></label>${ptSel('bcs',BCS_P,k.bcs)}</div>
+    <div class="krow"><label>Mother score</label>${msPill(kScore(k))}<span class="muted small">average of mothering, milk, birth and health</span></div>
+    <div class="krow"><label>Keep her?</label>${seg('keep',KEEP,k.keep)}</div>
+    ${k.keep!=='Keep'?`<div class="krow"><label>Why</label><select class="s" data-kv="why">${['','Rejects kids','Poor mother','Hard birth','Low milk','Health','Old age','Other'].map(x=>`<option${x===k.why?' selected':''}>${x}</option>`).join('')}</select></div>`:''}
+  </div>
+  <div class="kcol full">
+    <div class="kh">Kids <span class="tag">#7</span> <span class="muted small" style="font-weight:400">birth weight needed for every live kid</span></div>
+    ${k.alive?`<table class="kt"><thead><tr><th>Tag</th><th>Sex</th><th>Birth kg</th><th>Colostrum</th><th>Milk</th><th>Health</th></tr></thead><tbody>
+    ${k.kids.map((x,i)=>`<tr><td><b>${d.tag}-K${kids.filter(y=>y.dam===d.tag).length+i+1}</b></td><td>${seg('k'+i+'sex',[['F','♀'],['M','♂']],x.sex)}</td>
+      <td><input class="n dd${x.kg?'':' need'}" data-kk="${i}" value="${x.kg}" placeholder="kg"></td><td>${seg('k'+i+'col',['Yes','No'],x.col)}</td>
+      <td>${seg('k'+i+'raised',['Mother','Powder','Mixed','Foster'],x.raised)}</td><td>${seg('k'+i+'hl',['Good','Weak'],x.hl)}</td></tr>`).join('')}</tbody></table>`:'<p class="muted small">No live kids.</p>'}
+  </div>
+  <div class="kfoot full"><span class="small muted" id="kMsg"></span><button class="btn ghost" onclick="toggleKid('${d.tag}')">Cancel</button><button class="btn" id="kSave">Save kidding</button></div>
+  </div>`;}
+const step=(f,v)=>`<span class="stepper"><button data-st="${f}" data-d="-1">−</button><b>${v}</b><button data-st="${f}" data-d="1">+</button></span>`;
+function toggleKid(t){if(kOpen===t){kOpen=null;kF=null;}else{kOpen=t;kF=newForm(does.find(x=>x.tag===t));}renderKidding();
+  if(kOpen)setTimeout(()=>{const r=document.querySelector('#kdTable tr.kform');if(r)r.scrollIntoView({block:'center',behavior:'smooth'});},50);}
+function wireKidForm(){
+  if(!kF)return;
+  document.querySelectorAll('#kdTable .seg2 button').forEach(b=>b.onclick=()=>{const f=b.parentElement.dataset.kf,v=b.dataset.v,m=f.match(/^k(\d+)(\w+)$/);
+    if(m)kF.kids[+m[1]][m[2]]=v;else kF[f]=f==='bcs'?+v:v;if(f==='health'&&v==='Good')kF.issues=[];renderKidding();});
+  document.querySelectorAll('#kdTable [data-st]').forEach(b=>b.onclick=()=>{const f=b.dataset.st;kF[f]=Math.max(0,Math.min(6,kF[f]+ +b.dataset.d));
+    if(f==='alive'){while(kF.kids.length<kF.alive)kF.kids.push({sex:'F',kg:'',col:'Yes',raised:'Mother',hl:'Good'});kF.kids.length=kF.alive;}renderKidding();});
+  document.querySelectorAll('#kdTable [data-iss]').forEach(b=>b.onclick=()=>{const i=b.dataset.iss;kF.issues=kF.issues.includes(i)?kF.issues.filter(x=>x!==i):[...kF.issues,i];renderKidding();});
+  document.querySelectorAll('#kdTable [data-kv]').forEach(i=>i.oninput=i.onchange=()=>{kF[i.dataset.kv]=i.value;if(i.tagName==='SELECT')renderKidding();});
+  document.querySelectorAll('#kdTable [data-kk]').forEach(i=>i.oninput=()=>{kF.kids[+i.dataset.kk].kg=i.value;i.classList.toggle('need',!i.value);checkKid();});
+  document.querySelectorAll('#kdTable [data-pf]').forEach(sl=>sl.onchange=()=>{kF[sl.dataset.pf]=+sl.value;renderKidding();});
+  if($('kSave'))$('kSave').onclick=saveKid;checkKid();
+}
+function checkKid(){const miss=kF.kids.filter(x=>!x.kg).length;if(!$('kSave'))return;
+  $('kSave').disabled=miss>0;$('kMsg').textContent=miss?`Add birth weight for ${miss} kid${miss>1?'s':''}`:'';}
+function saveKid(){
+  const d=does.find(x=>x.tag===kOpen),k=kF,snap=JSON.stringify(does),dt=P(k.date),cur=d.hist.find(h=>h[0]==='cur');
+  d.stage='Kidded';d.kid=(d.kid||0)+1;if(d.here!=null)d.here++;d.kids=(d.kids||0)+k.alive+k.still;d.alive=(d.alive||0)+k.alive;
+  d.g=null;d.due=f(dt);d.note=null;d.seen=null;
+  d.ki={date:k.date,born:k.alive+k.still,alive:k.alive,ease:k.ease,moth:k.moth,milk:k.milk,health:k.health,issues:k.issues,bcs:k.bcs,keep:k.keep,why:k.why||(k.issues.join(', '))};
+  if(cur){cur[0]='';cur[2]=`Kidded ${f(dt)} · ${k.alive+k.still} born, ${k.alive} alive · ${k.ease}`;}
+  const off=kids.filter(x=>x.dam===d.tag).length;
+  k.kids.forEach((x,i)=>kids.unshift({tag:d.tag+'-K'+(off+i+1),dam:d.tag,sex:x.sex,born:k.date,bkg:+x.kg,wkg:null,hl:x.hl,raised:x.raised,plan:d.plan}));
+  kOpen=null;kF=null;rerenderDoes();
+  const ksnap=JSON.stringify(kids);setTimeout(()=>{$('toastUndo').onclick=()=>{does.splice(0,does.length,...JSON.parse(snap));kids.splice(0,kids.length,...JSON.parse(ksnap).slice(k.kids.length));$('toast').classList.remove('show');rerenderDoes();};});
+  toast(`🍼 <b>${d.tag}</b> kidded (${ord(d.kid)} time) — ${k.alive} alive · mother score ${kScore(d.ki).toFixed(1)} · ${k.keep}`,snap);
+}
+$('kWean').onclick=()=>{let n=0;kids.forEach(k=>{if(wSel.has(k.tag)){k.weaned=true;k.wDate=iso(TODAY);n++;}});wSel.clear();renderKidding();toast(`<b>${n} kid${n===1?'':'s'}</b> weaned`);};
+
+/* ================= MOTHER GROUPS ================= */
+const mgroups=[{id:'m4',name:'4+ kids',c:'#7B5EA7'},{id:'m3',name:'3 kids',c:'#4F6D8F'},{id:'m2',name:'2 kids (twins)',c:'#2E6A50'},{id:'m1',name:'1 kid (single)',c:'#B8862B'}];
+let mgF='all',mgSel=new Set(),mgNew=false,mgId=4;
+const litOf=d=>d.ki?d.ki.born:d.lit??null;
+const mgOf=id=>mgroups.find(g=>g.id===id);
+const mgPill=id=>{const g=mgOf(id);return g?`<span class="mgp" style="--c:${g.c}">${g.name}</span>`:'<span class="muted small">— no group</span>';};
+function autoMG(d){const n=litOf(d);if(n==null)return null;return n>=4?'m4':n===3?'m3':n===2?'m2':'m1';}
+// sample: litter sizes for does that kidded before, and groups already set for older mothers
+const LIT={'B-0142':2,'M-0031':1,'B-0219':2,'B-0203':1,'B-0240':2,'B-0241':3,'B-0242':1,'B-0245':4,'B-0246':2,'B-0247':1,'B-0248':2,'B-0249':3,'M-0050':2,'M-0051':1,'M-0052':3,'B-0251':2,'B-0252':2,'B-0253':3,'B-0254':1};
+does.forEach(d=>{if(LIT[d.tag]!=null&&!d.ki){d.lit=LIT[d.tag];d.mg=autoMG(d);}});
+const mothers=()=>does.filter(d=>(d.kid||0)>0||d.ki);
+function renderMG(){
+  const M=mothers(),cnt=id=>M.filter(d=>(d.mg||null)===id).length;
+  const chips=[['all','All mothers',M.length,null],...mgroups.map(g=>[g.id,g.name,cnt(g.id),g.c]),['none','No group',cnt(null),null]];
+  $('mgChips').innerHTML=chips.map(([id,n,c,col])=>`<button data-f="${id}" class="${mgF===id?'on':''}"${col?` style="--c:${col}"`:''}>${col?'<i class="dot"></i>':''}${n} <span>${c}</span></button>`).join('')
+    +(mgNew?`<span class="mgnew"><input class="t" id="mgName" placeholder="Group name" style="width:150px"><button class="btn sm" id="mgAdd">Add</button></span>`:`<button class="addg" id="mgPlus">＋ New group</button>`);
+  document.querySelectorAll('#mgChips button[data-f]').forEach(b=>b.onclick=()=>{mgF=b.dataset.f;renderMG();});
+  if($('mgPlus'))$('mgPlus').onclick=()=>{mgNew=true;renderMG();$('mgName').focus();};
+  if($('mgAdd')){const add=()=>{const n=$('mgName').value.trim();if(n){const cols=['#A3375A','#C05A21','#3D7F8C','#6B7A2E'];mgroups.push({id:'mx'+(++mgId),name:n,c:cols[mgId%4]});}mgNew=false;renderMG();};
+    $('mgAdd').onclick=add;$('mgName').onkeydown=e=>{if(e.key==='Enter')add();};}
+  const L=M.filter(d=>mgF==='all'||(mgF==='none'?!d.mg:d.mg===mgF)).sort((a,b)=>(litOf(b)||0)-(litOf(a)||0));
+  const allOn=L.length&&L.every(d=>mgSel.has(d.tag)),some=L.some(d=>mgSel.has(d.tag));
+  const opts=sel=>'<option value="">— no group</option>'+mgroups.map(g=>`<option value="${g.id}"${g.id===sel?' selected':''}>${g.name}</option>`).join('');
+  $('mgTable').innerHTML=L.length?`<table><thead><tr><th style="width:44px"><span class="cb${allOn?' on':some?' part':''}" id="mgHead">${allOn?'✓':some?'–':''}</span></th><th>Mother</th><th>Kiddings</th><th>Last litter</th><th>Mother score</th><th>Now</th><th>Group</th></tr></thead><tbody>
+   ${L.map(d=>{const s=mgSel.has(d.tag),n=litOf(d),sug=autoMG(d);
+    return `<tr class="${s?'sel':''}" data-t="${d.tag}"><td><span class="cb${s?' on':''}">${s?'✓':''}</span></td><td><b>${d.tag}</b><div class="small muted">${d.breed}</div></td>
+      <td>${kidPill(d.kid||1)}</td><td>${n!=null?`<b class="serif" style="font-size:17px">${n}</b> <span class="small muted">kid${n>1?'s':''}</span>`:'—'}</td><td>${msPill(msOf(d))}</td><td>${stagePill(d.stage)}</td>
+      <td onclick="event.stopPropagation()"><select class="s mgsel" data-t="${d.tag}" style="${d.mg?'border-color:'+mgOf(d.mg).c:''}">${opts(d.mg)}</select>${!d.mg&&sug?`<div class="small" style="margin-top:3px;color:var(--clay)">suggested: ${mgOf(sug).name}</div>`:''}</td></tr>`}).join('')}</tbody></table>`:'<p class="muted" style="padding:16px;margin:0">No mothers here.</p>';
+  if($('mgHead'))$('mgHead').onclick=()=>{allOn?L.forEach(d=>mgSel.delete(d.tag)):L.forEach(d=>mgSel.add(d.tag));renderMG();};
+  document.querySelectorAll('#mgTable tbody tr').forEach(r=>r.onclick=()=>{const t=r.dataset.t;mgSel.has(t)?mgSel.delete(t):mgSel.add(t);renderMG();});
+  document.querySelectorAll('#mgTable .mgsel').forEach(sl=>sl.onchange=()=>{const d=does.find(x=>x.tag===sl.dataset.t),snap=JSON.stringify(does);d.mg=sl.value||null;renderMG();renderHerdPrev();toast(`<b>${d.tag}</b> → ${d.mg?mgOf(d.mg).name:'no group'}`,snap);});
+  // move bar
+  $('mgMoveTo').innerHTML=mgroups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')+'<option value="">— remove from group</option>';
+  $('mgBar').classList.toggle('show',mgSel.size>0);$('mgCount').textContent=mgSel.size+' selected';
+}
+$('mgMove').onclick=()=>{const v=$('mgMoveTo').value||null,snap=JSON.stringify(does);let n=0;does.forEach(d=>{if(mgSel.has(d.tag)){d.mg=v;n++;}});mgSel.clear();renderMG();renderHerdPrev();
+  toast(`<b>${n} mothers</b> moved to ${v?mgOf(v).name:'no group'}`,snap);};
+$('mgClear').onclick=()=>{mgSel.clear();renderMG();};
+$('mgAuto').onclick=()=>{const snap=JSON.stringify(does);let n=0;mothers().forEach(d=>{if(!d.mg){const s=autoMG(d);if(s){d.mg=s;n++;}}});renderMG();renderHerdPrev();
+  toast(n?`<b>${n} mothers</b> grouped by kids born`:'Everyone already has a group',n?snap:null);};
+
+/* ================= MAIN HERD PREVIEW ================= */
+const pregOf=d=>(d.kid||0)+(['Pregnant','Dry'].includes(d.stage)?1:0)+(d.lost||0);
+function renderHerdPrev(){
+  const M=mothers().sort((a,b)=>(b.ki?P(b.ki.date):0)-(a.ki?P(a.ki.date):0));
+  $('hpTable').innerHTML=`<table><thead><tr><th>Tag</th><th>Status</th><th>Pregnant</th><th>Kiddings</th><th>Last kidding</th><th>Kids born / alive</th><th>Mother score</th><th>Body cond.</th><th>Health</th><th>Decision</th><th>Mother group</th></tr></thead><tbody>
+  ${M.map(d=>{const k=d.ki;return `<tr><td><b>${d.tag}</b></td><td>${stagePill(d.stage)}</td><td><span class="kcount" style="background:var(--sage);color:var(--green)">${pregOf(d)}×</span></td><td>${kidPill(d.kid||1)}</td><td>${k?f(P(k.date),1):'—'}</td>
+    <td>${d.kids!=null?d.kids+' / '+(d.alive??d.kids):k?k.born+' / '+k.alive:'—'}</td><td>${msPill(msOf(d))}</td><td>${k?k.bcs+' / 5':'—'}</td>
+    <td>${k?`<span class="pill ${k.health==='Good'?'':k.health==='Watch'?'gold':'red'}">${k.health}</span>`:'—'}</td>
+    <td>${k?`<span class="pill ${k.keep==='Keep'?'':k.keep==='Watch'?'gold':'red'}">${k.keep}</span>`:'—'}</td><td>${mgPill(d.mg)}</td></tr>`}).join('')}</tbody></table>`;
+  $('hpKids').innerHTML=`<table><thead><tr><th>Tag</th><th>Mother</th><th>Sex</th><th>Born</th><th>Age</th><th>Milk</th><th>Status</th><th>Wean date</th><th>Birth kg</th><th>Wean kg</th><th>Health</th></tr></thead><tbody>${kids.map(k=>{const st=kStat(k);return `<tr><td><b>${k.tag}</b></td><td>${k.dam}</td><td>${k.sex==='F'?'♀':'♂'}</td><td>${f(P(k.born),1)}</td><td>${kAge(k)} d</td><td>${k.raised}</td><td>${st.s==='Weaned'?'<span class="pill">Weaned</span>':'<span class="pill clay">On milk</span>'}</td><td>${f(st.date)}${st.s==='On milk'?' <span class="small muted">(planned)</span>':''}</td><td>${k.bkg}</td><td>${k.wkg??'—'}</td><td>${k.hl}</td></tr>`}).join('')}</tbody></table>`;
+}
+
+/* ================= REPORTS ================= */
+const RC={a:'#1F8A5B',b:'#3D6FD1',c:'#C98A1A',d:'#C0396B'};           // validated categorical (light)
+const BUCKCOL={'BK-07':RC.a,'BK-11':RC.b};
+const RD={
+  sept:{label:'🍂 September 2026',done:true,bucks:{
+    'BK-07':{crossed:22,preg:19,kidded:19,born:34,alive:32,weaned:30,lit:[5,13,1,0],wkg:13.6,hard:2,mast:1,ageFirst:17,interval:358,months:[1,26,7]},
+    'BK-11':{crossed:18,preg:13,kidded:12,born:19,alive:17,weaned:15,lit:[6,5,1,0],wkg:12.4,hard:3,mast:2,ageFirst:18,interval:371,months:[1,14,4]}},
+    mlab:['Aug','Sep','Oct']},
+  spring:{label:'🌸 Spring 2027',done:false,bucks:{
+    'BK-07':{crossed:16,preg:13,kidded:0,born:0,alive:0,weaned:0,lit:[0,0,0,0],wkg:0,hard:0,mast:0,months:[5,7,1]},
+    'BK-11':{crossed:9,preg:6,kidded:0,born:0,alive:0,weaned:0,lit:[0,0,0,0],wkg:0,hard:0,mast:0,months:[1,3,2]}},
+    mlab:['Feb','Mar','Apr']}};
+const TGT={preg:85,kpd:1.5,surv:90,kgd:18,interval:365,age:18};
+let rS='sept',rB='all';
+function agg(s,b){const B=RD[s].bucks,keys=b==='all'?Object.keys(B):[b],o={crossed:0,preg:0,kidded:0,born:0,alive:0,weaned:0,lit:[0,0,0,0],hard:0,mast:0,months:RD[s].mlab.map(()=>0),wkgT:0,ivT:0,agT:0};
+  keys.forEach(k=>{const x=B[k];['crossed','preg','kidded','born','alive','weaned','hard','mast'].forEach(f=>o[f]+=x[f]);x.lit.forEach((v,i)=>o.lit[i]+=v);x.months.forEach((v,i)=>o.months[i]+=v);
+    o.wkgT+=x.wkg*x.weaned;o.ivT+=(x.interval||0)*x.kidded;o.agT+=(x.ageFirst||0)*x.kidded;});
+  o.wkg=o.weaned?o.wkgT/o.weaned:0;o.interval=o.kidded?Math.round(o.ivT/o.kidded):0;o.ageFirst=o.kidded?Math.round(o.agT/o.kidded):0;return o;}
+const pct=(a,b)=>b?Math.round(a/b*100):0;
+const tip=(t)=>`data-tip="${t.replace(/"/g,'&quot;')}"`;
+function renderReports(){
+  const D=RD[rS],o=agg(rS,rB),done=D.done;
+  $('rSeason').innerHTML=Object.entries(RD).map(([k,v])=>`<button data-s="${k}" class="${k===rS?'on':''}">${v.label}${v.done?'':' · now'}</button>`).join('');
+  $('rBuck').innerHTML=['all',...Object.keys(D.bucks)].map(k=>`<button data-b="${k}" class="${k===rB?'on':''}">${k==='all'?'All bucks':k}</button>`).join('');
+  document.querySelectorAll('#rSeason button').forEach(b=>b.onclick=()=>{rS=b.dataset.s;renderReports();});
+  document.querySelectorAll('#rBuck button').forEach(b=>b.onclick=()=>{rB=b.dataset.b;renderReports();});
+  // headline sentence
+  $('rHead').innerHTML=done
+    ?`<b>${D.label}${rB!=='all'?' · '+rB:''}:</b> ${o.crossed} does crossed → <b>${o.preg} pregnant</b> (${pct(o.preg,o.crossed)}%) → ${o.kidded} kidded → <b>${o.born} kids</b> born → <b>${o.weaned} weaned</b> (${pct(o.weaned,o.born)}% of kids).`
+    :`<b>${D.label}${rB!=='all'?' · '+rB:''} — in progress:</b> ${o.crossed} does crossed → <b>${o.preg} pregnant</b> so far (${pct(o.preg,o.crossed)}%). About <b>${Math.round(o.preg*1.7)} kids</b> expected ${D.mlab[0]}–${D.mlab[D.mlab.length-1]}.`;
+  // scorecard
+  const tiles=[
+    {k:'preg',name:'Pregnancy rate',v:pct(o.preg,o.crossed),u:'%',hi:true,say:`${o.preg} of ${o.crossed} does got pregnant`},
+    {k:'kpd',name:'Kids per doe crossed',v:done?+(o.born/o.crossed).toFixed(2):null,u:'',hi:true,say:done?`${o.born} kids from ${o.crossed} does`:''},
+    {k:'surv',name:'Kids alive to weaning',v:done?pct(o.weaned,o.born):null,u:'%',hi:true,say:done?`${o.weaned} of ${o.born} kids reached weaning`:''},
+    {k:'kgd',name:'Kg weaned per doe crossed',v:done?+(o.weaned*o.wkg/o.crossed).toFixed(1):null,u:' kg',hi:true,say:done?`${Math.round(o.weaned*o.wkg)} kg of kids weaned in total`:''},
+    {k:'interval',name:'Days between kiddings',v:done?o.interval:null,u:' d',hi:false,say:done?'average gap from one kidding to the next':''},
+    {k:'age',name:'Age at first kidding',v:done?o.ageFirst:null,u:' m',hi:false,say:done?'young does — first time mothers':''}];
+  $('rScore').innerHTML=tiles.map(t=>{const T=TGT[t.k];let st='na',lab='In progress',ic='⏳';
+    if(t.v!=null){const ok=t.hi?t.v>=T:t.v<=T,close=t.hi?t.v>=T*0.95:t.v<=T*1.05;st=ok?'ok':close?'close':'bad';lab=ok?'On target':close?'Close':'Needs work';ic=ok?'✓':close?'⚠':'✕';}
+    const w=t.v==null?0:Math.min(100,(t.hi?t.v/(T*1.25):T*0.8/Math.max(t.v,1)*1)*100);
+    return `<div class="stile ${st}"><div class="sn">${t.name}</div><div class="sv">${t.v==null?'<span class="muted" style="font-size:16px">not kidded yet</span>':t.v+'<small>'+t.u+'</small>'}</div>
+      <div class="ss">${t.say||'&nbsp;'}</div>
+      <div class="sbar"><i style="width:${w}%"></i><b style="left:${t.hi?80:80}%"></b></div>
+      <div class="sf"><span class="sst">${ic} ${lab}</span><span class="small muted">target ${t.hi?'':'≤ '}<input class="tgt" data-k="${t.k}" value="${T}">${t.u.trim()}</span></div></div>`}).join('');
+  document.querySelectorAll('#rScore .tgt').forEach(i=>i.onchange=()=>{const v=parseFloat(i.value);if(v>0){TGT[i.dataset.k]=v;renderReports();}});
+  // funnel
+  const fun=(title,rows,col)=>{const m=rows[0][1]||1;return `<div class="fun"><div class="ft">${title}</div>${rows.map(([l,v,lost],i)=>`<div class="fr" ${tip(`${l}: ${v}${i?` (${pct(v,rows[0][1])}% of ${rows[0][0].toLowerCase()})`:''}`)}><span class="fl">${l}</span><span class="fb"><i style="width:${Math.max(v?2:0,v/m*100)}%;background:${col}"></i></span><span class="fv">${v}${i&&rows[0][1]?` <small>${pct(v,rows[0][1])}%</small>`:''}</span>${lost?`<span class="fd">−${lost}</span>`:''}</div>`).join('')}</div>`;};
+  $('rFunnel').innerHTML=fun('Does',[['Crossed',o.crossed],['Pregnant at scan',o.preg,o.crossed-o.preg],['Kidded',done?o.kidded:0,done?o.preg-o.kidded:0]],RC.a)
+    +(done?fun('Kids',[['Born',o.born],['Born alive',o.alive,o.born-o.alive],['Weaned',o.weaned,o.alive-o.weaned]],RC.b):'<p class="muted small" style="margin:14px 0 0">Kids part appears after kidding.</p>')
+    +`<div class="legend" style="margin-top:10px"><span><i style="background:${RC.a}"></i>Does</span>${done?`<span><i style="background:${RC.b}"></i>Kids</span>`:''}<span>−N = lost at that step</span></div>`;
+  // litter
+  const LN=['Single','Twins','Triplets','4 or more'],LC=[RC.c,RC.a,RC.b,RC.d],lt=o.lit.reduce((a,b)=>a+b,0);
+  if(lt){const top=o.lit.indexOf(Math.max(...o.lit));
+    $('rLitter').innerHTML=`<p class="rsay">Most does had <b>${LN[top].toLowerCase()}</b> — ${o.lit[top]} of ${lt} kiddings. Average <b>${(o.born/lt).toFixed(2)}</b> kids per kidding.</p>
+    <div class="stack">${o.lit.map((v,i)=>v?`<i style="flex:${v};background:${LC[i]}" ${tip(`${LN[i]}: ${v} kiddings (${pct(v,lt)}%)`)}>${v/lt>0.12?`<span>${pct(v,lt)}%</span>`:''}</i>`:'').join('')}</div>
+    <div class="legend">${o.lit.map((v,i)=>`<span><i style="background:${LC[i]}"></i>${LN[i]} · <b>${v}</b></span>`).join('')}</div>`;}
+  else $('rLitter').innerHTML='<p class="rsay muted">No kiddings yet this season. Kids seen at scan: about '+Math.round(o.preg*1.7)+'.</p>';
+  // bucks compared
+  const BK=Object.keys(D.bucks),bm=BK.map(k=>[k,agg(rS,k)]);
+  const mets=[['Pregnancy rate',x=>pct(x.preg,x.crossed),'%'],...(done?[['Kids per doe crossed',x=>+(x.born/x.crossed).toFixed(2),''],['Kids alive to weaning',x=>pct(x.weaned,x.born),'%'],['Average wean weight',x=>+x.wkg.toFixed(1),' kg']]:[])];
+  $('rBucks').innerHTML=`<div class="legend" style="margin:0 0 12px">${BK.map(k=>`<span><i style="background:${BUCKCOL[k]}"></i>${k}</span>`).join('')}</div><div class="bcmp">${mets.map(([n,fn,u])=>{const vals=bm.map(([k,x])=>[k,fn(x)]),mx=Math.max(...vals.map(v=>v[1]))||1,best=vals.find(v=>v[1]===mx)[0];
+    return `<div class="bm"><div class="bmn">${n}</div>${vals.map(([k,v])=>`<div class="bmr" ${tip(`${k} · ${n}: ${v}${u}`)}><span class="bmk">${k}</span><span class="fb"><i style="width:${v/mx*100}%;background:${BUCKCOL[k]}"></i></span><span class="fv">${v}${u}${k===best&&vals.length>1?' <span class="best">🏅 best</span>':''}</span></div>`).join('')}</div>`}).join('')}</div>
+    ${rB!=='all'?'<p class="muted small" style="margin:10px 0 0">Bucks are always shown side by side here.</p>':''}`;
+  // months
+  const mx=Math.max(...o.months,1),H=150;
+  $('rMonth').innerHTML=`<p class="rsay">${done?`Busiest month: <b>${D.mlab[o.months.indexOf(Math.max(...o.months))]}</b> with ${Math.max(...o.months)} kids.`:`Kiddings <b>expected</b> — does due each month (from scan dates).`}</p>
+   <div class="mbars">${o.months.map((v,i)=>`<div class="mb" ${tip(`${D.mlab[i]}: ${v} ${done?'kids born':'does due'}`)}><span class="mv">${v}</span><i class="${done?'':'exp'}" style="height:${Math.max(v?3:0,v/mx*H)}px;background:${RC.a}"></i><span class="ml">${D.mlab[i]}</span></div>`).join('')}</div>`;
+  // problems
+  const pr=[['⭕','Empty at scan',o.crossed-o.preg],['💔','Lost pregnancy',done?o.preg-o.kidded:null],['🩺','Hard / vet births',done?o.hard:null],['🔥','Mastitis',done?o.mast:null],['🕯','Stillborn kids',done?o.born-o.alive:null],['📉','Kids died before weaning',done?o.alive-o.weaned:null]];
+  const pm=Math.max(...pr.map(p=>p[2]||0),1);
+  $('rProb').innerHTML=`<div class="plist">${pr.map(([ic,l,v])=>`<div class="pr ${v?'':'z'}"><span class="pi">${ic}</span><span class="pl">${l}</span><span class="fb"><i style="width:${(v||0)/pm*100}%"></i></span><b>${v==null?'—':v}</b></div>`).join('')}</div>`;
+  // mothers
+  const M=mothers().filter(d=>msOf(d)!=null).sort((a,b)=>msOf(b)-msOf(a));
+  $('rTop').innerHTML=`<table class="rt"><tbody>${M.slice(0,5).map((d,i)=>`<tr><td class="nr">${i+1}</td><td><b>${d.tag}</b><div class="small muted">${d.breed}</div></td><td>${kidPill(d.kid||1)}</td><td>${litOf(d)!=null?litOf(d)+' kid'+(litOf(d)===1?'':'s')+' last time':''}</td><td>${msPill(msOf(d))}</td></tr>`).join('')}</tbody></table>`;
+  const cull=does.map(d=>{const r=[];if(d.ki&&d.ki.keep==='Cull')r.push('You marked Cull'+(d.ki.why?' — '+d.ki.why:''));if(d.ki&&d.ki.moth<=2)r.push('Mothering '+d.ki.moth+'/5');if(d.ki&&d.ki.ease==='Vet / caesarean')r.push('Vet birth');if(d.stage==='Cull list')r.push('On cull list');const s=msOf(d);if(s!=null&&s<3)r.push('Mother score '+s.toFixed(1));return [d,r];}).filter(x=>x[1].length);
+  $('rCull').innerHTML=cull.length?`<table class="rt"><tbody>${cull.map(([d,r])=>`<tr><td style="white-space:nowrap"><b>${d.tag}</b><div class="small muted">${kidPill(d.kid||0)}</div></td><td>${r.map(x=>`<span class="pill red" style="margin:2px 4px 2px 0">${x}</span>`).join('')}</td><td class="r"><button class="btn ghost sm" onclick="openStatus('${d.tag}','Cull list')">Decide</button></td></tr>`).join('')}</tbody></table>`:'<p class="muted">No does to think about. 🎉</p>';
+  // tooltips
+  document.querySelectorAll('#v-rep [data-tip]').forEach(el=>{el.onmousemove=e=>{const t=$('rTip');t.textContent=el.dataset.tip;t.style.left=e.clientX+14+'px';t.style.top=e.clientY+14+'px';t.classList.add('show');};el.onmouseleave=()=>$('rTip').classList.remove('show');});
+}
+$('repCsv').onclick=()=>{const rows=[['Doe','Status','Buck','Crossed','Due','Kids seen','Kiddings','Mother score','Mother group']].concat(does.map(d=>[d.tag,d.stage,d.buck,d.cr,d.due,d.seen??'',d.kid||0,msOf(d)!=null?msOf(d).toFixed(1):'',d.mg?mgOf(d.mg).name:'']));
+  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='breeding.csv';a.click();toast('Breeding CSV downloaded');};
+
+/* ================= TODAY ================= */
+function soonestPlan(){return plans.map(p=>({p,c:ptOf(p.id,'cross').a})).filter(x=>x.c>=TODAY).sort((a,b)=>a.c-b.c)[0]?.p||plans[0];}
+function renderHome(){
+  const sp0=soonestPlan(),sp=points(sp0.id),r=sp0.r,spring=plan('spring').r;
+  const items=[
+    [TODAY,'no','⚖️ Weigh 3 young does','No weight on record — needed before '+pLabel('sept'),'Weigh','does','#10'],
+    [TODAY,'no','🩺 Buck check for BK-11','Needed before '+pLabel('sept'),'Check','bucks','#11'],
+    [P('2026-11-22'),'wt','🔍 Scan 9 does','BK-11 group · '+pLabel('spring'),'Open','bucks',''],
+    [P('2026-12-21'),'wt','🔍 Scan 14 does','BK-07 group · buck out + '+spring.scan+' days','Open','bucks','#6'],
+    [P('2026-12-24'),'wt','🌙 Start dry off','BK-07 group · earliest due − '+spring.dry+' days','Open','bucks','#6'],
+    [sp[0].a,'ok','🌾 Start extra feed',pLabel(sp0.id)+' · '+r.feed+' days before crossing','Plan','plan',''],
+  ].sort((a,b)=>a[0]-b[0]);
+  $('todo').innerHTML=items.map(x=>`<li><span class="ic ${x[1]}">${x[1]==='no'?'!':x[1]==='wt'?'•':'✓'}</span><span class="when">${dd(x[0])<=0?'Today':f(x[0])}<small>${dd(x[0])<=0?'overdue':inTxt(dd(x[0]))}</small></span><span class="what"><b>${x[2]}</b>${x[6]?'<span class="tag">'+x[6]+'</span>':''}<span class="ds">${x[3]}</span></span><button class="btn ghost sm" onclick="go('${x[5]}')">${x[4]}</button></li>`).join('');
+  $('homeSeason').textContent=pLabel(sp0.id);
+  drawTL('tlHome',sp);
+  const nxt=sp.filter(p=>p.e>=TODAY).slice(0,3);
+  $('homeNext').innerHTML=nxt.map(p=>`<li style="display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line2)"><span style="width:24px">${p.x.e}</span><b style="font-weight:600">${p.x.name}</b><span class="muted small" style="margin-left:auto">${rng(p.a,p.e)} · ${away(p.a,p.e)[1]}</span></li>`).join('');
+}
+
+/* ================= NAV + REFRESH ================= */
+function refreshAll(){renderHome();renderBucks();renderGroups();calcGroup();renderKidding();renderProfile();renderReports();}
+function go(v){if(v==='rep')renderReports();document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));window.scrollTo({top:0,behavior:'smooth'});
+  const t=document.querySelector('#nav button.on');if(t)t.scrollIntoView({inline:'center',block:'nearest'});}
+function openP(id){const p=$(id);p.hidden=false;p.scrollIntoView({behavior:'smooth',block:'start'});}
+$('nav').onclick=e=>{const b=e.target.closest('button');if(b)go(b.dataset.v)};
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).hidden=true);
+$('openGroup').onclick=()=>openNewGroup();
+$('openCheck').onclick=()=>openP('checkPanel');
+$('openScan').onclick=()=>openScan();
+$('cDate').value=iso(TODAY);
+$('devt').onchange=e=>{document.body.classList.toggle('devon',e.target.checked);$('devNav').style.display=e.target.checked?'':'none';};
+
+syncChips(); renderDoes(); renderFlow(); buildPlan();
+</script>
+</body>
+</html>

@@ -68,6 +68,9 @@ public partial class BackupService : Application.Interfaces.IBackupService
             {
                 id = k.Id, doeId = k.DoeId, breedingEventId = k.BreedingEventId, kiddingDate = k.KiddingDate,
                 liveKids = k.LiveKids, stillborn = k.Stillborn, ease = k.Ease.ToString(), notes = k.Notes,
+                mothering = k.Mothering, milkProduction = k.MilkProduction, bodyCondition = k.BodyCondition,
+                damHealth = k.DamHealth.ToString(), damHealthIssues = k.DamHealthIssues,
+                keepDecision = k.KeepDecision.ToString(), keepReason = k.KeepReason,
                 clientRequestId = k.ClientRequestId
             }).ToListAsync(cancellationToken),
             farmTasks = (await _context.FarmTasks.AsNoTracking().OrderBy(t => t.Id).ToListAsync(cancellationToken)).Select(t => new

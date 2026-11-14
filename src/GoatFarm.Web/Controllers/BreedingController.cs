@@ -9,11 +9,20 @@ public class BreedingController : Controller
 {
     private readonly IBreedingService _breedingService;
     private readonly IGoatService _goatService;
+    private readonly IFarmCsvExportService _csvExport;
 
-    public BreedingController(IBreedingService breedingService, IGoatService goatService)
+    public BreedingController(IBreedingService breedingService, IGoatService goatService, IFarmCsvExportService csvExport)
     {
         _breedingService = breedingService;
         _goatService = goatService;
+        _csvExport = csvExport;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportCsv(CancellationToken cancellationToken)
+    {
+        var bytes = await _csvExport.ExportBreedingAsync(cancellationToken);
+        return File(bytes, "text/csv", $"breeding-{DateTime.UtcNow:yyyyMMdd}.csv");
     }
 
     [HttpGet]
@@ -184,9 +193,27 @@ public class BreedingController : Controller
         }
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GroupPicker(string? buckTag, CancellationToken cancellationToken) =>
+        Json(await _breedingService.GetGroupPickerAsync(buckTag, cancellationToken));
+
     [HttpPost]
-    public Task<IActionResult> CreateGroup([FromBody] CreateBreedingGroupViewModel model, CancellationToken cancellationToken) =>
-        Run(() => _breedingService.CreateBreedingGroupAsync(model, cancellationToken));
+    public async Task<IActionResult> CreateGroup([FromBody] CreateBreedingGroupViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var id = await _breedingService.CreateBreedingGroupAsync(model, cancellationToken);
+            return Ok(new { success = true, groupId = id });
+        }
+        catch (ConfirmationRequiredException ex)
+        {
+            return ConfirmationRequired(ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 
     [HttpPost]
     public Task<IActionResult> CloseGroup([FromBody] CloseBreedingGroupViewModel model, CancellationToken cancellationToken) =>
@@ -197,12 +224,88 @@ public class BreedingController : Controller
         Run(() => _breedingService.TakeBuckOutGroupAsync(model, cancellationToken));
 
     [HttpPost]
-    public Task<IActionResult> PutBuckIn([FromBody] BuckInBreedingGroupViewModel model, CancellationToken cancellationToken) =>
-        Run(() => _breedingService.PutBuckInGroupAsync(model, cancellationToken));
+    public async Task<IActionResult> PutBuckIn([FromBody] BuckInBreedingGroupViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var crossed = await _breedingService.PutBuckInGroupAsync(model, cancellationToken);
+            return Ok(new { success = true, crossedDoeIds = crossed });
+        }
+        catch (ConfirmationRequiredException ex)
+        {
+            return ConfirmationRequired(ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public Task<IActionResult> ReopenGroup([FromBody] CloseBreedingGroupViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.ReopenBreedingGroupAsync(model.GroupId ?? "", cancellationToken));
+
+    [HttpPost]
+    public Task<IActionResult> UndoGroupCrosses([FromBody] UndoGroupCrossesViewModel model, CancellationToken cancellationToken) =>
+        Run(() => _breedingService.UndoGroupCrossesAsync(model.DoeIds, cancellationToken));
 
     [HttpPost]
     public Task<IActionResult> RecordBuckCheck([FromBody] RecordBuckCheckViewModel model, CancellationToken cancellationToken) =>
         Run(() => _breedingService.RecordBuckCheckAsync(model, cancellationToken));
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateKiddingDam([FromBody] UpdateKiddingDamViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _breedingService.UpdateKiddingDamAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateMotherGroup([FromBody] CreateMotherGroupViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _breedingService.CreateMotherGroupAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> MoveMothersToGroup([FromBody] MoveMotherGroupViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var n = await _breedingService.MoveMothersToGroupAsync(model, cancellationToken);
+            return Json(new { count = n });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AutoAssignMotherGroups(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var n = await _breedingService.AutoAssignMotherGroupsByLitterAsync(cancellationToken);
+            return Json(new { count = n });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 
     [HttpPost]
     public Task<IActionResult> UpdateKidField([FromBody] UpdateKidFieldViewModel model, CancellationToken cancellationToken) =>

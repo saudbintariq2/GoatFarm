@@ -16,9 +16,17 @@ window.BreedingPage = (() => {
     const q = p.toString();
     return '/Breeding' + (q ? '?' + q : '');
   };
-  const reload = msg => {
+  const reload = (msg, undo) => {
     sessionStorage.setItem('goatToast', msg);
+    if (undo) sessionStorage.setItem('goatToastUndo', JSON.stringify(undo));
+    else sessionStorage.removeItem('goatToastUndo');
     location.href = buildBreedingUrl();
+  };
+
+  const breedingCan = (action) => {
+    const p = window.FarmPermissions?.breeding ?? { view: true, add: true, edit: true, delete: true };
+    if (action !== 'view' && !p.view) return false;
+    return !!p[action];
   };
 
   function setBreedingView(view) {
@@ -39,14 +47,12 @@ window.BreedingPage = (() => {
     if (view === 'does') {
       const p = new URLSearchParams(location.search);
       if (p.get('scan')) openScanPanel(false);
-      else if (!$('scanPanel')?.hidden) loadScanSheet().catch(() => {});
+      else loadScanSheet().catch(() => {});
       const first = document.querySelector('#brRows tr[data-br-id]');
       if (first) loadDoeProfile(+first.dataset.brId);
     }
     if (view === 'bucks') renderGroupCards().catch(() => {});
-    if (view === 'kidding') {
-      $('birthPanel')?.classList.remove('perm-hidden');
-    }
+    if (view === 'kidding') { /* birth form opens from Record kidding */ }
   }
 
   function filterDueToKid() {
@@ -380,25 +386,35 @@ window.BreedingPage = (() => {
     const btn = e.target.closest?.('button');
     if (!btn || !btn.closest('#bg-groups')) return;
     const grApi = gr();
+    if (btn.dataset.bgBuckin && !breedingCan('edit')) return;
+    if (btn.dataset.bgClose && !breedingCan('edit')) return;
+    if (btn.dataset.bgDel && !breedingCan('delete')) return;
+    if (btn.dataset.bgRm && !breedingCan('edit')) return;
     try {
       if (btn.dataset.bgBuckin) {
         if (!await grApi.showConfirm('Put the buck in today and record a cross for every doe still waiting?')) return;
+        let res;
         try {
-          await grApi.api('/Breeding/PutBuckIn', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgBuckin, confirmWarnings: true }) });
+          res = await grApi.api('/Breeding/PutBuckIn', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgBuckin, confirmWarnings: true }) });
         } catch (err) {
           if (err?.requiresConfirmation) {
             if (!await grApi.showConfirm((err.warnings || []).join('\n\n') + '\n\nContinue?')) return;
-            await grApi.api('/Breeding/PutBuckIn', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgBuckin, confirmWarnings: true }) });
+            res = await grApi.api('/Breeding/PutBuckIn', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgBuckin, confirmWarnings: true }) });
           } else throw err;
         }
-        reload('Buck in recorded — does are waiting for scan');
+        const ids = res?.crossedDoeIds || [];
+        reload('Buck in recorded — does are waiting for scan', ids.length && breedingCan('delete')
+          ? { kind: 'crosses', doeIds: ids }
+          : null);
         return;
       }
       if (btn.dataset.bgClose) {
         const r = await grApi.showModal('Date buck was taken out', { prompt: true, defaultValue: today() });
         if (r == null) return;
         await grApi.api('/Breeding/TakeBuckOut', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgClose, endDate: r || today() }) });
-        reload('Group closed');
+        reload('Group closed', breedingCan('edit')
+          ? { kind: 'reopen', groupId: btn.dataset.bgClose }
+          : null);
         return;
       }
       if (btn.dataset.bgDel) {
@@ -502,6 +518,9 @@ window.BreedingPage = (() => {
       });
     });
     renderScanTable();
+    const anyWaiting = scanGroupsList().some(g => (g.does || []).length > 0);
+    const headPreg = $('scAllPregHead');
+    if (headPreg) headPreg.hidden = !anyWaiting;
   }
 
   function activeScanDoes() {
@@ -519,13 +538,14 @@ window.BreedingPage = (() => {
         <input type="number" class="scan-days-preg" data-sc-days="${d.id}" min="0" max="180" placeholder="days" title="Days pregnant (optional)" value="${esc(pick.daysPregnant || '')}">`;
     }
     if (pick.r === 'empty') {
-      const nx = pick.emptyNext || 'next';
+      const nx = pick.emptyNext || '';
       const backOpt = buckStill ? `<option value="back"${nx === 'back' ? ' selected' : ''}>🐐 Back with buck</option>` : '';
       const batches = birthBatches();
       const batchOpts = batches.map(b =>
         `<option value="${esc(b.id)}"${b.id === (pick.emptyBatchId || defaultNextBatchId(d)) ? ' selected' : ''}>${esc(b.icon)} ${esc(b.name)}</option>`
       ).join('');
-      return `<select class="scan-empty-next" data-sc-enext="${d.id}">
+      return `<select class="scan-empty-next" data-sc-enext="${d.id}" required>
+        <option value="" disabled${nx ? '' : ' selected'}>What next?</option>
         <option value="next"${nx === 'next' ? ' selected' : ''}>📅 Next birth group</option>
         <option value="heat"${nx === 'heat' ? ' selected' : ''}>👀 Watch for heat</option>
         <option value="cull"${nx === 'cull' ? ' selected' : ''}>🚩 Cull list</option>
@@ -593,7 +613,7 @@ window.BreedingPage = (() => {
             r,
             kids: r === 'preg' ? (cur?.kids ?? 2) : undefined,
             again: r === 'unsure' ? (cur?.again ?? 14) : undefined,
-            emptyNext: r === 'empty' ? (cur?.emptyNext ?? 'next') : undefined,
+            emptyNext: r === 'empty' ? (cur?.emptyNext ?? '') : undefined,
             emptyBatchId: r === 'empty' ? (cur?.emptyBatchId ?? (doe ? defaultNextBatchId(doe) : '')) : undefined,
             daysPregnant: cur?.daysPregnant
           });
@@ -639,7 +659,19 @@ window.BreedingPage = (() => {
       save.disabled = done.length === 0;
       save.textContent = done.length ? `Save ${done.length} result${done.length > 1 ? 's' : ''}` : 'Save results';
     }
-    if (allPreg) allPreg.style.display = list.length && done.length < list.length ? '' : 'none';
+    const syncAllPreg = btn => {
+      if (!btn) return;
+      const show = list.length > 0;
+      btn.hidden = !show;
+      btn.disabled = !show || done.length >= list.length;
+    };
+    syncAllPreg(allPreg);
+    syncAllPreg($('scAllPregHead'));
+  }
+
+  function markAllScanPregnant() {
+    activeScanDoes().forEach(d => { if (!scanPicks.has(d.id)) scanPicks.set(d.id, { r: 'preg', kids: 2 }); });
+    renderScanTable();
   }
 
   function wireScanPanel() {
@@ -666,15 +698,25 @@ window.BreedingPage = (() => {
       gr().showModal('No doe with tag <b>' + esc(q) + '</b> is waiting for a scan.');
     });
     $('scClear')?.addEventListener('click', () => { scanPicks.clear(); renderScanTable(); loadScanSheet().catch(() => {}); });
-    $('scAllPreg')?.addEventListener('click', () => {
-      activeScanDoes().forEach(d => { if (!scanPicks.has(d.id)) scanPicks.set(d.id, { r: 'preg', kids: 2 }); });
-      renderScanTable();
-      loadScanSheet().catch(() => {});
+    $('scAllPreg')?.addEventListener('click', () => markAllScanPregnant());
+    $('scAllPregHead')?.addEventListener('click', () => {
+      openScanPanel(false);
+      markAllScanPregnant();
     });
     $('scSave')?.addEventListener('click', async () => {
       const list = activeScanDoes().filter(d => scanPicks.has(d.id));
       if (!list.length) return;
       const scanDate = $('scDate')?.value || today();
+      const missingNext = list.filter(d => {
+        const p = scanPicks.get(d.id);
+        return p?.r === 'empty' && !p.emptyNext;
+      });
+      if (missingNext.length) {
+        await gr().showModal(
+          'For each <b>empty</b> doe, choose the next step: next birth group, watch for heat, back with the buck, or cull list.'
+        );
+        return;
+      }
       const results = list.map(d => {
         const p = scanPicks.get(d.id);
         if (p.r === 'unsure') {
@@ -685,7 +727,7 @@ window.BreedingPage = (() => {
             goatId: d.id,
             kidsCount: 0,
             notSure: false,
-            emptyNextStep: p.emptyNext || 'next',
+            emptyNextStep: p.emptyNext,
             emptyBirthBatchId: p.emptyBatchId || defaultNextBatchId(d)
           };
         }
@@ -743,6 +785,7 @@ window.BreedingPage = (() => {
   }
 
   let doeFlowFilter = null;
+  let brKdFilter = 'all';
   let selectedDoeId = null;
 
   function highlightSelectedDoe(id) {
@@ -887,6 +930,7 @@ window.BreedingPage = (() => {
     let n = 0;
     rows.forEach(tr => {
       const st = tr.dataset.brStage;
+      const kd = +(tr.dataset.brKiddings || 0);
       let show = true;
       if (doeFlowFilter) show = tr.dataset.brFlow === doeFlowFilter;
       else if (f === 'plan') show = st === 'plan';
@@ -895,11 +939,26 @@ window.BreedingPage = (() => {
       else if (f === 'preg') show = st === 'preg';
       else if (f === 'due30') show = st === 'preg'; // rough; server already computed due
       else if (f === 'scan') show = st === 'wait';
+      if (show && brKdFilter !== 'all') {
+        if (brKdFilter === '5') show = kd >= 5;
+        else show = kd === +brKdFilter;
+      }
       if (show) n++;
       tr.style.display = show ? '' : 'none';
     });
     const pill = $('brCount');
     if (pill) pill.textContent = n + ' doe(s)';
+  }
+
+  function wireBrKdFilter() {
+    document.querySelectorAll('#brKdFilter [data-br-kd]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        brKdFilter = chip.dataset.brKd || 'all';
+        document.querySelectorAll('#brKdFilter [data-br-kd]').forEach(c =>
+          c.classList.toggle('breed-on', c.dataset.brKd === brKdFilter));
+        filterPipeline();
+      });
+    });
   }
 
   function filterHeat() {
@@ -972,6 +1031,67 @@ window.BreedingPage = (() => {
   }
 
   let birthRequestId = null;
+  let birthPastScore = null;
+  let birthOpenTag = null;
+  const mgSelected = new Set();
+
+  const MOTH_PT = [
+    [1, '1 — Poor'], [2, '2 — Weak'], [3, '3 — OK'], [4, '4 — Good'], [5, '5 — Excellent']
+  ];
+  const easePts = { Easy: 5, SlightHelp: 4, HardPull: 2, Vet: 1, Caesarean: 1, Normal: 5, Assisted: 4 };
+  const healthPts = { Good: 5, Watch: 3, Sick: 1 };
+
+  function fillPtSelect(id, val) {
+    const sel = $(id);
+    if (!sel) return;
+    sel.innerHTML = MOTH_PT.map(([v, lab]) =>
+      `<option value="${v}"${+val === v ? ' selected' : ''}>${lab}</option>`).join('');
+  }
+
+  function kbHealth() {
+    return document.querySelector('#kb-health-seg .breed-seg-btn.breed-on')?.dataset.val || 'Good';
+  }
+
+  function kbKeep() {
+    return document.querySelector('#kb-keep-seg .breed-seg-btn.breed-on')?.dataset.val || 'Keep';
+  }
+
+  function kbEase() {
+    return $('kb-ease')?.value || 'Easy';
+  }
+
+  function kbLiveScore() {
+    const moth = +$('kb-mothering')?.value || 3;
+    const milk = +$('kb-milk')?.value || 3;
+    const sc = (moth + milk + (easePts[kbEase()] || 3) + (healthPts[kbHealth()] || 3)) / 4;
+    const full = Math.max(0, Math.min(5, Math.round(sc)));
+  const stars = '★'.repeat(full) + '☆'.repeat(5 - full);
+    return { sc, html: `<span class="breed-ms">${stars}</span> <b>${sc.toFixed(1)}</b>` };
+  }
+
+  function refreshBirthUi() {
+    const health = kbHealth();
+    $('kb-issues-wrap').hidden = health === 'Good';
+    const keep = kbKeep();
+    $('kb-why-wrap').hidden = keep === 'Keep';
+    if ($('kb-mscore')) $('kb-mscore').innerHTML = kbLiveScore().html;
+    const miss = [...$('kb-kids')?.querySelectorAll('tr') || []].filter(tr => !(+tr.querySelector('[data-k=weight]')?.value > 0)).length;
+    const live = +$('kb-live')?.value || 0;
+    const msg = $('kb-msg');
+    const save = $('kb-save');
+    if (msg) msg.textContent = live && miss ? `Add birth weight for ${miss} kid${miss > 1 ? 's' : ''}` : '';
+    if (save) save.disabled = live > 0 && miss > 0;
+  }
+
+  function setKbSeg(group, val) {
+    const seg = $(group);
+    if (!seg) return;
+    seg.querySelectorAll('.breed-seg-btn').forEach(b => {
+      b.classList.toggle('breed-on', b.dataset.val === val);
+    });
+    if (group === 'kb-ease-seg') $('kb-ease').value = val;
+    refreshBirthUi();
+  }
 
   function renderKidRows() {
     const body = $('kb-kids');
@@ -984,38 +1104,293 @@ window.BreedingPage = (() => {
         <td><select data-k="gender"><option value="Female">Female</option><option value="Male">Male</option></select></td>
         <td><input data-k="tag" maxlength="50" autocomplete="off"></td>
         <td><input data-k="name" maxlength="100"></td>
-        <td class="num-cell"><input data-k="weight" type="number" min="0" max="20" step="0.1"></td>`;
+        <td class="num-cell"><input data-k="weight" type="number" min="0" max="20" step="0.1" placeholder="kg"></td>
+        <td><div class="breed-seg" data-k-row-col>
+          <button type="button" class="breed-seg-btn breed-on" data-val="Yes">Yes</button>
+          <button type="button" class="breed-seg-btn" data-val="No">No</button>
+        </div></td>
+        <td><div class="breed-seg" data-k-row-milk>
+          ${['Mother', 'Powder', 'Mixed', 'Foster'].map(m =>
+            `<button type="button" class="breed-seg-btn${m === 'Mother' ? ' breed-on' : ''}" data-val="${m}">${m}</button>`).join('')}
+        </div></td>
+        <td><div class="breed-seg" data-k-row-hl>
+          ${['Good', 'Weak'].map(h =>
+            `<button type="button" class="breed-seg-btn${h === 'Good' ? ' breed-on' : ''}" data-val="${h}">${h}</button>`).join('')}
+        </div></td>`;
+      tr.querySelectorAll('.breed-seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          btn.parentElement.querySelectorAll('.breed-seg-btn').forEach(b => b.classList.toggle('breed-on', b === btn));
+          refreshBirthUi();
+        });
+      });
+      tr.querySelector('[data-k=weight]')?.addEventListener('input', refreshBirthUi);
       body.appendChild(tr);
     }
+    refreshBirthUi();
   }
 
-  function openBirth(tag, kids) {
+  function closeInlineBirth() {
+    document.querySelectorAll('.breed-kform-row').forEach(r => r.remove());
+    document.querySelectorAll('[data-kd-row]').forEach(r => {
+      r.classList.remove('breed-kd-open');
+      const b = r.querySelector('[data-birth-open]');
+      if (b) {
+        b.textContent = '🍼 Record kidding';
+        b.classList.remove('breed-on');
+      }
+    });
+    const panel = $('birthPanel');
+    const slot = $('birthPanelSlot');
+    if (panel && slot) {
+      panel.classList.add('perm-hidden');
+      panel.classList.remove('breed-kform-inline');
+      slot.appendChild(panel);
+      slot.hidden = true;
+    }
+    birthOpenTag = null;
+    birthRequestId = null;
+  }
+
+  function toggleBirthInline(btn) {
+    const tag = btn.dataset.birthOpen;
+    if (birthOpenTag === tag) {
+      closeInlineBirth();
+      return;
+    }
+    closeInlineBirth();
+    const row = btn.closest('[data-kd-row]');
+    if (!row) return;
+    const formRow = document.createElement('tr');
+    formRow.className = 'breed-kform-row';
+    const td = document.createElement('td');
+    td.colSpan = 8;
+    td.className = 'breed-kform-cell';
+    formRow.appendChild(td);
+    row.after(formRow);
+    row.classList.add('breed-kd-open');
+    const panel = $('birthPanel');
+    panel.classList.remove('perm-hidden');
+    panel.classList.add('breed-kform-inline');
+    td.appendChild(panel);
+    btn.textContent = 'Close';
+    btn.classList.add('breed-on');
+    birthOpenTag = tag;
+    openBirth(tag, btn.dataset.birthKids, btn.dataset.birthKiddings, btn.dataset.birthOrdinal, btn.dataset.birthPastScore);
+    formRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function openBirth(tag, kids, kiddings, ordinal, pastScore) {
     birthRequestId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
     $('kb-doe').value = tag || '';
     $('kb-date').value = today();
     $('kb-live').value = String(Math.min(Math.max(+kids || 1, 0), 6));
     $('kb-still').value = '0';
+    $('kb-notes').value = '';
+    fillPtSelect('kb-mothering', 3);
+    fillPtSelect('kb-milk', 3);
+    fillPtSelect('kb-bcs', 3);
+    setKbSeg('kb-ease-seg', 'Easy');
+    setKbSeg('kb-health-seg', 'Good');
+    setKbSeg('kb-keep-seg', 'Keep');
+    $('kb-why').value = '';
+    document.querySelectorAll('#kb-issues .breed-ichip').forEach(b => b.classList.remove('breed-on'));
+    const n = +kiddings || 0;
+    birthPastScore = pastScore != null && pastScore !== '' ? +pastScore : null;
+    const ordNum = parseInt(String(ordinal || ''), 10) || (n + 1);
+    const ordSuffix = ordNum === 1 ? 'st' : ordNum === 2 ? 'nd' : ordNum === 3 ? 'rd' : 'th';
+    const ordEl = $('kb-ordinal');
+    if (ordEl) {
+      const prior = birthPastScore != null && !Number.isNaN(birthPastScore)
+        ? ` · past average ${birthPastScore.toFixed(1)}★` : '';
+      ordEl.innerHTML = `<b>This is her ${ordNum}${ordSuffix} kidding</b>${n ? ` (${n}× before this farm)` : ' (first time here)'}${prior}`;
+    }
     renderKidRows();
-    $('birthPanel')?.classList.remove('perm-hidden');
-    $('birthPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function bgDoeCheckboxes() {
-    return [...document.querySelectorAll('#bg-does [data-bgdoe]')];
+  function kbIssues() {
+    return [...document.querySelectorAll('#kb-issues .breed-ichip.breed-on')].map(b => b.dataset.iss);
+  }
+
+  function kidSegVal(tr, sel) {
+    return tr.querySelector(`${sel} .breed-seg-btn.breed-on`)?.dataset.val;
+  }
+
+  function wireBirthForm() {
+    ['kb-mothering', 'kb-milk', 'kb-bcs'].forEach(id => {
+      $(id)?.addEventListener('change', refreshBirthUi);
+    });
+    document.querySelectorAll('[data-kb-seg]').forEach(seg => {
+      seg.querySelectorAll('.breed-seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (seg.id === 'kb-ease-seg') $('kb-ease').value = btn.dataset.val;
+          seg.querySelectorAll('.breed-seg-btn').forEach(b => b.classList.toggle('breed-on', b === btn));
+          refreshBirthUi();
+        });
+      });
+    });
+    document.querySelectorAll('#kb-issues .breed-ichip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('breed-on');
+      });
+    });
+  }
+
+  async function patchKiddingDam(row, body) {
+    const id = +row.dataset.kmId;
+    try {
+      const res = await gr().api('/Breeding/UpdateKiddingDam', {
+        method: 'POST',
+        body: JSON.stringify({ kiddingRecordId: id, ...body })
+      });
+      const sc = row.querySelector('.breed-km-score');
+      if (sc && res?.motherScoreHtml) sc.innerHTML = res.motherScoreHtml;
+      gr().showToast?.('Mother updated');
+    } catch { /* shown */ }
+  }
+
+  function wireMotherCheck() {
+    document.querySelectorAll('.breed-pt-sel[data-km-id]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const row = sel.closest('[data-km-row]');
+        if (!row) return;
+        patchKiddingDam(row, { [sel.dataset.kmField]: +sel.value });
+      });
+    });
+    document.querySelectorAll('.breed-seg[data-km-field]').forEach(seg => {
+      seg.querySelectorAll('.breed-seg-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const row = seg.closest('[data-km-row]');
+          if (!row) return;
+          const field = seg.dataset.kmField;
+          const val = btn.dataset.val;
+          seg.querySelectorAll('.breed-seg-btn').forEach(b => b.classList.toggle('breed-on', b === btn));
+          const extra = {};
+          if (field === 'keepDecision') {
+            extra.keepReason = val === 'Keep' ? null : (val === 'Cull' ? 'Cull after weaning' : '');
+          }
+          patchKiddingDam(row, { [field]: val, ...extra });
+        });
+      });
+    });
+  }
+
+  function syncMgBar() {
+    const n = mgSelected.size;
+    $('mgCount').textContent = `${n} selected`;
+    $('mgMove').disabled = n === 0;
+  }
+
+  function filterMotherGroups() {
+    const f = document.querySelector('.breed-kd-chip.breed-on[data-mg-filter]')?.dataset.mgFilter || 'all';
+    document.querySelectorAll('#mgTable [data-mg-row]').forEach(tr => {
+      const g = tr.dataset.mgGroup || '';
+      const show = f === 'all' || (f === 'none' ? !g : g === f);
+      tr.style.display = show ? '' : 'none';
+    });
+  }
+
+  function wireMotherGroups() {
+    document.querySelectorAll('#mgFilter [data-mg-filter]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#mgFilter [data-mg-filter]').forEach(c => c.classList.toggle('breed-on', c === chip));
+        filterMotherGroups();
+      });
+    });
+    document.querySelectorAll('.breed-mg-sel').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = +cb.dataset.mgSel;
+        if (cb.checked) mgSelected.add(id);
+        else mgSelected.delete(id);
+        syncMgBar();
+      });
+    });
+    $('mgHead')?.addEventListener('change', () => {
+      const on = !!$('mgHead').checked;
+      document.querySelectorAll('.breed-mg-sel').forEach(cb => {
+        const tr = cb.closest('[data-mg-row]');
+        if (tr?.style.display === 'none') return;
+        cb.checked = on;
+        const id = +cb.dataset.mgSel;
+        if (on) mgSelected.add(id);
+        else mgSelected.delete(id);
+      });
+      syncMgBar();
+    });
+    $('mgClearSel')?.addEventListener('click', () => {
+      mgSelected.clear();
+      document.querySelectorAll('.breed-mg-sel').forEach(cb => { cb.checked = false; });
+      if ($('mgHead')) $('mgHead').checked = false;
+      syncMgBar();
+    });
+    $('mgMove')?.addEventListener('click', async () => {
+      if (!mgSelected.size) return;
+      const motherGroupId = $('mgMoveTo')?.value || null;
+      try {
+        const res = await gr().api('/Breeding/MoveMothersToGroup', {
+          method: 'POST',
+          body: JSON.stringify({ doeIds: [...mgSelected], motherGroupId })
+        });
+        reload(`${res?.count || mgSelected.size} mother(s) moved`);
+      } catch { /* shown */ }
+    });
+    $('mgAuto')?.addEventListener('click', async () => {
+      try {
+        const res = await gr().api('/Breeding/AutoAssignMotherGroups', { method: 'POST', body: '{}' });
+        reload(res?.count ? `${res.count} mothers grouped by last litter` : 'No ungrouped mothers to assign');
+      } catch { /* shown */ }
+    });
+    $('mgPlus')?.addEventListener('click', () => {
+      $('mgNewWrap').hidden = false;
+      $('mgName')?.focus();
+    });
+    $('mgAdd')?.addEventListener('click', async () => {
+      const name = ($('mgName')?.value || '').trim();
+      if (!name) return;
+      try {
+        await gr().api('/Breeding/CreateMotherGroup', { method: 'POST', body: JSON.stringify({ name }) });
+        reload(`Group <b>${name}</b> added`);
+      } catch { /* shown */ }
+    });
+    document.querySelectorAll('.breed-mg-selone').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const id = +sel.dataset.mgDoe;
+        const motherGroupId = sel.value || null;
+        try {
+          await gr().api('/Breeding/MoveMothersToGroup', {
+            method: 'POST',
+            body: JSON.stringify({ doeIds: [id], motherGroupId })
+          });
+          gr().showToast?.('Group updated');
+        } catch { /* shown */ }
+      });
+    });
+    filterMotherGroups();
+    syncMgBar();
+  }
+
+  function bgDoeCheckboxes(visibleOnly = false) {
+    return [...document.querySelectorAll('#bg-does [data-bgdoe]')].filter(cb => {
+      if (!visibleOnly) return true;
+      const lab = cb.closest('.breed-bg-doe');
+      return lab && lab.style.display !== 'none';
+    });
   }
 
   function updateBgCount() {
     const el = $('bg-count');
     if (!el) return;
     const list = bgDoeCheckboxes();
+    const pickable = list.filter(c => !c.disabled);
     const max = Math.max(1, +($('bg-max')?.value || 15));
     const selected = list.filter(c => c.checked).length;
     const over = selected > max;
     let html = `${selected} selected · max ${max} per buck`;
     if (over) {
-      html += ` — <span style="color:var(--red)">only the first ${max} will be assigned; the other ${selected - max} stay available for another buck</span>`;
+      html += ` — <span style="color:var(--red)">${selected - max} over your limit of ${max}</span> — allowed, but conception may drop`;
+    } else if (selected > 0) {
+      html += ` — <span style="color:var(--green-dark)">${Math.max(0, max - selected)} more can go with this buck</span>`;
     }
-    html += ` · ${list.length} eligible does free`;
+    html += ` · ${pickable.length} can pick now`;
     el.innerHTML = html;
     const meter = $('bg-meter');
     const fill = $('bg-meter-fill');
@@ -1030,10 +1405,16 @@ window.BreedingPage = (() => {
   function filterBgDoes() {
     const q = ($('bg-find')?.value || '').trim().toLowerCase();
     const readyOnly = !!$('bg-ready-only')?.checked;
+    const mg = $('bg-mother-group')?.value || 'all';
     document.querySelectorAll('.breed-bg-doe').forEach(lab => {
       const tag = lab.dataset.bgTag || '';
       const ready = lab.dataset.bgReady === '1';
-      const show = (!q || tag.includes(q)) && (!readyOnly || ready);
+      const labMg = lab.dataset.bgMg || '';
+      let show = (!q || tag.includes(q)) && (!readyOnly || ready);
+      if (show && mg !== 'all') {
+        if (mg === 'none') show = !labMg;
+        else show = labMg === mg;
+      }
       lab.style.display = show ? '' : 'none';
     });
   }
@@ -1047,6 +1428,82 @@ window.BreedingPage = (() => {
     $('bg-out').value = d.toISOString().slice(0, 10);
   }
 
+  function renderBgDoes(candidates) {
+    const box = $('bg-does');
+    if (!box) return;
+    if (!candidates?.length) {
+      box.innerHTML = '<div class="empty">No does in the herd to show.</div>';
+      updateBgCount();
+      return;
+    }
+    box.innerHTML = candidates.map(g => {
+      const can = g.canPick ?? g.CanPick;
+      const block = g.blockReason ?? g.BlockReason ?? '';
+      const w = g.latestWeightKg ?? g.LatestWeightKg;
+      const ready = g.ready ?? g.Ready;
+      const tag = g.tag ?? g.Tag;
+      const breed = g.breed ?? g.Breed ?? '';
+      const id = g.id ?? g.Id;
+      const mgName = g.motherGroupName ?? g.MotherGroupName;
+      const mgId = g.motherGroupId ?? g.MotherGroupId ?? '';
+      const wTxt = w != null && w > 0 ? ` · ${w} kg` : '';
+      const mgTxt = mgName ? ` · ${esc(mgName)}` : '';
+      return `<label class="breed-bg-doe${can ? '' : ' breed-bg-doe-no'}" data-bg-ready="${ready ? '1' : '0'}" data-bg-tag="${String(tag).toLowerCase()}" data-bg-mg="${esc(mgId)}" data-bg-can="${can ? '1' : '0'}" data-bg-block="${esc(block)}">
+        <input type="checkbox" data-bgdoe="${id}"${can ? '' : ' disabled'}>
+        <b>${esc(tag)}</b>
+        <span class="breed">${esc(breed)}${wTxt}${mgTxt}</span>
+        ${ready && can ? '<span class="chip chip-kid">ready</span>' : ''}
+        ${block ? `<span class="breed-bg-block">✕ ${esc(block)}</span>` : ''}
+      </label>`;
+    }).join('');
+    bgDoeCheckboxes().forEach(c => c.addEventListener('change', updateBgCount));
+    document.querySelectorAll('.breed-bg-doe-no').forEach(lab => {
+      lab.addEventListener('click', ev => {
+        if (ev.target.closest('input[type=checkbox]')) return;
+        const why = lab.dataset.bgBlock;
+        const tag = lab.querySelector('b')?.textContent || '';
+        if (why) gr().showToast?.(`<b>${tag}</b> can't go in: ${why}`, 'error');
+      });
+    });
+    filterBgDoes();
+    updateBgCount();
+  }
+
+  async function refreshBgDoesForBuck() {
+    const buck = normalizeTag($('bg-buck')?.value);
+    try {
+      const q = buck ? '?buckTag=' + encodeURIComponent(buck) : '';
+      const list = await gr().api('/Breeding/GroupPicker' + q);
+      renderBgDoes(list);
+    } catch { /* shown */ }
+  }
+
+  function applyBreedingPermissions() {
+    const canAdd = breedingCan('add');
+    const canEdit = breedingCan('edit');
+    const canDel = breedingCan('delete');
+    if (!canAdd && !canEdit) {
+      document.querySelectorAll(
+        '#bgPanel input, #bgPanel select, #bgPanel button, #bgPanel textarea, .breed-se-edit input, .breed-se-edit select, .breed-se-edit button, [data-kk-wa], .breed-rep-tgt, [data-br-stage], [data-birth-open], #kb-save, #scSave, .breed-mg-selone'
+      ).forEach(el => { el.disabled = true; });
+      ['bg-create', 'bucksOpenCheck', 'bc-check-save', 'mgAdd', 'mgAuto', 'mgApply', 'se-np-save', 'se-del', 'se-copy', 'br-reconcile'].forEach(id => {
+        const el = $(id);
+        if (el) el.classList.add('perm-hidden');
+      });
+    } else {
+      if (!canAdd) {
+        ['bg-create'].forEach(id => $(id)?.classList.add('perm-hidden'));
+      }
+      if (!canEdit) {
+        ['bc-check-save', 'mgApply', 'mgAuto', 'se-np-save', 'se-copy', 'br-reconcile'].forEach(id => $(id)?.classList.add('perm-hidden'));
+        document.querySelectorAll('.breed-rep-tgt, [data-kk-wa]').forEach(el => { el.disabled = true; });
+      }
+      if (!canDel) {
+        $('se-del')?.classList.add('perm-hidden');
+      }
+    }
+  }
+
   function wireBgPanel() {
     if (!$('bg-does')) return;
   $('bg-date')?.addEventListener('change', syncBuckOutDate);
@@ -1054,15 +1511,25 @@ window.BreedingPage = (() => {
     syncBuckOutDate();
     $('bg-pick')?.addEventListener('click', () => {
       const n = +($('bg-n')?.value) || +($('bg-max')?.value) || 15;
-      const list = bgDoeCheckboxes();
-      list.forEach(c => { c.checked = false; });
+      const list = bgDoeCheckboxes(true).filter(c => !c.disabled);
+      bgDoeCheckboxes().forEach(c => { c.checked = false; });
       list.slice(0, n).forEach(c => { c.checked = true; });
       updateBgCount();
     });
     $('bg-max')?.addEventListener('input', updateBgCount);
+    $('bg-buck')?.addEventListener('change', () => refreshBgDoesForBuck());
     bgDoeCheckboxes().forEach(c => c.addEventListener('change', updateBgCount));
     $('bg-find')?.addEventListener('input', filterBgDoes);
+    $('bg-mother-group')?.addEventListener('change', filterBgDoes);
     $('bg-ready-only')?.addEventListener('change', filterBgDoes);
+    $('bg-all-shown')?.addEventListener('click', () => {
+      document.querySelectorAll('.breed-bg-doe').forEach(lab => {
+        if (lab.style.display === 'none') return;
+        const cb = lab.querySelector('[data-bgdoe]');
+        if (cb) cb.checked = true;
+      });
+      updateBgCount();
+    });
     $('bg-all-ready')?.addEventListener('click', () => {
       document.querySelectorAll('.breed-bg-doe').forEach(lab => {
         if (lab.style.display === 'none') return;
@@ -1138,6 +1605,7 @@ window.BreedingPage = (() => {
     renderGroupCards().catch(() => {});
     wireStageSelects();
     wireDoeFlow();
+    wireBrKdFilter();
     wireDoeProfilePick();
     wireKiddingFilters();
     wireKidsTable();
@@ -1196,8 +1664,9 @@ window.BreedingPage = (() => {
     });
 
     const seasonFields = [
-      ['se-build', 'buildUp'], ['se-scan', 'scanAfter'], ['se-dry', 'dryOff'],
-      ['se-drycross', 'dryBeforeCross'], ['se-wean', 'weanDays'], ['se-weankg', 'weanKg']
+      ['se-build', 'buildUp'], ['se-check', 'buckCheckDays'], ['se-weigh', 'weighYoungDoesDays'],
+      ['se-minkg', 'minYoungDoeKg'], ['se-scan', 'scanAfter'], ['se-dry', 'dryOff'],
+      ['se-pens', 'kiddingPensDays'], ['se-drycross', 'dryBeforeCross'], ['se-wean', 'weanDays']
     ];
     seasonFields.forEach(([id, key]) => {
       $(id)?.addEventListener('change', e => {
@@ -1364,10 +1833,7 @@ window.BreedingPage = (() => {
     });
 
     $('kb-live')?.addEventListener('change', renderKidRows);
-    $('kb-cancel')?.addEventListener('click', () => {
-      birthRequestId = null;
-      $('birthPanel')?.classList.add('perm-hidden');
-    });
+    $('kb-cancel')?.addEventListener('click', () => closeInlineBirth());
     $('kb-save')?.addEventListener('click', async () => {
       if (!birthRequestId) return;
       const doeTag = normalizeTag($('kb-doe')?.value);
@@ -1375,7 +1841,10 @@ window.BreedingPage = (() => {
         gender: tr.querySelector('[data-k=gender]').value,
         tag: tr.querySelector('[data-k=tag]').value.trim() || null,
         name: tr.querySelector('[data-k=name]').value.trim() || null,
-        weightKg: tr.querySelector('[data-k=weight]').value ? +tr.querySelector('[data-k=weight]').value : null
+        weightKg: tr.querySelector('[data-k=weight]').value ? +tr.querySelector('[data-k=weight]').value : null,
+        colostrumGiven: kidSegVal(tr, '[data-k-row-col]') !== 'No',
+        milkType: kidSegVal(tr, '[data-k-row-milk]') || 'Mother',
+        kidHealth: kidSegVal(tr, '[data-k-row-hl]') || 'Good'
       }));
       try {
         await gr().api('/Breeding/RecordBirth', {
@@ -1384,20 +1853,42 @@ window.BreedingPage = (() => {
             clientRequestId: birthRequestId,
             doeTag,
             kiddingDate: $('kb-date').value,
-            ease: $('kb-ease').value,
+            ease: kbEase(),
             stillborn: +$('kb-still').value || 0,
             notes: $('kb-notes')?.value.trim() || null,
+            mothering: +$('kb-mothering')?.value || 3,
+            milkProduction: +$('kb-milk')?.value || 3,
+            bodyCondition: +$('kb-bcs')?.value || 3,
+            damHealth: kbHealth(),
+            damHealthIssues: kbIssues(),
+            keepDecision: kbKeep(),
+            keepReason: kbKeep() === 'Keep' ? null : ($('kb-why')?.value || null),
             kids
           })
         });
-        reload('Birth recorded');
+        reload('Kidding recorded');
       } catch { /* shown */ }
     });
+
+    const slot = $('birthPanelSlot');
+    const panel = $('birthPanel');
+    if (slot && panel) {
+      slot.appendChild(panel);
+      slot.hidden = true;
+    }
+
+    wireBirthForm();
+    wireMotherCheck();
+    wireMotherGroups();
+    fillPtSelect('kb-mothering', 3);
+    fillPtSelect('kb-milk', 3);
+    fillPtSelect('kb-bcs', 3);
 
     const params = new URLSearchParams(location.search);
     if (params.get('birth')) {
       setBreedingView('kidding');
-      openBirth(params.get('birth'), params.get('kids') || '1');
+      const openBtn = document.querySelector(`[data-birth-open="${params.get('birth')}"]`);
+      if (openBtn) toggleBirthInline(openBtn);
     } else if (params.get('scan')) {
       setBreedingView('does');
       openScanPanel(false);
@@ -1407,15 +1898,17 @@ window.BreedingPage = (() => {
     }
 
     document.querySelectorAll('[data-birth-open]').forEach(b => {
-      b.addEventListener('click', () => openBirth(b.dataset.birthOpen, b.dataset.birthKids || '1'));
+      b.addEventListener('click', () => toggleBirthInline(b));
     });
 
     wireBgPanel();
     wireBuckCheck();
+    applyBreedingPermissions();
 
     $('bg-groups')?.addEventListener('click', onGroupAction);
 
     $('bg-create')?.addEventListener('click', async () => {
+      if (!breedingCan('add')) return;
       const ids = [...document.querySelectorAll('[data-bgdoe]:checked')].map(c => +c.dataset.bgdoe);
       const buck = normalizeTag($('bg-buck')?.value);
       const startDate = $('bg-date')?.value;
@@ -1433,8 +1926,10 @@ window.BreedingPage = (() => {
         doeIds: ids
       };
       try {
-        await gr().api('/Breeding/CreateGroup', { method: 'POST', body: JSON.stringify(body) });
-        reload(defer ? 'Group saved — put the buck in when ready' : 'Breeding group created');
+        const res = await gr().api('/Breeding/CreateGroup', { method: 'POST', body: JSON.stringify(body) });
+        const gid = res?.groupId;
+        reload(defer ? 'Group saved — put the buck in when ready' : 'Breeding group created',
+          gid && defer && breedingCan('delete') ? { kind: 'deleteGroup', groupId: gid } : null);
       } catch { /* shown */ }
     });
 

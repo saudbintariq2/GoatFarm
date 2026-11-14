@@ -52,7 +52,7 @@ internal static class FarmScenario
             DoeTag = "DOE-A",
             KiddingDate = today.AddDays(-2),
             Stillborn = 1,
-            Ease = KiddingEase.Assisted,
+            Ease = KiddingEase.SlightHelp,
             Kids =
             [
                 new BirthKidViewModel { Gender = GoatGender.Female, WeightKg = 3.1m },

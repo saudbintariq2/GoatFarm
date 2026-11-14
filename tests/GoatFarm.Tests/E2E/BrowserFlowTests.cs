@@ -274,15 +274,17 @@ public class BrowserFlowTests
             await s.ApiOkAsync("POST", "/Breeding/RecordCross", new { tag = t, date = Today(-148), confirmWarnings = true });
             await s.ApiOkAsync("POST", "/Breeding/RecordUltrasound", new { tag = t, kidsCount = 2, date = Today(-100) });
         }
-        await page.ReloadAsync();
+        await page.GotoAsync("/Breeding?view=kidding");
 
-        await page.ClickAsync($"[data-birth='MUM{id}']");
+        await page.ClickAsync($"[data-birth-open='MUM{id}']");
         await Expect(page.Locator("#birthPanel")).ToBeVisibleAsync();
         Assert.Equal("2", await page.InputValueAsync("#kb-live"));
         await page.Locator("#kb-kids tr").Nth(0).Locator("[data-k=tag]").FillAsync($"KIDA{id}");
+        await page.Locator("#kb-kids tr").Nth(0).Locator("[data-k=weight]").FillAsync("3.1");
         await page.Locator("#kb-kids tr").Nth(1).Locator("[data-k=gender]").SelectOptionAsync("Male");
+        await page.Locator("#kb-kids tr").Nth(1).Locator("[data-k=weight]").FillAsync("3.2");
         await page.Locator("#kb-save").DblClickAsync();
-        await Expect(page.Locator("#toastHost")).ToContainTextAsync("Birth recorded");
+        await Expect(page.Locator("#toastHost")).ToContainTextAsync("Kidding recorded");
 
         var mum = await GoatId($"MUM{id}");
         Assert.Equal(2, await Sql($"select count(*) from \"Goats\" where \"DamId\" = {mum}"));

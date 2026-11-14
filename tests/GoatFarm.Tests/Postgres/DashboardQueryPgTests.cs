@@ -157,6 +157,8 @@ public class DashboardQueryPgTests(ITestOutputHelper output)
         public Task RecordBcsAsync(Application.ViewModels.Goats.RecordBcsViewModel m, CancellationToken ct = default) => inner.RecordBcsAsync(m, ct);
         public Task RecordHeatAsync(Application.ViewModels.Goats.RecordHeatViewModel m, CancellationToken ct = default) => inner.RecordHeatAsync(m, ct);
         public Task<Application.ViewModels.Goats.GoatViewModel?> GetViewModelForCardAsync(int id, CancellationToken ct = default) => inner.GetViewModelForCardAsync(id, ct);
+        public Task SetKiddingsBeforePurchaseAsync(Application.ViewModels.Goats.SetKiddingsBeforePurchaseViewModel m, CancellationToken ct = default) =>
+            inner.SetKiddingsBeforePurchaseAsync(m, ct);
     }
 
     [SkippableFact]

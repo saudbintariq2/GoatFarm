@@ -202,7 +202,7 @@ public class BreedingServiceTests
             Kids =
             [
                 new BirthKidViewModel { Gender = GoatGender.Female, WeightKg = 3.2m },
-                new BirthKidViewModel { Gender = GoatGender.Male, Tag = "K-100" }
+                new BirthKidViewModel { Gender = GoatGender.Male, Tag = "K-100", WeightKg = 3.0m }
             ]
         };
 
@@ -217,7 +217,7 @@ public class BreedingServiceTests
         Assert.All(kids, k => Assert.Equal(GoatStatus.Kid, k.Status));
         Assert.Contains(kids, k => k.IsTemporaryTag && k.Tag.StartsWith("T-D1-"));
         Assert.Contains(kids, k => k.Tag == "K-100" && !k.IsTemporaryTag);
-        Assert.Single(db.GoatWeightRecords);
+        Assert.Equal(2, db.GoatWeightRecords.Count());
         Assert.Single(db.KiddingRecords);
 
         var savedDoe = await db.Goats.SingleAsync(g => g.Id == doe.Id);
@@ -239,7 +239,7 @@ public class BreedingServiceTests
             ClientRequestId = Guid.NewGuid(),
             DoeTag = "D1",
             KiddingDate = TestDb.Today,
-            Kids = [new BirthKidViewModel { Gender = GoatGender.Female, Tag = "taken" }]
+            Kids = [new BirthKidViewModel { Gender = GoatGender.Female, Tag = "taken", WeightKg = 3.0m }]
         }));
 
         Assert.Equal(2, await db.Goats.CountAsync());
@@ -256,7 +256,7 @@ public class BreedingServiceTests
             ClientRequestId = Guid.NewGuid(),
             DoeTag = "D1",
             KiddingDate = TestDb.Today,
-            Kids = [new BirthKidViewModel { Gender = GoatGender.Female }]
+            Kids = [new BirthKidViewModel { Gender = GoatGender.Female, WeightKg = 3.5m }]
         };
 
         await Assert.ThrowsAsync<ConfirmationRequiredException>(() => svc.RecordBirthAsync(request));

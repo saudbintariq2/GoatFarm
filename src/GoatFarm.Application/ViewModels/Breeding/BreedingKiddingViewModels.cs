@@ -27,6 +27,8 @@ public class BreedingDueToKidRowViewModel
     public string DaysToDueStyle { get; set; } = string.Empty;
     public string KidsSeenDisplay { get; set; } = "—";
     public int? KidsCount { get; set; }
+    public string? MotherScoreHtml { get; set; }
+    public double? MotherScoreAverage { get; set; }
 }
 
 public class BreedingMotherCheckRowViewModel
@@ -42,9 +44,39 @@ public class BreedingMotherCheckRowViewModel
     public int Alive { get; set; }
     public int Born { get; set; }
     public string EaseDisplay { get; set; } = string.Empty;
+    public string EaseKey { get; set; } = "Easy";
     public string EaseCssClass { get; set; } = string.Empty;
     public string? Notes { get; set; }
     public string RowCssClass { get; set; } = string.Empty;
+    public int? Mothering { get; set; }
+    public int? MilkProduction { get; set; }
+    public int? BodyCondition { get; set; }
+    public string DamHealth { get; set; } = "Good";
+    public IReadOnlyList<string> DamHealthIssues { get; set; } = [];
+    public string KeepDecision { get; set; } = "Keep";
+    public string? KeepReason { get; set; }
+    public string MotherScoreHtml { get; set; } = "";
+}
+
+public class MotherGroupDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Color { get; set; } = "#2E6A50";
+    public int Order { get; set; }
+}
+
+public class BreedingMotherGroupRowViewModel
+{
+    public int DoeId { get; set; }
+    public string Tag { get; set; } = string.Empty;
+    public string Breed { get; set; } = string.Empty;
+    public int KiddingsCount { get; set; }
+    public int? LastLitterBorn { get; set; }
+    public string LastLitterText { get; set; } = "—";
+    public string MotherScoreHtml { get; set; } = "";
+    public string? MotherGroupId { get; set; }
+    public string? SuggestedGroupId { get; set; }
 }
 
 public class BreedingKidAutoWeanBarViewModel

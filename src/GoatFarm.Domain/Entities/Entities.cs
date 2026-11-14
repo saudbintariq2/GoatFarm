@@ -52,10 +52,16 @@ public class Goat : BaseEntity
     public string? WeanMethod { get; set; }
     public KidMilkType KidMilkType { get; set; } = KidMilkType.Mother;
     public KidHealthTag KidHealthTag { get; set; } = KidHealthTag.Good;
+    /// <summary>Whether colostrum was given at birth (kidding form).</summary>
+    public bool? ColostrumGiven { get; set; }
     public YoungGoatClass YoungClass { get; set; }
     public DateOnly? YoungClassDate { get; set; }
     /// <summary>Season birth batch name (prototype <c>goat.batch</c>).</summary>
     public string? BirthBatchName { get; set; }
+    /// <summary>Litter-based mother group id (settings JSON), e.g. m2, m3.</summary>
+    public string? MotherGroupId { get; set; }
+    /// <summary>Kiddings that happened before this doe was bought — added to in-system kiddings for totals.</summary>
+    public int KiddingsBeforePurchase { get; set; }
     /// <summary>Planned cross date for build-up / stop-milk filters.</summary>
     public DateOnly? NextCrossDate { get; set; }
     public int? CustomFeedingGroupId { get; set; }
@@ -91,6 +97,14 @@ public class KiddingRecord : BaseEntity
     public int LiveKids { get; set; }
     public int Stillborn { get; set; }
     public KiddingEase Ease { get; set; }
+    public int? Mothering { get; set; }
+    public int? MilkProduction { get; set; }
+    public int? BodyCondition { get; set; }
+    public DamAfterKiddingHealth DamHealth { get; set; } = DamAfterKiddingHealth.Good;
+    /// <summary>Comma-separated issue labels when dam health is not Good.</summary>
+    public string? DamHealthIssues { get; set; }
+    public DamKeepDecision KeepDecision { get; set; } = DamKeepDecision.Keep;
+    public string? KeepReason { get; set; }
     public string? Notes { get; set; }
     /// <summary>Client-generated key so a resubmitted birth form cannot create kids twice.</summary>
     public Guid ClientRequestId { get; set; }

@@ -35,6 +35,7 @@ public static class BreedingKiddingAssembler
     public static IReadOnlyList<BreedingDueToKidRowViewModel> BuildDueRows(
         IReadOnlyList<Goat> confirmed,
         IReadOnlyDictionary<int, int> kiddingsByDoe,
+        ILookup<int, KiddingRecord> kiddingsByDoeAll,
         DateOnly today)
     {
         return confirmed
@@ -46,6 +47,7 @@ public static class BreedingKiddingAssembler
                 var w2 = mated.AddDays(BreedingHelper.KiddingWindowEnd);
                 var du = BreedingHelper.DaysUntil(kd);
                 var n = kiddingsByDoe.GetValueOrDefault(g.Id);
+                var pastScore = MotherScoreHelper.DoeAverage(kiddingsByDoeAll[g.Id]);
                 var flow = BreedingDoeFlowHelper.FlowStage(g, today) ?? "pregnant";
                 return new BreedingDueToKidRowViewModel
                 {
@@ -70,7 +72,9 @@ public static class BreedingKiddingAssembler
                         null or 0 => "—",
                         >= 4 => "4+",
                         _ => g.KidsCount.ToString()!
-                    }
+                    },
+                    MotherScoreHtml = pastScore.HasValue ? MotherScoreHelper.StarsHtml(pastScore) : null,
+                    MotherScoreAverage = pastScore
                 };
             })
             .OrderBy(r => r.DaysToDue)
@@ -94,7 +98,11 @@ public static class BreedingKiddingAssembler
                 var born = k.LiveKids + k.Stillborn;
                 var days = today.DayNumber - k.KiddingDate.DayNumber;
                 var ease = EaseLabel(k.Ease);
-                var warn = k.Ease != KiddingEase.Normal || k.Stillborn > 0;
+                var warn = k.DamHealth != DamAfterKiddingHealth.Good || k.KeepDecision != DamKeepDecision.Keep
+                    || k.Ease is KiddingEase.HardPull or KiddingEase.Vet or KiddingEase.Caesarean || k.Stillborn > 0;
+                var issues = string.IsNullOrWhiteSpace(k.DamHealthIssues)
+                    ? []
+                    : k.DamHealthIssues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 return new BreedingMotherCheckRowViewModel
                 {
                     DoeId = k.DoeId,
@@ -108,14 +116,23 @@ public static class BreedingKiddingAssembler
                     Alive = k.LiveKids,
                     Born = born,
                     EaseDisplay = ease,
+                    EaseKey = k.Ease.ToString(),
                     EaseCssClass = k.Ease switch
                     {
-                        KiddingEase.Normal => "chip-kid",
-                        KiddingEase.Assisted => "chip-dry",
+                        KiddingEase.Easy => "chip-kid",
+                        KiddingEase.SlightHelp => "chip-dry",
                         _ => "chip-preg"
                     },
                     Notes = k.Notes,
-                    RowCssClass = warn ? "breed-mother-warn" : ""
+                    RowCssClass = warn ? "breed-mother-warn" : "",
+                    Mothering = k.Mothering,
+                    MilkProduction = k.MilkProduction,
+                    BodyCondition = k.BodyCondition,
+                    DamHealth = k.DamHealth.ToString(),
+                    DamHealthIssues = issues,
+                    KeepDecision = k.KeepDecision.ToString(),
+                    KeepReason = k.KeepReason,
+                    MotherScoreHtml = MotherScoreHelper.StarsHtml(MotherScoreHelper.ScoreForKidding(k))
                 };
             })
             .ToList();
@@ -256,9 +273,11 @@ public static class BreedingKiddingAssembler
 
     private static string EaseLabel(KiddingEase ease) => ease switch
     {
-        KiddingEase.Normal => "Easy",
-        KiddingEase.Assisted => "Slight help",
-        KiddingEase.Difficult => "Hard / vet",
+        KiddingEase.Easy => "Easy",
+        KiddingEase.SlightHelp => "Slight help",
+        KiddingEase.HardPull => "Hard pull",
+        KiddingEase.Vet => "Vet",
+        KiddingEase.Caesarean => "Caesarean",
         _ => ease.ToString()
     };
 }

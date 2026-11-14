@@ -27,4 +27,5 @@ public interface IGoatService
     Task RecordBcsAsync(RecordBcsViewModel model, CancellationToken cancellationToken = default);
     Task RecordHeatAsync(RecordHeatViewModel model, CancellationToken cancellationToken = default);
     Task<GoatViewModel?> GetViewModelForCardAsync(int id, CancellationToken cancellationToken = default);
+    Task SetKiddingsBeforePurchaseAsync(SetKiddingsBeforePurchaseViewModel model, CancellationToken cancellationToken = default);
 }

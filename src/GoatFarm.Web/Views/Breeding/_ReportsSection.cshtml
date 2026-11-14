@@ -9,21 +9,12 @@
         <h1 class="breed-ph-title">Reports</h1>
         <p class="breed muted small">How the breeding went — in plain words, with simple pictures.</p>
     </div>
-    @if (rep.HasData)
-    {
-        <div class="breed-rep-actions">
-            <button type="button" class="btn btn-ghost btn-sm" id="breedRepPrint">🖨 Print</button>
-            <a class="btn btn-ghost btn-sm" href="/BackupCenter/ExportCsv?module=breeding" id="breedRepCsv">⬇ Breeding CSV</a>
-        </div>
-    }
+    <div class="breed-rep-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="breedRepPrint">🖨 Print</button>
+        <a class="btn btn-ghost btn-sm" href="/Breeding/ExportCsv" id="breedRepCsv">⬇ Breeding CSV</a>
+    </div>
 </div>
-@if (!rep.HasData)
-{
-    <div class="panel breed-rep-panel"><div class="panel-body empty">No crosses recorded yet. Reports fill in as soon as does are crossed, scanned and kidded.</div></div>
-}
-else
-{
-    <div class="breed-rep-filt">
+<div class="breed-rep-filt">
         <div>
             <label class="breed muted small">Season</label>
             <div class="breed-seg" id="breedRepSeason">
@@ -289,5 +280,5 @@ else
             </div>
         </div>
     </div>
-}
+</div>
 </div>

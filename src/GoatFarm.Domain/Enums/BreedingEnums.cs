@@ -33,9 +33,27 @@ public enum BreedingOutcome
 
 public enum KiddingEase
 {
-    Normal = 0,
-    Assisted = 1,
-    Difficult = 2
+    Easy = 0,
+    SlightHelp = 1,
+    HardPull = 2,
+    Vet = 3,
+    Caesarean = 4
+}
+
+/// <summary>Dam health right after kidding (Sandeel v16).</summary>
+public enum DamAfterKiddingHealth
+{
+    Good = 0,
+    Watch = 1,
+    Sick = 2
+}
+
+/// <summary>Keep / watch / cull decision after kidding.</summary>
+public enum DamKeepDecision
+{
+    Keep = 0,
+    Watch = 1,
+    Cull = 2
 }
 
 /// <summary>V243 kid milk feeding on the Kidding tab.</summary>

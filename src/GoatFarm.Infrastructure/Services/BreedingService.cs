@@ -30,6 +30,7 @@ public class BreedingService : IBreedingService
         string? reportBuck = null,
         CancellationToken cancellationToken = default)
     {
+        await ApplyAutoWeanDueKidsAsync(cancellationToken);
         var today = Today;
         var goats = await _context.Goats.AsNoTracking()
             .Include(g => g.HeatEvents)
@@ -164,12 +165,19 @@ public class BreedingService : IBreedingService
         var reports = BreedingReportsAssembler.Build(
             season, batchId, reportBuck, goats, breedingEvents, allKiddings, emptyLogs, today, canEditTargets: true);
         var goatsById = goats.ToDictionary(g => g.Id);
-        var dueToKidRows = BreedingKiddingAssembler.BuildDueRows(confirmed, kiddingCounts, today);
+        var kiddingsByDoe = allKiddings.ToLookup(k => k.DoeId);
+        var dueToKidRows = BreedingKiddingAssembler.BuildDueRows(confirmed, kiddingCounts, kiddingsByDoe, today);
         var motherCheckRows = BreedingKiddingAssembler.BuildMotherCheckRows(allKiddings, goatsById, kiddingCounts, today);
         var kidGroundRows = BreedingKiddingAssembler.BuildKidRows(bornKids, goatsById, season.WeanDays, season.AutoWean, today);
         var onMilkKids = bornKids.Where(g => !g.IsArchived && g.Status == GoatStatus.Kid && !g.WeanDate.HasValue).ToList();
         var kidAutoWeanBars = BreedingKiddingAssembler.BuildAutoWeanBars(season, onMilkKids);
         var kiddingStats = BreedingKiddingAssembler.BuildStats(dueToKidRows, motherCheckRows, kidGroundRows, does, today);
+        var motherGroups = await LoadMotherGroupsAsync(cancellationToken);
+        var latestKidding = allKiddings
+            .GroupBy(k => k.DoeId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(k => k.KiddingDate).First());
+        var allKiddingsByDoe = allKiddings.GroupBy(k => k.DoeId).ToDictionary(g => g.Key, g => g.ToArray());
+        var motherGroupRows = BreedingMotherGroupAssembler.BuildRows(does, kiddingCounts, latestKidding, allKiddingsByDoe);
 
         return new BreedingPageViewModel
         {
@@ -210,7 +218,7 @@ public class BreedingService : IBreedingService
                 .ToList(),
             EmptyRows = emptyRows,
             RationRows = rationRows,
-            PipelineRows = BreedingPageAssembler.BuildPipelineRows(goats),
+            PipelineRows = BreedingPageAssembler.BuildPipelineRows(goats, kiddingCounts, allKiddingsByDoe),
             DoeFlowSteps = BreedingPageAssembler.BuildDoeFlowSteps(goats, today),
             NowJobs = BreedingPageAssembler.BuildNowJobs(goats, season, today, breedingGroups, kiddingCounts,
                 latestWeights, rescanIds, kidGoats),
@@ -229,19 +237,119 @@ public class BreedingService : IBreedingService
             SeasonWeanDays = season.WeanDays,
             SeasonAutoWean = season.AutoWean,
             KidAutoWeanBars = kidAutoWeanBars,
-            GroupCandidates = goats
-                .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.MatedDate.HasValue)
-                .Where(g => BreedingRules.EligibilityError(g, today) is null)
-                .OrderByDescending(g => g.PrepCrossDate.HasValue)
-                .ThenBy(g => g.Tag)
-                .Select(g => new BreedingGroupCandidateViewModel
+            MotherGroups = motherGroups,
+            MotherGroupRows = motherGroupRows,
+            GroupCandidates = await BuildGroupPickerCandidatesAsync(
+                bucks.FirstOrDefault()?.Tag,
+                goats,
+                latestWeights,
+                motherGroups,
+                breedingGroups,
+                season,
+                today,
+                cancellationToken)
+        };
+    }
+
+    public async Task<IReadOnlyList<BreedingGroupCandidateViewModel>> GetGroupPickerAsync(
+        string? buckTag,
+        CancellationToken cancellationToken = default)
+    {
+        var today = Today;
+        var goats = await _context.Goats.AsNoTracking()
+            .Where(g => !g.IsArchived && g.Gender == GoatGender.Female)
+            .OrderBy(g => g.Tag)
+            .ToListAsync(cancellationToken);
+        var latestWeights = await _context.GoatWeightRecords.AsNoTracking()
+            .GroupBy(w => w.GoatId)
+            .Select(g => new { g.Key, Kg = g.OrderByDescending(x => x.Date).Select(x => x.Kg).FirstOrDefault() })
+            .ToDictionaryAsync(x => x.Key, x => (decimal?)x.Kg, cancellationToken);
+        var motherGroups = await LoadMotherGroupsAsync(cancellationToken);
+        var breedingGroups = await LoadBreedingGroupsAsync(cancellationToken);
+        var season = await LoadSeasonSettingsAsync(cancellationToken);
+        return await BuildGroupPickerCandidatesAsync(
+            buckTag,
+            goats,
+            latestWeights,
+            motherGroups,
+            breedingGroups,
+            season,
+            today,
+            cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<BreedingGroupCandidateViewModel>> BuildGroupPickerCandidatesAsync(
+        string? buckTag,
+        IReadOnlyList<Goat> does,
+        IReadOnlyDictionary<int, decimal?> latestWeights,
+        IReadOnlyList<MotherGroupDto> motherGroups,
+        IReadOnlyList<BreedingGroupDto> breedingGroups,
+        BreedingSeasonSettings season,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        var inGroup = new Dictionary<int, string>();
+        foreach (var grp in breedingGroups.Where(g => string.Equals(g.Status, "active", StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var m in grp.Members)
+                inGroup[m.GoatId] = grp.Buck;
+        }
+
+        var buck = await BreedingCycleWriter.FindBuckAsync(_context, buckTag, cancellationToken);
+        var pedigree = await BreedingCycleWriter.LoadPedigreeAsync(_context, cancellationToken);
+        var minKg = season.MinYoungDoeKg;
+
+        return does
+            .OrderByDescending(g => g.PrepCrossDate.HasValue && BreedingGroupPickerHelper.BlockReason(
+                g, today, minKg, latestWeights.GetValueOrDefault(g.Id), buck, pedigree, inGroup) is null)
+            .ThenByDescending(g => BreedingGroupPickerHelper.BlockReason(
+                g, today, minKg, latestWeights.GetValueOrDefault(g.Id), buck, pedigree, inGroup) is null)
+            .ThenBy(g => g.Tag)
+            .Select(g =>
+            {
+                var w = latestWeights.GetValueOrDefault(g.Id);
+                var block = BreedingGroupPickerHelper.BlockReason(g, today, minKg, w, buck, pedigree, inGroup);
+                var mg = string.IsNullOrWhiteSpace(g.MotherGroupId)
+                    ? null
+                    : motherGroups.FirstOrDefault(m => string.Equals(m.Id, g.MotherGroupId, StringComparison.OrdinalIgnoreCase));
+                return new BreedingGroupCandidateViewModel
                 {
                     Id = g.Id,
                     Tag = g.Tag,
                     Breed = g.Breed,
-                    Ready = g.PrepCrossDate.HasValue
-                }).ToList()
-        };
+                    Ready = g.PrepCrossDate.HasValue,
+                    CanPick = block is null,
+                    BlockReason = block,
+                    LatestWeightKg = w is > 0 ? w : null,
+                    MotherGroupId = g.MotherGroupId,
+                    MotherGroupName = mg?.Name
+                };
+            }).ToList();
+    }
+
+    private async Task<int> ApplyAutoWeanDueKidsAsync(CancellationToken cancellationToken)
+    {
+        var season = await LoadSeasonSettingsAsync(cancellationToken);
+        if (!season.AutoWean)
+            return 0;
+        var today = Today;
+        var kids = await _context.Goats
+            .Where(g => !g.IsArchived && g.Status == GoatStatus.Kid && g.WeanDate == null)
+            .ToListAsync(cancellationToken);
+        var n = 0;
+        foreach (var kid in kids)
+        {
+            var due = kid.EventDate.AddDays(season.WeanDays);
+            if (due > today) continue;
+            kid.WeanDate = due;
+            kid.WeanMethod = "auto";
+            kid.UpdatedDate = DateTime.UtcNow;
+            n++;
+        }
+
+        if (n > 0)
+            await _context.SaveChangesAsync(cancellationToken);
+        return n;
     }
 
     public async Task<BreedingDoeProfileViewModel?> GetDoeProfileAsync(int goatId, CancellationToken cancellationToken = default)
@@ -361,12 +469,13 @@ public class BreedingService : IBreedingService
 
         if (model.KidsCount == 0)
         {
+            var buckBeforeEmpty = goat.BuckTag;
             _context.BreedingEmptyLogs.Add(new BreedingEmptyLog
             {
                 GoatId = goat.Id,
                 ScanDate = scanDate,
                 MatedDate = goat.MatedDate,
-                BuckTag = goat.BuckTag
+                BuckTag = buckBeforeEmpty
             });
             foreach (var e in open)
             {
@@ -374,8 +483,16 @@ public class BreedingService : IBreedingService
                 e.ScanKids = 0;
             }
             BreedingCycleWriter.CloseCycle(goat, open, BreedingOutcome.Empty, scanDate);
-            if (goat.Status == GoatStatus.Pregnant)
-                goat.Status = GoatStatus.Dry;
+            if (!string.IsNullOrWhiteSpace(model.EmptyNextStep))
+            {
+                await ApplyEmptyScanNextAsync(goat, scanDate, new BulkScanResultItemViewModel
+                {
+                    GoatId = goat.Id,
+                    KidsCount = 0,
+                    EmptyNextStep = model.EmptyNextStep,
+                    EmptyBirthBatchId = model.EmptyBirthBatchId
+                }, buckBeforeEmpty, cancellationToken);
+            }
         }
         else
         {
@@ -436,8 +553,16 @@ public class BreedingService : IBreedingService
             throw new InvalidOperationException($"A birth can have at most {BreedingHelper.MaxKidsPerBirth} kids.");
         if (model.Kids.Any(k => k.WeightKg is < 0 or > 20))
             throw new InvalidOperationException("Kid birth weight must be between 0 and 20 kg.");
+        if (model.Kids.Any(k => k.WeightKg is null or <= 0))
+            throw new InvalidOperationException("Enter birth weight for every live kid.");
         if (!Enum.IsDefined(model.Ease) || model.Kids.Any(k => !Enum.IsDefined(k.Gender)))
             throw new InvalidOperationException("Invalid birth details.");
+        if (model.Mothering is < 1 or > 5 || model.MilkProduction is < 1 or > 5 || model.BodyCondition is < 1 or > 5)
+            throw new InvalidOperationException("Mothering, milk, and body condition must be between 1 and 5.");
+        if (!Enum.IsDefined(model.DamHealth) || !Enum.IsDefined(model.KeepDecision))
+            throw new InvalidOperationException("Invalid mother health or keep decision.");
+        if (model.Kids.Any(k => !Enum.IsDefined(k.MilkType) || !Enum.IsDefined(k.KidHealth)))
+            throw new InvalidOperationException("Invalid kid milk type or health.");
 
         var warnings = new List<string>();
         if (!doe.MatedDate.HasValue)
@@ -457,6 +582,13 @@ public class BreedingService : IBreedingService
         var currentEvent = open.FirstOrDefault();
         var tags = await AssignKidTagsAsync(doe.Tag, model.KiddingDate, model.Kids, cancellationToken);
 
+        var issues = model.DamHealth == DamAfterKiddingHealth.Good
+            ? null
+            : string.Join(", ", model.DamHealthIssues.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+        var keepReason = model.KeepDecision == DamKeepDecision.Keep
+            ? null
+            : string.IsNullOrWhiteSpace(model.KeepReason) ? null : model.KeepReason.Trim();
+
         var record = new KiddingRecord
         {
             DoeId = doe.Id,
@@ -465,6 +597,13 @@ public class BreedingService : IBreedingService
             LiveKids = model.Kids.Count,
             Stillborn = model.Stillborn,
             Ease = model.Ease,
+            Mothering = model.Mothering,
+            MilkProduction = model.MilkProduction,
+            BodyCondition = model.BodyCondition,
+            DamHealth = model.DamHealth,
+            DamHealthIssues = string.IsNullOrWhiteSpace(issues) ? null : issues,
+            KeepDecision = model.KeepDecision,
+            KeepReason = keepReason,
             Notes = string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim(),
             ClientRequestId = model.ClientRequestId
         };
@@ -489,7 +628,10 @@ public class BreedingService : IBreedingService
                 DamId = doe.Id,
                 SireId = currentEvent?.BuckId,
                 SireTagText = currentEvent?.BuckId is null ? currentEvent?.BuckTagText ?? doe.BuckTag : null,
-                KiddingRecord = record
+                KiddingRecord = record,
+                KidMilkType = input.MilkType,
+                KidHealthTag = input.KidHealth,
+                ColostrumGiven = input.ColostrumGiven
             };
             if (input.WeightKg > 0)
                 kid.WeightRecords.Add(new GoatWeightRecord { Date = model.KiddingDate, Kg = input.WeightKg.Value });
@@ -813,6 +955,10 @@ public class BreedingService : IBreedingService
         string? newBatchId = null;
         var season = await LoadSeasonSettingsAsync(cancellationToken);
         if (model.BuildUp is > 0) season.BuildUp = model.BuildUp.Value;
+        if (model.BuckCheckDays is >= 0) season.BuckCheckDays = model.BuckCheckDays.Value;
+        if (model.WeighYoungDoesDays is >= 0) season.WeighYoungDoesDays = model.WeighYoungDoesDays.Value;
+        if (model.MinYoungDoeKg is > 0) season.MinYoungDoeKg = model.MinYoungDoeKg.Value;
+        if (model.KiddingPensDays is >= 0) season.KiddingPensDays = model.KiddingPensDays.Value;
         if (model.ScanAfter is > 0) season.ScanAfter = model.ScanAfter.Value;
         if (model.DryOff is > 0) season.DryOff = model.DryOff.Value;
         if (model.WeanDays is > 0) season.WeanDays = model.WeanDays.Value;
@@ -1003,7 +1149,9 @@ public class BreedingService : IBreedingService
                 {
                     Tag = goat.Tag,
                     KidsCount = model.KidsCount.Value,
-                    Date = model.Date
+                    Date = model.Date,
+                    EmptyNextStep = model.KidsCount.Value == 0 ? model.EmptyNextStep : null,
+                    EmptyBirthBatchId = model.KidsCount.Value == 0 ? model.EmptyBirthBatchId : null
                 }, cancellationToken);
                 break;
             case "abort":
@@ -1015,9 +1163,12 @@ public class BreedingService : IBreedingService
                 }, cancellationToken);
                 break;
             case "mistake":
-                if (goat.NextCrossDate.HasValue && !goat.MatedDate.HasValue)
+                if (!goat.MatedDate.HasValue && !goat.UltrasoundDate.HasValue)
                 {
                     goat.NextCrossDate = null;
+                    goat.PrepCrossDate = null;
+                    if (goat.BreedingStage != BreedingStage.None)
+                        goat.BreedingStage = BreedingStage.None;
                     goat.UpdatedDate = DateTime.UtcNow;
                     await _context.SaveChangesAsync(cancellationToken);
                     break;
@@ -1056,6 +1207,113 @@ public class BreedingService : IBreedingService
 
     public async Task<IReadOnlyList<BreedingGroupDto>> GetBreedingGroupsAsync(CancellationToken cancellationToken = default) =>
         await LoadBreedingGroupsAsync(cancellationToken);
+
+    public async Task<UpdateKiddingDamResultViewModel> UpdateKiddingDamAsync(UpdateKiddingDamViewModel model, CancellationToken cancellationToken = default)
+    {
+        var record = await _context.KiddingRecords.FirstOrDefaultAsync(k => k.Id == model.KiddingRecordId, cancellationToken)
+            ?? throw new InvalidOperationException("Kidding record not found.");
+        if (model.Mothering is < 1 or > 5 || model.MilkProduction is < 1 or > 5 || model.BodyCondition is < 1 or > 5)
+            throw new InvalidOperationException("Mothering, milk, and body condition must be between 1 and 5.");
+
+        if (model.Mothering.HasValue) record.Mothering = model.Mothering;
+        if (model.MilkProduction.HasValue) record.MilkProduction = model.MilkProduction;
+        if (model.BodyCondition.HasValue) record.BodyCondition = model.BodyCondition;
+        if (model.DamHealth.HasValue)
+        {
+            record.DamHealth = model.DamHealth.Value;
+            if (model.DamHealth == DamAfterKiddingHealth.Good)
+                record.DamHealthIssues = null;
+        }
+
+        if (model.DamHealthIssues is not null)
+        {
+            var issues = string.Join(", ", model.DamHealthIssues.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            record.DamHealthIssues = string.IsNullOrWhiteSpace(issues) ? null : issues;
+        }
+
+        if (model.KeepDecision.HasValue)
+        {
+            record.KeepDecision = model.KeepDecision.Value;
+            if (model.KeepDecision == DamKeepDecision.Keep)
+                record.KeepReason = null;
+        }
+
+        if (model.KeepReason is not null)
+            record.KeepReason = string.IsNullOrWhiteSpace(model.KeepReason) ? null : model.KeepReason.Trim();
+
+        record.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return new UpdateKiddingDamResultViewModel
+        {
+            MotherScoreHtml = MotherScoreHelper.StarsHtml(MotherScoreHelper.ScoreForKidding(record))
+        };
+    }
+
+    public async Task<MotherGroupDto> CreateMotherGroupAsync(CreateMotherGroupViewModel model, CancellationToken cancellationToken = default)
+    {
+        var name = model.Name.Trim();
+        if (name.Length < 2)
+            throw new InvalidOperationException("Enter a group name.");
+        var groups = await LoadMotherGroupsAsync(cancellationToken);
+        var cols = new[] { "#A3375A", "#C05A21", "#3D7F8C", "#6B7A2E", "#7B5EA7" };
+        var g = new MotherGroupDto
+        {
+            Id = "mx" + Guid.NewGuid().ToString("N")[..8],
+            Name = name,
+            Color = cols[groups.Count % cols.Length],
+            Order = groups.Count + 1
+        };
+        groups.Add(g);
+        await SaveMotherGroupsAsync(groups, cancellationToken);
+        return g;
+    }
+
+    public async Task<int> MoveMothersToGroupAsync(MoveMotherGroupViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (model.DoeIds.Count == 0)
+            throw new InvalidOperationException("Select at least one mother.");
+        var groups = await LoadMotherGroupsAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(model.MotherGroupId) &&
+            groups.All(g => !string.Equals(g.Id, model.MotherGroupId, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Mother group not found.");
+
+        var does = await _context.Goats.Where(g => model.DoeIds.Contains(g.Id)).ToListAsync(cancellationToken);
+        foreach (var d in does)
+        {
+            d.MotherGroupId = string.IsNullOrWhiteSpace(model.MotherGroupId) ? null : model.MotherGroupId.Trim();
+            d.UpdatedDate = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return does.Count;
+    }
+
+    public async Task<int> AutoAssignMotherGroupsByLitterAsync(CancellationToken cancellationToken = default)
+    {
+        var groups = (await LoadMotherGroupsAsync(cancellationToken)).ToDictionary(g => g.Id, StringComparer.OrdinalIgnoreCase);
+        var kiddings = await _context.KiddingRecords.AsNoTracking().ToListAsync(cancellationToken);
+        var latest = kiddings
+            .GroupBy(k => k.DoeId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(k => k.KiddingDate).First());
+        var does = await _context.Goats
+            .Where(g => g.Gender == GoatGender.Female && !g.IsArchived && g.MotherGroupId == null)
+            .ToListAsync(cancellationToken);
+        var n = 0;
+        foreach (var d in does)
+        {
+            if (!latest.TryGetValue(d.Id, out var k)) continue;
+            var born = k.LiveKids + k.Stillborn;
+            var sug = MotherGroupHelper.SuggestGroupId(born);
+            if (sug is null || !groups.ContainsKey(sug)) continue;
+            d.MotherGroupId = sug;
+            d.UpdatedDate = DateTime.UtcNow;
+            n++;
+        }
+
+        if (n > 0)
+            await _context.SaveChangesAsync(cancellationToken);
+        return n;
+    }
 
     public async Task UpdateKidFieldAsync(UpdateKidFieldViewModel model, CancellationToken cancellationToken = default)
     {
@@ -1188,7 +1446,7 @@ public class BreedingService : IBreedingService
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task CreateBreedingGroupAsync(CreateBreedingGroupViewModel model, CancellationToken cancellationToken = default)
+    public async Task<string> CreateBreedingGroupAsync(CreateBreedingGroupViewModel model, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(model.BuckTag))
             throw new InvalidOperationException("Enter the buck tag.");
@@ -1243,9 +1501,10 @@ public class BreedingService : IBreedingService
         if (birthBatch is not null)
             await _context.SaveChangesAsync(cancellationToken);
 
+        var groupId = Guid.NewGuid().ToString("N");
         groups.Add(new BreedingGroupDto
         {
-            Id = Guid.NewGuid().ToString("N"),
+            Id = groupId,
             Name = "Breeding Group " + n.ToString("000"),
             Buck = model.BuckTag,
             Start = model.DeferCross ? "" : model.StartDate.ToString("yyyy-MM-dd"),
@@ -1258,9 +1517,10 @@ public class BreedingService : IBreedingService
             Members = members
         });
         await SaveBreedingGroupsAsync(groups, cancellationToken);
+        return groupId;
     }
 
-    public async Task PutBuckInGroupAsync(BuckInBreedingGroupViewModel model, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<int>> PutBuckInGroupAsync(BuckInBreedingGroupViewModel model, CancellationToken cancellationToken = default)
     {
         var groups = await LoadBreedingGroupsAsync(cancellationToken);
         var grp = groups.FirstOrDefault(g => g.Id == model.GroupId)
@@ -1296,6 +1556,7 @@ public class BreedingService : IBreedingService
         if (warnings.Count > 0 && !model.ConfirmWarnings)
             throw new ConfirmationRequiredException(warnings.Distinct().ToList());
 
+        var crossedIds = new List<int>();
         foreach (var m in grp.Members)
         {
             var doe = await _context.Goats.FindAsync([m.GoatId], cancellationToken);
@@ -1305,6 +1566,7 @@ public class BreedingService : IBreedingService
             var plan = BreedingCycleWriter.PlanCross(doe, buck, grp.Buck, inDate, Today, pedigree);
             var open = await BreedingCycleWriter.OpenEventsAsync(_context, doe.Id, cancellationToken);
             BreedingCycleWriter.ApplyCross(_context, doe, inDate, plan, open);
+            crossedIds.Add(doe.Id);
         }
 
         grp.Start = inDate.ToString("yyyy-MM-dd");
@@ -1312,6 +1574,26 @@ public class BreedingService : IBreedingService
         grp.CrossDeferred = false;
         await _context.SaveChangesAsync(cancellationToken);
         await SaveBreedingGroupsAsync(groups, cancellationToken);
+        return crossedIds;
+    }
+
+    public async Task ReopenBreedingGroupAsync(string groupId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(groupId))
+            throw new InvalidOperationException("Group not found.");
+        var groups = await LoadBreedingGroupsAsync(cancellationToken);
+        var grp = groups.FirstOrDefault(g => g.Id == groupId)
+            ?? throw new InvalidOperationException("Group not found.");
+        if (grp.Status != "closed")
+            throw new InvalidOperationException($"{grp.Name} is still active.");
+        grp.Status = "active";
+        await SaveBreedingGroupsAsync(groups, cancellationToken);
+    }
+
+    public async Task UndoGroupCrossesAsync(IReadOnlyList<int> doeIds, CancellationToken cancellationToken = default)
+    {
+        foreach (var id in doeIds.Distinct())
+            await RemoveCrossAsync(id, cancellationToken);
     }
 
     public async Task TakeBuckOutGroupAsync(CloseBreedingGroupViewModel model, CancellationToken cancellationToken = default) =>
@@ -1460,6 +1742,30 @@ public class BreedingService : IBreedingService
         var row = await _context.AppSettings.FirstOrDefaultAsync(s => s.Key == AppSettingKeys.BreedingGroups, cancellationToken);
         if (row is null)
             _context.AppSettings.Add(new AppSetting { Key = AppSettingKeys.BreedingGroups, Value = json });
+        else row.Value = json;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<List<MotherGroupDto>> LoadMotherGroupsAsync(CancellationToken cancellationToken)
+    {
+        var row = await _context.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == AppSettingKeys.MotherGroups, cancellationToken);
+        if (row?.Value is null)
+        {
+            var defaults = MotherGroupHelper.Defaults.ToList();
+            await SaveMotherGroupsAsync(defaults, cancellationToken);
+            return defaults;
+        }
+
+        return JsonSerializer.Deserialize<List<MotherGroupDto>>(row.Value) ?? MotherGroupHelper.Defaults.ToList();
+    }
+
+    private async Task SaveMotherGroupsAsync(List<MotherGroupDto> groups, CancellationToken cancellationToken)
+    {
+        var json = JsonSerializer.Serialize(groups);
+        var row = await _context.AppSettings.FirstOrDefaultAsync(s => s.Key == AppSettingKeys.MotherGroups, cancellationToken);
+        if (row is null)
+            _context.AppSettings.Add(new AppSetting { Key = AppSettingKeys.MotherGroups, Value = json });
         else row.Value = json;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -1703,13 +2009,20 @@ public class BreedingService : IBreedingService
             {
                 if (item.KidsCount == 0)
                 {
+                    if (string.IsNullOrWhiteSpace(item.EmptyNextStep))
+                    {
+                        errors.Add($"{goat.Tag}: choose what to do after an empty scan.");
+                        continue;
+                    }
+
                     await RecordUltrasoundAsync(new RecordUltrasoundViewModel
                     {
                         Tag = goat.Tag,
                         KidsCount = 0,
-                        Date = model.ScanDate
+                        Date = model.ScanDate,
+                        EmptyNextStep = item.EmptyNextStep.Trim(),
+                        EmptyBirthBatchId = item.EmptyBirthBatchId
                     }, cancellationToken);
-                    await ApplyEmptyScanNextAsync(goat, model.ScanDate, item, buckBeforeEmpty, cancellationToken);
                 }
                 else
                 {

@@ -97,6 +97,9 @@ public class BreedingPipelineRowViewModel
     public string DaysText { get; set; } = string.Empty;
     public string DaysStyle { get; set; } = string.Empty;
     public int? KidsCount { get; set; }
+    public int KiddingsTotal { get; set; }
+    public string KiddingsDisplay { get; set; } = string.Empty;
+    public string? MotherScoreHtml { get; set; }
 }
 
 public class BreedingNowJobViewModel
@@ -156,6 +159,10 @@ public class BreedingSeasonStepViewModel
 public class BreedingSeasonPanelViewModel
 {
     public int BuildUp { get; set; }
+    public int BuckCheckDays { get; set; }
+    public int WeighYoungDoesDays { get; set; }
+    public decimal MinYoungDoeKg { get; set; }
+    public int KiddingPensDays { get; set; }
     public int ScanAfter { get; set; }
     public int DryOff { get; set; }
     public int WeanDays { get; set; }
@@ -228,6 +235,11 @@ public class BreedingGroupCandidateViewModel
     public string Tag { get; set; } = string.Empty;
     public string Breed { get; set; } = string.Empty;
     public bool Ready { get; set; }
+    public bool CanPick { get; set; }
+    public string? BlockReason { get; set; }
+    public decimal? LatestWeightKg { get; set; }
+    public string? MotherGroupId { get; set; }
+    public string? MotherGroupName { get; set; }
 }
 
 public class BreedingBuckRowViewModel
@@ -311,6 +323,24 @@ public class BreedingPageViewModel
     public int SeasonWeanDays { get; set; } = HerdRules.WeanDaysDefault;
     public bool SeasonAutoWean { get; set; } = true;
     public IReadOnlyList<BreedingKidAutoWeanBarViewModel> KidAutoWeanBars { get; set; } = [];
+    public IReadOnlyList<MotherGroupDto> MotherGroups { get; set; } = [];
+    public IReadOnlyList<BreedingMotherGroupRowViewModel> MotherGroupRows { get; set; } = [];
+}
+
+public class CreateMotherGroupViewModel
+{
+    public string Name { get; set; } = string.Empty;
+}
+
+public class MoveMotherGroupViewModel
+{
+    public IReadOnlyList<int> DoeIds { get; set; } = [];
+    public string? MotherGroupId { get; set; }
+}
+
+public class UpdateKiddingDamResultViewModel
+{
+    public string MotherScoreHtml { get; set; } = "";
 }
 
 public class BreedingReportsViewModel
@@ -447,6 +477,10 @@ public class BreedingReportCullRowViewModel
 public class UpdateBreedingSeasonViewModel
 {
     public int? BuildUp { get; set; }
+    public int? BuckCheckDays { get; set; }
+    public int? WeighYoungDoesDays { get; set; }
+    public decimal? MinYoungDoeKg { get; set; }
+    public int? KiddingPensDays { get; set; }
     public int? ScanAfter { get; set; }
     public int? DryOff { get; set; }
     public int? WeanDays { get; set; }
@@ -509,6 +543,8 @@ public class BreedingStageActionViewModel
     public int? KidsCount { get; set; }
     public string? Notes { get; set; }
     public bool ConfirmWarnings { get; set; }
+    public string? EmptyNextStep { get; set; }
+    public string? EmptyBirthBatchId { get; set; }
 }
 
 public class CreateBreedingGroupViewModel
@@ -529,6 +565,11 @@ public class CloseBreedingGroupViewModel
 {
     public string GroupId { get; set; } = string.Empty;
     public DateOnly? EndDate { get; set; }
+}
+
+public class UndoGroupCrossesViewModel
+{
+    public List<int> DoeIds { get; set; } = [];
 }
 
 public class BreedingGroupMemberActionViewModel
@@ -665,6 +706,9 @@ public class RecordUltrasoundViewModel
     public int KidsCount { get; set; }
     public DateOnly? Date { get; set; }
     public int? DaysPregnant { get; set; }
+    /// <summary>When empty: next, heat, cull, back (v16 scan sheet).</summary>
+    public string? EmptyNextStep { get; set; }
+    public string? EmptyBirthBatchId { get; set; }
 }
 
 public class CrossCheckViewModel
@@ -686,6 +730,9 @@ public class BirthKidViewModel
     public string? Tag { get; set; }
     public string? Name { get; set; }
     public decimal? WeightKg { get; set; }
+    public bool ColostrumGiven { get; set; } = true;
+    public KidMilkType MilkType { get; set; } = KidMilkType.Mother;
+    public KidHealthTag KidHealth { get; set; } = KidHealthTag.Good;
 }
 
 public class RecordBirthViewModel
@@ -693,11 +740,30 @@ public class RecordBirthViewModel
     public Guid ClientRequestId { get; set; }
     public string DoeTag { get; set; } = string.Empty;
     public DateOnly KiddingDate { get; set; }
-    public KiddingEase Ease { get; set; } = KiddingEase.Normal;
+    public KiddingEase Ease { get; set; } = KiddingEase.Easy;
     public int Stillborn { get; set; }
     public string? Notes { get; set; }
+    public int? Mothering { get; set; } = 3;
+    public int? MilkProduction { get; set; } = 3;
+    public int? BodyCondition { get; set; } = 3;
+    public DamAfterKiddingHealth DamHealth { get; set; } = DamAfterKiddingHealth.Good;
+    public List<string> DamHealthIssues { get; set; } = [];
+    public DamKeepDecision KeepDecision { get; set; } = DamKeepDecision.Keep;
+    public string? KeepReason { get; set; }
     public List<BirthKidViewModel> Kids { get; set; } = [];
     public bool ConfirmWarnings { get; set; }
+}
+
+public class UpdateKiddingDamViewModel
+{
+    public int KiddingRecordId { get; set; }
+    public int? Mothering { get; set; }
+    public int? MilkProduction { get; set; }
+    public int? BodyCondition { get; set; }
+    public DamAfterKiddingHealth? DamHealth { get; set; }
+    public List<string>? DamHealthIssues { get; set; }
+    public DamKeepDecision? KeepDecision { get; set; }
+    public string? KeepReason { get; set; }
 }
 
 public class RecordBirthResultViewModel

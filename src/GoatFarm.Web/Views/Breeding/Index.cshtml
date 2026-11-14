@@ -423,7 +423,22 @@
         </div>
         <div class="filterbar" style="margin-bottom:10px;flex-wrap:wrap">
             <div class="field" style="flex:1;min-width:180px"><label for="bg-find">Find a doe</label><input id="bg-find" placeholder="Type or scan a tag" autocomplete="off"/></div>
+            <div class="field"><label for="bg-mother-group">Mother group</label>
+                <select id="bg-mother-group" title="Filter does e.g. all 3 kids mothers for one buck">
+                    <option value="all">Any (@Model.GroupCandidates.Count)</option>
+                    @{
+                        var bgNoMg = Model.GroupCandidates.Count(g => string.IsNullOrEmpty(g.MotherGroupId));
+                    }
+                    <option value="none">No group set (@bgNoMg)</option>
+                    @foreach (var mg in Model.MotherGroups.OrderBy(x => x.Order))
+                    {
+                        var c = Model.GroupCandidates.Count(g => g.MotherGroupId == mg.Id);
+                        <option value="@mg.Id">@mg.Name (@c)</option>
+                    }
+                </select>
+            </div>
             <label class="checkline" style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="bg-ready-only"> Ready only</label>
+            <button type="button" class="btn btn-ghost btn-sm" id="bg-all-shown">Select all shown</button>
             <button type="button" class="btn btn-ghost btn-sm" id="bg-all-ready">Select all ready</button>
             <button type="button" class="btn btn-ghost btn-sm" id="bg-clear">Clear</button>
         </div>
@@ -463,20 +478,24 @@
         {
             foreach (var g in Model.GroupCandidates)
             {
-                <label class="breed-bg-doe" data-bg-ready="@(g.Ready ? "1" : "0")" data-bg-tag="@g.Tag.ToLowerInvariant()">
-                    <input type="checkbox" data-bgdoe="@g.Id">
+                <label class="breed-bg-doe@(g.CanPick ? "" : " breed-bg-doe-no")" data-bg-ready="@(g.Ready ? "1" : "0")" data-bg-tag="@g.Tag.ToLowerInvariant()" data-bg-mg="@(g.MotherGroupId ?? "")" data-bg-can="@(g.CanPick ? "1" : "0")" data-bg-block="@(g.BlockReason ?? "")">
+                    <input type="checkbox" data-bgdoe="@g.Id"@(g.CanPick ? "" : " disabled")>
                     <b>@g.Tag</b>
-                    <span class="breed">@g.Breed</span>
-                    @if (g.Ready)
+                    <span class="breed">@g.Breed@if (g.LatestWeightKg is { } wkg){<text> · @wkg.ToString("0.#") kg</text>}@if (!string.IsNullOrEmpty(g.MotherGroupName)){<text> · @g.MotherGroupName</text>}</span>
+                    @if (g.Ready && g.CanPick)
                     {
                         <span class="chip chip-kid">ready</span>
+                    }
+                    @if (!string.IsNullOrEmpty(g.BlockReason))
+                    {
+                        <span class="breed-bg-block">✕ @g.BlockReason</span>
                     }
                 </label>
             }
         }
         else
         {
-            <div class="empty">No eligible does free. Does must be female, not kids, old enough, and not already crossed.</div>
+            <div class="empty">No does in the herd to show.</div>
         }
         </div>
         <label class="checkline" for="bg-defer" style="display:flex;gap:10px;align-items:center;margin:12px 0;font-size:14px;cursor:pointer">
@@ -550,6 +569,7 @@
     </div>
     <div class="breed-ph-actions">
         <button type="button" class="btn btn-green btn-sm" id="doesOpenScan">🔍 Record scan</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="scAllPregHead" hidden>Rest → 🤰 Pregnant</button>
     </div>
 </div>
 <div class="panel" id="scanPanel">
@@ -577,7 +597,7 @@
         <div class="scan-tbl-wrap" id="scTable"></div>
         <div class="scan-foot">
             <div id="scSum" class="small muted"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;align-items:center">
                 <button type="button" class="btn btn-ghost btn-sm" id="scAllPreg">Rest → 🤰 Pregnant</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="scClear">Clear choices</button>
                 <button type="button" class="btn btn-green btn-sm" id="scSave" disabled>Save results</button>
@@ -618,6 +638,14 @@
 
 <div class="panel">
     <div class="panel-head"><h2>Breeding</h2>
+        <div class="breed-kd-chips" id="brKdFilter" role="tablist" style="margin-bottom:12px">
+            <button type="button" class="breed-kd-chip breed-on" data-br-kd="all">All</button>
+            @for (var pk = 0; pk <= 4; pk++)
+            {
+                <button type="button" class="breed-kd-chip" data-br-kd="@pk">@pk×</button>
+            }
+            <button type="button" class="breed-kd-chip" data-br-kd="5">5+</button>
+        </div>
         <div class="filterbar">
             <div class="field"><label class="hide-sm">Show</label>
                 <select id="brFilter">
@@ -634,13 +662,13 @@
     </div>
     <div class="panel-body">
         <table class="tbl"><thead><tr>
-            <th>Doe</th><th>Stage</th><th class="hide-sm">Mated</th><th class="hide-sm">Buck</th>
+            <th>Doe</th><th class="num-cell">Kiddings</th><th class="num-cell">Mother score</th><th>Stage</th><th class="hide-sm">Mated</th><th class="hide-sm">Buck</th>
             <th>Kids</th><th>Key date</th><th class="num-cell">Days</th>
             <th style="width:150px">Change stage</th></tr></thead>
             <tbody id="brRows">
             @foreach (var r in Model.PipelineRows)
             {
-                <tr data-br-stage="@r.StageKey" data-br-flow="@r.FlowStageKey" data-br-id="@r.Id" data-doe-profile="@r.Id" data-br-mated="@r.MatedDate" data-br-kids="@(r.KidsCount?.ToString() ?? "")">
+                <tr data-br-stage="@r.StageKey" data-br-flow="@r.FlowStageKey" data-br-id="@r.Id" data-doe-profile="@r.Id" data-br-mated="@r.MatedDate" data-br-kids="@(r.KidsCount?.ToString() ?? "")" data-br-kiddings="@r.KiddingsTotal">
                     <td>
                         <a href="#" class="tag" data-doe-profile="@r.Id">@r.Tag</a>
                         @if (!string.IsNullOrEmpty(r.Name))
@@ -652,6 +680,8 @@
                             <div class="name" style="color:var(--blue)">@r.Owner</div>
                         }
                     </td>
+                    <td class="num-cell"><span class="breed">@r.KiddingsDisplay</span></td>
+                    <td class="num-cell">@(r.MotherScoreHtml != null ? Html.Raw(r.MotherScoreHtml) : Html.Raw("<span class=\"muted\">—</span>"))</td>
                     <td><span class="chip @r.StageCssClass">@r.StageLabel</span></td>
                     <td class="hide-sm"><span class="breed">@(r.MatedDate ?? "—")</span></td>
                     <td class="hide-sm"><span class="breed">@(r.BuckTag ?? "—")</span></td>
@@ -663,11 +693,11 @@
             }
             @if (!Model.PipelineRows.Any())
             {
-                <tr id="brEmpty"><td colspan="8" class="empty">No does in breeding. Add one below.</td></tr>
+                <tr id="brEmpty"><td colspan="10" class="empty">No does in breeding. Add one below.</td></tr>
             }
             </tbody></table>
         <div class="rule" style="margin-top:12px"><b>Change stage</b> on any row to move her forward — each step asks
-            for the date it happened. A <b>not pregnant</b> scan returns her to Dry and counts against your conception rate.</div>
+            for the date it happened. A <b>not pregnant</b> scan counts against conception rate; you choose her next step (back with buck, next birth group, watch for heat, or cull list).</div>
     </div>
 </div>
 
@@ -801,12 +831,12 @@
     </div>
     <div class="panel-body">
         <table class="tbl" id="kdTable"><thead><tr>
-            <th>Doe</th><th>Kiddings</th><th class="hide-sm">Buck</th><th>Stage</th><th>Due</th><th class="num-cell">Kids seen</th><th style="width:140px"></th>
+            <th>Doe</th><th>Kiddings</th><th class="hide-sm">Mother score</th><th class="hide-sm">Buck</th><th>Stage</th><th>Due</th><th class="num-cell">Kids seen</th><th style="width:140px"></th>
         </tr></thead>
         <tbody>
         @foreach (var e in Model.DueToKidRows)
         {
-            <tr data-kd-row data-kd-soon="@(e.DaysToDue <= 30 ? "1" : "0")" data-kd-dry="@(e.IsDry ? "1" : "0")">
+            <tr data-kd-row data-kd-tag="@e.Tag" data-kd-soon="@(e.DaysToDue <= 30 ? "1" : "0")" data-kd-dry="@(e.IsDry ? "1" : "0")">
                 <td>
                     <a href="#" class="tag" data-doe-profile="@e.Id">@e.Tag</a>
                     @if (!string.IsNullOrEmpty(e.Name)) { <div class="name">@e.Name</div> }
@@ -816,6 +846,7 @@
                     <span class="chip chip-kid">@e.KiddingsCount×</span>
                     <div class="name muted small">next is @e.NextKiddingOrdinal</div>
                 </td>
+                <td class="hide-sm">@(e.MotherScoreHtml != null ? Html.Raw(e.MotherScoreHtml) : Html.Raw("<span class=\"muted\">—</span>"))</td>
                 <td class="hide-sm"><span class="breed">@(e.BuckTag ?? "—")</span></td>
                 <td><span class="chip @e.FlowStageCssClass">@e.FlowStageLabel</span></td>
                 <td>
@@ -823,60 +854,125 @@
                     <div class="small" style="@e.DaysToDueStyle">@e.DaysToDueText</div>
                 </td>
                 <td class="num-cell"><span class="breed">@e.KidsSeenDisplay</span></td>
-                <td><button type="button" class="btn btn-green btn-sm" data-birth-open="@e.Tag" data-birth-kids="@(e.KidsCount ?? 2)">🍼 Record kidding</button></td>
+                <td><button type="button" class="btn btn-green btn-sm" data-birth-open="@e.Tag" data-birth-kids="@(e.KidsCount ?? 2)" data-birth-kiddings="@e.KiddingsCount" data-birth-ordinal="@e.NextKiddingOrdinal" data-birth-past-score="@(e.MotherScoreAverage?.ToString("0.0") ?? "")">🍼 Record kidding</button></td>
             </tr>
         }
         @if (!Model.DueToKidRows.Any())
         {
-            <tr id="kdEmpty"><td colspan="7" class="empty">No does due to kid right now.</td></tr>
+            <tr id="kdEmpty"><td colspan="8" class="empty">No does due to kid right now.</td></tr>
         }
         </tbody></table>
+        <div id="birthPanelSlot" hidden aria-hidden="true"></div>
     </div>
 </div>
 
-<div class="panel" id="birthPanel">
-    <div class="panel-head"><h2>Record a birth</h2><span class="sub">kids are added to the herd with their dam and sire</span></div>
+<div class="panel perm-hidden" id="birthPanel">
+    <div class="panel-head"><h2>Record a birth</h2><span class="sub">mother points, dam health, keep decision, and kid details (Sandeel v16)</span></div>
     <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:1.3fr 1fr 1fr 1fr 1fr">
-            <div class="field"><label for="kb-doe">Doe tag</label><input id="kb-doe" autocomplete="off"></div>
-            <div class="field"><label for="kb-date">Birth date</label><input type="date" id="kb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field"><label for="kb-live">Live kids</label><select id="kb-live">
-                @for (var i = 0; i <= BreedingHelper.MaxKidsPerBirth; i++)
-                {
-                    if (i == 1)
-                    {
-                        <option value="@i" selected>@i</option>
-                    }
-                    else
-                    {
-                        <option value="@i">@i</option>
-                    }
-                }
-            </select></div>
-            <div class="field"><label for="kb-still">Stillborn</label><input type="number" id="kb-still" min="0" max="@BreedingHelper.MaxKidsPerBirth" value="0"></div>
-            <div class="field"><label for="kb-ease">Birth</label><select id="kb-ease">
-                <option value="Normal">Normal</option><option value="Assisted">Assisted</option><option value="Difficult">Difficult</option></select></div>
+        <input type="hidden" id="kb-doe" autocomplete="off">
+        <div class="breed-kbirth">
+            <div class="breed-kbirth-col">
+                <div class="breed-kbirth-h">Birth</div>
+                <div class="field"><label for="kb-date">Date</label><input type="date" id="kb-date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
+                <div class="add-grid" style="grid-template-columns:1fr 1fr;gap:10px">
+                    <div class="field"><label for="kb-live">Born alive</label>
+                        <select id="kb-live">
+                            @for (var i = 0; i <= BreedingHelper.MaxKidsPerBirth; i++)
+                            {
+                                if (i == 1)
+                                {
+                                    <option value="@i" selected>@i</option>
+                                }
+                                else
+                                {
+                                    <option value="@i">@i</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="field"><label for="kb-still">Stillborn</label><input type="number" id="kb-still" min="0" max="@BreedingHelper.MaxKidsPerBirth" value="0"></div>
+                </div>
+                <div class="field"><label>Birth was</label>
+                    <div class="breed-seg" id="kb-ease-seg" data-kb-seg="ease">
+                        @foreach (var (opt, label) in new[] { ("Easy", "Easy"), ("SlightHelp", "Slight help"), ("HardPull", "Hard pull"), ("Caesarean", "Vet (caesarean)") })
+                        {
+                            <button type="button" class="breed-seg-btn@(opt == "Easy" ? " breed-on" : "")" data-val="@opt">@label</button>
+                        }
+                    </div>
+                    <input type="hidden" id="kb-ease" value="Easy">
+                </div>
+                <div class="field"><label for="kb-notes">Note</label><input id="kb-notes" maxlength="1000" placeholder="e.g. second kid came backwards"></div>
+            </div>
+            <div class="breed-kbirth-col">
+                <div class="breed-kbirth-h">Mother after kidding</div>
+                <div id="kb-ordinal" class="breed-kordinal muted small" style="margin-bottom:10px"></div>
+                <div class="field"><label for="kb-mothering">Mothering (1–5)</label><select id="kb-mothering"></select></div>
+                <div class="field"><label for="kb-milk">Milk (1–5)</label><select id="kb-milk"></select></div>
+                <div class="field"><label for="kb-bcs">Body condition (1–5)</label><select id="kb-bcs"></select></div>
+                <div class="field"><label>Health</label>
+                    <div class="breed-seg" id="kb-health-seg" data-kb-seg="health">
+                        @foreach (var h in new[] { "Good", "Watch", "Sick" })
+                        {
+                            <button type="button" class="breed-seg-btn@(h == "Good" ? " breed-on" : "")" data-val="@h">@h</button>
+                        }
+                    </div>
+                </div>
+                <div class="field" id="kb-issues-wrap" hidden><label>Problem</label>
+                    <div class="breed-ichips" id="kb-issues">
+                        @foreach (var iss in MotherScoreHelper.DamIssueOptions)
+                        {
+                            <button type="button" class="breed-ichip" data-iss="@iss">@iss</button>
+                        }
+                    </div>
+                </div>
+                <div class="field"><label>Mother score</label><div id="kb-mscore" class="breed"></div></div>
+                <div class="field"><label>Keep her?</label>
+                    <div class="breed-seg" id="kb-keep-seg" data-kb-seg="keep">
+                        @foreach (var k in new[] { "Keep", "Watch", "Cull" })
+                        {
+                            <button type="button" class="breed-seg-btn@(k == "Keep" ? " breed-on" : "")" data-val="@k">@k</button>
+                        }
+                    </div>
+                </div>
+                <div class="field" id="kb-why-wrap" hidden><label for="kb-why">Why</label>
+                    <select id="kb-why">
+                        <option value=""></option>
+                        @foreach (var r in new[] { "Rejects kids", "Poor mother", "Hard birth", "Low milk", "Health", "Old age", "Other" })
+                        {
+                            <option value="@r">@r</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="breed-kbirth-col breed-kbirth-wide">
+                <div class="breed-kbirth-h">Kids <span class="muted small">birth weight required for every live kid</span></div>
+                <table class="tbl" style="margin-top:8px"><thead><tr>
+                    <th>#</th><th>Gender</th><th>Tag</th><th>Name</th><th class="num-cell">Birth kg</th><th>Colostrum</th><th>Milk</th><th>Health</th>
+                </tr></thead><tbody id="kb-kids"></tbody></table>
+            </div>
         </div>
-        <table class="tbl" style="margin-top:12px"><thead><tr><th>#</th><th>Gender</th><th>Tag (blank = temporary)</th><th>Name</th><th class="num-cell">Birth weight kg</th></tr></thead>
-            <tbody id="kb-kids"></tbody></table>
-        <div class="field" style="margin-top:10px"><label for="kb-notes">Notes</label><input id="kb-notes" maxlength="1000" placeholder="optional"></div>
+        <p class="muted small" id="kb-msg" style="margin-top:8px"></p>
         <div class="goat-form-actions" style="margin-top:12px">
-            <button type="button" class="btn btn-green" id="kb-save">Save birth</button>
+            <button type="button" class="btn btn-green" id="kb-save">Save kidding</button>
             <button type="button" class="btn btn-ghost" id="kb-cancel">Cancel</button>
         </div>
     </div>
 </div>
 
 <div class="panel">
-    <div class="panel-head"><h2>🩺 Mother check</h2><span class="sub">does that kidded in the last 200 days — review birth notes</span></div>
-    <div class="panel-body">
-        <table class="tbl"><thead><tr>
-            <th>Mother</th><th>Kiddings</th><th>Kidded</th><th class="num-cell">Kids</th><th>Birth</th><th class="hide-sm">Notes</th>
+    <div class="panel-head"><h2>🩺 Mother check</h2><span class="sub">does that kidded in the last 200 days — change health or decision any time</span></div>
+    <div class="panel-body" style="overflow-x:auto">
+        <table class="tbl breed-km-tbl" id="kmTable"><thead><tr>
+            <th>Mother</th><th>Kiddings</th><th>Kidded</th><th class="num-cell">Kids</th><th>Birth</th>
+            <th>Mothering</th><th>Milk</th><th>Body cond.</th><th>Health</th><th>Score</th><th>Decision</th>
         </tr></thead>
         <tbody>
+        @{
+            var mothPts = new[] { (1, "1 — Poor"), (2, "2 — Weak"), (3, "3 — OK"), (4, "4 — Good"), (5, "5 — Excellent") };
+        }
         @foreach (var m in Model.MotherCheckRows)
         {
-            <tr class="@m.RowCssClass">
+            <tr class="@m.RowCssClass" data-km-row data-km-id="@m.KiddingRecordId" data-km-ease="@m.EaseKey">
                 <td>
                     <a href="#" class="tag" data-doe-profile="@m.DoeId">@m.Tag</a>
                     <div class="name muted small">@m.Breed</div>
@@ -891,12 +987,141 @@
                 </td>
                 <td class="num-cell">@m.Alive alive@if (m.Born > m.Alive) { <span class="muted small"> / @m.Born born</span> }</td>
                 <td><span class="chip @m.EaseCssClass">@m.EaseDisplay</span></td>
-                <td class="hide-sm"><span class="breed">@(m.Notes ?? "—")</span></td>
+                <td>
+                    <select class="breed-pt-sel" data-km-field="mothering" data-km-id="@m.KiddingRecordId">
+                        @foreach (var (v, lab) in mothPts)
+                        {
+                            if ((m.Mothering ?? 3) == v) { <option value="@v" selected>@lab</option> }
+                            else { <option value="@v">@lab</option> }
+                        }
+                    </select>
+                </td>
+                <td>
+                    <select class="breed-pt-sel" data-km-field="milkProduction" data-km-id="@m.KiddingRecordId">
+                        @foreach (var (v, lab) in mothPts)
+                        {
+                            if ((m.MilkProduction ?? 3) == v) { <option value="@v" selected>@lab</option> }
+                            else { <option value="@v">@lab</option> }
+                        }
+                    </select>
+                </td>
+                <td>
+                    <select class="breed-pt-sel" data-km-field="bodyCondition" data-km-id="@m.KiddingRecordId">
+                        @foreach (var (v, lab) in mothPts)
+                        {
+                            if ((m.BodyCondition ?? 3) == v) { <option value="@v" selected>@lab</option> }
+                            else { <option value="@v">@lab</option> }
+                        }
+                    </select>
+                </td>
+                <td>
+                    <div class="breed-seg" data-km-field="damHealth" data-km-id="@m.KiddingRecordId">
+                        @foreach (var h in new[] { "Good", "Watch", "Sick" })
+                        {
+                            <button type="button" class="breed-seg-btn@(m.DamHealth == h ? " breed-on" : "")" data-val="@h">@h</button>
+                        }
+                    </div>
+                    @if (m.DamHealthIssues.Count > 0)
+                    {
+                        <div class="name" style="color:var(--red);margin-top:4px">@string.Join(", ", m.DamHealthIssues)</div>
+                    }
+                </td>
+                <td class="breed-km-score">@Html.Raw(m.MotherScoreHtml)</td>
+                <td>
+                    <div class="breed-seg" data-km-field="keepDecision" data-km-id="@m.KiddingRecordId">
+                        @foreach (var k in new[] { "Keep", "Watch", "Cull" })
+                        {
+                            <button type="button" class="breed-seg-btn@(m.KeepDecision == k ? " breed-on" : "")" data-val="@k">@k</button>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(m.KeepReason))
+                    {
+                        <div class="name muted small" style="margin-top:4px">@m.KeepReason</div>
+                    }
+                </td>
             </tr>
         }
         @if (!Model.MotherCheckRows.Any())
         {
-            <tr><td colspan="6" class="empty">No kiddings in the last 200 days.</td></tr>
+            <tr><td colspan="11" class="empty">No kiddings in the last 200 days.</td></tr>
+        }
+        </tbody></table>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-head breed-kd-head">
+        <h2>👪 Mother groups</h2>
+        <span class="sub">group mothers by litter size, then pick a group at buck assignment</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="mgAuto" style="margin-left:8px">⚡ Group by kids born</button>
+    </div>
+    <div class="panel-body">
+        @{
+            var mgAll = Model.MotherGroupRows.Count;
+            var mgNone = Model.MotherGroupRows.Count(r => string.IsNullOrEmpty(r.MotherGroupId));
+        }
+        <div class="breed-kd-chips" id="mgFilter" role="tablist">
+            <button type="button" class="breed-kd-chip breed-on" data-mg-filter="all">All mothers (@mgAll)</button>
+            @foreach (var g in Model.MotherGroups.OrderBy(x => x.Order))
+            {
+                var c = Model.MotherGroupRows.Count(r => r.MotherGroupId == g.Id);
+                <button type="button" class="breed-kd-chip" data-mg-filter="@g.Id" style="--mgc:@g.Color">@g.Name (@c)</button>
+            }
+            <button type="button" class="breed-kd-chip" data-mg-filter="none">No group (@mgNone)</button>
+            <button type="button" class="breed-kd-chip" id="mgPlus">＋ New group</button>
+        </div>
+        <div class="breed-mgbar" id="mgBar">
+            <b id="mgCount">0 selected</b>
+            <span class="muted small">→ move to</span>
+            <select id="mgMoveTo" class="breed-pt-sel">
+                @foreach (var g in Model.MotherGroups.OrderBy(x => x.Order))
+                {
+                    <option value="@g.Id">@g.Name</option>
+                }
+                <option value="">— remove from group</option>
+            </select>
+            <button type="button" class="btn btn-green btn-sm" id="mgMove" disabled>Move</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="mgClearSel">Clear</button>
+        </div>
+        <div id="mgNewWrap" class="breed-mgnew" hidden>
+            <input id="mgName" class="t" maxlength="80" placeholder="Group name" style="width:180px">
+            <button type="button" class="btn btn-green btn-sm" id="mgAdd">Add</button>
+        </div>
+        <table class="tbl" id="mgTable" style="margin-top:12px"><thead><tr>
+            <th style="width:40px"><input type="checkbox" id="mgHead" aria-label="Select all mothers"></th>
+            <th>Mother</th><th>Kiddings</th><th>Last litter</th><th>Score</th><th>Group</th>
+        </tr></thead>
+        <tbody>
+        @foreach (var r in Model.MotherGroupRows)
+        {
+            <tr data-mg-row data-mg-id="@r.DoeId" data-mg-group="@(r.MotherGroupId ?? "")">
+                <td><input type="checkbox" class="breed-mg-sel" data-mg-sel="@r.DoeId" aria-label="Select @r.Tag"></td>
+                <td>
+                    <a href="#" class="tag" data-doe-profile="@r.DoeId">@r.Tag</a>
+                    <div class="name muted small">@r.Breed</div>
+                </td>
+                <td><span class="chip chip-kid">@r.KiddingsCount×</span></td>
+                <td>@r.LastLitterText</td>
+                <td>@Html.Raw(r.MotherScoreHtml)</td>
+                <td>
+                    <select class="breed-mg-selone" data-mg-doe="@r.DoeId" style="@(r.MotherGroupId != null && Model.MotherGroups.FirstOrDefault(g => g.Id == r.MotherGroupId) is { } mg ? $"border-color:{mg.Color}" : "")">
+                        <option value="">— no group</option>
+                        @foreach (var g in Model.MotherGroups.OrderBy(x => x.Order))
+                        {
+                            if (r.MotherGroupId == g.Id) { <option value="@g.Id" selected>@g.Name</option> }
+                            else { <option value="@g.Id">@g.Name</option> }
+                        }
+                    </select>
+                    @if (r.SuggestedGroupId != null && Model.MotherGroups.FirstOrDefault(g => g.Id == r.SuggestedGroupId) is { } sug)
+                    {
+                        <div class="name small" style="color:var(--amber);margin-top:3px">suggested: @sug.Name</div>
+                    }
+                </td>
+            </tr>
+        }
+        @if (!Model.MotherGroupRows.Any())
+        {
+            <tr><td colspan="6" class="empty">No mothers yet — record a kidding first.</td></tr>
         }
         </tbody></table>
     </div>
@@ -1033,7 +1258,7 @@
     <div class="panel-head"><h2>📋 In the main herd</h2>
         <a href="/Goat" class="btn btn-ghost btn-sm" style="margin-left:auto">Open herd</a></div>
     <div class="panel-body">
-        <p class="breed muted small" style="margin:0">After you save a birth here, does and kids update on the Herd screen — breeding status, due dates, mother links, birth weights, and weaning. Change detailed mother scores and mother groups in a later release; use <b>Goat card</b> on any animal for weigh, wean, and health actions today.</p>
+        <p class="breed muted small" style="margin:0">After you save a birth here, does and kids update on the Herd screen — breeding status, due dates, mother links, birth weights, and weaning. Mother scores and groups are maintained in <b>Mother check</b> and <b>Mother groups</b> above.</p>
     </div>
 </div>
 

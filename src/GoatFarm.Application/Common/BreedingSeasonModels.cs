@@ -3,6 +3,10 @@ namespace GoatFarm.Application.Common;
 public class BreedingSeasonSettings
 {
     public int BuildUp { get; set; } = 60;
+    public int BuckCheckDays { get; set; } = 30;
+    public int WeighYoungDoesDays { get; set; } = 30;
+    public decimal MinYoungDoeKg { get; set; } = 28;
+    public int KiddingPensDays { get; set; } = 7;
     public int ScanAfter { get; set; } = 45;
     public int DryOff { get; set; } = 60;
     public int WeanDays { get; set; } = 90;

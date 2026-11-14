@@ -151,6 +151,30 @@
                 <optgroup label="By group" id="groupOpts">
                     @foreach (var g in Model.Groups){<option value="grp:@g" @(Model.Filter == "grp:" + g ? "selected" : null)>@g</option>}
                 </optgroup>
+                <optgroup label="Kiddings &amp; mothers">
+                    <option value="kd:0" @(Model.Filter == "kd:0" ? "selected" : null)>First-timers (0 kiddings)</option>
+                    <option value="kd:1" @(Model.Filter == "kd:1" ? "selected" : null)>1 kidding</option>
+                    <option value="kd:2" @(Model.Filter == "kd:2" ? "selected" : null)>2 kiddings</option>
+                    <option value="kd:3" @(Model.Filter == "kd:3" ? "selected" : null)>3 kiddings</option>
+                    <option value="kd:4" @(Model.Filter == "kd:4" ? "selected" : null)>4 kiddings</option>
+                    <option value="kd:5" @(Model.Filter == "kd:5" ? "selected" : null)>5+ kiddings</option>
+                    <option value="ms:4" @(Model.Filter == "ms:4" ? "selected" : null)>Mother score ≥ 4</option>
+                    <option value="ms:low" @(Model.Filter == "ms:low" ? "selected" : null)>Mother score &lt; 3</option>
+                    <option value="dec:cull" @(Model.Filter == "dec:cull" ? "selected" : null)>Decision = Cull</option>
+                    @foreach (var mg in Model.MotherGroups)
+                    {
+                        var mgf = "mg:" + mg.Id;
+                        <option value="@mgf" @(Model.Filter == mgf ? "selected" : null)>Mother group: @mg.Name</option>
+                    }
+                </optgroup>
+                <optgroup label="Kid milk">
+                    <option value="kid:milk" @(Model.Filter == "kid:milk" ? "selected" : null)>Kids on milk</option>
+                    <option value="kid:weaned" @(Model.Filter == "kid:weaned" ? "selected" : null)>Kids weaned</option>
+                    <option value="milk:Mother" @(Model.Filter == "milk:Mother" ? "selected" : null)>On mother milk</option>
+                    <option value="milk:Powder" @(Model.Filter == "milk:Powder" ? "selected" : null)>On powder milk</option>
+                    <option value="milk:Mixed" @(Model.Filter == "milk:Mixed" ? "selected" : null)>On mixed milk</option>
+                    <option value="milk:Foster" @(Model.Filter == "milk:Foster" ? "selected" : null)>On foster milk</option>
+                </optgroup>
             </select></div></div>
     </div>
     <div class="panel-body">
@@ -215,9 +239,26 @@
             <button type="button" class="btn btn-green" id="moveBtn">Move</button>
             <button type="button" class="btn btn-ghost" id="newGroupBtn">+ New group</button>
         </div>
-        <table class="tbl"><thead><tr>
+        <p class="breed muted small" style="margin:0 0 10px">Scroll sideways for breeding columns (does) and kid milk columns. Use the filter dropdown or chips for kiddings, mother score, cull, mother group, and milk type.</p>
+        <div class="herd-table-scroll">
+        <table class="tbl herd-breed-cols"><thead><tr>
             <th style="width:34px"><input type="checkbox" id="checkAll"></th>
             <th>Tag</th><th class="hide-sm">Breed</th><th>Age</th><th>Status</th>
+            <th class="hide-sm herd-doe-col">Breeding</th>
+            <th class="hide-sm herd-doe-col">Next job</th>
+            <th class="hide-sm herd-doe-col num-cell">Pregnant</th>
+            <th class="hide-sm herd-doe-col num-cell">Kiddings</th>
+            <th class="hide-sm herd-doe-col">Last kidding</th>
+            <th class="hide-sm herd-doe-col">Born / alive</th>
+            <th class="hide-sm herd-doe-col">Mother score</th>
+            <th class="hide-sm herd-doe-col num-cell">BCS</th>
+            <th class="hide-sm herd-doe-col">Health</th>
+            <th class="hide-sm herd-doe-col">Decision</th>
+            <th class="hide-sm herd-doe-col">Mother grp</th>
+            <th class="hide-sm herd-kid-col">Mother</th>
+            <th class="hide-sm herd-kid-col">Milk type</th>
+            <th class="hide-sm herd-kid-col">Milk</th>
+            <th class="hide-sm herd-kid-col">Wean date</th>
             <th class="hide-sm num-cell">Price</th><th class="hide-sm">Date</th>
         </tr></thead><tbody id="rows">
             @foreach (var g in Model.Goats)
@@ -288,11 +329,49 @@
                             </div>
                         }
                     </td>
+                    @{
+                        var isKid = g.Status == GoatStatus.Kid;
+                        var isDoe = g.Gender == GoatGender.Female && !isKid;
+                    }
+                    <td class="hide-sm herd-doe-col">@if (isDoe && !string.IsNullOrEmpty(g.HerdBreedingStatus))
+                        {<span class="chip @g.HerdBreedingStatusCss">@g.HerdBreedingStatus</span>}
+                        else if (!isKid) { <span class="breed">—</span> }</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe) { <span class="breed">@(g.HerdNextJob ?? "—")</span> }</td>
+                    <td class="hide-sm herd-doe-col num-cell">@if (isDoe) { @(g.TimesPregnant?.ToString() ?? "—") }</td>
+                    <td class="hide-sm herd-doe-col num-cell">@if (isDoe)
+                        {
+                            var kdTot = g.KiddingsTotal ?? 0;
+                            <span class="breed">@kdTot×</span>
+                            @if (g.KiddingsBeforePurchase > 0)
+                            {
+                                <div class="name muted small">incl. @g.KiddingsBeforePurchase before farm</div>
+                            }
+                        }</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe) { @(g.LastKiddingDate ?? "—") }</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe)
+                        {
+                            if (g.KidsBornTotal is > 0){@($"{g.KidsBornTotal} / {g.KidsAliveTotal}")}
+                            else{<span class="breed">—</span>}
+                        }</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe && !string.IsNullOrEmpty(g.MotherScoreHtml))
+                        {@Html.Raw(g.MotherScoreHtml)}
+                        else if (isDoe) { <span class="breed">—</span> }</td>
+                    <td class="hide-sm herd-doe-col num-cell">@if (isDoe && g.LatestBcs is { } bcs) { @($"{bcs}/5") }</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe)
+                        {<span class="breed">@(g.DamAfterKiddingHealth ?? g.HealthDisplay)</span>}</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe) { <span class="breed">@(g.KeepDecision ?? "—")</span> }</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe && !string.IsNullOrEmpty(g.MotherGroupName))
+                        {<span style="color:@(g.MotherGroupColor ?? "var(--green)");font-weight:700">● @g.MotherGroupName</span>}</td>
+                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidMotherTag ?? "—")</span> }</td>
+                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidMilkTypeDisplay ?? "—")</span> }</td>
+                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidMilkStatus ?? "—")</span> }</td>
+                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidWeanDateDisplay ?? "—")</span> }</td>
                     <td class="hide-sm num-cell">@if(g.Source == GoatSource.Born){<span class="breed">home-bred</span>}else{<span class="breed">@DisplayHelper.FormatRs(g.PurchasePrice)</span>}</td>
                     <td class="hide-sm"><span class="breed">@g.EventDateDisplay</span></td>
                 </tr>
             }
         </tbody></table>
+        </div>
         <div class="empty" id="empty" style="display:@(Model.Pagination.TotalItems > 0 ? "none" : "block")">@(string.IsNullOrEmpty(Model.Search) ? "No goats match this filter." : "No goats match this search and filter.")</div>
         @await Html.PartialAsync("_HerdPagination", Model.Pagination)
     </div>

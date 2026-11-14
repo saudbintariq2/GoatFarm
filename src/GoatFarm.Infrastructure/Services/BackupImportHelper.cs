@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GoatFarm.Application.Common;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
@@ -543,7 +544,9 @@ internal static class BackupImportHelper
                     KiddingDate = ParseDateRequired(k, "kiddingDate"),
                     LiveKids = GetInt(k, "liveKids"),
                     Stillborn = GetInt(k, "stillborn"),
-                    Ease = ParseEnum<KiddingEase>(GetString(k, "ease")) ?? KiddingEase.Normal,
+                    Ease = MotherScoreHelper.TryParseEase(GetString(k, "ease"), out var ease)
+                        ? ease
+                        : (ParseEnum<KiddingEase>(GetString(k, "ease")) ?? KiddingEase.Easy),
                     Notes = GetString(k, "notes"),
                     ClientRequestId = Guid.TryParse(GetString(k, "clientRequestId"), out var requestId) ? requestId : Guid.NewGuid()
                 };

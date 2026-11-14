@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GoatFarm.Application.ViewModels.Breeding;
 using GoatFarm.Domain.Enums;
 
 namespace GoatFarm.Application.ViewModels.Goats;
@@ -66,6 +67,32 @@ public class GoatViewModel
     public bool IsArchived { get; set; }
     public string? ArchivedReason { get; set; }
     public string? ArchivedDateDisplay { get; set; }
+    public int KiddingsBeforePurchase { get; set; }
+    public string? HerdBreedingStatus { get; set; }
+    public string? HerdBreedingStatusCss { get; set; }
+    public string? HerdNextJob { get; set; }
+    public int? TimesPregnant { get; set; }
+    public int? KiddingsTotal { get; set; }
+    public string? LastKiddingDate { get; set; }
+    public string? LastLitterDisplay { get; set; }
+    public int? KidsBornTotal { get; set; }
+    public int? KidsAliveTotal { get; set; }
+    public string? MotherScoreHtml { get; set; }
+    public int? LatestBcs { get; set; }
+    public string? DamAfterKiddingHealth { get; set; }
+    public string? KeepDecision { get; set; }
+    public string? MotherGroupName { get; set; }
+    public string? MotherGroupColor { get; set; }
+    public string? KidMotherTag { get; set; }
+    public string? KidMilkTypeDisplay { get; set; }
+    public string? KidMilkStatus { get; set; }
+    public string? KidWeanDateDisplay { get; set; }
+}
+
+public class SetKiddingsBeforePurchaseViewModel
+{
+    public int GoatId { get; set; }
+    public int KiddingsBeforePurchase { get; set; }
 }
 
 public class RecordBcsViewModel
@@ -205,6 +232,7 @@ public class HerdPageViewModel
     public IReadOnlyList<string> OwnerFilters { get; set; } = [];
     public IReadOnlyList<(int Id, string Name)> FeedingGroups { get; set; } = [];
     public HerdFilterOptionsViewModel FilterOptions { get; set; } = new();
+    public IReadOnlyList<MotherGroupDto> MotherGroups { get; set; } = [];
     public string? Filter { get; set; }
     public string? Search { get; set; }
     public PaginationViewModel Pagination { get; set; } = new();
