@@ -59,6 +59,9 @@ public static class FarmPermissionMap
 
             ["Breeding.GetData"] = (FarmTabs.Breeding, FarmActions.View),
             ["Breeding.DoeProfile"] = (FarmTabs.Breeding, FarmActions.View),
+            ["Breeding.DoeStatusContext"] = (FarmTabs.Breeding, FarmActions.View),
+            ["Breeding.ChangeDoeStatus"] = (FarmTabs.Breeding, FarmActions.Edit),
+            ["Breeding.ChangeDoeStatusBulk"] = (FarmTabs.Breeding, FarmActions.Edit),
             ["Breeding.LookupTag"] = (FarmTabs.Breeding, FarmActions.View),
             ["Breeding.RecordPrep"] = (FarmTabs.Breeding, FarmActions.Add),
             ["Breeding.RecordCross"] = (FarmTabs.Breeding, FarmActions.Add),

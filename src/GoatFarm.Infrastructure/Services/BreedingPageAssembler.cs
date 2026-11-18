@@ -33,16 +33,17 @@ internal static class BreedingPageAssembler
     public static IReadOnlyList<BreedingPipelineRowViewModel> BuildPipelineRows(
         IReadOnlyList<Goat> goats,
         IReadOnlyDictionary<int, int> kiddingsHere,
-        IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe)
+        IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe,
+        DateOnly today,
+        Func<int, string> ageLabel)
     {
-        var today = Today;
         var rows = goats
             .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.IsArchived)
             .Select(g =>
             {
                 var flow = BreedingDoeFlowHelper.FlowStage(g, today);
                 if (flow is null) return null;
-                return MapPipeline(g, today, flow, kiddingsHere, kiddingsByDoe);
+                return MapPipeline(g, today, flow, kiddingsHere, kiddingsByDoe, ageLabel);
             })
             .Where(r => r is not null)
             .Cast<BreedingPipelineRowViewModel>()
@@ -72,7 +73,8 @@ internal static class BreedingPageAssembler
         DateOnly today,
         string flowStage,
         IReadOnlyDictionary<int, int> kiddingsHere,
-        IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe)
+        IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe,
+        Func<int, string> ageLabel)
     {
         var stage = StageKey(g) ?? flowStage switch
         {
@@ -82,14 +84,8 @@ internal static class BreedingPageAssembler
             "kidded" => "prep",
             _ => "prep"
         };
-        var (label, css) = stage switch
-        {
-            "plan" => ("Next cross planned", "chip-dry"),
-            "prep" => ("Ready for cross", "chip-kid"),
-            "wait" => ("Waiting for scan", "chip-buck"),
-            "preg" => ("Pregnant", "chip-preg"),
-            _ => (BreedingDoeFlowHelper.FlowStageLabel(flowStage), BreedingDoeFlowHelper.FlowStageChipClass(flowStage))
-        };
+        var flowLabel = BreedingDoeFlowHelper.FlowStageLabel(flowStage);
+        var flowCss = BreedingDoeFlowHelper.FlowStageChipClass(flowStage);
 
         var row = new BreedingPipelineRowViewModel
         {
@@ -99,12 +95,20 @@ internal static class BreedingPageAssembler
             Owner = string.IsNullOrWhiteSpace(g.Owner) || g.Owner == "Farm" ? null : g.Owner,
             FlowStageKey = flowStage,
             StageKey = stage,
-            StageLabel = BreedingDoeFlowHelper.FlowStageLabel(flowStage),
-            StageCssClass = BreedingDoeFlowHelper.FlowStageChipClass(flowStage),
+            StageLabel = flowLabel,
+            StageCssClass = flowCss,
+            Breed = g.Breed,
             MatedDate = g.MatedDate?.ToString("yyyy-MM-dd"),
+            CrossedDisplay = g.MatedDate?.ToString("yyyy-MM-dd"),
             BuckTag = g.BuckTag,
-            KidsCount = g.KidsCount
+            KidsCount = g.KidsCount,
+            StatusNote = ShortStatusNote(g.Comment)
         };
+
+        if (HerdRules.AgeDays(g, today) is { } ageDays)
+            row.AgeText = ageLabel(ageDays);
+        if (g.MatedDate is { } md && (g.KidsCount is > 0 || PregnancyRules.IsConfirmedPregnant(g)))
+            row.DueDisplay = BreedingHelper.ExpectedKidding(md).ToString("yyyy-MM-dd");
 
         var here = kiddingsHere.GetValueOrDefault(g.Id);
         var total = here + Math.Max(0, g.KiddingsBeforePurchase);
@@ -192,6 +196,13 @@ internal static class BreedingPageAssembler
         }
 
         return row;
+    }
+
+    private static string? ShortStatusNote(string? comment)
+    {
+        if (string.IsNullOrWhiteSpace(comment)) return null;
+        var lines = comment.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return lines.Length == 0 ? null : lines[^1];
     }
 
     private static string KidsCell(Goat g)

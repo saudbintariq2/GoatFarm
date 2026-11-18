@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GoatFarm.Infrastructure.Services;
 
-public class BreedingService : IBreedingService
+public partial class BreedingService : IBreedingService
 {
     private readonly GoatFarmDbContext _context;
     private readonly IGoatService _goatService;
@@ -218,7 +218,8 @@ public class BreedingService : IBreedingService
                 .ToList(),
             EmptyRows = emptyRows,
             RationRows = rationRows,
-            PipelineRows = BreedingPageAssembler.BuildPipelineRows(goats, kiddingCounts, allKiddingsByDoe),
+            PipelineRows = BreedingPageAssembler.BuildPipelineRows(
+                goats, kiddingCounts, allKiddingsByDoe, Today, _goatService.GetAgeLabel),
             DoeFlowSteps = BreedingPageAssembler.BuildDoeFlowSteps(goats, today),
             NowJobs = BreedingPageAssembler.BuildNowJobs(goats, season, today, breedingGroups, kiddingCounts,
                 latestWeights, rescanIds, kidGoats),
@@ -737,7 +738,10 @@ public class BreedingService : IBreedingService
         goat.KidsCount = null;
         goat.UltrasoundDate = null;
         goat.PrepCrossDate = null;
-        goat.Status = GoatStatus.Dry;
+        if (goat.Status == GoatStatus.Pregnant)
+            goat.Status = GoatStatus.Dry;
+        else if (goat.Status == GoatStatus.Milking)
+            goat.Status = GoatStatus.Milking;
         goat.BreedingStage = BreedingStage.None;
         goat.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
@@ -1184,6 +1188,9 @@ public class BreedingService : IBreedingService
     {
         var goat = await _context.Goats.FindAsync([goatId], cancellationToken)
             ?? throw new InvalidOperationException("Goat not found");
+        if (goat.MatedDate.HasValue && await _context.KiddingRecords.AsNoTracking()
+                .AnyAsync(k => k.DoeId == goat.Id && k.KiddingDate >= goat.MatedDate.Value, cancellationToken))
+            throw new InvalidOperationException("Cannot undo — she already kidded from this cross.");
         var open = await BreedingCycleWriter.OpenEventsAsync(_context, goat.Id, cancellationToken);
         foreach (var e in open)
         {

@@ -46,8 +46,7 @@ window.BreedingPage = (() => {
     history.replaceState(null, '', url.pathname + url.search);
     if (view === 'does') {
       const p = new URLSearchParams(location.search);
-      if (p.get('scan')) openScanPanel(false);
-      else loadScanSheet().catch(() => {});
+      if (p.get('scan')) openScanPanel(true);
       const first = document.querySelector('#brRows tr[data-br-id]');
       if (first) loadDoeProfile(+first.dataset.brId);
     }
@@ -232,7 +231,7 @@ window.BreedingPage = (() => {
     const pending = (grp.members || []).filter(m => m.outcomeKey === 'pending').length;
     const rows = (grp.members || []).map(m =>
       `<tr><td><b>${esc(m.tag)}</b></td><td><span class="breed">${esc(m.breed)}</span></td><td>${esc(grp.start || '—')}</td><td>${esc(m.outcomeText)}</td>
-      <td>${m.canRemove ? `<button type="button" class="btn btn-ghost btn-sm" data-bg-rm="${esc(grp.id)}|${m.goatId}">Remove</button>` : ''}</td></tr>`
+      <td class="num-cell" style="white-space:nowrap">${m.canRemove ? `<button type="button" class="btn btn-ghost btn-sm" data-bg-rm="${esc(grp.id)}|${m.goatId}">Remove</button> ` : ''}<button type="button" class="btn btn-ghost btn-sm" data-doe-status="${m.goatId}">Change status ▾</button></td></tr>`
     ).join('');
     const acts = [];
     if (grp.canBuckIn) acts.push(`<button type="button" class="btn btn-green btn-sm" data-bg-buckin="${esc(grp.id)}">Put buck in today</button>`);
@@ -751,40 +750,8 @@ window.BreedingPage = (() => {
     });
   }
 
-  const STAGE_OPTS = {
-    plan: '<option value="">Change…</option><option value="cross">Record cross now</option><option value="replan">Change the date</option><option value="prep2">Mark ready for cross</option><option value="mistake">Remove the plan</option>',
-    prep: '<option value="">Change…</option><option value="cross">Record cross</option><option value="notcross">Decided not to cross her</option><option value="mistake">Entered by mistake</option>',
-    wait: '<option value="">Change…</option><option value="scan">Record scan result</option><option value="abort">Aborted / lost it</option><option value="mistake">Entered by mistake</option>',
-    preg: '<option value="">Change…</option><option value="kidded">Record birth</option><option value="rescan">Change scan result</option><option value="abort">Aborted / lost it</option><option value="mistake">Entered by mistake</option>'
-  };
-
-  function wireStageSelects() {
-    document.querySelectorAll('[data-bract]').forEach(sel => {
-      const st = sel.dataset.brStage;
-      sel.innerHTML = STAGE_OPTS[st] || STAGE_OPTS.wait;
-      sel.onchange = () => onStageAction(sel);
-    });
-  }
-
-  async function onStageAction(sel) {
-    const v = sel.value;
-    sel.value = '';
-    if (!v) return;
-    const id = +sel.dataset.bract;
-    const stageKey = sel.dataset.brStage || '';
-    const gc = window.GoatCard;
-    if (!gc?.runBreedingStageAction) {
-      await gr().showModal('Goat card scripts did not load — refresh the page.');
-      return;
-    }
-    try {
-      await gc.runBreedingStageAction(id, v, stageKey, {
-        afterSuccess: () => reload('')
-      });
-    } catch { /* errors shown by goat-card */ }
-  }
-
   let doeFlowFilter = null;
+  let brStageChip = 'all';
   let brKdFilter = 'all';
   let selectedDoeId = null;
 
@@ -876,13 +843,8 @@ window.BreedingPage = (() => {
       mount.innerHTML = renderDoeProfileHtml(p);
       mount.querySelector('[data-doe-status]')?.addEventListener('click', async e => {
         e.preventDefault();
-        const gc = window.GoatCard;
-        if (!gc?.open) {
-          await gr().showModal('Goat card did not load — refresh the page.');
-          return;
-        }
-        await gc.open({ id: p.id });
-        await gc.runAction?.('status');
+        e.stopPropagation();
+        window.BreedingDoeStatus?.open(p.id);
       });
       setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30);
     } catch {
@@ -894,7 +856,7 @@ window.BreedingPage = (() => {
     document.addEventListener('click', e => {
       const root = e.target.closest('#breedViewDoes');
       if (!root) return;
-      if (e.target.closest('select, [data-bract], button[data-heat]')) return;
+      if (e.target.closest('select, [data-br-chg-status], [data-br-pick], button[data-heat], [data-doe-status], #brPickAll')) return;
       const pick = e.target.closest('[data-doe-profile]');
       if (!pick) return;
       const id = +pick.getAttribute('data-doe-profile');
@@ -918,6 +880,11 @@ window.BreedingPage = (() => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.flow;
         doeFlowFilter = doeFlowFilter === key ? null : key;
+        if (doeFlowFilter) {
+          brStageChip = 'all';
+          document.querySelectorAll('#brStageChips [data-br-flow-filter]').forEach(c =>
+            c.classList.toggle('breed-on', c.dataset.brFlowFilter === 'all'));
+        }
         syncDoeFlowUi();
         filterPipeline();
       });
@@ -925,20 +892,14 @@ window.BreedingPage = (() => {
   }
 
   function filterPipeline() {
-    const f = $('brFilter')?.value || 'all';
-    const rows = [...document.querySelectorAll('#brRows tr[data-br-stage]')];
+    const rows = [...document.querySelectorAll('#brRows tr[data-br-flow]')];
     let n = 0;
     rows.forEach(tr => {
-      const st = tr.dataset.brStage;
       const kd = +(tr.dataset.brKiddings || 0);
       let show = true;
-      if (doeFlowFilter) show = tr.dataset.brFlow === doeFlowFilter;
-      else if (f === 'plan') show = st === 'plan';
-      else if (f === 'prep') show = st === 'prep';
-      else if (f === 'wait') show = st === 'wait';
-      else if (f === 'preg') show = st === 'preg';
-      else if (f === 'due30') show = st === 'preg'; // rough; server already computed due
-      else if (f === 'scan') show = st === 'wait';
+      const flowKey = tr.dataset.brFlow;
+      if (doeFlowFilter) show = flowKey === doeFlowFilter;
+      else if (brStageChip !== 'all') show = flowKey === brStageChip;
       if (show && brKdFilter !== 'all') {
         if (brKdFilter === '5') show = kd >= 5;
         else show = kd === +brKdFilter;
@@ -948,6 +909,53 @@ window.BreedingPage = (() => {
     });
     const pill = $('brCount');
     if (pill) pill.textContent = n + ' doe(s)';
+  }
+
+  function wireBrStageChips() {
+    document.querySelectorAll('#brStageChips [data-br-flow-filter]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        brStageChip = chip.dataset.brFlowFilter || 'all';
+        doeFlowFilter = null;
+        syncDoeFlowUi();
+        document.querySelectorAll('#brStageChips [data-br-flow-filter]').forEach(c =>
+          c.classList.toggle('breed-on', c.dataset.brFlowFilter === brStageChip));
+        filterPipeline();
+      });
+    });
+  }
+
+  function selectedDoeIds() {
+    return [...document.querySelectorAll('[data-br-pick]:checked')].map(c => +c.dataset.brPick);
+  }
+
+  function syncBulkBar() {
+    const ids = selectedDoeIds();
+    const bar = $('brBulkBar');
+    const btn = $('brBulkStatus');
+    const lbl = $('brBulkCount');
+    if (!bar) return;
+    bar.hidden = ids.length === 0;
+    if (lbl) lbl.textContent = ids.length + ' selected';
+    if (btn) btn.disabled = ids.length === 0 || !breedingCan('edit');
+  }
+
+  function wireDoeBulkPick() {
+    $('brPickAll')?.addEventListener('change', e => {
+      const on = e.target.checked;
+      document.querySelectorAll('[data-br-pick]').forEach(c => {
+        const tr = c.closest('tr');
+        if (tr && tr.style.display !== 'none') c.checked = on;
+      });
+      syncBulkBar();
+    });
+    document.getElementById('breedViewDoes')?.addEventListener('change', e => {
+      if (e.target.matches?.('[data-br-pick]')) syncBulkBar();
+    });
+    $('brBulkStatus')?.addEventListener('click', () => {
+      const ids = selectedDoeIds();
+      if (!ids.length) return;
+      window.BreedingDoeStatus?.open(null, null, ids);
+    });
   }
 
   function wireBrKdFilter() {
@@ -1177,6 +1185,20 @@ window.BreedingPage = (() => {
     birthOpenTag = tag;
     openBirth(tag, btn.dataset.birthKids, btn.dataset.birthKiddings, btn.dataset.birthOrdinal, btn.dataset.birthPastScore);
     formRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function openKiddingForDoe(id, tag) {
+    setBreedingView('kidding');
+    const btn = tag
+      ? document.querySelector(`[data-birth-open="${CSS.escape(tag)}"]`)
+      : null;
+    if (btn) toggleBirthInline(btn);
+    else if (tag) {
+      const url = new URL(location.href);
+      url.searchParams.set('view', 'kidding');
+      url.searchParams.set('birth', tag);
+      location.href = url.pathname + url.search;
+    }
   }
 
   function openBirth(tag, kids, kiddings, ordinal, pastScore) {
@@ -1484,7 +1506,7 @@ window.BreedingPage = (() => {
     const canDel = breedingCan('delete');
     if (!canAdd && !canEdit) {
       document.querySelectorAll(
-        '#bgPanel input, #bgPanel select, #bgPanel button, #bgPanel textarea, .breed-se-edit input, .breed-se-edit select, .breed-se-edit button, [data-kk-wa], .breed-rep-tgt, [data-br-stage], [data-birth-open], #kb-save, #scSave, .breed-mg-selone'
+        '#bgPanel input, #bgPanel select, #bgPanel button, #bgPanel textarea, .breed-se-edit input, .breed-se-edit select, .breed-se-edit button, [data-kk-wa], .breed-rep-tgt, [data-br-chg-status], [data-doe-status], [data-br-pick], #brPickAll, #doeStSave, #brBulkStatus, [data-birth-open], #kb-save, #scSave, .breed-mg-selone'
       ).forEach(el => { el.disabled = true; });
       ['bg-create', 'bucksOpenCheck', 'bc-check-save', 'mgAdd', 'mgAuto', 'mgApply', 'se-np-save', 'se-del', 'se-copy', 'br-reconcile'].forEach(id => {
         const el = $(id);
@@ -1603,17 +1625,14 @@ window.BreedingPage = (() => {
     wireReports();
     wireScanPanel();
     renderGroupCards().catch(() => {});
-    wireStageSelects();
+    wireBrStageChips();
+    wireDoeBulkPick();
     wireDoeFlow();
     wireBrKdFilter();
     wireDoeProfilePick();
+    window.BreedingDoeStatus?.refreshRowSelects?.();
     wireKiddingFilters();
     wireKidsTable();
-    $('brFilter')?.addEventListener('change', () => {
-      doeFlowFilter = null;
-      syncDoeFlowUi();
-      filterPipeline();
-    });
     $('heatFilter')?.addEventListener('change', filterHeat);
     filterPipeline();
     filterHeat();
@@ -1936,5 +1955,5 @@ window.BreedingPage = (() => {
     if (currentView === 'bucks') renderGroupCards().catch(() => {});
   }
 
-  return { init, openBirth };
+  return { init, openBirth, reload, openKiddingForDoe };
 })();

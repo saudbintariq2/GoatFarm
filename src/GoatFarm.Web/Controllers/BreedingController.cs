@@ -44,6 +44,39 @@ public class BreedingController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> DoeStatusContext(int id, CancellationToken cancellationToken)
+    {
+        var ctx = await _breedingService.GetDoeStatusContextAsync(id, cancellationToken);
+        return ctx is null ? NotFound(new { error = "Doe not found." }) : Json(ctx);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ChangeDoeStatus([FromBody] ChangeDoeStatusViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _breedingService.ChangeDoeStatusAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ChangeDoeStatusBulk([FromBody] ChangeDoeStatusBulkViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _breedingService.ChangeDoeStatusBulkAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet]
     public async Task<IActionResult> LookupTag(string tag, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(tag))

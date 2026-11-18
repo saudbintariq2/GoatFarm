@@ -3492,6 +3492,149 @@ body.farm-pro #mgFilter .breed-kd-chip[style*="--mgc"]::before {
   }
 }
 
+body.farm-pro .breed-does-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+}
+
+body.farm-pro .breed-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--fp-line);
+  background: #f8faf9;
+}
+
+body.farm-pro .breed-pick-col {
+  width: 2.25rem;
+}
+
+body.farm-pro .breed-st-modal .breed-st-sheet {
+  max-width: min(96vw, 540px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body.farm-pro .breed-st-body {
+  overflow-y: auto;
+}
+
+body.farm-pro .breed-st-from {
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+body.farm-pro .breed-st-arrow {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+body.farm-pro .breed-st-opts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+body.farm-pro .breed-st-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--fp-line);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+body.farm-pro .breed-st-opt b {
+  font-size: 13px;
+}
+
+body.farm-pro .breed-st-opt span:last-child {
+  font-size: 11px;
+  color: var(--fp-ink-soft);
+}
+
+body.farm-pro .breed-st-opt-on {
+  border-color: var(--fp-accent);
+  background: #f1f8f4;
+  box-shadow: 0 0 0 1px var(--fp-accent);
+}
+
+body.farm-pro .breed-st-opt-ico {
+  font-size: 18px;
+  line-height: 1;
+}
+
+body.farm-pro .breed-st-field-row {
+  margin: 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+body.farm-pro .breed-st-sel {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 7px;
+  border: 1px solid var(--fp-line);
+  border-radius: 7px;
+  width: 100%;
+  max-width: 11rem;
+}
+
+body.farm-pro .breed-st-numpick {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+
+body.farm-pro .breed-st-numpick button {
+  min-width: 2.25rem;
+  padding: 6px 10px;
+  border: 1px solid var(--fp-line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+body.farm-pro .breed-st-numpick button.on {
+  background: var(--fp-accent-dark);
+  color: #fff;
+  border-color: var(--fp-accent-dark);
+}
+
+body.farm-pro .breed-st-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+body.farm-pro .breed-st-date,
+body.farm-pro .breed-st-num {
+  padding: 6px 8px;
+  border: 1px solid var(--fp-line);
+  border-radius: 8px;
+  font: inherit;
+}
+
 @media print {
   body.farm-pro .ai-panel,
   body.farm-pro .ai-scrim {

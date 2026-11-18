@@ -100,6 +100,11 @@ public class BreedingPipelineRowViewModel
     public int KiddingsTotal { get; set; }
     public string KiddingsDisplay { get; set; } = string.Empty;
     public string? MotherScoreHtml { get; set; }
+    public string Breed { get; set; } = string.Empty;
+    public string AgeText { get; set; } = string.Empty;
+    public string? StatusNote { get; set; }
+    public string? DueDisplay { get; set; }
+    public string? CrossedDisplay { get; set; }
 }
 
 public class BreedingNowJobViewModel
@@ -792,4 +797,66 @@ public class RecordReturnedToHeatViewModel
 {
     public string Tag { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
+}
+
+public class DoeStatusContextViewModel
+{
+    public int GoatId { get; set; }
+    public string Tag { get; set; } = string.Empty;
+    public string FlowStageKey { get; set; } = string.Empty;
+    public string FlowStageLabel { get; set; } = string.Empty;
+    public string Breed { get; set; } = string.Empty;
+    public string? BirthBatchId { get; set; }
+    public string? BirthBatchName { get; set; }
+    public string? MatedDate { get; set; }
+    public string? BuckTag { get; set; }
+    public int? KidsCount { get; set; }
+    public bool CanUndoMistake { get; set; }
+    public IReadOnlyList<BreedingBirthBatchOptionViewModel> BirthBatches { get; set; } = [];
+    public IReadOnlyList<string> BuckTags { get; set; } = [];
+}
+
+public class BreedingBirthBatchOptionViewModel
+{
+    public string Id { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+}
+
+public class ChangeDoeStatusViewModel
+{
+    public int GoatId { get; set; }
+    public string TargetStatus { get; set; } = string.Empty;
+    public DateOnly? Date { get; set; }
+    public string? BuckTag { get; set; }
+    public string? BirthBatchId { get; set; }
+    public string? EmptyNextStep { get; set; }
+    public int? KidsCount { get; set; }
+    public int? DaysPregnant { get; set; }
+    public string? CullReason { get; set; }
+    public bool ConfirmWarnings { get; set; }
+    public bool CrossNotTaken { get; set; }
+    public bool CrossNowFromHeat { get; set; }
+}
+
+public class ChangeDoeStatusBulkViewModel
+{
+    public List<int> GoatIds { get; set; } = [];
+    public string TargetStatus { get; set; } = string.Empty;
+    public DateOnly? Date { get; set; }
+    public bool ConfirmWarnings { get; set; }
+}
+
+public class ChangeDoeStatusResultViewModel
+{
+    public string Message { get; set; } = string.Empty;
+    public bool OpenKiddingForm { get; set; }
+    public int GoatId { get; set; }
+    public string Tag { get; set; } = string.Empty;
+}
+
+public class ChangeDoeStatusBulkResultViewModel
+{
+    public int Saved { get; set; }
+    public IReadOnlyList<string> Errors { get; set; } = [];
+    public string Message { get; set; } = string.Empty;
 }

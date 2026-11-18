@@ -48,4 +48,7 @@ public interface IBreedingService
     Task RecordKidWeanWeightAsync(RecordKidWeanWeightViewModel model, CancellationToken cancellationToken = default);
     Task BulkWeanKidsAsync(BulkWeanKidsViewModel model, CancellationToken cancellationToken = default);
     Task UpdateKidWeanRuleAsync(UpdateKidWeanRuleViewModel model, CancellationToken cancellationToken = default);
+    Task<DoeStatusContextViewModel?> GetDoeStatusContextAsync(int goatId, CancellationToken cancellationToken = default);
+    Task<ChangeDoeStatusResultViewModel> ChangeDoeStatusAsync(ChangeDoeStatusViewModel model, CancellationToken cancellationToken = default);
+    Task<ChangeDoeStatusBulkResultViewModel> ChangeDoeStatusBulkAsync(ChangeDoeStatusBulkViewModel model, CancellationToken cancellationToken = default);
 }

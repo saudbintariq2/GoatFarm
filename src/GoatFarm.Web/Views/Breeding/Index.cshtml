@@ -565,14 +565,14 @@
     <div>
         <div class="breed-eyebrow">Herd</div>
         <h1 class="breed-ph-title">Does</h1>
-        <p class="breed muted small">Pipeline, heat, and ultrasound scans.</p>
+        <p class="breed muted small">Tap a doe to see her card, history and family.</p>
     </div>
     <div class="breed-ph-actions">
         <button type="button" class="btn btn-green btn-sm" id="doesOpenScan">🔍 Record scan</button>
         <button type="button" class="btn btn-ghost btn-sm" id="scAllPregHead" hidden>Rest → 🤰 Pregnant</button>
     </div>
 </div>
-<div class="panel" id="scanPanel">
+<div class="panel" id="scanPanel" hidden>
     <div class="panel-head breed-scan-head">
         <h2>Record scan</h2>
         <span class="sub">one buck group at a time · pregnant only after an ultrasound</span>
@@ -637,8 +637,16 @@
 </div>
 
 <div class="panel">
-    <div class="panel-head"><h2>Breeding</h2>
-        <div class="breed-kd-chips" id="brKdFilter" role="tablist" style="margin-bottom:12px">
+    <div class="panel-head breed-does-head">
+        <div class="breed-kd-chips" id="brStageChips" role="tablist">
+            <button type="button" class="breed-kd-chip breed-on" data-br-flow-filter="all">All</button>
+            @foreach (var step in Model.DoeFlowSteps)
+            {
+                <button type="button" class="breed-kd-chip" data-br-flow-filter="@step.Key">@step.Label</button>
+            }
+        </div>
+        <div class="breed-kd-chips" id="brKdFilter" role="tablist">
+            <span class="small muted" style="align-self:center;margin-right:4px">Kiddings</span>
             <button type="button" class="breed-kd-chip breed-on" data-br-kd="all">All</button>
             @for (var pk = 0; pk <= 4; pk++)
             {
@@ -646,29 +654,23 @@
             }
             <button type="button" class="breed-kd-chip" data-br-kd="5">5+</button>
         </div>
-        <div class="filterbar">
-            <div class="field"><label class="hide-sm">Show</label>
-                <select id="brFilter">
-                    <option value="all">All in breeding</option>
-                    <option value="plan">0 · Next cross planned</option>
-                    <option value="prep">1 · Ready for cross</option>
-                    <option value="wait">2 · Waiting for scan</option>
-                    <option value="preg">3 · Confirmed pregnant</option>
-                    <option value="due30">Due within 30 days</option>
-                    <option value="scan">Scan due now</option>
-                </select></div>
-            <span class="count-pill" id="brCount">@Model.PipelineRows.Count doe(s)</span>
-        </div>
+        <span class="count-pill" id="brCount">@Model.PipelineRows.Count doe(s)</span>
+    </div>
+    <div class="breed-bulk-bar" id="brBulkBar" hidden>
+        <span id="brBulkCount">0 selected</span>
+        <button type="button" class="btn btn-green btn-sm" id="brBulkStatus" disabled>Change status for selected</button>
     </div>
     <div class="panel-body">
         <table class="tbl"><thead><tr>
-            <th>Doe</th><th class="num-cell">Kiddings</th><th class="num-cell">Mother score</th><th>Stage</th><th class="hide-sm">Mated</th><th class="hide-sm">Buck</th>
-            <th>Kids</th><th>Key date</th><th class="num-cell">Days</th>
-            <th style="width:150px">Change stage</th></tr></thead>
+            <th class="breed-pick-col"><input type="checkbox" id="brPickAll" aria-label="Select all does" title="Select all"></th>
+            <th>Doe</th><th class="hide-sm">Breed</th><th class="hide-sm">Age</th><th class="num-cell">Kiddings</th><th class="num-cell">Mother score</th><th>Status</th>
+            <th class="hide-sm">Buck</th><th class="hide-sm">Crossed</th><th>Due</th>
+            <th style="width:11rem">Change status</th></tr></thead>
             <tbody id="brRows">
             @foreach (var r in Model.PipelineRows)
             {
-                <tr data-br-stage="@r.StageKey" data-br-flow="@r.FlowStageKey" data-br-id="@r.Id" data-doe-profile="@r.Id" data-br-mated="@r.MatedDate" data-br-kids="@(r.KidsCount?.ToString() ?? "")" data-br-kiddings="@r.KiddingsTotal">
+                <tr data-br-flow="@r.FlowStageKey" data-br-id="@r.Id" data-doe-profile="@r.Id" data-br-kiddings="@r.KiddingsTotal">
+                    <td class="breed-pick-col"><input type="checkbox" data-br-pick="@r.Id" aria-label="Select @r.Tag"></td>
                     <td>
                         <a href="#" class="tag" data-doe-profile="@r.Id">@r.Tag</a>
                         @if (!string.IsNullOrEmpty(r.Name))
@@ -679,25 +681,30 @@
                         {
                             <div class="name" style="color:var(--blue)">@r.Owner</div>
                         }
+                        <div class="name hide-sm-none breed-doe-mobile-meta">@r.Breed · @r.AgeText</div>
                     </td>
+                    <td class="hide-sm"><span class="breed">@r.Breed</span></td>
+                    <td class="hide-sm"><span class="breed">@r.AgeText</span></td>
                     <td class="num-cell"><span class="breed">@r.KiddingsDisplay</span></td>
                     <td class="num-cell">@(r.MotherScoreHtml != null ? Html.Raw(r.MotherScoreHtml) : Html.Raw("<span class=\"muted\">—</span>"))</td>
-                    <td><span class="chip @r.StageCssClass">@r.StageLabel</span></td>
-                    <td class="hide-sm"><span class="breed">@(r.MatedDate ?? "—")</span></td>
+                    <td>
+                        <span class="chip @r.StageCssClass">@r.StageLabel</span>
+                        @if (!string.IsNullOrWhiteSpace(r.StatusNote))
+                        {
+                            <div class="name" style="color:var(--red);margin-top:4px">@r.StatusNote</div>
+                        }
+                    </td>
                     <td class="hide-sm"><span class="breed">@(r.BuckTag ?? "—")</span></td>
-                    <td>@Html.Raw(r.KidsHtml)</td>
-                    <td>@Html.Raw(r.KeyDateHtml)</td>
-                    <td class="num-cell" style="@r.DaysStyle">@r.DaysText</td>
-                    <td><select data-bract="@r.Id" data-br-stage="@r.StageKey" style="font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;width:100%"></select></td>
+                    <td class="hide-sm"><span class="breed">@(r.CrossedDisplay ?? "—")</span></td>
+                    <td><span class="breed">@(r.DueDisplay ?? "—")</span></td>
+                    <td><select class="breed-st-sel" data-br-chg-status="@r.Id" data-br-flow="@r.FlowStageKey" aria-label="Change status for @r.Tag"><option value="">Change status…</option></select></td>
                 </tr>
             }
             @if (!Model.PipelineRows.Any())
             {
-                <tr id="brEmpty"><td colspan="10" class="empty">No does in breeding. Add one below.</td></tr>
+                <tr id="brEmpty"><td colspan="11" class="empty">No does match.</td></tr>
             }
             </tbody></table>
-        <div class="rule" style="margin-top:12px"><b>Change stage</b> on any row to move her forward — each step asks
-            for the date it happened. A <b>not pregnant</b> scan counts against conception rate; you choose her next step (back with buck, next birth group, watch for heat, or cull list).</div>
     </div>
 </div>
 
@@ -705,7 +712,7 @@
     <div class="panel-body" id="doeProfileMount" style="padding-top:20px"></div>
 </div>
 
-<div class="panel">
+<div class="panel" hidden aria-hidden="true">
     <div class="panel-head"><h2>Heat &amp; cycles</h2><span class="sub">a doe returns to heat about every 21 days</span></div>
     <div class="panel-body">
         <div class="note" style="margin:0 0 14px 0">Tap <b>♡ Seen today</b> the moment you notice a doe in heat —
@@ -748,7 +755,7 @@
     </div>
 </div>
 
-<div class="panel">
+<div class="panel" hidden aria-hidden="true">
     <div class="panel-head"><h2>Add a doe to breeding</h2><span class="sub">scan her tag, pick the stage</span></div>
     <div class="panel-body">
         <div class="add-grid" style="grid-template-columns:1.3fr 1.1fr 1fr 1fr auto">
@@ -769,7 +776,7 @@
     </div>
 </div>
 
-<div class="panel">
+<div class="panel" hidden aria-hidden="true">
     <div class="panel-head"><h2>Came back empty (not pregnant)</h2>
         <span class="sub" id="emptyRate">@Model.EmptyRateText</span></div>
     <div class="panel-body">
@@ -1306,7 +1313,27 @@
     <partial name="_ReportsSection" for="Reports" />
 </section>
 
+<div class="goat-card-modal modal breed-st-modal" id="doeStatusModal" aria-hidden="true">
+    <div class="modal-box breed-st-sheet" role="dialog" aria-modal="true" aria-labelledby="doeStTitle">
+        <div class="modal-head breed-st-head">
+            <h2 id="doeStTitle">Change status</h2>
+            <button type="button" class="btn btn-ghost btn-sm" data-doe-st-close>Close</button>
+        </div>
+        <div class="modal-body breed-st-body">
+            <div id="doeStFrom" class="breed-st-from"></div>
+            <div class="breed-eyebrow">Move her to</div>
+            <div class="breed-st-opts" id="doeStPick"></div>
+            <div id="doeStFields"></div>
+        </div>
+        <div class="modal-foot breed-st-foot">
+            <button type="button" class="btn btn-green" id="doeStSave" disabled>Save</button>
+            <button type="button" class="btn btn-ghost" data-doe-st-close>Cancel</button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
+<script src="~/js/breeding-doe-status.js" asp-append-version="true"></script>
 <script src="~/js/breeding-page.js" asp-append-version="true"></script>
 <script>GoatRecords.initBreeding();</script>
 }

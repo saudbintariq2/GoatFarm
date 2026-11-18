@@ -1042,6 +1042,12 @@
       return;
     }
     if (act === 'status') {
+      if (g.gender === 'Female' && window.BreedingDoeStatus?.open) {
+        document.getElementById('goatModal')?.classList.remove('show');
+        setGoatCardOpen(false);
+        window.BreedingDoeStatus.open(id);
+        return;
+      }
       const statuses = ['Kid', 'Milking', 'Dry', 'Pregnant', 'Buck', 'Meat'];
       const r = await ask('Change status — ' + g.tag, [
         { key: 'st', label: 'New status', type: 'select', options: statuses },

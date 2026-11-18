@@ -14,7 +14,8 @@ public static class BreedingDoeFlowHelper
         ("waiting_scan", "Waiting scan", "scan: pregnant"),
         ("pregnant", "Pregnant", "dry-off date"),
         ("dry", "Dry", "record kidding"),
-        ("kidded", "Kidded", null)
+        ("kidded", "Kidded", null),
+        ("cull_list", "Cull list", null)
     ];
 
     public static string FlowStageLabel(string key) =>
@@ -24,6 +25,10 @@ public static class BreedingDoeFlowHelper
     {
         if (g.IsArchived || g.Gender != GoatGender.Female || g.Status == GoatStatus.Kid)
             return null;
+
+        if (!string.IsNullOrWhiteSpace(g.Comment) &&
+            g.Comment.Contains("Cull list", StringComparison.OrdinalIgnoreCase))
+            return "cull_list";
 
         if (PregnancyRules.IsConfirmedPregnant(g))
             return g.Status == GoatStatus.Dry ? "dry" : "pregnant";
@@ -64,6 +69,7 @@ public static class BreedingDoeFlowHelper
         "pregnant" => "chip-preg",
         "dry" => "chip-dry",
         "kidded" => "chip-kid",
+        "cull_list" => "chip-sale",
         _ => "chip-dry"
     };
 }
