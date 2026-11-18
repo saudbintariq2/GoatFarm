@@ -53,7 +53,15 @@ public partial class FinanceService : IFinanceService
         var expenses = await _context.Expenses.AsNoTracking()
             .Where(e => e.Date >= monthStart && e.Date < monthEnd)
             .OrderByDescending(e => e.Date)
-            .Select(e => new ExpenseViewModel { Id = e.Id, Type = e.Type, Amount = e.Amount, Date = e.Date, Comment = e.Comment })
+            .Select(e => new ExpenseViewModel
+            {
+                Id = e.Id,
+                Type = e.Type,
+                Amount = e.Amount,
+                Date = e.Date,
+                Comment = e.Comment,
+                ReadOnlyFromFeed = e.Comment != null && e.Comment.StartsWith("fodder_pool:")
+            })
             .ToListAsync(cancellationToken);
 
         var recurringCosts = await _context.RecurringCosts.AsNoTracking()
@@ -343,6 +351,8 @@ public partial class FinanceService : IFinanceService
     {
         var entity = await _context.Expenses.FindAsync([id], cancellationToken);
         if (entity is null) return null;
+        if (FinanceExpenseRules.IsFodderPoolManaged(entity.Comment))
+            throw new InvalidOperationException(FinanceExpenseRules.FodderPoolEditBlockedMessage);
         EnsureMoneyAccount(model.AccountId);
         entity.Type = model.Type;
         entity.Amount = model.Amount;
@@ -403,6 +413,8 @@ public partial class FinanceService : IFinanceService
     {
         var entity = await _context.Expenses.FindAsync([id], cancellationToken);
         if (entity is null) return false;
+        if (FinanceExpenseRules.IsFodderPoolManaged(entity.Comment))
+            throw new InvalidOperationException(FinanceExpenseRules.FodderPoolEditBlockedMessage);
         await RemoveLinkedCashAsync($"fin-expense:{id}", cancellationToken);
         _context.Expenses.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);

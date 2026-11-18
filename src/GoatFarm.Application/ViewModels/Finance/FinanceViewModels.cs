@@ -33,6 +33,7 @@ public class ExpenseViewModel
     public string? Comment { get; set; }
     public int? AccountId { get; set; }
     public string? AccountName { get; set; }
+    public bool ReadOnlyFromFeed { get; set; }
 }
 
 public class RecurringCostViewModel

@@ -71,6 +71,7 @@ public static class MixRecipeHelper
         ("pregnant", "Pregnant"),
         ("dry", "Dry"),
         ("buck", "Bucks"),
+        ("meat", "Meat / Finishing"),
         ("sale", "For sale")
     ];
 

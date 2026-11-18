@@ -277,8 +277,8 @@
             <tr><td><span class="chip chip-exp">Vaccines bought</span><div class="name">auto from Vaccines</div></td><td class="hide-sm"><span class="breed">this month</span></td><td></td><td class="num-cell">@DisplayHelper.FormatRs(Model.VaccineBoughtMonthly)</td></tr>
             @foreach (var e in Model.Expenses)
             {
-                <tr class="fin-row fin-expense-row" data-id="@e.Id" data-type="@e.Type" data-date="@e.DateDisplay" data-amount="@e.Amount.ToString(CultureInfo.InvariantCulture)" data-comment="@e.Comment" data-account="@(e.AccountId?.ToString() ?? "")">
-                    <td><span class="chip chip-exp">@e.Type</span>@if (!string.IsNullOrEmpty(e.Comment)) { <div class="name">@e.Comment</div> }</td>
+                <tr class="fin-row fin-expense-row@(e.ReadOnlyFromFeed ? " fin-expense-feed" : "")" data-id="@e.Id" data-type="@e.Type" data-date="@e.DateDisplay" data-amount="@e.Amount.ToString(CultureInfo.InvariantCulture)" data-comment="@e.Comment" data-account="@(e.AccountId?.ToString() ?? "")" @(e.ReadOnlyFromFeed ? "data-from-feed=\"1\"" : null)>
+                    <td><span class="chip chip-exp">@e.Type</span>@if (e.ReadOnlyFromFeed) { <div class="name breed">from Feed › Green fodder cost</div> }@if (!string.IsNullOrEmpty(e.Comment)) { <div class="name">@e.Comment</div> }</td>
                     <td class="hide-sm"><span class="breed">@e.DateDisplay</span></td>
                     <td><span class="breed">@(e.AccountName ?? "—")</span></td>
                     <td class="num-cell">@DisplayHelper.FormatRs(e.Amount)</td>

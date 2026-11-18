@@ -30,9 +30,9 @@ public class FeedService : IFeedService
 
     [
 
-        GoatStatus.Kid, GoatStatus.Milking, GoatStatus.Pregnant,
+        GoatStatus.Kid, GoatStatus.Meat, GoatStatus.Milking, GoatStatus.Pregnant,
 
-        GoatStatus.Dry, GoatStatus.Buck, GoatStatus.Sale, GoatStatus.Meat
+        GoatStatus.Dry, GoatStatus.Buck, GoatStatus.Sale
 
     ];
 
@@ -104,8 +104,9 @@ public class FeedService : IFeedService
         var seasonAsOf = DateOnly.FromDateTime(DateTime.Today);
         var activeMonths = feedSettings.ActiveMonthsByFeed;
 
+        var fodderMatches = await LoadFodderMatchesAsync(fodderPoolDto, cancellationToken);
         var fodderFinanceRefs = await LoadFodderFinanceRefsAsync(cancellationToken);
-        var fodderPoolVm = BuildFodderPoolViewModel(fodderPoolDto, plans, fodderFinanceRefs);
+        var fodderPoolVm = BuildFodderPoolViewModel(fodderPoolDto, plans, fodderMatches, fodderFinanceRefs, month);
 
         var feedSettingsVm = BuildFeedSettingsViewModel(feedSettings);
 
@@ -194,7 +195,7 @@ public class FeedService : IFeedService
 
         decimal totalFeedMonthly = 0, totalDaily = 0, totalGoats = 0, totalFodder = 0, totalFodderDry = 0, totalMixKg = 0;
 
-        var fodderDailyPool = FodderPoolHelper.DailyTotal(fodderPoolDto);
+        var fodderDailyPool = FodderPoolHelper.DailyTotalForMonth(fodderPoolDto, month);
         var totalHeads = FeedPlanHeadcount(herd, customGroups);
         var totalFodderShare = StatusOrder.Sum(st =>
         {
@@ -206,7 +207,6 @@ public class FeedService : IFeedService
         foreach (var st in StatusOrder)
         {
             var count = CountFeedPlan(herd, st);
-            if (count == 0 && st is GoatStatus.Sale or GoatStatus.Meat) continue;
             var plan = plans.FirstOrDefault(p => p.StatusKey == st);
             if (plan is null) continue;
 
@@ -690,8 +690,10 @@ public class FeedService : IFeedService
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
+        var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
-        return BuildFodderPoolViewModel(dto, plans, refs);
+        var month = MonthHelper.CurrentMonthKey();
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
 
     }
 
@@ -721,11 +723,11 @@ public class FeedService : IFeedService
 
                 PaidDate = string.IsNullOrWhiteSpace(i.PaidDate) ? null : DateOnly.Parse(i.PaidDate),
 
-                AllocateMonths = Math.Clamp(i.AllocateMonths <= 0 ? 1 : i.AllocateMonths, 1, 12),
+                AllocateMonths = FodderPoolHelper.EffectiveMonths(i.AllocateMonths),
 
                 AccountId = i.AccountId,
 
-                PaidAmount = i.PaidAmount
+                PaidAmount = i.Amount > 0 ? i.Amount : i.PaidAmount
 
             }).ToList()
 
@@ -737,8 +739,10 @@ public class FeedService : IFeedService
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
+        var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
-        return BuildFodderPoolViewModel(dto, plans, refs);
+        var month = MonthHelper.CurrentMonthKey();
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
 
     }
 
@@ -766,16 +770,20 @@ public class FeedService : IFeedService
 
             Label = label,
 
-            Amount = model.Amount
+            Amount = model.Amount,
+            AllocateMonths = FodderPoolHelper.DefaultAllocateMonths
 
         });
 
         await SaveFodderPoolDtoAsync(dto, cancellationToken);
+        await SyncFodderPoolFinanceAsync(dto, cancellationToken);
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
+        var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
-        return BuildFodderPoolViewModel(dto, plans, refs);
+        var month = MonthHelper.CurrentMonthKey();
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
 
     }
 
@@ -790,11 +798,14 @@ public class FeedService : IFeedService
         dto.Items.RemoveAll(i => i.Id == itemId);
 
         await SaveFodderPoolDtoAsync(dto, cancellationToken);
+        await SyncFodderPoolFinanceAsync(dto, cancellationToken);
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
+        var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
-        return BuildFodderPoolViewModel(dto, plans, refs);
+        var month = MonthHelper.CurrentMonthKey();
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
 
     }
 
@@ -1940,16 +1951,33 @@ public class FeedService : IFeedService
             .ToListAsync(cancellationToken))
         .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+    private async Task<Dictionary<string, FodderFinanceMatch?>> LoadFodderMatchesAsync(
+        FodderPoolDto dto,
+        CancellationToken cancellationToken)
+    {
+        var year = DateTime.Today.Year;
+        var recurring = await _context.RecurringCosts.AsNoTracking().ToListAsync(cancellationToken);
+        var expenses = await _context.Expenses.AsNoTracking()
+            .Where(e => e.Date.Year == year)
+            .ToListAsync(cancellationToken);
+        var dict = new Dictionary<string, FodderFinanceMatch?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in dto.Items)
+            dict[item.Id] = FodderFinanceMatchHelper.TryMatch(item.Label, recurring, expenses, year);
+        return dict;
+    }
+
     private FodderPoolViewModel BuildFodderPoolViewModel(
         FodderPoolDto dto,
         IReadOnlyList<FeedPlan> plans,
-        IReadOnlySet<string> financeRefs)
+        IReadOnlyDictionary<string, FodderFinanceMatch?> financeMatches,
+        IReadOnlySet<string> financeRefs,
+        string monthKey)
 
     {
 
         var yearly = FodderPoolHelper.AnnualTotal(dto);
 
-        var daily = FodderPoolHelper.DailyTotal(dto);
+        var daily = FodderPoolHelper.DailyTotalForMonth(dto, monthKey);
 
         var heads = StatusOrder.Sum(st => _goatService.CountByStatus(st));
 
@@ -1975,7 +2003,7 @@ public class FeedService : IFeedService
 
         var note = yearly <= 0
 
-            ? "<span style=\"color:var(--amber)\">Add your yearly fodder-land costs above to give green fodder a real cost.</span>"
+            ? "<span style=\"color:var(--amber)\">Add your green-fodder land costs above to give green fodder a real cost.</span>"
 
             : $"<span class=\"breed\">Works out to about <b>Rs {(perKg?.ToString("F1") ?? "—")} per kg</b> of green fodder" +
 
@@ -1993,26 +2021,35 @@ public class FeedService : IFeedService
 
             Mode = dto.Mode ?? "share",
 
-            Items = dto.Items.Select(i => new FodderPoolItemViewModel
-
+            Items = dto.Items.Select(i =>
             {
-
-                Id = i.Id,
-
-                Label = i.Label,
-
-                Amount = i.Amount,
-
-                PaidDate = i.PaidDate?.ToString("yyyy-MM-dd"),
-
-                AllocateMonths = Math.Clamp(i.AllocateMonths <= 0 ? 1 : i.AllocateMonths, 1, 12),
-
-                AccountId = i.AccountId,
-
-                PaidAmount = i.PaidAmount,
-
-                PostedToFinance = financeRefs.Contains("fodder_pool:" + i.Id)
-
+                var months = FodderPoolHelper.EffectiveMonths(i.AllocateMonths);
+                financeMatches.TryGetValue(i.Id, out var match);
+                var vm = new FodderPoolItemViewModel
+                {
+                    Id = i.Id,
+                    Label = i.Label,
+                    Amount = i.Amount,
+                    PaidDate = i.PaidDate?.ToString("yyyy-MM-dd"),
+                    AllocateMonths = months,
+                    AccountId = i.AccountId,
+                    PaidAmount = i.Amount > 0 ? i.Amount : i.PaidAmount,
+                    PostedToFinance = financeRefs.Contains("fodder_pool:" + i.Id),
+                    FinanceDuplicateName = match?.Name,
+                    FinanceDuplicateWhere = match?.Where
+                };
+                if (match is not null)
+                {
+                    vm.ResultLine = $"✓ already in Finance as {match.Name} — not added again";
+                }
+                else if (i.Amount > 0 && i.PaidDate.HasValue)
+                {
+                    var per = FodderPoolHelper.AverageMonthlyAmount(i);
+                    vm.ResultLine =
+                        $"✓ Cash: {DisplayHelper.FormatRs(i.Amount)} on {FodderPoolHelper.FormatPaidDate(i.PaidDate.Value)} · " +
+                        $"P&L: {DisplayHelper.FormatRs(per)}/month × {months} ({FodderPoolHelper.FormatMonthRangeLabel(i.PaidDate.Value, months)})";
+                }
+                return vm;
             }).ToList(),
 
             YearlyTotal = yearly,
@@ -2861,47 +2898,87 @@ public class FeedService : IFeedService
         price.UpdatedDate = DateTime.UtcNow;
     }
 
+    private static string? FodderItemIdFromReference(string reference)
+    {
+        if (!reference.StartsWith("fodder_pool:", StringComparison.OrdinalIgnoreCase)) return null;
+        var rest = reference["fodder_pool:".Length..];
+        var split = rest.IndexOf(':');
+        return split < 0 ? rest : rest[..split];
+    }
+
     private async Task SyncFodderPoolFinanceAsync(FodderPoolDto dto, CancellationToken cancellationToken)
     {
+        var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
+        const string feedNote = "from Feed › Green fodder cost";
+
+        var activeIds = dto.Items.Select(i => i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var orphanTxs = await _context.LedgerTransactions
+            .Where(t => t.Reference != null && t.Reference.StartsWith("fodder_pool:"))
+            .ToListAsync(cancellationToken);
+        foreach (var t in orphanTxs)
+        {
+            var id = FodderItemIdFromReference(t.Reference!);
+            if (id is null || !activeIds.Contains(id))
+                _context.LedgerTransactions.Remove(t);
+        }
+
+        var orphanExpenses = await _context.Expenses
+            .Where(e => e.Comment != null && e.Comment.StartsWith("fodder_pool:"))
+            .ToListAsync(cancellationToken);
+        foreach (var e in orphanExpenses)
+        {
+            var id = FodderItemIdFromReference(e.Comment!);
+            if (id is null || !activeIds.Contains(id))
+                _context.Expenses.Remove(e);
+        }
+
         foreach (var item in dto.Items)
         {
             var cashRef = "fodder_pool:" + item.Id;
             var txs = await _context.LedgerTransactions
-                .Where(t => t.Reference != null && (t.Reference == cashRef || t.Reference.StartsWith(cashRef + ":pl:")))
+                .Where(t => t.Reference != null && (t.Reference == cashRef || t.Reference.StartsWith(cashRef + ":pl:", StringComparison.Ordinal)))
                 .ToListAsync(cancellationToken);
             _context.LedgerTransactions.RemoveRange(txs);
             var spread = await _context.Expenses
-                .Where(e => e.Comment != null && e.Comment.StartsWith(cashRef + ":pl:"))
+                .Where(e => e.Comment != null && e.Comment.StartsWith(cashRef + ":pl:", StringComparison.Ordinal))
                 .ToListAsync(cancellationToken);
             _context.Expenses.RemoveRange(spread);
 
-            if (item.PaidAmount <= 0 || !item.PaidDate.HasValue || item.AccountId is not > 0)
+            var cashTotal = item.Amount > 0 ? item.Amount : item.PaidAmount;
+            item.PaidAmount = cashTotal;
+
+            if (cashTotal <= 0 || !item.PaidDate.HasValue)
                 continue;
 
-            if (!await _context.MoneyAccounts.AnyAsync(a => a.Id == item.AccountId && a.IsActive, cancellationToken))
+            if (matches.TryGetValue(item.Id, out var dup) && dup is not null)
                 continue;
 
-            _context.LedgerTransactions.Add(new LedgerTransaction
+            var months = FodderPoolHelper.EffectiveMonths(item.AllocateMonths);
+            var parts = FodderPoolHelper.SpreadOverMonths(cashTotal, months);
+
+            if (item.AccountId is > 0 &&
+                await _context.MoneyAccounts.AnyAsync(a => a.Id == item.AccountId && a.IsActive, cancellationToken))
             {
-                Date = item.PaidDate.Value,
-                Kind = LedgerTransactionKind.Expense,
-                AccountId = item.AccountId.Value,
-                Amount = item.PaidAmount,
-                Category = "Green fodder",
-                Reference = cashRef,
-                Notes = $"Green fodder · {item.Label}"
-            });
+                _context.LedgerTransactions.Add(new LedgerTransaction
+                {
+                    Date = item.PaidDate.Value,
+                    Kind = LedgerTransactionKind.Expense,
+                    AccountId = item.AccountId.Value,
+                    Amount = cashTotal,
+                    Category = "Green fodder",
+                    Reference = cashRef,
+                    Notes = $"Green fodder · {item.Label} · {feedNote}"
+                });
+            }
 
-            var months = Math.Clamp(item.AllocateMonths <= 0 ? 1 : item.AllocateMonths, 1, 12);
-            var monthly = item.Amount / months;
             for (var i = 0; i < months; i++)
             {
                 _context.Expenses.Add(new Expense
                 {
                     Type = "Green fodder",
-                    Amount = Math.Round(monthly),
+                    Amount = parts[i],
                     Date = item.PaidDate.Value.AddMonths(i),
-                    Comment = $"{cashRef}:pl:{i} · {item.Label}"
+                    Comment = $"{cashRef}:pl:{i} · {item.Label} · {feedNote}"
                 });
             }
         }

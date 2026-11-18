@@ -278,13 +278,19 @@ public class FodderPoolItemViewModel
 
   public string? PaidDate { get; set; }
 
-  public int AllocateMonths { get; set; } = 1;
+  public int AllocateMonths { get; set; } = 12;
 
   public int? AccountId { get; set; }
 
   public decimal PaidAmount { get; set; }
 
   public bool PostedToFinance { get; set; }
+
+  public string? FinanceDuplicateName { get; set; }
+
+  public string? FinanceDuplicateWhere { get; set; }
+
+  public string ResultLine { get; set; } = "";
 
 }
 

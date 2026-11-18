@@ -1476,15 +1476,18 @@ const GoatRecords = (() => {
     };
 
     const saveFodderPool = async () => {
-      const items = [...document.querySelectorAll('[data-foditem]')].map(el => ({
-        id: el.dataset.foditem,
-        label: el.dataset.fodlabel,
-        amount: +document.querySelector(`[data-fodamt="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0,
-        paidDate: document.querySelector(`[data-fodpaid="${CSS.escape(el.dataset.foditem)}"]`)?.value || null,
-        paidAmount: +document.querySelector(`[data-fodcash="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0,
-        allocateMonths: +document.querySelector(`[data-fodmonths="${CSS.escape(el.dataset.foditem)}"]`)?.value || 1,
-        accountId: +document.querySelector(`[data-fodacct="${CSS.escape(el.dataset.foditem)}"]`)?.value || null
-      }));
+      const items = [...document.querySelectorAll('[data-foditem]')].map(el => {
+        const amount = +document.querySelector(`[data-fodamt="${CSS.escape(el.dataset.foditem)}"]`)?.value || 0;
+        return {
+          id: el.dataset.foditem,
+          label: el.dataset.fodlabel,
+          amount,
+          paidDate: document.querySelector(`[data-fodpaid="${CSS.escape(el.dataset.foditem)}"]`)?.value || null,
+          paidAmount: amount,
+          allocateMonths: +document.querySelector(`[data-fodmonths="${CSS.escape(el.dataset.foditem)}"]`)?.value || 12,
+          accountId: +document.querySelector(`[data-fodacct="${CSS.escape(el.dataset.foditem)}"]`)?.value || null
+        };
+      });
       await api('/Feed/UpdateFodderPool', {
         method: 'POST',
         body: JSON.stringify({
@@ -1580,18 +1583,31 @@ const GoatRecords = (() => {
       if (!box || !pool) return;
       const acctOpts = (feedData?.moneyAccounts || []).map(a =>
         `<option value="${a.id}">${esc(a.name)}</option>`).join('');
-      box.innerHTML = (pool.items || []).map(it =>
-        `<div class="price-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}" style="grid-column:1/-1">
-          <label>${esc(it.label)} ${it.postedToFinance ? '<span class="breed">✓ in Finance</span>' : ''}
+      const defaultPaid = new Date().toISOString().slice(0, 10);
+      box.innerHTML = (pool.items || []).map(it => {
+        const months = Math.min(60, Math.max(1, +it.allocateMonths || 12));
+        const dup = it.financeDuplicateName;
+        const resultStyle = dup ? 'color:var(--green-dark)' : 'color:var(--green-dark)';
+        const resultHtml = esc(it.resultLine || (dup
+          ? `✓ already in Finance as ${it.financeDuplicateName} (${it.financeDuplicateWhere || 'Finance'}) — not added again`
+          : ''));
+        return `<div class="price-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}">
+          <label>${esc(it.label)}
           <span class="del feed-foddel" data-delfod="${esc(it.id)}" title="remove" style="font-size:13px">×</span></label>
           <div class="price-in"><span class="pre">Rs</span>
           <input type="number" min="0" data-fodamt="${esc(it.id)}" value="${+it.amount || 0}" style="width:110px">
-          <span class="suf">/ year</span></div>
-          <div class="field" style="margin-top:6px"><label style="font-size:11px">Cash paid</label>
-          <input type="date" data-fodpaid="${esc(it.id)}" value="${esc(it.paidDate || '')}">
-          <input type="number" min="0" data-fodcash="${esc(it.id)}" value="${+it.paidAmount || 0}" placeholder="Rs paid" style="width:90px">
-          <select data-fodacct="${esc(it.id)}"><option value="">Account</option>${acctOpts}</select>
-          <input type="number" min="1" max="12" data-fodmonths="${esc(it.id)}" value="${+it.allocateMonths || 1}" title="P&amp;L months" style="width:52px"></div></div>`).join('') ||
+          <span class="suf">total</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
+            <label style="font-size:11px;font-weight:600">Paid
+            <input type="date" data-fodpaid="${esc(it.id)}" value="${esc(it.paidDate || defaultPaid)}" style="width:135px;padding:4px 5px"></label>
+            <label style="font-size:11px;font-weight:600">Paid from
+            <select data-fodacct="${esc(it.id)}" style="max-width:140px;padding:4px 5px"><option value="">—</option>${acctOpts}</select></label>
+            <label style="font-size:11px;font-weight:600">Allocate
+            <input type="number" min="1" max="60" data-fodmonths="${esc(it.id)}" value="${months}" style="width:55px;padding:4px 5px"> months</label>
+            <span class="breed" style="font-size:10px">(1–60)</span>
+          </div>
+          ${resultHtml ? `<div style="font-size:11.5px;margin-top:4px;${resultStyle}">${resultHtml}</div>` : ''}</div>`;
+      }).join('') ||
         '<div class="rule" style="grid-column:1/-1">No cost lines yet — add one below.</div>';
       const mode = document.getElementById('fodderMode');
       const acres = document.getElementById('fodderAcres');
@@ -1610,7 +1626,7 @@ const GoatRecords = (() => {
         const sel = document.querySelector(`[data-fodacct="${CSS.escape(it.id)}"]`);
         if (sel && it.accountId) sel.value = String(it.accountId);
       });
-      document.querySelectorAll('[data-fodamt],[data-fodpaid],[data-fodcash],[data-fodacct],[data-fodmonths]').forEach(inp => { inp.onchange = () => saveFodderPool(); });
+      document.querySelectorAll('[data-fodamt],[data-fodpaid],[data-fodacct],[data-fodmonths]').forEach(inp => { inp.onchange = () => saveFodderPool(); });
       document.querySelectorAll('.feed-foddel').forEach(x => {
         x.onclick = async e => {
           e.preventDefault();
@@ -3016,6 +3032,10 @@ const GoatRecords = (() => {
 
     function loadExpenseForEdit(row) {
       if (!FarmPerms.can('finance', 'edit')) return;
+      if (row.dataset.fromFeed === '1') {
+        showModal('This cost is managed on Feed › Green fodder cost. Edit it there.');
+        return;
+      }
       editingExpenseId = +row.dataset.id;
       document.getElementById('expenseFormTitle').textContent = 'Edit running cost';
       document.getElementById('addExpense').textContent = 'Save';
@@ -3329,7 +3349,11 @@ const GoatRecords = (() => {
       row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadIncomeForEdit(row); });
     });
     document.querySelectorAll('#expenseRows tr.fin-expense-row').forEach(row => {
-      row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadExpenseForEdit(row); });
+      row.addEventListener('click', () => {
+        if (!FarmPerms.can('finance', 'edit')) return;
+        if (row.dataset.fromFeed === '1') return;
+        loadExpenseForEdit(row);
+      });
     });
     document.querySelectorAll('#ownerRows tr.fin-owner-row').forEach(row => {
       row.addEventListener('click', () => { if (FarmPerms.can('finance', 'edit')) loadOwnerForEdit(row); });
