@@ -9,12 +9,17 @@ internal static class BreedingPageAssembler
 {
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
-    public static IReadOnlyList<BreedingDoeFlowStepViewModel> BuildDoeFlowSteps(IReadOnlyList<Goat> goats, DateOnly today)
+    public static IReadOnlyList<BreedingDoeFlowStepViewModel> BuildDoeFlowSteps(
+        IReadOnlyList<Goat> goats,
+        DateOnly today,
+        IReadOnlySet<int>? doesWithBuckIn = null,
+        IReadOnlyDictionary<int, int>? kiddingCounts = null)
     {
         var counts = BreedingDoeFlowHelper.Steps.ToDictionary(s => s.Key, _ => 0);
         foreach (var g in goats)
         {
-            var flow = BreedingDoeFlowHelper.FlowStage(g, today);
+            var here = kiddingCounts?.GetValueOrDefault(g.Id) ?? 0;
+            var flow = BreedingDoeFlowHelper.FlowStage(g, today, doesWithBuckIn, here);
             if (flow is not null && counts.ContainsKey(flow))
                 counts[flow]++;
         }
@@ -35,15 +40,19 @@ internal static class BreedingPageAssembler
         IReadOnlyDictionary<int, int> kiddingsHere,
         IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe,
         DateOnly today,
-        Func<int, string> ageLabel)
+        Func<int, string> ageLabel,
+        IReadOnlySet<int>? doesWithBuckIn = null,
+        IReadOnlyDictionary<int, DateOnly>? rescanDueByGoat = null)
     {
+        rescanDueByGoat ??= new Dictionary<int, DateOnly>();
         var rows = goats
             .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.IsArchived)
             .Select(g =>
             {
-                var flow = BreedingDoeFlowHelper.FlowStage(g, today);
+                var here = kiddingsHere.GetValueOrDefault(g.Id);
+                var flow = BreedingDoeFlowHelper.FlowStage(g, today, doesWithBuckIn, here);
                 if (flow is null) return null;
-                return MapPipeline(g, today, flow, kiddingsHere, kiddingsByDoe, ageLabel);
+                return MapPipeline(g, today, flow, kiddingsHere, kiddingsByDoe, ageLabel, rescanDueByGoat);
             })
             .Where(r => r is not null)
             .Cast<BreedingPipelineRowViewModel>()
@@ -74,7 +83,8 @@ internal static class BreedingPageAssembler
         string flowStage,
         IReadOnlyDictionary<int, int> kiddingsHere,
         IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe,
-        Func<int, string> ageLabel)
+        Func<int, string> ageLabel,
+        IReadOnlyDictionary<int, DateOnly> rescanDueByGoat)
     {
         var stage = StageKey(g) ?? flowStage switch
         {
@@ -157,12 +167,25 @@ internal static class BreedingPageAssembler
         {
             var mated = g.MatedDate!.Value;
             var since = today.DayNumber - mated.DayNumber;
-            var from = mated.AddDays(BreedingHelper.ScanAfterDays);
-            var scanNote = since >= BreedingHelper.ScanAfterDays
-                ? "<span style=\"color:var(--amber);font-weight:700\">scan now</span>"
-                : $"scan in {BreedingHelper.ScanAfterDays - since}d";
-            row.KeyDateHtml = $"<b>{from:yyyy-MM-dd}</b><div class=\"name\">{scanNote}</div>";
-            row.DaysText = since + "d since";
+            if (rescanDueByGoat.TryGetValue(g.Id, out var rescanDue))
+            {
+                var until = BreedingHelper.DaysUntil(rescanDue);
+                var rescanNote = until <= 0
+                    ? "<span style=\"color:var(--amber);font-weight:700\">rescan now</span>"
+                    : $"rescan on {rescanDue:yyyy-MM-dd}";
+                row.KeyDateHtml = $"<b>{rescanDue:yyyy-MM-dd}</b><div class=\"name\">{rescanNote}</div>";
+                row.DaysText = until <= 0 ? "due" : $"in {until}d";
+                if (until <= 0) row.DaysStyle = "color:var(--amber);font-weight:700";
+            }
+            else
+            {
+                var from = mated.AddDays(BreedingHelper.ScanAfterDays);
+                var scanNote = since >= BreedingHelper.ScanAfterDays
+                    ? "<span style=\"color:var(--amber);font-weight:700\">scan now</span>"
+                    : $"scan in {BreedingHelper.ScanAfterDays - since}d";
+                row.KeyDateHtml = $"<b>{from:yyyy-MM-dd}</b><div class=\"name\">{scanNote}</div>";
+                row.DaysText = since + "d since";
+            }
         }
         else if (stage == "preg" && g.MatedDate.HasValue)
         {
@@ -825,13 +848,18 @@ internal static class BreedingPageAssembler
         IReadOnlyList<Goat> bornKids,
         IReadOnlyDictionary<string, int> emptyByBuckTag,
         IReadOnlyList<BuckHealthCheck> buckChecks,
+        IReadOnlyList<BreedingGroupDto> groups,
         DateOnly today)
     {
+        var doesWithBuck = BreedingGroupHelper.DoesWithBuckIn(groups, live.ToDictionary(g => g.Id), today);
         return bucks.Select(x =>
         {
             var check = BuckCheckHelper.LatestCheck(buckChecks, x.Id);
             var checkOk = BuckCheckHelper.IsOk(check, today);
-            var carrying = live.Count(z => z.MatedDate.HasValue &&
+            var carrying = live.Count(z => PregnancyRules.IsConfirmedPregnant(z) &&
+                string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase));
+            var withBuck = live.Count(z =>
+                doesWithBuck.Contains(z.Id) &&
                 string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase));
             var kidYr = kiddingsYear.Count(k =>
                 (k.BreedingEvent?.Buck?.Tag ?? k.BreedingEvent?.BuckTagText ?? "")
@@ -856,8 +884,9 @@ internal static class BreedingPageAssembler
                     .Select(k => k.KiddingDate))
                 .OrderBy(d => d)
                 .ToList();
-            var load = carrying >= 25 ? ("Heavy — rest him", "#8a261c")
-                : carrying >= 15 ? ("Busy", "var(--amber)")
+            var workload = carrying + withBuck;
+            var load = workload >= 25 ? ("Heavy — rest him", "#8a261c")
+                : workload >= 15 ? ("Busy", "var(--amber)")
                 : ("Fine", "var(--green-dark)");
 
             static bool KiddingByBuck(KiddingRecord k, string tag) =>
@@ -875,7 +904,8 @@ internal static class BreedingPageAssembler
                 Id = x.Id,
                 Tag = x.Tag,
                 Carrying = carrying,
-                CrossesThisYear = kidYr,
+                WithBuck = withBuck,
+                CrossesThisYear = crossesYr,
                 KidsSiredYear = kidsSired,
                 KidsSired = kidsOfBuck.Count,
                 KidsPerCrossText = kpc,

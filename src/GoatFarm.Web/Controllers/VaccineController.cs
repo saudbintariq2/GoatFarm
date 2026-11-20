@@ -57,6 +57,13 @@ public class VaccineController : Controller
         return Json(await _treatmentService.SaveAsync(model, cancellationToken));
     }
 
+    [HttpPost]
+    public async Task<IActionResult> RecoverTreatment(int id, CancellationToken cancellationToken)
+    {
+        var ok = await _treatmentService.RecoverAsync(id, cancellationToken);
+        return ok ? Ok(new { success = true }) : NotFound();
+    }
+
     [HttpDelete]
     public async Task<IActionResult> DeleteTreatment(int id, CancellationToken cancellationToken)
     {

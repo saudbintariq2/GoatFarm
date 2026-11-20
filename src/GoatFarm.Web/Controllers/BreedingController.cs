@@ -220,6 +220,10 @@ public class BreedingController : Controller
         {
             return Json(await _breedingService.SaveScanBatchAsync(model, cancellationToken));
         }
+        catch (ConfirmationRequiredException ex)
+        {
+            return ConfirmationRequired(ex);
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { error = ex.Message });

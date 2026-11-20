@@ -63,13 +63,16 @@ public class TreatmentService : ITreatmentService
                 throw new InvalidOperationException("Selected account was not found. Add accounts on Finance → Bank & Cash.");
 
             var note = goat.Tag + " — " + (string.IsNullOrWhiteSpace(row.Diagnosis) ? "treatment" : row.Diagnosis.Trim());
-            _context.Expenses.Add(new Expense
+            var expense = new Expense
             {
                 Type = "Vet / extra medicine",
                 Amount = model.Cost,
                 Date = model.StartDate,
                 Comment = note
-            });
+            };
+            _context.Expenses.Add(expense);
+            await _context.SaveChangesAsync(cancellationToken);
+
             _context.LedgerTransactions.Add(new LedgerTransaction
             {
                 Date = model.StartDate,
@@ -77,11 +80,13 @@ public class TreatmentService : ITreatmentService
                 AccountId = model.AccountId,
                 Amount = model.Cost,
                 Category = "Vet / extra medicine",
-                Reference = goat.Tag,
+                Reference = $"fin-expense:{expense.Id}",
                 Notes = "Expense · Vet / extra medicine · " + goat.Tag,
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
             });
+            await _context.SaveChangesAsync(cancellationToken);
+            return new { id = row.Id };
         }
 
         await _context.SaveChangesAsync(cancellationToken);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 
@@ -11,9 +12,9 @@ public static class MotherScoreHelper
     ];
 
     public static double? ScoreForKidding(KiddingRecord k) =>
-        Score(k.Mothering, k.MilkProduction, k.Ease, k.DamHealth);
+        Score(k.Mothering, k.MilkProduction, k.Ease, k.DamHealth, k.BodyCondition);
 
-    public static double? Score(int? mothering, int? milk, KiddingEase ease, DamAfterKiddingHealth health)
+    public static double? Score(int? mothering, int? milk, KiddingEase ease, DamAfterKiddingHealth health, int? bodyCondition = null)
     {
         if (mothering is null or < 1 or > 5 || milk is null or < 1 or > 5)
             return null;
@@ -25,6 +26,8 @@ public static class MotherScoreHelper
             DamAfterKiddingHealth.Sick => 1,
             _ => 3
         };
+        if (bodyCondition is >= 1 and <= 5)
+            return (mothering.Value + milk.Value + easePts + healthPts + bodyCondition.Value) / 5.0;
         return (mothering.Value + milk.Value + easePts + healthPts) / 4.0;
     }
 
@@ -37,10 +40,12 @@ public static class MotherScoreHelper
     public static string StarsHtml(double? score)
     {
         if (score is null) return "<span class=\"muted\">—</span>";
-        var full = (int)Math.Round(score.Value);
+        var display = Math.Clamp(score.Value, 0, 5);
+        var full = (int)Math.Round(display);
         full = Math.Clamp(full, 0, 5);
         var stars = new string('★', full) + new string('☆', 5 - full);
-        return $"<span class=\"breed-ms\" title=\"{score.Value:0.1}\">{stars}</span> <b>{score.Value:0.1}</b>";
+        var txt = display.ToString("0.0", CultureInfo.InvariantCulture);
+        return $"<span class=\"breed-ms\" title=\"{txt}\">{stars}</span> <b>{txt}</b>";
     }
 
     public static int EasePoints(KiddingEase ease) => ease switch

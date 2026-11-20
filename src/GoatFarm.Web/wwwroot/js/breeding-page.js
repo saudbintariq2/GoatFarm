@@ -244,6 +244,7 @@ window.BreedingPage = (() => {
       <div class="v206-bg-bar"><i style="width:${pct}%"></i></div>
       <div class="v206-bg-kpis">
         ${pending ? `<div><b>${pending}</b>buck not in</div>` : ''}
+        ${grp.withBuck ? `<div><b>${grp.withBuck}</b>with buck</div>` : ''}
         <div><b>${grp.waitingScan}</b>awaiting scan</div>
         <div><b>${grp.pregnant}</b>pregnant</div>
         <div><b>${grp.empty}</b>empty</div>
@@ -402,7 +403,7 @@ window.BreedingPage = (() => {
           } else throw err;
         }
         const ids = res?.crossedDoeIds || [];
-        reload('Buck in recorded — does are waiting for scan', ids.length && breedingCan('delete')
+        reload('Buck in — does are with buck', ids.length && breedingCan('delete')
           ? { kind: 'crosses', doeIds: ids }
           : null);
         return;
@@ -410,8 +411,17 @@ window.BreedingPage = (() => {
       if (btn.dataset.bgClose) {
         const r = await grApi.showModal('Date buck was taken out', { prompt: true, defaultValue: today() });
         if (r == null) return;
-        await grApi.api('/Breeding/TakeBuckOut', { method: 'POST', body: JSON.stringify({ groupId: btn.dataset.bgClose, endDate: r || today() }) });
-        reload('Group closed', breedingCan('edit')
+        const body = { groupId: btn.dataset.bgClose, endDate: r || today(), confirmShortStay: false };
+        try {
+          await grApi.api('/Breeding/TakeBuckOut', { method: 'POST', body: JSON.stringify(body) });
+        } catch (err) {
+          if (err?.requiresConfirmation) {
+            if (!await grApi.showConfirm((err.warnings || []).join('\n\n') + '\n\nContinue anyway?')) return;
+            body.confirmShortStay = true;
+            await grApi.api('/Breeding/TakeBuckOut', { method: 'POST', body: JSON.stringify(body) });
+          } else throw err;
+        }
+        reload('Buck out — does are waiting for scan', breedingCan('edit')
           ? { kind: 'reopen', groupId: btn.dataset.bgClose }
           : null);
         return;
@@ -506,7 +516,11 @@ window.BreedingPage = (() => {
       const total = g.does?.length || 0;
       const label = g.id === '_hand'
         ? 'Hand mated'
-        : `${esc(g.buck || g.name)}${g.birthBatchIcon ? ' · ' + esc(g.birthBatchIcon) : ''}`;
+        : (() => {
+            const batch = g.birthBatchName ? ` · ${esc(g.birthBatchName)}` : (g.birthBatchIcon ? ` · ${esc(g.birthBatchIcon)}` : '');
+            const out = g.buckOutDate ? ` · buck out ${esc(g.buckOutDate)}` : '';
+            return `${esc(g.buck || g.name)}${batch}${out}`;
+          })();
       return `<button type="button" data-sc-group="${esc(g.id)}" class="${g.id === scanGroupKey ? 'on' : ''}" role="tab">${label}<span class="scan-tab-count">${done}/${total}</span></button>`;
     }).join('');
     tabs.querySelectorAll('[data-sc-group]').forEach(b => {
@@ -702,7 +716,7 @@ window.BreedingPage = (() => {
       openScanPanel(false);
       markAllScanPregnant();
     });
-    $('scSave')?.addEventListener('click', async () => {
+    async function saveScanBatch(confirmEarlyScan) {
       const list = activeScanDoes().filter(d => scanPicks.has(d.id));
       if (!list.length) return;
       const scanDate = $('scDate')?.value || today();
@@ -737,17 +751,30 @@ window.BreedingPage = (() => {
           daysPregnant: p.daysPregnant ? +p.daysPregnant : null
         };
       });
-      try {
-        const res = await gr().api('/Breeding/SaveScanBatch', {
-          method: 'POST',
-          body: JSON.stringify({ scanDate, results })
-        });
-        let msg = `Saved ${res.saved} scan(s)`;
-        if (res.errors?.length) msg += ' — ' + res.errors.slice(0, 3).join('; ');
+      const res = await fetch('/Breeding/SaveScanBatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ scanDate, results, confirmEarlyScan: !!confirmEarlyScan })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        let msg = `Saved ${data.saved} scan(s)`;
+        if (data.errors?.length) msg += ' — ' + data.errors.slice(0, 3).join('; ');
         scanPicks.clear();
         reload(msg);
-      } catch { /* shown */ }
-    });
+        return;
+      }
+      const err = await res.json().catch(() => ({}));
+      const msg = err.error || 'Could not save scans';
+      if (res.status === 409 && err.requiresConfirmation && !confirmEarlyScan) {
+        const warn = (err.warnings || []).join('\n') || msg;
+        if (await gr().showConfirm(warn + '\n\nSave anyway?')) await saveScanBatch(true);
+        return;
+      }
+      await gr().showModal(msg);
+    }
+    $('scSave')?.addEventListener('click', () => saveScanBatch(false).catch(() => {}));
   }
 
   let doeFlowFilter = null;
@@ -1071,7 +1098,8 @@ window.BreedingPage = (() => {
   function kbLiveScore() {
     const moth = +$('kb-mothering')?.value || 3;
     const milk = +$('kb-milk')?.value || 3;
-    const sc = (moth + milk + (easePts[kbEase()] || 3) + (healthPts[kbHealth()] || 3)) / 4;
+    const bcs = +$('kb-bcs')?.value || 3;
+    const sc = (moth + milk + bcs + (easePts[kbEase()] || 3) + (healthPts[kbHealth()] || 3)) / 5;
     const full = Math.max(0, Math.min(5, Math.round(sc)));
   const stars = '★'.repeat(full) + '☆'.repeat(5 - full);
     return { sc, html: `<span class="breed-ms">${stars}</span> <b>${sc.toFixed(1)}</b>` };
@@ -1547,18 +1575,27 @@ window.BreedingPage = (() => {
     $('bg-all-shown')?.addEventListener('click', () => {
       document.querySelectorAll('.breed-bg-doe').forEach(lab => {
         if (lab.style.display === 'none') return;
+        if (lab.dataset.bgCan !== '1') return;
         const cb = lab.querySelector('[data-bgdoe]');
-        if (cb) cb.checked = true;
+        if (cb && !cb.disabled) cb.checked = true;
       });
       updateBgCount();
     });
     $('bg-all-ready')?.addEventListener('click', () => {
-      document.querySelectorAll('.breed-bg-doe').forEach(lab => {
-        if (lab.style.display === 'none') return;
+      const max = Math.max(1, +($('bg-max')?.value) || 15);
+      bgDoeCheckboxes().forEach(c => { c.checked = false; });
+      const ready = [...document.querySelectorAll('.breed-bg-doe')].filter(lab =>
+        lab.style.display !== 'none' && lab.dataset.bgReady === '1' && lab.dataset.bgCan === '1');
+      ready.slice(0, max).forEach(lab => {
         const cb = lab.querySelector('[data-bgdoe]');
-        if (lab.dataset.bgReady === '1' && cb) cb.checked = true;
+        if (cb && !cb.disabled) cb.checked = true;
       });
+      const extra = ready.length - Math.min(ready.length, max);
       updateBgCount();
+      if (extra > 0 && $('bg-count')) {
+        const cur = $('bg-count').innerHTML;
+        $('bg-count').innerHTML = cur + ` — <span style="color:var(--amber)">${extra} more ready doe${extra > 1 ? 's' : ''} not selected (max ${max})</span>`;
+      }
     });
     $('bg-clear')?.addEventListener('click', () => {
       bgDoeCheckboxes().forEach(c => { c.checked = false; });
@@ -1633,54 +1670,10 @@ window.BreedingPage = (() => {
     window.BreedingDoeStatus?.refreshRowSelects?.();
     wireKiddingFilters();
     wireKidsTable();
-    $('heatFilter')?.addEventListener('change', filterHeat);
     filterPipeline();
-    filterHeat();
 
     const tn = $('se-todayNote');
     if (tn) tn.textContent = 'counted from today, ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-
-    $('bc-stage')?.addEventListener('change', () => {
-      const cross = $('bc-stage')?.value === 'cross';
-      $('bc-datefield').style.display = cross ? '' : 'none';
-      $('bc-buckfield').style.display = cross ? '' : 'none';
-    });
-
-    $('bc-tag')?.addEventListener('input', () => lookupTag('bc-tag', 'bc-found'));
-    $('bc-buck')?.addEventListener('change', () => lookupTag('bc-tag', 'bc-found'));
-    $('bc-date')?.addEventListener('change', () => lookupTag('bc-tag', 'bc-found'));
-
-    $('addCross')?.addEventListener('click', async () => {
-      const tag = normalizeTag($('bc-tag')?.value);
-      if (!tag) { await gr().showModal('Scan or type a valid doe tag'); return; }
-      const stage = $('bc-stage')?.value || 'prep';
-      const buckTag = $('bc-buck')?.value?.trim() || null;
-      if (stage === 'cross' && !buckTag) {
-        await gr().showModal('Pick the buck for this cross.');
-        return;
-      }
-      try {
-        await gr().api('/Breeding/AddDoe', {
-          method: 'POST',
-          body: JSON.stringify({
-            tag,
-            stage,
-            date: $('bc-date')?.value || today(),
-            buckTag
-          })
-        });
-        reload(stage === 'cross' ? 'Cross recorded' : 'Doe marked ready for cross');
-      } catch { /* shown */ }
-    });
-
-    document.querySelectorAll('[data-heat]').forEach(b => {
-      b.addEventListener('click', async () => {
-        try {
-          await gr().api('/Goat/RecordHeat', { method: 'POST', body: JSON.stringify({ goatId: +b.dataset.heat, date: today(), note: '' }) });
-          reload('Heat recorded today');
-        } catch { /* shown */ }
-      });
-    });
 
     const seasonFields = [
       ['se-build', 'buildUp'], ['se-check', 'buckCheckDays'], ['se-weigh', 'weighYoungDoesDays'],
@@ -1944,8 +1937,22 @@ window.BreedingPage = (() => {
         max: +$('bg-max')?.value || 15,
         doeIds: ids
       };
+      const postGroup = async (extra = {}) => {
+        return gr().api('/Breeding/CreateGroup', {
+          method: 'POST',
+          body: JSON.stringify({ ...body, ...extra })
+        });
+      };
       try {
-        const res = await gr().api('/Breeding/CreateGroup', { method: 'POST', body: JSON.stringify(body) });
+        let res;
+        try {
+          res = await postGroup();
+        } catch (err) {
+          if (err?.requiresConfirmation) {
+            if (!await gr().showConfirm((err.warnings || []).join('\n\n') + '\n\nContinue?')) return;
+            res = await postGroup({ confirmWarnings: true, confirmSecondActive: true });
+          } else throw err;
+        }
         const gid = res?.groupId;
         reload(defer ? 'Group saved — put the buck in when ready' : 'Breeding group created',
           gid && defer && breedingCan('delete') ? { kind: 'deleteGroup', groupId: gid } : null);

@@ -157,6 +157,14 @@ public class FinanceController : Controller
     public async Task<IActionResult> SalaryReconciliation(CancellationToken cancellationToken) =>
         Json(await _financeService.GetSalaryReconciliationAsync(cancellationToken));
 
+    [HttpPost]
+    public async Task<IActionResult> RecordPayrollPayment([FromBody] RecordPayrollPaymentViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var result = await _financeService.RecordPayrollPaymentAsync(model, cancellationToken);
+        return result.Success ? Json(result) : BadRequest(new { error = result.Message });
+    }
+
     [HttpGet]
     public async Task<IActionResult> IntegrityCheck(CancellationToken cancellationToken) =>
         Json(await _financeService.GetIntegrityCheckAsync(cancellationToken));

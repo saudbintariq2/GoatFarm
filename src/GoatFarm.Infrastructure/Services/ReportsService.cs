@@ -130,9 +130,12 @@ public class ReportsService : IReportsService
         var totalGoats = goats.Count;
         var confirmed = goats.Where(PregnancyRules.IsConfirmedPregnant).ToList();
         var waiting = goats.Where(PregnancyRules.IsAwaitingScan).ToList();
-        var emptyCount = emptyLogs.Count;
-        var scans = confirmed.Count + emptyCount;
-        var concRate = scans > 0 ? (int)Math.Round(confirmed.Count / (double)scans * 100) : (int?)null;
+        var emptyInRange = emptyLogs.Where(e => range.Test(e.ScanDate)).ToList();
+        var emptyCount = emptyInRange.Count;
+        var positiveIds = confirmed.Select(g => g.Id).ToHashSet();
+        var emptyDoeIds = emptyInRange.Select(e => e.GoatId).Where(id => !positiveIds.Contains(id)).Distinct().Count();
+        var scans = positiveIds.Count + emptyDoeIds;
+        var concRate = scans > 0 ? (int)Math.Round(positiveIds.Count / (double)scans * 100) : (int?)null;
         var kidsExpected = confirmed.Sum(g => g.KidsCount ?? 0);
         var deathsP = deaths.Where(d => range.Test(d.Date)).ToList();
         var births = goats.Where(g => g.Source == GoatSource.Born && range.Test(g.EventDate)).ToList();
@@ -142,9 +145,10 @@ public class ReportsService : IReportsService
         var vaccCost = vaccineBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
         var medCost = expenses.Where(e => range.Test(e.Date) && MedExpenseTypes.Contains(e.Type)).Sum(e => e.Amount);
         var days = Math.Max(1, range.MonthCount * 30);
-        var costPerL = milkLp > 0 ? feedMonth * range.MonthCount / milkLp : (decimal?)null;
-        var avgRate = milkLs > 0 ? milkInc / milkLs : 0;
         var feedPeriod = feedBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
+        var milkForCost = Math.Max(milkLp, milkLs);
+        var costPerL = milkForCost > 0 ? feedPeriod / milkForCost : (decimal?)null;
+        var avgRate = milkLs > 0 ? milkInc / milkLs : 0;
         var milkingN = _goatService.CountByStatus(GoatStatus.Milking);
         var livestockValue = _financeService.GetLivestockValue();
         var assetsValue = _financeService.GetAssetsValue();
@@ -161,7 +165,7 @@ public class ReportsService : IReportsService
         foreach (var f in feedPrices.Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase)))
         {
             var du = dailyUse.GetValueOrDefault(f.FeedType);
-            if (du <= 0) continue;
+            if (du <= 0 || f.StockKg <= 0) continue;
             var d = (int)Math.Floor(f.StockKg / du);
             if (minDays is null || d < minDays) minDays = d;
         }
@@ -197,8 +201,8 @@ public class ReportsService : IReportsService
             DayNote = BuildDayNote(range, incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, ownerInv)
         };
 
-        var dashboard = BuildDashboard(totalGoats, confirmed, deathsP, minDays, feedMonth, range, incTot, expTot,
-            vaccDueTotal, mortality, openHerd, concRate, scans, confirmed.Count, kidsExpected, totalGoats, feedMonth,
+        var dashboard = BuildDashboard(totalGoats, confirmed, deathsP, minDays, feedPeriod, feedMonth, range, incTot, expTot,
+            vaccDueTotal, mortality, openHerd, concRate, scans, positiveIds.Count, kidsExpected, totalGoats, feedMonth,
             costPerL, vaccCost, medCost, trend, preRevenue);
 
         var herd = BuildHerdSection(goats, totalGoats, openHerd, births, bought, deathsP, livestockValue, range);
@@ -462,7 +466,7 @@ public class ReportsService : IReportsService
 
     private ReportDashboardSectionViewModel BuildDashboard(
         int totalGoats, List<Goat> confirmed, List<DeathRecord> deathsP, int? minDays,
-        decimal feedMonth, ReportRange range, decimal incTot, decimal expTot, int vaccDueTotal,
+        decimal feedPeriod, decimal feedMonth, ReportRange range, decimal incTot, decimal expTot, int vaccDueTotal,
         double mortality, int openHerd, int? concRate, int scans, int confirmedCount, int kidsExpected,
         int herdSize, decimal feedMonthly, decimal? costPerL, decimal vaccCost, decimal medCost,
         (List<ReportTrendRowViewModel> Rows, decimal TIn, decimal TOut, decimal TPut, decimal TNet) trend,
@@ -476,7 +480,7 @@ public class ReportsService : IReportsService
             KpiDot("Pregnant", confirmed.Count.ToString(), "var(--pink)"),
             KpiDot("Deaths", deathsP.Count.ToString(), "var(--red)"),
             KpiDot("Feed stock", minDays.HasValue ? $"{minDays} d" : "—", "var(--blue)"),
-            KpiDot("Feed cost", DisplayHelper.FormatRs(feedMonth * range.MonthCount), "var(--amber)"),
+            KpiDot("Feed bought", DisplayHelper.FormatRs(feedPeriod), "var(--amber)"),
             Fin(KpiDot("Revenue", DisplayHelper.FormatRs(incTot), "var(--green)")),
             Fin(KpiDot("Expenses", DisplayHelper.FormatRs(expTot), "var(--red)")),
             Fin(KpiDot("Net profit", (net < 0 ? "– " : "") + DisplayHelper.FormatRs(Math.Abs(net)), net < 0 ? "var(--red)" : "var(--green)")),
@@ -1249,20 +1253,8 @@ public class ReportsService : IReportsService
         _ => false
     };
 
-    private static (DateOnly Date, int Days)? NextDue(Goat g, Vaccine v, IReadOnlyList<VaccinationHistory> log)
-    {
-        if (v.RuleType == VaccineRuleType.Age)
-        {
-            if (log.Any(l => l.GoatId == g.Id && l.VaccineId == v.Id)) return null;
-            var dueDate = g.EventDate.AddDays(v.Days ?? 0);
-            return (dueDate, BreedingHelper.DaysUntil(dueDate));
-        }
-        var last = log.Where(l => l.GoatId == g.Id && l.VaccineId == v.Id)
-            .Select(l => l.VaccinationDate).OrderByDescending(d => d).FirstOrDefault();
-        var baseDate = last == default ? DateOnly.FromDateTime(DateTime.Today) : last;
-        var nextDate = baseDate.AddDays((v.Months ?? 0) * 30);
-        return (nextDate, BreedingHelper.DaysUntil(nextDate));
-    }
+    private static (DateOnly Date, int Days)? NextDue(Goat g, Vaccine v, IReadOnlyList<VaccinationHistory> log) =>
+        VaccineDueHelper.NextDue(g, v, log, BreedingHelper.DaysUntil);
 
     private static string KeyOf(string date, string groupBy)
     {

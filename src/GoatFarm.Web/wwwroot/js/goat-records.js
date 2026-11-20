@@ -673,9 +673,62 @@ const GoatRecords = (() => {
     function applySourcePriceState() {
       const p = document.getElementById('f-price');
       const source = document.getElementById('f-source')?.value;
-      if (!p) return;
-      p.disabled = source === 'Born';
-      if (source === 'Born') p.value = '';
+      const bought = source !== 'Born';
+      if (p) {
+        p.disabled = !bought;
+        if (!bought) p.value = '';
+      }
+      const dobWrap = document.getElementById('f-dob-wrap');
+      const ageWrap = document.getElementById('f-age-wrap');
+      const paidWrap = document.getElementById('f-paidfrom-wrap');
+      if (dobWrap) dobWrap.style.display = bought ? '' : 'none';
+      if (ageWrap) ageWrap.style.display = bought ? '' : 'none';
+      if (paidWrap) paidWrap.style.display = bought ? '' : 'none';
+      applyPregnantIntakeUi();
+    }
+
+    function applyPregnantIntakeUi() {
+      const panel = document.getElementById('f-preg-intake');
+      if (!panel) return;
+      const bought = document.getElementById('f-source')?.value !== 'Born';
+      const preg = document.getElementById('f-status')?.value === 'Pregnant';
+      const fem = document.getElementById('f-gender')?.value === 'Female';
+      const show = bought && preg && fem && !editingId;
+      panel.hidden = !show;
+    }
+
+    async function loadPurchaseAccounts() {
+      const sel = document.getElementById('f-paidfrom');
+      if (!sel || !FarmPerms.can('finance', 'view')) return;
+      try {
+        const data = await api('/Goat/SaleFormData');
+        const accounts = data?.accounts || [];
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">— optional —</option>' +
+          accounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+        if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+      } catch { /* optional */ }
+    }
+
+    function resolveDateOfBirthForPayload() {
+      const source = document.getElementById('f-source')?.value;
+      if (source === 'Born') return { dateOfBirth: null, dateOfBirthIsEstimated: false };
+      const dobEl = document.getElementById('f-dob');
+      const dob = dobEl?.value?.trim();
+      if (dob) {
+        return {
+          dateOfBirth: dob,
+          dateOfBirthIsEstimated: !!document.getElementById('f-dob-est')?.checked
+        };
+      }
+      const ageDays = Math.floor(+(document.getElementById('f-age-days')?.value || 0));
+      const bought = document.getElementById('f-date')?.value;
+      if (ageDays > 0 && bought) {
+        const d = new Date(bought + 'T12:00:00');
+        d.setDate(d.getDate() - ageDays);
+        return { dateOfBirth: d.toISOString().slice(0, 10), dateOfBirthIsEstimated: true };
+      }
+      return { dateOfBirth: null, dateOfBirthIsEstimated: false };
     }
 
     function setEditMode(editing) {
@@ -709,6 +762,15 @@ const GoatRecords = (() => {
       document.getElementById('f-status').value = 'Kid';
       document.getElementById('f-date').value = '';
       document.getElementById('f-note').value = '';
+      document.getElementById('f-dob').value = '';
+      document.getElementById('f-dob-est').checked = false;
+      document.getElementById('f-age-days').value = '';
+      const paid = document.getElementById('f-paidfrom');
+      if (paid) paid.value = '';
+      document.getElementById('f-intake-mated').value = '';
+      document.getElementById('f-intake-buck').value = '';
+      document.getElementById('f-intake-kids').value = '2';
+      document.getElementById('f-intake-scan').value = '';
       setHerdExtras({ owner: 'Farm', healthState: 'Healthy', sireTag: '', damTag: '' });
       applySourcePriceState();
       document.querySelectorAll('#rows tr.goat-row.editing').forEach(r => r.classList.remove('editing'));
@@ -815,6 +877,9 @@ const GoatRecords = (() => {
       if (statusSel) statusSel.value = status;
       document.getElementById('f-date').value = goat.eventDateDisplay || goat.eventDate || '';
       document.getElementById('f-note').value = goat.comment || '';
+      document.getElementById('f-dob').value = goat.dateOfBirthDisplay || goat.dateOfBirth || '';
+      document.getElementById('f-dob-est').checked = !!goat.dateOfBirthIsEstimated;
+      document.getElementById('f-age-days').value = '';
       setHerdExtras(goat);
       applySourcePriceState();
       setEditMode(true);
@@ -840,6 +905,7 @@ const GoatRecords = (() => {
       if (!FarmPerms.can('herd', 'edit')) return;
       showGoatFormPanel();
       await loadParentOptions();
+      await loadPurchaseAccounts();
       fillGoatForm({
         id: +row.dataset.id,
         tag: row.dataset.tag,
@@ -941,18 +1007,23 @@ const GoatRecords = (() => {
 
     function goatPayload() {
       const source = document.getElementById('f-source').value;
-      return {
+      const dob = resolveDateOfBirthForPayload();
+      const paidEl = document.getElementById('f-paidfrom');
+      const paidFrom = paidEl?.value ? +paidEl.value : null;
+      const status = document.getElementById('f-status').value;
+      const payload = {
         tag: document.getElementById('f-tag').value.trim(),
         name: document.getElementById('f-name').value.trim(),
         comment: document.getElementById('f-note').value.trim() || null,
         breed: document.getElementById('f-breed').value,
         gender: document.getElementById('f-gender').value,
-        status: document.getElementById('f-status').value,
+        status,
         source,
         purchasePrice: source === 'Born' ? 0 : (+document.getElementById('f-price').value || 0),
         eventDate: document.getElementById('f-date').value,
-        dateOfBirth: null,
-        dateOfBirthIsEstimated: false,
+        dateOfBirth: dob.dateOfBirth,
+        dateOfBirthIsEstimated: dob.dateOfBirthIsEstimated,
+        paidFromAccountId: source !== 'Born' && paidFrom > 0 ? paidFrom : null,
         healthState: healthStateFromLabel(document.getElementById('f-health')?.value || 'Healthy'),
         owner: document.getElementById('f-owner')?.value || 'Farm',
         sireTag: (() => {
@@ -961,9 +1032,18 @@ const GoatRecords = (() => {
         })(),
         damTag: document.getElementById('f-dam')?.value.trim() || null
       };
+      if (!editingId && status === 'Pregnant' && source !== 'Born' && payload.gender === 'Female') {
+        payload.intakeMatedDate = document.getElementById('f-intake-mated')?.value || null;
+        payload.intakeBuckTag = document.getElementById('f-intake-buck')?.value?.trim() || null;
+        payload.intakeKidsCount = +(document.getElementById('f-intake-kids')?.value || 0) || null;
+        payload.intakeUltrasoundDate = document.getElementById('f-intake-scan')?.value || null;
+      }
+      return payload;
     }
 
     document.getElementById('f-source')?.addEventListener('change', applySourcePriceState);
+    document.getElementById('f-status')?.addEventListener('change', applyPregnantIntakeUi);
+    document.getElementById('f-gender')?.addEventListener('change', applyPregnantIntakeUi);
 
     document.getElementById('f-tag')?.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
@@ -980,6 +1060,7 @@ const GoatRecords = (() => {
       if (!FarmPerms.can('herd', 'add')) return;
       resetGoatForm();
       await loadParentOptions();
+      await loadPurchaseAccounts();
       showGoatFormPanel();
       document.getElementById('goatFormPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       document.getElementById('f-tag')?.focus();
@@ -1015,6 +1096,12 @@ const GoatRecords = (() => {
       if (!tag) { await showModal('Please enter a Tag / RFID ID'); return; }
       if (!date) { await showModal('Please pick the date'); return; }
       const payload = goatPayload();
+      if (!editingId && payload.status === 'Pregnant' && payload.source !== 'Born' && payload.gender === 'Female') {
+        if (!payload.intakeMatedDate || !(payload.intakeKidsCount > 0)) {
+          await showModal('For a bought pregnant doe, enter the <b>cross date</b> and <b>kids seen at scan</b>.');
+          return;
+        }
+      }
       try {
         if (editingId) {
           await api('/Goat/Update?id=' + editingId, { method: 'PUT', body: JSON.stringify(payload) });
@@ -1266,6 +1353,8 @@ const GoatRecords = (() => {
     initEditableDropdown('f-owner', 'Lookup.Owners', opts.ownerSeed || []);
     initEditableDropdown('f-health', 'Lookup.HealthStates');
     if (FarmPerms.can('herd', 'add') || FarmPerms.can('herd', 'edit')) loadParentOptions();
+    applySourcePriceState();
+    if (FarmPerms.can('finance', 'view')) loadPurchaseAccounts();
   }
 
   function renderBulk() {
@@ -1673,7 +1762,12 @@ const GoatRecords = (() => {
             <div class="lbl"><span class="dot" style="background:${c.col}"></span>${c.l}</div></div>`).join('');
       }
       const low = document.getElementById('lowAlert');
-      if (low) low.innerHTML = '';
+      if (low) {
+        const lowNames = (data.lowStockItems || []).map(x => esc(x.displayName));
+        low.innerHTML = lowNames.length
+          ? `<div class="note" style="margin:0 0 10px 0;border-color:var(--red)"><b>${lowNames.length} low in store:</b> ${lowNames.join(', ')}</div>`
+          : '';
+      }
       const auto = document.getElementById('autoInfo');
       if (auto && data.feedSettings) auto.innerHTML = data.feedSettings.autoInfoHtml || '';
       const reorder = document.getElementById('reorderNote');
@@ -1789,7 +1883,7 @@ const GoatRecords = (() => {
       if (pfm) pfm.innerHTML = data.planFodderModeHtml || '';
 
       let buyHtml = (data.buyingList || []).map(b =>
-        `<tr><td>${esc(b.displayName)}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : ''}</td>
+        `<tr><td>${esc(b.displayName)}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : '<div class="name">net to buy after store stock</div>'}</td>
           <td class="num-cell hide-sm">${b.kgPerDay.toFixed(1)}</td>
           <td class="num-cell">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
           <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>' : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
@@ -1870,7 +1964,7 @@ const GoatRecords = (() => {
         `<tr><td>${esc(s.displayName)}${s.isLowStock ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
           <td class="num-cell hide-sm"><span class="breed">${Math.round(s.purchasedKg || 0).toLocaleString('en-US')} kg</span></td>
           <td class="num-cell hide-sm"><span class="breed">${Math.round(s.usedKg || 0).toLocaleString('en-US')} kg</span></td>
-          <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${esc(s.feedType)}" value="${esc(s.stockKg)}"
+          <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${esc(s.feedType)}" value="${Number(s.stockKg ?? 0).toFixed(1)}"
             style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
           <td class="num-cell">${(+s.kgPerDay).toFixed(1)} kg</td>
           <td class="num-cell" style="${esc(s.daysLeftColor)}">${esc(s.daysLeftText)}</td>
@@ -2890,7 +2984,12 @@ const GoatRecords = (() => {
 
     function reloadFinanceWithToast(message, date) {
       sessionStorage.setItem('goatToast', message);
-      location.href = financeUrl(date);
+      const tab = document.querySelector('#finance-tabs .tab.active')?.dataset.fintab || 'overview';
+      const month = date ? date.slice(0, 7) : (document.getElementById('finMonth')?.value || '');
+      let url = '/Finance';
+      if (month) url += '?month=' + encodeURIComponent(month);
+      if (tab) url += (month ? '&' : '?') + 'tab=' + encodeURIComponent(tab);
+      location.href = url;
     }
 
     function requireFinAccount(selectId) {
@@ -3321,6 +3420,50 @@ const GoatRecords = (() => {
       });
     });
 
+    async function promptPayrollPayment(employeeId, kind, defaultAmount) {
+      if (!FarmPerms.guardAddEdit('finance', false)) return;
+      const row = document.querySelector(`#payRows tr[data-pay-emp="${employeeId}"]`);
+      const name = row?.dataset.payName || 'employee';
+      const payMonth = document.getElementById('pay-month')?.value || document.getElementById('finMonth')?.value || '';
+      const amtStr = await showModal(`${kind === 'advance' ? 'Advance' : 'Pay salary'} — ${name}\nAmount (Rs):`, { prompt: true, defaultValue: String(defaultAmount || '') });
+      if (amtStr == null) return;
+      const amount = +amtStr || 0;
+      if (amount <= 0) { await showModal('Enter a positive amount'); return; }
+      const dateStr = await showModal('Payment date (yyyy-mm-dd):', { prompt: true, defaultValue: new Date().toISOString().slice(0, 10) });
+      if (dateStr == null) return;
+      const accountId = requireFinAccount('pay-account') || requireFinAccount('i-account') || requireFinAccount('fin-relink-account');
+      if (!accountId) { await showModal('Select Paid from on the Salaries tab (or Transactions).'); return; }
+      const note = await showModal('Note (optional):', { prompt: true, defaultValue: '', cancelText: 'Skip' });
+      try {
+        await api('/Finance/RecordPayrollPayment', {
+          method: 'POST',
+          body: JSON.stringify({
+            employeeId: +employeeId,
+            month: payMonth,
+            date: dateStr,
+            amount,
+            accountId,
+            kind,
+            note: note?.trim() || null
+          })
+        });
+        reloadFinanceWithToast(kind === 'advance' ? 'Advance recorded' : 'Salary paid');
+      } catch { /* api shows error */ }
+    }
+
+    document.getElementById('payRows')?.addEventListener('click', e => {
+      const adv = e.target.closest('[data-advemp]');
+      const pay = e.target.closest('[data-payemp]');
+      if (adv) {
+        e.preventDefault();
+        promptPayrollPayment(adv.dataset.advemp, 'advance', +adv.dataset.bal || 0);
+      }
+      if (pay) {
+        e.preventDefault();
+        promptPayrollPayment(pay.dataset.payemp, 'salary', +pay.dataset.bal || 0);
+      }
+    });
+
     document.getElementById('addRecur')?.addEventListener('click', async () => {
       if (!FarmPerms.guardAddEdit('finance', !!editingRecurId)) return;
       const name = document.getElementById('rc-name').value.trim();
@@ -3419,14 +3562,25 @@ const GoatRecords = (() => {
       if (raw) healthData = JSON.parse(raw);
     } catch (e) { /* keep empty accounts */ }
 
+    function moneyAccountOptions(emptyLabel) {
+      return `<option value="">${esc(emptyLabel)}</option>` +
+        (healthData.moneyAccounts || []).map(a =>
+          `<option value="${esc(a.id)}">${esc(a.name)} · ${rs(a.balance || 0)}</option>`).join('');
+    }
+
     function fillVaccAccountSelect() {
       const el = document.getElementById('vb-account');
       if (!el) return;
       const cur = el.value;
-      const opts = '<option value="">Select Cash / Bank account...</option>' +
-        (healthData.moneyAccounts || []).map(a =>
-          `<option value="${esc(a.id)}">${esc(a.name)} · ${rs(a.balance || 0)}</option>`).join('');
-      el.innerHTML = opts;
+      el.innerHTML = moneyAccountOptions('Select Cash / Bank account...');
+      if ([...el.options].some(o => o.value === cur)) el.value = cur;
+    }
+
+    function fillTrAccountSelect() {
+      const el = document.getElementById('tr-account');
+      if (!el) return;
+      const cur = el.value;
+      el.innerHTML = moneyAccountOptions('— if cost > 0 —');
       if ([...el.options].some(o => o.value === cur)) el.value = cur;
     }
 
@@ -3815,6 +3969,53 @@ const GoatRecords = (() => {
       reloadHealthWithToast('Vaccination marked done');
     });
 
+    document.getElementById('tr-save')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('vaccines', false)) return;
+      const tag = document.getElementById('tr-tag')?.value.trim();
+      if (!tag) { await showModal('Enter a goat tag.'); return; }
+      const dx = document.getElementById('tr-dx')?.value.trim();
+      const med = document.getElementById('tr-med')?.value.trim();
+      if (!dx || !med) { await showModal('Enter diagnosis and medicine.'); return; }
+      const cost = +document.getElementById('tr-cost')?.value || 0;
+      const accountId = document.getElementById('tr-account')?.value ? +document.getElementById('tr-account').value : null;
+      if (cost > 0 && !(accountId > 0)) {
+        await showModal('Choose <b>Paid from</b> when treatment cost is greater than zero.');
+        return;
+      }
+      let goat;
+      try {
+        goat = await api('/Goat/GetByTag?tag=' + encodeURIComponent(tag));
+      } catch { return; }
+      const wdRaw = document.getElementById('tr-wd')?.value;
+      const withdrawalDays = wdRaw === '' || wdRaw === undefined ? null : (+wdRaw || 0);
+      try {
+        await api('/Vaccine/SaveTreatment', {
+          method: 'POST',
+          body: JSON.stringify({
+            goatId: goat.id,
+            startDate: document.getElementById('tr-start')?.value || new Date().toISOString().slice(0, 10),
+            diagnosis: dx,
+            medicine: med,
+            cost,
+            withdrawalDays,
+            accountId: cost > 0 ? accountId : null,
+            healthStateLabel: 'Under treatment'
+          })
+        });
+        reloadHealthWithToast('Treatment recorded');
+      } catch { /* api toast */ }
+    });
+
+    document.getElementById('tr-active-rows')?.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-tr-finish]');
+      if (!btn || !FarmPerms.can('vaccines', 'edit')) return;
+      const id = btn.getAttribute('data-tr-finish');
+      const confirmed = await showConfirm('Mark this treatment finished and the goat recovered?');
+      if (!confirmed) return;
+      await api('/Vaccine/RecoverTreatment?id=' + encodeURIComponent(id), { method: 'POST' });
+      reloadHealthWithToast('Treatment finished');
+    });
+
     document.querySelectorAll('#reminderRows tr.reminder-row').forEach(row => {
       row.addEventListener('click', () => loadRemForEdit(row));
     });
@@ -3839,6 +4040,7 @@ const GoatRecords = (() => {
     initEditableDropdown('vb-name', 'Lookup.VaccineNames');
     initEditableDropdown('vb-unit', 'Lookup.VaccineUnits');
     fillVaccAccountSelect();
+    fillTrAccountSelect();
     document.getElementById('vb-payment')?.addEventListener('change', syncVaccPayFields);
     document.getElementById('vb-amt')?.addEventListener('input', () => {
       const status = document.getElementById('vb-payment')?.value || 'paid';

@@ -86,9 +86,11 @@ public class FeedService : IFeedService
 
 
 
-        var prices = await GetPriceDictionaryAsync(cancellationToken);
+        var prices = await GetEffectivePriceDictionaryAsync(cancellationToken);
 
         var feedCatalog = await GetFeedCatalogAsync(cancellationToken);
+        var herd = await LoadHerdSnapshotAsync(cancellationToken);
+        var customGroups = await _context.CustomFeedingGroups.AsNoTracking().OrderBy(g => g.Name).ToListAsync(cancellationToken);
 
         var mixFeedKeys = MixRecipeHelper.MixFeedKeys(
 
@@ -106,7 +108,7 @@ public class FeedService : IFeedService
 
         var fodderMatches = await LoadFodderMatchesAsync(fodderPoolDto, cancellationToken);
         var fodderFinanceRefs = await LoadFodderFinanceRefsAsync(cancellationToken);
-        var fodderPoolVm = BuildFodderPoolViewModel(fodderPoolDto, plans, fodderMatches, fodderFinanceRefs, month);
+        var fodderPoolVm = BuildFodderPoolViewModel(fodderPoolDto, plans, fodderMatches, fodderFinanceRefs, month, herd, customGroups);
 
         var feedSettingsVm = BuildFeedSettingsViewModel(feedSettings);
 
@@ -136,7 +138,7 @@ public class FeedService : IFeedService
 
                 DisplayName = p.DisplayName,
 
-                PricePerKg = p.PricePerKg,
+                PricePerKg = prices.GetValueOrDefault(p.FeedType, p.PricePerKg),
 
                 StockKg = p.StockKg,
 
@@ -158,12 +160,13 @@ public class FeedService : IFeedService
 
         var mixRecipeVm = BuildMixRecipeItems(legacyRecipe, mixFeedKeys, feedCatalog, prices);
 
-        var herd = await LoadHerdSnapshotAsync(cancellationToken);
-        var customGroups = await _context.CustomFeedingGroups.AsNoTracking().OrderBy(g => g.Name).ToListAsync(cancellationToken);
         var directPlans = await LoadDirectPlansAsync(cancellationToken);
         var moneyAccounts = await LoadMoneyAccountsAsync(cancellationToken);
 
-        var dailyUse = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, activeMonths);
+        var kidDietState = await LoadKidMilkDietAsync(cancellationToken);
+        var dailyUse = AugmentDailyUseWithKidDiet(
+            BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, activeMonths),
+            herd, kidDietState.Months, allRecipes, mixFeedKeys);
 
         var stockFeeds = feedCatalog.Where(f => FeedTypes.IsPurchasable(f.FeedType)).ToList();
 
@@ -347,7 +350,8 @@ public class FeedService : IFeedService
 
 
 
-        var buying = BuildBuyingList(plans, allRecipes, prices, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, activeMonths);
+        var buying = BuildBuyingList(plans, allRecipes, prices, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, activeMonths,
+            stock.ToDictionary(s => s.FeedType, s => s.StockKg, StringComparer.OrdinalIgnoreCase), dailyUse);
 
         var buyingTotalKg = buying.Where(b => !b.IsOwnLand).Sum(b => b.KgPerMonth);
 
@@ -375,7 +379,7 @@ public class FeedService : IFeedService
         {
             FeedType = p.FeedType,
             DisplayName = p.DisplayName,
-            PricePerKg = p.PricePerKg,
+            PricePerKg = prices.GetValueOrDefault(p.FeedType, p.PricePerKg),
             StockKg = p.StockKg,
             UseType = string.IsNullOrWhiteSpace(p.UseType) ? FeedTypes.UseRecipe : p.UseType
         }).ToList();
@@ -693,7 +697,9 @@ public class FeedService : IFeedService
         var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
         var month = MonthHelper.CurrentMonthKey();
-        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
+        var herd = await LoadHerdSnapshotAsync(cancellationToken);
+        var customGroups = await _context.CustomFeedingGroups.AsNoTracking().OrderBy(g => g.Name).ToListAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month, herd, customGroups);
 
     }
 
@@ -742,7 +748,9 @@ public class FeedService : IFeedService
         var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
         var month = MonthHelper.CurrentMonthKey();
-        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
+        var herd = await LoadHerdSnapshotAsync(cancellationToken);
+        var customGroups = await _context.CustomFeedingGroups.AsNoTracking().OrderBy(g => g.Name).ToListAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month, herd, customGroups);
 
     }
 
@@ -783,7 +791,9 @@ public class FeedService : IFeedService
         var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
         var month = MonthHelper.CurrentMonthKey();
-        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
+        var herd = await LoadHerdSnapshotAsync(cancellationToken);
+        var customGroups = await _context.CustomFeedingGroups.AsNoTracking().OrderBy(g => g.Name).ToListAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month, herd, customGroups);
 
     }
 
@@ -805,7 +815,9 @@ public class FeedService : IFeedService
         var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         var refs = await LoadFodderFinanceRefsAsync(cancellationToken);
         var month = MonthHelper.CurrentMonthKey();
-        return BuildFodderPoolViewModel(dto, plans, matches, refs, month);
+        var herd = await LoadHerdSnapshotAsync(cancellationToken);
+        var customGroups = await _context.CustomFeedingGroups.AsNoTracking().OrderBy(g => g.Name).ToListAsync(cancellationToken);
+        return BuildFodderPoolViewModel(dto, plans, matches, refs, month, herd, customGroups);
 
     }
 
@@ -1451,7 +1463,12 @@ public class FeedService : IFeedService
 
     public decimal CalculateFarmFeedMonthly() => CalculateFarmFeedMonthlyInternal(feedOnly: true);
 
-
+    public async Task<decimal> GetFeedStockBookValueAsync(CancellationToken cancellationToken = default)
+    {
+        var prices = await GetEffectivePriceDictionaryAsync(cancellationToken);
+        var rows = await _context.FeedPrices.AsNoTracking().ToListAsync(cancellationToken);
+        return rows.Sum(f => f.StockKg * prices.GetValueOrDefault(f.FeedType, f.PricePerKg));
+    }
 
     public decimal CalculateFarmMedicineMonthly() => 0;
 
@@ -1503,7 +1520,7 @@ public class FeedService : IFeedService
 
         var feedSettings = await LoadFeedSettingsDtoAsync(cancellationToken);
 
-        var prices = await GetPriceDictionaryAsync(cancellationToken);
+        var prices = await GetEffectivePriceDictionaryAsync(cancellationToken);
 
         var feedCatalog = await GetFeedCatalogAsync(cancellationToken);
 
@@ -1521,8 +1538,11 @@ public class FeedService : IFeedService
 
         var directPlans = await LoadDirectPlansAsync(cancellationToken);
         var seasonAsOf = DateOnly.FromDateTime(DateTime.Today);
+        var kidDietState = await LoadKidMilkDietAsync(cancellationToken);
 
-        var dailyUse = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, feedSettings.ActiveMonthsByFeed);
+        var dailyUse = AugmentDailyUseWithKidDiet(
+            BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, feedSettings.ActiveMonthsByFeed),
+            herd, kidDietState.Months, allRecipes, mixFeedKeys);
 
         var stockFeeds = feedCatalog.Where(f => FeedTypes.IsPurchasable(f.FeedType)).ToList();
 
@@ -1971,7 +1991,9 @@ public class FeedService : IFeedService
         IReadOnlyList<FeedPlan> plans,
         IReadOnlyDictionary<string, FodderFinanceMatch?> financeMatches,
         IReadOnlySet<string> financeRefs,
-        string monthKey)
+        string monthKey,
+        IReadOnlyList<HerdSnap>? herd = null,
+        IReadOnlyList<CustomFeedingGroup>? customGroups = null)
 
     {
 
@@ -1979,19 +2001,24 @@ public class FeedService : IFeedService
 
         var daily = FodderPoolHelper.DailyTotalForMonth(dto, monthKey);
 
-        var heads = StatusOrder.Sum(st => _goatService.CountByStatus(st));
+        customGroups ??= [];
+        var heads = herd is not null
+            ? FeedPlanHeadcount(herd, customGroups)
+            : StatusOrder.Sum(st => _goatService.CountByStatus(st));
 
-        var kgDay = StatusOrder.Sum(st =>
-
-        {
-
-            var n = _goatService.CountByStatus(st);
-
-            var plan = plans.FirstOrDefault(p => p.StatusKey == st);
-
-            return plan is null ? 0 : plan.FodderKgPerDay * n;
-
-        });
+        var kgDay = herd is not null
+            ? StatusOrder.Sum(st =>
+            {
+                var n = CountFeedPlan(herd, st);
+                var plan = plans.FirstOrDefault(p => p.StatusKey == st);
+                return plan is null ? 0 : plan.FodderKgPerDay * n;
+            }) + customGroups.Sum(g => g.FodderKgPerDay * CountCustomGroup(herd, g.Id))
+            : StatusOrder.Sum(st =>
+            {
+                var n = _goatService.CountByStatus(st);
+                var plan = plans.FirstOrDefault(p => p.StatusKey == st);
+                return plan is null ? 0 : plan.FodderKgPerDay * n;
+            });
 
 
 
@@ -2217,6 +2244,24 @@ public class FeedService : IFeedService
 
 
 
+    private async Task<Dictionary<string, decimal>> GetEffectivePriceDictionaryAsync(CancellationToken cancellationToken)
+    {
+        var catalog = await GetPriceDictionaryAsync(cancellationToken);
+        var buyAgg = await _context.FeedPurchases.AsNoTracking()
+            .GroupBy(p => p.FeedType)
+            .Select(g => new { FeedType = g.Key, Kg = g.Sum(x => x.Kg), Amt = g.Sum(x => x.Amount) })
+            .ToListAsync(cancellationToken);
+        var result = new Dictionary<string, decimal>(catalog, StringComparer.OrdinalIgnoreCase);
+        foreach (var ag in buyAgg)
+        {
+            if (ag.Kg > 0)
+                result[ag.FeedType] = Math.Round(ag.Amt / ag.Kg, 2);
+        }
+        return result;
+    }
+
+
+
     private async Task<Dictionary<string, decimal>> GetPurchasedTotalsAsync(CancellationToken cancellationToken) =>
 
         await _context.FeedPurchases.AsNoTracking()
@@ -2240,6 +2285,39 @@ public class FeedService : IFeedService
             .ToDictionaryAsync(x => x.FeedType, x => x.Total, cancellationToken);
 
 
+
+    private static Dictionary<string, decimal> AugmentDailyUseWithKidDiet(
+        IReadOnlyDictionary<string, decimal> daily,
+        IReadOnlyList<HerdSnap> herd,
+        IReadOnlyList<KidMilkMonthViewModel> months,
+        IReadOnlyDictionary<string, Dictionary<string, decimal>> allRecipes,
+        IReadOnlyList<string> mixFeedKeys)
+    {
+        var kg = daily.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+        if (months.Count == 0) return kg;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var starter = allRecipes.GetValueOrDefault(FeedTypes.KidStarter)
+            ?? new Dictionary<string, decimal>(MixRecipeHelper.DefaultKidStarterRecipe, StringComparer.OrdinalIgnoreCase);
+        var starterTotal = MixRecipeHelper.MixTotalKg(starter, mixFeedKeys);
+        foreach (var g in herd.Where(OnMilkDiet))
+        {
+            var age = AgeDaysOn(g, today);
+            var i = KidMilkDietHelper.BandForAge(age);
+            if (i < 0 || i >= months.Count) continue;
+            var m = months[i];
+            var (pMul, _) = KidMilkDietHelper.MilkTypeFactors(g.KidMilkType);
+            kg[FeedTypes.MilkPowder] = kg.GetValueOrDefault(FeedTypes.MilkPowder) + m.PowderG / 1000m * pMul;
+            kg[FeedTypes.Fodder] = kg.GetValueOrDefault(FeedTypes.Fodder) + m.GreenG / 1000m;
+            kg[FeedTypes.FodderDry] = kg.GetValueOrDefault(FeedTypes.FodderDry) + m.DryG / 1000m;
+            var mixKg = m.MixG / 1000m;
+            if (mixKg > 0 && starterTotal > 0)
+            {
+                foreach (var key in mixFeedKeys)
+                    kg[key] = kg.GetValueOrDefault(key) + mixKg * (starter.GetValueOrDefault(key) / starterTotal);
+            }
+        }
+        return kg;
+    }
 
     private IReadOnlyDictionary<string, decimal> BuildDailyUseMap(
         IReadOnlyList<FeedPlan> plans,
@@ -2351,15 +2429,27 @@ public class FeedService : IFeedService
 
                 var du = dailyUse.GetValueOrDefault(s.FeedType);
 
-                if (du <= 0 || s.StockKgFull <= 0) return null;
-
-                var minLevel = s.StockKgFull * 0.2m;
-
-                var daysToMin = (int)Math.Floor((s.StockKg - minLevel) / du);
+                if (du <= 0) return null;
 
                 var daysOut = (int)Math.Floor(s.StockKg / du);
 
-                return new { s.FeedType, s.DisplayName, DaysToMinimum = daysToMin, DaysUntilEmpty = daysOut };
+                if (s.StockKgFull > 0)
+
+                {
+
+                    var minLevel = s.StockKgFull * 0.2m;
+
+                    var daysToMin = (int)Math.Floor((s.StockKg - minLevel) / du);
+
+                    if (daysToMin > 21) return null;
+
+                    return new { s.FeedType, s.DisplayName, DaysToMinimum = daysToMin, DaysUntilEmpty = daysOut };
+
+                }
+
+                if (daysOut >= 21) return null;
+
+                return new { s.FeedType, s.DisplayName, DaysToMinimum = daysOut, DaysUntilEmpty = daysOut };
 
             })
 
@@ -2371,7 +2461,7 @@ public class FeedService : IFeedService
 
 
 
-        if (soon is null || soon.DaysToMinimum > 21) return null;
+        if (soon is null) return null;
 
 
 
@@ -2421,7 +2511,8 @@ public class FeedService : IFeedService
 
             feedSettings.OpeningStockByFeed.TryGetValue(f.FeedType, out var opening);
 
-            var st = FeedStockHelper.BookKg(opening, purchased, used);
+            var book = FeedStockHelper.BookKg(opening, purchased, used);
+            var st = Math.Max(book, f.StockKg);
 
             var du = dailyUse.GetValueOrDefault(f.FeedType, 0);
 
@@ -2451,7 +2542,7 @@ public class FeedService : IFeedService
 
             var pct = f.StockKgFull > 0 ? st / f.StockKgFull : (decimal?)null;
 
-            var isLow = pct is <= 0.2m;
+            var isLow = (pct is <= 0.2m) || (du > 0 && days is < 14);
 
 
 
@@ -2537,17 +2628,25 @@ public class FeedService : IFeedService
         IReadOnlyList<FeedPrice> catalog,
         Dictionary<string, Dictionary<string, decimal>> directPlans,
         DateOnly asOfDate,
-        IReadOnlyDictionary<string, int[]>? activeMonthsByFeed = null)
+        IReadOnlyDictionary<string, int[]>? activeMonthsByFeed = null,
+        IReadOnlyDictionary<string, decimal>? stockKgByType = null,
+        IReadOnlyDictionary<string, decimal>? dailyUseOverride = null)
     {
-        var daily = BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, catalog, directPlans, asOfDate, activeMonthsByFeed);
+        var daily = dailyUseOverride ?? AugmentDailyUseWithKidDiet(
+            BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, catalog, directPlans, asOfDate, activeMonthsByFeed),
+            herd, [], allRecipes, mixFeedKeys);
         var nameByType = catalog.ToDictionary(f => f.FeedType, f => f.DisplayName, StringComparer.OrdinalIgnoreCase);
+        stockKgByType ??= new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         var rows = new List<FeedBuyingRowViewModel>();
 
         void AddRow(string key, string fallback, bool ownLand)
         {
             var d = daily.GetValueOrDefault(key);
             if (d <= 0) return;
-            var m = d * 30;
+            var grossMonth = d * 30;
+            var stockOnHand = stockKgByType.GetValueOrDefault(key);
+            var m = ownLand ? grossMonth : Math.Max(0, grossMonth - stockOnHand);
+            if (!ownLand && m <= 0) return;
             rows.Add(new FeedBuyingRowViewModel
             {
                 DisplayName = nameByType.GetValueOrDefault(key, fallback),
@@ -2671,12 +2770,12 @@ public class FeedService : IFeedService
 
     private sealed record HerdSnap(
         int Id, GoatStatus Status, DateOnly? WeanDate, YoungGoatClass YoungClass,
-        int? CustomFeedingGroupId, DateOnly EventDate, DateOnly? DateOfBirth, GoatSource Source);
+        int? CustomFeedingGroupId, DateOnly EventDate, DateOnly? DateOfBirth, GoatSource Source, KidMilkType KidMilkType);
 
     private async Task<List<HerdSnap>> LoadHerdSnapshotAsync(CancellationToken cancellationToken) =>
         await _context.Goats.AsNoTracking()
             .Where(g => !g.IsArchived)
-            .Select(g => new HerdSnap(g.Id, g.Status, g.WeanDate, g.YoungClass, g.CustomFeedingGroupId, g.EventDate, g.DateOfBirth, g.Source))
+            .Select(g => new HerdSnap(g.Id, g.Status, g.WeanDate, g.YoungClass, g.CustomFeedingGroupId, g.EventDate, g.DateOfBirth, g.Source, g.KidMilkType))
             .ToListAsync(cancellationToken);
 
     private static bool OnMilkDiet(HerdSnap g) => g.Status == GoatStatus.Kid && g.WeanDate is null;
@@ -3071,9 +3170,10 @@ public class FeedService : IFeedService
             var age = AgeDaysOn(g, today);
             var i = KidMilkDietHelper.BandForAge(age);
             var m = months[i];
+            var (pMul, mMul) = KidMilkDietHelper.MilkTypeFactors(g.KidMilkType);
             counts[i]++;
-            powder += m.PowderG / 1000m;
-            mother += m.MotherMilkMl / 1000m;
+            powder += m.PowderG / 1000m * pMul;
+            mother += m.MotherMilkMl / 1000m * mMul;
             mix += m.MixG / 1000m;
             green += m.GreenG / 1000m;
             dry += m.DryG / 1000m;
@@ -3147,14 +3247,15 @@ public class FeedService : IFeedService
             foreach (var g in herdAll)
             {
                 if (!EligibleKidOn(g, day)) continue;
-                var goatSnap = new HerdSnap(g.Id, g.Status, g.WeanDate, g.YoungClass, g.CustomFeedingGroupId, g.EventDate, g.DateOfBirth, g.Source);
+                var goatSnap = new HerdSnap(g.Id, g.Status, g.WeanDate, g.YoungClass, g.CustomFeedingGroupId, g.EventDate, g.DateOfBirth, g.Source, g.KidMilkType);
                 var age = AgeDaysOn(goatSnap, day);
                 var i = KidMilkDietHelper.BandForAge(age);
                 var m = months[i];
+                var (pMul, mMul) = KidMilkDietHelper.MilkTypeFactors(g.KidMilkType);
                 kids++;
                 counts[i]++;
-                powder += m.PowderG / 1000m;
-                mother += m.MotherMilkMl / 1000m;
+                powder += m.PowderG / 1000m * pMul;
+                mother += m.MotherMilkMl / 1000m * mMul;
                 mix += m.MixG / 1000m;
                 green += m.GreenG / 1000m;
                 dry += m.DryG / 1000m;

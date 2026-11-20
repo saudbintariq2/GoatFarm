@@ -239,25 +239,25 @@
     const g = profile.goat;
     const gens = cardState.gens;
     const src = g.source === 'Born' ? 'born on farm' : 'bought';
-    let html = `<div class="breed">${esc(g.breed)} · ${esc(g.gender)} · ${esc(g.ageLabel)} old · ${src}`;
+    let html = `<div class="goat-card-lead breed">${esc(g.breed)} · ${esc(g.gender)} · ${esc(g.ageLabel)} old · ${src}`;
     if (g.owner) html += ` · owner ${esc(g.owner)}`;
     html += '</div>';
     if (g.kidStageLine) {
       html += `<div class="name v207-stage" style="color:${esc(g.kidStageColor || 'var(--ink-soft)')};font-weight:700">${esc(g.kidStageLine)}</div>`;
     }
-    html += `<div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
-      <div style="font-weight:700">Family tree</div>
+    html += `<div class="goat-card-section-head" style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <div class="goat-card-h">Family tree</div>
       <div class="filterbar" style="gap:4px;display:flex">
         ${[3, 4, 5].map(n => `<button type="button" class="btn btn-ghost btn-sm" data-gens="${n}" style="${gens === n ? 'background:var(--green);color:#fff;border-color:var(--green)' : ''}">${n} generations</button>`).join('')}
       </div></div>
-      <div style="background:#FCFDFB;border:1px solid var(--line);border-radius:12px;padding:12px 8px;overflow-x:auto" id="gmPedigreeWrap">${pedigreeSvg(profile.subjectGoatId, profile, gens)}</div>
-      <div class="breed" style="font-size:12px">Tap any box to open that goat. Dashed boxes are ancestors not yet recorded.
+      <div class="goat-card-pedigree" style="background:#FCFDFB;border:1px solid var(--line);border-radius:12px;padding:12px 8px;overflow-x:auto" id="gmPedigreeWrap">${pedigreeSvg(profile.subjectGoatId, profile, gens)}</div>
+      <div class="breed goat-card-hint">Tap any box to open that goat. Dashed boxes are ancestors not yet recorded.
       ${g.isArchived ? '' : `<a href="#" id="editParents" style="color:var(--green-dark);font-weight:700;margin-left:6px">Edit parents</a>`}</div>`;
 
     if (profile.siblings?.length) {
-      html += `<div style="font-weight:700;margin-top:6px">Brothers &amp; sisters (${profile.siblings.length})</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${profile.siblings.map(k =>
-        `<span style="background:var(--green-tint);border-radius:8px;padding:4px 9px;font-size:13px">
+      html += `<div class="goat-card-h" style="margin-top:10px">Brothers &amp; sisters (${profile.siblings.length})</div>
+        <div class="goat-card-siblings">${profile.siblings.map(k =>
+        `<span class="goat-card-sib">
           <a href="#" data-goatcard="${k.id}" style="color:var(--green-dark);font-weight:700;text-decoration:none">${esc(k.tag)}</a>
           <span class="breed">${k.gender === 'Male' ? '♂' : '♀'} ${esc(k.birthDateDisplay)}${k.twin ? ' · twin' : ''}</span></span>`).join('')}</div>`;
     }
@@ -267,28 +267,28 @@
       const live = kd.reduce((a, k) => a + (k.liveKids || 0), 0);
       const before = Math.max(0, +g.kiddingsBeforePurchase || 0);
       const canEditKbp = FarmPerms.can('herd', 'edit');
-      html += `<div style="font-weight:700;margin-top:6px">Breeding record</div>
-        <div class="breed">${kd.length} birth(s) on farm · ${before} before purchase · ${live} kids born alive here · ${profile.emptyScanCount || 0} empty scan(s) · ${profile.abortionCount || 0} abortion(s)</div>
+      html += `<div class="goat-card-h" style="margin-top:10px">Breeding record</div>
+        <div class="breed goat-card-lead">${kd.length} birth(s) on farm · ${before} before purchase · ${live} kids born alive here · ${profile.emptyScanCount || 0} empty scan(s) · ${profile.abortionCount || 0} abortion(s)</div>
         <div class="field" style="margin-top:8px;max-width:240px">
           <label for="gmKiddingsBefore">Kiddings before purchase</label>
           <input type="number" id="gmKiddingsBefore" min="0" step="1" value="${before}"${canEditKbp ? '' : ' disabled'}>
-          <span class="breed" style="font-size:11px;display:block;margin-top:4px">Used in herd kiddings total (here + before purchase).</span>
+          <span class="breed goat-card-hint">Used in herd kiddings total (here + before purchase).</span>
         </div>`;
       if (kd.length) {
-        html += `<table class="tbl" style="margin-top:6px"><thead><tr><th>Date</th><th>Sire</th><th class="num-cell">Alive</th><th class="num-cell">Still</th></tr></thead><tbody>
+        html += `<table class="tbl goat-card-tbl" style="margin-top:8px"><thead><tr><th>Date</th><th>Sire</th><th class="num-cell">Alive</th><th class="num-cell">Still</th></tr></thead><tbody>
           ${kd.map(k => `<tr><td>${esc(k.dateDisplay)}</td><td>${k.sireGoatId ? `<a href="#" data-goatcard="${k.sireGoatId}">${esc(k.sireTag || '—')}</a>` : esc(k.sireTag || '—')}</td>
           <td class="num-cell">${k.liveKids}</td><td class="num-cell">${k.stillborn || 0}</td></tr>`).join('')}</tbody></table>`;
       }
     } else if (g.gender === 'Male') {
-      html += `<div style="font-weight:700;margin-top:6px">As a sire</div><div class="breed">${profile.siredKidsCount || 0} kid(s) sired</div>`;
+      html += `<div class="goat-card-h">As a sire</div><div class="breed goat-card-lead">${profile.siredKidsCount || 0} kid(s) sired</div>`;
     }
 
     const w = profile.weights || [];
-    html += `<div style="font-weight:700;margin-top:6px">Weights</div>`;
+    html += `<div class="goat-card-h">Weights</div>`;
     html += w.length
-      ? `<div class="breed">${w.map(x => `${esc(x.dateDisplay)}: <b>${x.kg} kg</b>`).join(' · ')}</div>`
-      : '<div class="breed">None recorded.</div>';
-    if (g.comment) html += `<div style="font-weight:700;margin-top:6px">Note</div><div class="breed">${esc(g.comment)}</div>`;
+      ? `<div class="breed goat-card-lead">${w.map(x => `${esc(x.dateDisplay)}: <b>${x.kg} kg</b>`).join(' · ')}</div>`
+      : '<div class="breed goat-card-lead">None recorded.</div>';
+    if (g.comment) html += `<div class="goat-card-h">Note</div><div class="breed goat-card-lead">${esc(g.comment)}</div>`;
     return html;
   }
 
@@ -297,9 +297,7 @@
       weigh: ['herd', 'edit'], bcs: ['herd', 'edit'], status: ['herd', 'edit'], wean: ['herd', 'edit'],
       youngclass: ['herd', 'edit'], younggraduate: ['herd', 'edit'], tagone: ['herd', 'edit'], tagkids: ['herd', 'edit'],
       treat: ['vaccines', 'add'], recover: ['vaccines', 'edit'], vacc: ['vaccines', 'add'],
-      heat: ['breeding', 'add'], plancross: ['breeding', 'add'], prep: ['breeding', 'add'],
-      cross: ['breeding', 'add'], scan: ['breeding', 'edit'], kid: ['breeding', 'add'], returned: ['breeding', 'edit'],
-      unprep: ['breeding', 'edit'],
+      breeding: ['breeding', 'edit'], kid: ['breeding', 'add'],
       dryoff: ['herd', 'edit'], sell: ['finance', 'add'], death: ['herd', 'delete']
     }[act];
     if (need && !FarmPerms.can(need[0], need[1])) return '';
@@ -325,12 +323,8 @@
     if (profile.kidsToTag?.length) first += btn(`🏷 Tag her kids (${profile.kidsToTag.length})`, 'tagkids', 'btn-green');
     let breed = '';
     if (doe) {
-      if (g.matedDate && g.kidsCount) breed = btn('🍼 Record birth', 'kid', 'btn-green');
-      else if (g.matedDate) breed = btn('🔍 Scan result', 'scan', 'btn-green') + btn('🍼 Record birth', 'kid');
-      else if (g.prepCrossDate) {
-        breed = btn('↩ Not ready for cross', 'unprep') + btn('♥ Record cross', 'cross', 'btn-green') + btn('🍼 Record birth', 'kid');
-      }
-      else breed = btn('Ready for cross', 'prep') + btn('♥ Record cross', 'cross') + btn('🍼 Record birth', 'kid');
+      if (window.BreedingDoeStatus?.open) breed = btn('Change breeding status', 'breeding', 'btn-green');
+      if (g.matedDate && g.kidsCount) breed += btn('🍼 Record birth', 'kid', 'btn-green');
     }
     let extra = '';
     if (g.statusKey === 'kid' && !g.weanDate) extra += btn('🍼 Wean', 'wean', 'btn-green');
@@ -338,15 +332,11 @@
     if (g.statusKey === 'kid' && g.weanDate && g.youngClass && g.youngClass !== 'None') {
       extra += btn('→ Move to adult herd', 'younggraduate', 'btn-green');
     }
-    if (doe && !g.matedDate) {
-      extra += btn('♡ Seen in heat', 'heat') +
-        btn('📅 ' + (g.nextCrossDate ? 'Change next cross' : 'Plan next cross'), 'plancross');
-    }
-    if (doe && g.matedDate && !g.kidsCount) extra += btn('↺ Returned to heat', 'returned');
     if (g.nextStepAction === 'DryOff') extra += btn('🌙 Dry her off', 'dryoff', 'btn-green');
+    const herdStatusBtn = (doe && window.BreedingDoeStatus?.open) ? '' : btn('Status', 'status');
     box.innerHTML = first + btn('⚖ Weigh', 'weigh') + btn('◐ Condition', 'bcs') +
       (sick ? btn('✓ Recovered', 'recover', 'btn-green') : btn('⚕ Treat', 'treat')) +
-      btn('💉 Vaccinate', 'vacc') + extra + breed + btn('Status', 'status') + btn('₨ Sell', 'sell') + btn('✕ Death', 'death');
+      btn('💉 Vaccinate', 'vacc') + extra + breed + herdStatusBtn + btn('₨ Sell', 'sell') + btn('✕ Death', 'death');
   }
 
   async function refreshCard() {
@@ -1039,6 +1029,16 @@
       toast(result?.message || 'Sale recorded');
       document.getElementById('goatModal')?.classList.remove('show');
       setGoatCardOpen(false);
+      return;
+    }
+    if (act === 'breeding') {
+      if (window.BreedingDoeStatus?.open) {
+        document.getElementById('goatModal')?.classList.remove('show');
+        setGoatCardOpen(false);
+        window.BreedingDoeStatus.open(id);
+        return;
+      }
+      await modal('Open the Breeding tab to change her stage.');
       return;
     }
     if (act === 'status') {

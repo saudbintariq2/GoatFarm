@@ -427,6 +427,10 @@
     @if (isAuthenticated)
     {
         @await Html.PartialAsync("_GoatCardModals")
+        @if (visibleTabs.Contains(FarmTabs.Breeding))
+        {
+            @await Html.PartialAsync("_BreedingDoeStatusModal")
+        }
     }
 
     <div id="appModal" class="modal-overlay" aria-hidden="true">
@@ -466,6 +470,10 @@
     }
 
     <script src="~/js/goat-records.js" asp-append-version="true"></script>
+    @if (isAuthenticated && visibleTabs.Contains(FarmTabs.Breeding))
+    {
+        <script src="~/js/breeding-doe-status.js" asp-append-version="true"></script>
+    }
     <script src="~/js/goat-card.js" asp-append-version="true"></script>
 
     @if (useShell)

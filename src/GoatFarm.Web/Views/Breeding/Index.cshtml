@@ -138,7 +138,7 @@
 <div class="panel">
     <div class="panel-head"><h2>Buck workload</h2><span class="sub">do not overwork one buck</span></div>
     <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Buck</th><th class="num-cell">Does carrying now</th>
+        <table class="tbl"><thead><tr><th>Buck</th><th class="num-cell">Pregnant</th><th class="num-cell hide-sm">With buck</th>
             <th class="num-cell hide-sm">Crosses this year</th><th class="num-cell">Conception</th>
             <th class="hide-sm">Last used</th><th>Load</th></tr></thead>
             <tbody id="buckRowsToday">
@@ -147,6 +147,7 @@
                 <tr>
                     <td><a href="#" class="tag" data-goatcard="@b.Id">@b.Tag</a></td>
                     <td class="num-cell" style="font-weight:700">@b.Carrying</td>
+                    <td class="num-cell hide-sm">@b.WithBuck</td>
                     <td class="num-cell hide-sm">@b.CrossesThisYear</td>
                     <td class="num-cell" style="@b.ConceptionStyle">@b.ConceptionText</td>
                     <td class="hide-sm"><span class="breed">@(b.LastUsed ?? "—")</span></td>
@@ -155,7 +156,7 @@
             }
             @if (!Model.BuckRows.Any())
             {
-                <tr><td colspan="6" class="empty">No bucks in the herd.</td></tr>
+                <tr><td colspan="7" class="empty">No bucks in the herd.</td></tr>
             }
             </tbody></table>
     </div>
@@ -403,7 +404,7 @@
         {
             <div class="breed-buck-card">
                 <b><a href="#" class="tag" data-goatcard="@b.Id">@b.Tag</a></b>
-                <span class="breed" style="color:@b.LoadColor">@b.Carrying does carrying · @b.ConceptionText conception · @b.LoadText</span>
+                <span class="breed" style="color:@b.LoadColor">@b.WithBuck with buck · @b.Carrying pregnant · @b.ConceptionText conception · @b.LoadText</span>
                 <span class="breed" style="font-size:12px;color:@(b.BuckCheckOk ? "var(--green-dark)" : "#8a261c");font-weight:600">
                     @(b.BuckCheckOk ? "✓" : "!") @b.BuckCheckLineHtml
                     @if (!b.BuckCheckOk)
@@ -511,7 +512,7 @@
 <div class="panel">
     <div class="panel-head"><h2>Buck workload</h2><span class="sub">full detail</span></div>
     <div class="panel-body">
-        <table class="tbl"><thead><tr><th>Buck</th><th class="num-cell">Does carrying now</th>
+        <table class="tbl"><thead><tr><th>Buck</th><th class="num-cell">Pregnant</th><th class="num-cell hide-sm">With buck</th>
             <th class="num-cell hide-sm">Crosses this year</th><th class="num-cell">Conception</th>
             <th class="hide-sm">Last used</th><th>Load</th></tr></thead>
             <tbody id="buckRows">
@@ -520,6 +521,7 @@
                 <tr>
                     <td><a href="#" class="tag" data-goatcard="@b.Id">@b.Tag</a></td>
                     <td class="num-cell" style="font-weight:700">@b.Carrying</td>
+                    <td class="num-cell hide-sm">@b.WithBuck</td>
                     <td class="num-cell hide-sm">@b.CrossesThisYear</td>
                     <td class="num-cell" style="@b.ConceptionStyle">@b.ConceptionText</td>
                     <td class="hide-sm"><span class="breed">@(b.LastUsed ?? "—")</span></td>
@@ -528,7 +530,7 @@
             }
             @if (!Model.BuckRows.Any())
             {
-                <tr><td colspan="6" class="empty">No bucks in the herd.</td></tr>
+                <tr><td colspan="7" class="empty">No bucks in the herd.</td></tr>
             }
             </tbody></table>
     </div>
@@ -553,7 +555,7 @@
             }
             @if (!Model.BuckRows.Any())
             {
-                <tr><td colspan="6" class="empty">No bucks in the herd.</td></tr>
+                <tr><td colspan="7" class="empty">No bucks in the herd.</td></tr>
             }
             </tbody></table>
     </div>
@@ -712,103 +714,6 @@
     <div class="panel-body" id="doeProfileMount" style="padding-top:20px"></div>
 </div>
 
-<div class="panel" hidden aria-hidden="true">
-    <div class="panel-head"><h2>Heat &amp; cycles</h2><span class="sub">a doe returns to heat about every 21 days</span></div>
-    <div class="panel-body">
-        <div class="note" style="margin:0 0 14px 0">Tap <b>♡ Seen today</b> the moment you notice a doe in heat —
-            that is the whole job. The app then expects her again in 21 days, which is when to put her to the buck.
-            A crossed doe seen in heat did not take: tapping it here catches that three weeks before a scan would.</div>
-        <div class="filterbar" style="margin-bottom:12px">
-            <div class="field"><label class="hide-sm">Show</label>
-                <select id="heatFilter">
-                    <option value="active">Does that can cycle</option>
-                    <option value="due">Expected in heat now</option>
-                    <option value="seen">Only ones I have recorded</option>
-                    <option value="all">Every doe</option>
-                </select></div>
-            <span class="count-pill" id="heatCount">@Model.HeatRows.Count doe(s)</span>
-        </div>
-        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Status</th><th>Last seen</th>
-            <th class="hide-sm">Next expected</th><th class="num-cell">In</th>
-            <th class="num-cell hide-sm">Times</th><th style="width:120px"></th></tr></thead>
-            <tbody id="heatRows">
-            @foreach (var h in Model.HeatRows)
-            {
-                var canCycle = !(h.CrossedNote is not null);
-                <tr data-heat-row data-doe-profile="@h.Id" data-can-cycle="@(canCycle ? "1" : "0")" data-times="@h.Times" data-in="@h.InText">
-                    <td><a href="#" class="tag" data-doe-profile="@h.Id">@h.Tag</a></td>
-                    <td class="hide-sm">
-                        <span class="chip @h.StatusCssClass">@h.StatusDisplay</span>
-                        @if (h.CrossedNote is not null)
-                        {
-                            <div class="name" style="color:var(--blue)">@h.CrossedNote</div>
-                        }
-                    </td>
-                    <td>@Html.Raw(h.LastSeenHtml)</td>
-                    <td class="hide-sm"><span class="breed">@(h.NextExpected ?? "—")</span></td>
-                    <td class="num-cell" style="@h.InStyle">@h.InText</td>
-                    <td class="num-cell hide-sm"><span class="breed">@h.Times</span></td>
-                    <td><button type="button" class="btn btn-ghost btn-sm" data-heat="@h.Id" style="width:100%">♡ Seen today</button></td>
-                </tr>
-            }
-            </tbody></table>
-    </div>
-</div>
-
-<div class="panel" hidden aria-hidden="true">
-    <div class="panel-head"><h2>Add a doe to breeding</h2><span class="sub">scan her tag, pick the stage</span></div>
-    <div class="panel-body">
-        <div class="add-grid" style="grid-template-columns:1.3fr 1.1fr 1fr 1fr auto">
-            <div class="field"><label for="bc-tag">Doe — scan or type tag</label><input autocomplete="off" id="bc-tag" placeholder="scan or type tag"/></div>
-            <div class="field"><label for="bc-stage">Stage</label><select id="bc-stage">
-                <option value="prep">Getting ready for cross</option>
-                <option value="cross">Already crossed</option></select></div>
-            <div class="field" id="bc-datefield" style="display:none"><label for="bc-date" id="bc-datelbl">Mating date</label><input id="bc-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")"></div>
-            <div class="field" id="bc-buckfield" style="display:none"><label for="bc-buck">Buck</label><select id="bc-buck"><option value="">—</option>
-                @foreach (var bk in Model.BuckOptions)
-                {
-                    <option value="@bk">@bk</option>
-                }
-            </select></div>
-            <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addCross">Add</button></div>
-        </div>
-        <div class="rule" id="bc-found" style="margin-top:8px"></div>
-    </div>
-</div>
-
-<div class="panel" hidden aria-hidden="true">
-    <div class="panel-head"><h2>Came back empty (not pregnant)</h2>
-        <span class="sub" id="emptyRate">@Model.EmptyRateText</span></div>
-    <div class="panel-body">
-        <div class="note" style="margin:0 0 14px 0">These does were crossed but the scan showed no kids. Keeping
-            this list is how you spot a problem — the same doe failing twice, or one buck's does failing often.</div>
-        <table class="tbl"><thead><tr><th>Doe</th><th class="hide-sm">Was mated</th><th class="hide-sm">Buck</th>
-            <th>Scan date</th><th class="num-cell">Times empty</th><th class="num-cell hide-sm">Now</th></tr></thead>
-            <tbody id="emptyRows">
-            @foreach (var row in Model.EmptyRows)
-            {
-                <tr>
-                    <td>
-                        <a href="#" class="tag" data-doe-profile="@row.Id">@row.Tag</a>
-                        @if (!string.IsNullOrEmpty(row.Name))
-                        {
-                            <div class="name">@row.Name</div>
-                        }
-                    </td>
-                    <td class="hide-sm"><span class="breed">@(row.MatedDate ?? "—")</span></td>
-                    <td class="hide-sm"><span class="breed">@(row.BuckTag ?? "—")</span></td>
-                    <td><span class="breed">@row.ScanDate</span></td>
-                    <td class="num-cell" style="@(row.TimesEmpty > 1 ? "color:#8a261c;font-weight:700" : "")">@row.TimesEmpty@(row.TimesEmpty > 1 ? " ⚠" : "")</td>
-                    <td class="num-cell hide-sm"><span class="chip @row.StatusCssClass">@row.StatusDisplay</span></td>
-                </tr>
-            }
-            @if (!Model.EmptyRows.Any())
-            {
-                <tr><td colspan="6" class="empty">No empty scans recorded. Good sign.</td></tr>
-            }
-            </tbody></table>
-    </div>
-</div>
 </section>
 
 <section class="breed-view" data-breed-view="kidding" id="breedViewKidding" hidden>
@@ -992,7 +897,7 @@
                     <span class="breed">@m.KiddedDate</span>
                     <div class="name muted small">@m.KiddedAgoText</div>
                 </td>
-                <td class="num-cell">@m.Alive alive@if (m.Born > m.Alive) { <span class="muted small"> / @m.Born born</span> }</td>
+                <td class="num-cell">@m.Alive <span class="breed">alive</span>@if (m.Born > m.Alive) { <span class="muted small"> / @m.Born born</span> }</td>
                 <td><span class="chip @m.EaseCssClass">@m.EaseDisplay</span></td>
                 <td>
                     <select class="breed-pt-sel" data-km-field="mothering" data-km-id="@m.KiddingRecordId">
@@ -1313,27 +1218,7 @@
     <partial name="_ReportsSection" for="Reports" />
 </section>
 
-<div class="goat-card-modal modal breed-st-modal" id="doeStatusModal" aria-hidden="true">
-    <div class="modal-box breed-st-sheet" role="dialog" aria-modal="true" aria-labelledby="doeStTitle">
-        <div class="modal-head breed-st-head">
-            <h2 id="doeStTitle">Change status</h2>
-            <button type="button" class="btn btn-ghost btn-sm" data-doe-st-close>Close</button>
-        </div>
-        <div class="modal-body breed-st-body">
-            <div id="doeStFrom" class="breed-st-from"></div>
-            <div class="breed-eyebrow">Move her to</div>
-            <div class="breed-st-opts" id="doeStPick"></div>
-            <div id="doeStFields"></div>
-        </div>
-        <div class="modal-foot breed-st-foot">
-            <button type="button" class="btn btn-green" id="doeStSave" disabled>Save</button>
-            <button type="button" class="btn btn-ghost" data-doe-st-close>Cancel</button>
-        </div>
-    </div>
-</div>
-
 @section Scripts {
-<script src="~/js/breeding-doe-status.js" asp-append-version="true"></script>
 <script src="~/js/breeding-page.js" asp-append-version="true"></script>
 <script>GoatRecords.initBreeding();</script>
 }

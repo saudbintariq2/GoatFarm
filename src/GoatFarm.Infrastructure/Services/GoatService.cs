@@ -221,6 +221,8 @@ public class GoatService : IGoatService
         await ApplyAsync(goat, model, cancellationToken);
         _context.Goats.Add(goat);
         await _context.SaveChangesAsync(cancellationToken);
+        if (model.Source == GoatSource.Bought && model.PurchasePrice > 0 && model.PaidFromAccountId is > 0)
+            await RecordPurchasePaymentAsync(goat, model, cancellationToken);
         return MapGoat(goat);
     }
 
@@ -256,7 +258,21 @@ public class GoatService : IGoatService
         goat.Comment = string.IsNullOrWhiteSpace(model.Comment) ? null : model.Comment.Trim();
         goat.Breed = model.Breed;
         goat.Gender = model.Gender;
-        if (PregnancyRules.IsConfirmedPregnant(goat))
+        var isCreate = goat.Id == 0;
+        if (isCreate && model.Status == GoatStatus.Pregnant && model.Source == GoatSource.Bought)
+        {
+            if (model.Gender != GoatGender.Female)
+                throw new InvalidOperationException("Only does can be marked pregnant.");
+            if (!model.IntakeMatedDate.HasValue || model.IntakeKidsCount is not > 0)
+                throw new InvalidOperationException("For a bought pregnant doe, enter the cross date and kids seen at scan.");
+            goat.Status = GoatStatus.Pregnant;
+            goat.MatedDate = model.IntakeMatedDate;
+            goat.KidsCount = model.IntakeKidsCount;
+            goat.BuckTag = string.IsNullOrWhiteSpace(model.IntakeBuckTag) ? null : model.IntakeBuckTag.Trim();
+            goat.UltrasoundDate = model.IntakeUltrasoundDate ?? model.EventDate;
+            goat.BreedingStage = BreedingStage.ConfirmedPregnant;
+        }
+        else if (PregnancyRules.IsConfirmedPregnant(goat))
         {
             if (model.Status is not GoatStatus.Pregnant and not GoatStatus.Meat and not GoatStatus.Sale)
                 throw new InvalidOperationException("She is confirmed pregnant — use Breeding to record birth, abortion, or clear a mistake before changing herd status.");
@@ -282,6 +298,37 @@ public class GoatService : IGoatService
         goat.SireTagText = sireText;
         goat.DamId = damId;
         goat.DamTagText = damText;
+    }
+
+    private async Task RecordPurchasePaymentAsync(Goat goat, CreateGoatViewModel model, CancellationToken cancellationToken)
+    {
+        var accountId = model.PaidFromAccountId!.Value;
+        if (!await _context.MoneyAccounts.AsNoTracking().AnyAsync(a => a.Id == accountId, cancellationToken))
+            throw new InvalidOperationException("Choose a valid cash or bank account for Paid from.");
+
+        var expense = new Expense
+        {
+            Type = "Goat purchase",
+            Amount = model.PurchasePrice,
+            Date = model.EventDate,
+            Comment = goat.Tag
+        };
+        _context.Expenses.Add(expense);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _context.LedgerTransactions.Add(new LedgerTransaction
+        {
+            Date = model.EventDate,
+            Kind = LedgerTransactionKind.Expense,
+            AccountId = accountId,
+            Amount = model.PurchasePrice,
+            Category = expense.Type,
+            Reference = $"fin-expense:{expense.Id}",
+            Notes = $"Goat purchase · {goat.Tag}",
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        });
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public const int MaxGoatAgeYears = 25;
@@ -770,8 +817,8 @@ public class GoatService : IGoatService
                 AccountId = ledgerAccountId,
                 Amount = model.Price,
                 Category = income.Type,
-                Reference = goat.Tag,
-                Notes = "Live goat sale" + (buyer is not null ? " · " + buyer : ""),
+                Reference = $"fin-income:{income.Id}",
+                Notes = "Live goat sale · " + goat.Tag + (buyer is not null ? " · " + buyer : ""),
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
             });

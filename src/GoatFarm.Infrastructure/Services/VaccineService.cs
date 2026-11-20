@@ -500,23 +500,8 @@ public class VaccineService : IVaccineService
             _ => false
         };
 
-    private static (DateOnly Date, int Days)? NextDue(Goat g, Vaccine v, IReadOnlyList<VaccinationHistory> log)
-    {
-        if (v.RuleType == VaccineRuleType.Age)
-        {
-            if (log.Any(l => l.GoatId == g.Id && l.VaccineId == v.Id)) return null;
-            var dueDate = g.EventDate.AddDays(v.Days ?? 0);
-            return (dueDate, DaysUntil(dueDate));
-        }
-
-        var last = log.Where(l => l.GoatId == g.Id && l.VaccineId == v.Id)
-            .Select(l => l.VaccinationDate)
-            .OrderByDescending(d => d)
-            .FirstOrDefault();
-        var baseDate = last == default ? DateOnly.FromDateTime(DateTime.Today) : last;
-        var nextDate = baseDate.AddDays((v.Months ?? 0) * 30);
-        return (nextDate, DaysUntil(nextDate));
-    }
+    private static (DateOnly Date, int Days)? NextDue(Goat g, Vaccine v, IReadOnlyList<VaccinationHistory> log) =>
+        VaccineDueHelper.NextDue(g, v, log, DaysUntil);
 
     private static int DaysUntil(DateOnly date)
     {

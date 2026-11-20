@@ -73,6 +73,14 @@
                 <select id="f-health"></select></div>
             <div class="field"><label for="f-source">Source</label><select id="f-source"><option value="Bought">Bought</option><option value="Born">Born on farm</option></select></div>
             <div class="field"><label for="f-price">Price (Rs)</label><input type="number" id="f-price" min="0" placeholder="0"></div>
+            <div class="field" id="f-paidfrom-wrap"><label for="f-paidfrom">Paid from</label>
+                <select id="f-paidfrom"><option value="">— optional —</option></select></div>
+            <div class="field" id="f-dob-wrap"><label for="f-dob">Date of birth</label>
+                <input type="date" id="f-dob" max="@DateTime.Today.ToString("yyyy-MM-dd")">
+                <label class="small muted" style="display:flex;align-items:center;gap:6px;margin-top:6px">
+                    <input type="checkbox" id="f-dob-est"> Age is estimated</label></div>
+            <div class="field" id="f-age-wrap"><label for="f-age-days">Or age at purchase (days)</label>
+                <input type="number" id="f-age-days" min="1" max="9000" placeholder="e.g. 400"></div>
             <div class="field"><label for="f-status">Status</label><select id="f-status">
                 <option value="Kid">Kid</option><option value="Milking">Milking</option><option value="Pregnant">Pregnant</option>
                 <option value="Dry">Dry</option><option value="Buck">Buck</option><option value="Sale">For sale</option></select></div>
@@ -82,6 +90,16 @@
             <div class="field field-comment"><label for="f-note">Comment</label>
                 <input id="f-note" maxlength="500" placeholder="optional note" autocomplete="off"></div>
             <datalist id="damOptions"></datalist>
+        </div>
+        <div class="goat-intake-preg panel-note" id="f-preg-intake" hidden style="margin:12px 0 0 0;padding:12px;border:1px solid var(--line);border-radius:10px">
+            <div class="small muted" style="margin:0 0 10px 0">She is pregnant when you bought her — record cross and scan so due dates work.</div>
+            <div class="add-grid goat-add-grid">
+                <div class="field"><label for="f-intake-mated">Cross date</label><input type="date" id="f-intake-mated"></div>
+                <div class="field"><label for="f-intake-buck">Buck (optional)</label><input id="f-intake-buck" maxlength="50" autocomplete="off"></div>
+                <div class="field"><label for="f-intake-kids">Kids seen at scan</label>
+                    <input type="number" id="f-intake-kids" min="1" max="6" value="2"></div>
+                <div class="field"><label for="f-intake-scan">Scan date (optional)</label><input type="date" id="f-intake-scan"></div>
+            </div>
         </div>
         <div class="goat-form-actions">
             <div class="goat-form-actions-left">

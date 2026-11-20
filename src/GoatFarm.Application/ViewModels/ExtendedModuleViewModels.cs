@@ -816,6 +816,8 @@ public class MilkingSessionRowViewModel
     public string Breed { get; set; } = "";
     public decimal Liters { get; set; }
     public decimal RejectedLiters { get; set; }
+    public int GoatCount { get; set; }
+    public string? WarehouseName { get; set; }
 }
 
 public class SlaughterRowViewModel
@@ -915,6 +917,7 @@ public class SaveMilkingSessionViewModel
     public decimal Liters { get; set; }
     public decimal RejectedLiters { get; set; }
     public int? WarehouseId { get; set; }
+    public int GoatCount { get; set; }
 }
 
 public class SaveSlaughterViewModel

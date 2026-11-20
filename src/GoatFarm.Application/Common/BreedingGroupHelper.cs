@@ -1,4 +1,5 @@
 using GoatFarm.Domain.Entities;
+using GoatFarm.Domain.Enums;
 
 namespace GoatFarm.Application.Common;
 
@@ -22,7 +23,8 @@ public static class BreedingGroupHelper
         BreedingGroupMemberDto member,
         Goat? goat,
         IReadOnlyList<BreedingEmptyLog> emptyLogs,
-        IReadOnlyList<KiddingRecord> kiddings)
+        IReadOnlyList<KiddingRecord> kiddings,
+        bool buckStillWithDoes = false)
     {
         if (goat is null || goat.IsArchived)
             return new BreedingGroupMemberOutcome { Key = "gone", Text = "left herd" };
@@ -75,10 +77,25 @@ public static class BreedingGroupHelper
             if (PregnancyRules.IsAwaitingScan(goat))
             {
                 var days = Today().DayNumber - goat.MatedDate!.Value.DayNumber;
+                if (buckStillWithDoes && group.Status == "active")
+                {
+                    return new BreedingGroupMemberOutcome
+                    {
+                        Key = "with_buck",
+                        Text = $"with buck ({days}d)"
+                    };
+                }
+
+                DateOnly? scanWhen = null;
+                if (TryParseStart(group.End, out var buckOut))
+                    scanWhen = buckOut.AddDays(BreedingHelper.ScanAfterDays);
+                var scanText = scanWhen.HasValue
+                    ? $"scan on {scanWhen:dd MMM}"
+                    : $"awaiting scan ({days} days)";
                 return new BreedingGroupMemberOutcome
                 {
                     Key = "wait",
-                    Text = $"crossed · awaiting scan ({days} days)"
+                    Text = $"crossed · {scanText}"
                 };
             }
         }
@@ -87,4 +104,32 @@ public static class BreedingGroupHelper
     }
 
     private static DateOnly Today() => DateOnly.FromDateTime(DateTime.Today);
+
+    public static bool BuckStillWithDoes(BreedingGroupDto grp, DateOnly today)
+    {
+        if (grp.CrossDeferred || string.IsNullOrWhiteSpace(grp.Start)) return false;
+        if (!TryParseStart(grp.Start, out var buckIn) || buckIn > today) return false;
+        if (string.IsNullOrWhiteSpace(grp.End)) return true;
+        return TryParseStart(grp.End, out var buckOut) && buckOut >= today;
+    }
+
+    public static HashSet<int> DoesWithBuckIn(
+        IReadOnlyList<BreedingGroupDto> groups,
+        IReadOnlyDictionary<int, Goat> goatsById,
+        DateOnly today)
+    {
+        var set = new HashSet<int>();
+        foreach (var grp in groups.Where(g => string.Equals(g.Status, "active", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!BuckStillWithDoes(grp, today)) continue;
+            foreach (var m in grp.Members)
+            {
+                if (!goatsById.TryGetValue(m.GoatId, out var g)) continue;
+                if (PregnancyRules.IsAwaitingScan(g))
+                    set.Add(m.GoatId);
+            }
+        }
+
+        return set;
+    }
 }

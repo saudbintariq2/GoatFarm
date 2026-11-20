@@ -1,4 +1,5 @@
 using GoatFarm.Application.ViewModels.Feed;
+using GoatFarm.Domain.Enums;
 
 namespace GoatFarm.Application.Common;
 
@@ -53,4 +54,14 @@ public static class KidMilkDietHelper
 
     public static int BandForAge(int ageDays) =>
         ageDays <= 30 ? 0 : ageDays <= 60 ? 1 : 2;
+
+    /// <summary>How much of the band ration counts toward powder vs dam milk for feed planning.</summary>
+    public static (decimal PowderFactor, decimal MotherFactor) MilkTypeFactors(KidMilkType milkType) => milkType switch
+    {
+        KidMilkType.Mother => (0m, 1m),
+        KidMilkType.Powder => (1m, 0m),
+        KidMilkType.Mixed => (0.55m, 0.45m),
+        KidMilkType.Foster => (0.35m, 0.65m),
+        _ => (1m, 0m)
+    };
 }

@@ -67,6 +67,44 @@ public class EmployeeViewModel
     public decimal MonthlySalary { get; set; }
 }
 
+public class PayrollEmployeeRowViewModel
+{
+    public int EmployeeId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Role { get; set; }
+    public decimal Due { get; set; }
+    public decimal Advance { get; set; }
+    public decimal Paid { get; set; }
+    public decimal Balance { get; set; }
+}
+
+public class PayrollMonthViewModel
+{
+    public string Month { get; set; } = string.Empty;
+    public decimal TotalDue { get; set; }
+    public decimal TotalAdvance { get; set; }
+    public decimal TotalPaid { get; set; }
+    public decimal TotalOutstanding { get; set; }
+    public IReadOnlyList<PayrollEmployeeRowViewModel> Rows { get; set; } = [];
+}
+
+public class RecordPayrollPaymentViewModel
+{
+    public int EmployeeId { get; set; }
+    public string Month { get; set; } = string.Empty;
+    public DateOnly Date { get; set; }
+    public decimal Amount { get; set; }
+    public int AccountId { get; set; }
+    public string Kind { get; set; } = "salary";
+    public string? Note { get; set; }
+}
+
+public class PayrollPaymentResultViewModel
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
 public class CreateEmployeeViewModel
 {
     [Required(ErrorMessage = "Enter employee name")]
@@ -241,6 +279,7 @@ public class FinancePageViewModel
     public IReadOnlyList<ExpenseViewModel> Expenses { get; set; } = [];
     public IReadOnlyList<RecurringCostViewModel> RecurringCosts { get; set; } = [];
     public IReadOnlyList<EmployeeViewModel> Employees { get; set; } = [];
+    public PayrollMonthViewModel Payroll { get; set; } = new();
     public IReadOnlyList<OwnerInvestmentViewModel> OwnerInvestments { get; set; } = [];
     public IReadOnlyList<OwnerInvestmentViewModel> FundingHistory { get; set; } = [];
     public decimal DisplayIncome { get; set; }

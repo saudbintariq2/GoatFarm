@@ -80,6 +80,8 @@ public interface IFeedService
 
     decimal GetFeedPurchasedKg(string month);
 
+    Task<decimal> GetFeedStockBookValueAsync(CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<FeedStockRowViewModel>> GetFeedStockRowsAsync(CancellationToken cancellationToken = default);
 
     Task<FeedStockRebuildViewModel> RebuildFeedStockAsync(CancellationToken cancellationToken = default);

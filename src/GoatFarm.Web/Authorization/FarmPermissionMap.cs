@@ -282,6 +282,7 @@ public static class FarmPermissionMap
 
             ["Vaccine.Treatments"] = (FarmTabs.Vaccines, FarmActions.View),
             ["Vaccine.SaveTreatment"] = (FarmTabs.Vaccines, FarmActions.Add),
+            ["Vaccine.RecoverTreatment"] = (FarmTabs.Vaccines, FarmActions.Edit),
             ["Vaccine.DeleteTreatment"] = (FarmTabs.Vaccines, FarmActions.Delete)
         };
 }

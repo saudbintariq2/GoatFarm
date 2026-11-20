@@ -273,7 +273,7 @@ public class ProductsService : IProductsService
             Meat = meatDash,
             CustomMilkingSessions = customMilkingSessions,
             ProductDropdownOptions = productDropdownOptions,
-            RecentSessions = MapSessions(recentSessions),
+            RecentSessions = MapSessions(recentSessions, warehouses),
             HerdGoats = herdGoats,
             MoneyAccounts = ledgerPage.Accounts,
             Customers = customers.Select(c => new ProductCustomerRowViewModel { Id = c.Id, Name = c.Name }).ToList(),
@@ -312,10 +312,10 @@ public class ProductsService : IProductsService
                 Liters = p.Liters,
                 Comment = p.Comment
             }).ToList(),
-            Sessions = MapSessions(sessions),
+            Sessions = MapSessions(sessions, warehouses),
             Slaughters = slaughters.Select(MapSlaughterRow).ToList(),
             MeatCutStock = meatCutStock,
-            AnalyticsMilkingSessions = MapSessions(allSessions),
+            AnalyticsMilkingSessions = MapSessions(allSessions, warehouses),
             AnalyticsLegacyMilk = allLegacyMilk.Select(p => new MilkLegacyRowViewModel
             {
                 Id = p.Id,
@@ -491,6 +491,8 @@ public class ProductsService : IProductsService
         row.Breed = model.Breed;
         row.Liters = model.Liters;
         row.RejectedLiters = model.RejectedLiters;
+        if (model.GoatCount > 0 || model.WarehouseId is > 0)
+            row.Notes = JsonSerializer.Serialize(new { goats = model.GoatCount, wh = model.WarehouseId ?? 0 });
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -503,6 +505,17 @@ public class ProductsService : IProductsService
                 : await _context.Warehouses.FirstOrDefaultAsync(w => w.Location == "raw_tank", cancellationToken);
             if (raw != null && wh != null)
             {
+                if (InferKind(wh) is "raw_tank" or "past_tank")
+                {
+                    const decimal defaultTankCapacity = 500m;
+                    var moves = await _context.StockMovements.AsNoTracking()
+                        .Where(m => m.ProductId == raw.Id && m.WarehouseId == wh.Id)
+                        .ToListAsync(cancellationToken);
+                    var onHand = ComputeBalances(moves).FirstOrDefault(b => b.productId == raw.Id && b.warehouseId == wh.Id).qty;
+                    if (onHand + usable > defaultTankCapacity + 0.001m)
+                        throw new InvalidOperationException(
+                            $"{wh.Name} would exceed {defaultTankCapacity:0} L capacity ({onHand:0.##} L in tank now).");
+                }
                 _context.StockMovements.Add(new StockMovement
                 {
                     Date = model.Date,
@@ -739,14 +752,33 @@ public class ProductsService : IProductsService
             row = await _context.ProductSales.FirstAsync(s => s.Id == model.Id, cancellationToken);
         else { row = new ProductSale(); _context.ProductSales.Add(row); }
 
-        if (isNew && model.ProductId is > 0 && model.WarehouseId is > 0)
+        int? saleWarehouseId = model.WarehouseId;
+        if (isNew && model.ProductId is > 0)
         {
-            var moves = await _context.StockMovements.AsNoTracking()
-                .Where(m => m.ProductId == model.ProductId && m.WarehouseId == model.WarehouseId)
-                .ToListAsync(cancellationToken);
-            var onHand = ComputeBalances(moves).FirstOrDefault(b => b.productId == model.ProductId && b.warehouseId == model.WarehouseId.Value).qty;
-            if (model.Qty > onHand + 0.0005m)
-                throw new InvalidOperationException($"Not enough stock ({onHand:0.##} available).");
+            if (saleWarehouseId is null or <= 0)
+            {
+                var movesAll = await _context.StockMovements.AsNoTracking()
+                    .Where(m => m.ProductId == model.ProductId)
+                    .ToListAsync(cancellationToken);
+                var best = ComputeBalances(movesAll)
+                    .Where(b => b.productId == model.ProductId && b.qty > 0.0005m)
+                    .OrderByDescending(b => b.qty)
+                    .FirstOrDefault();
+                if (best.productId > 0)
+                    saleWarehouseId = best.warehouseId;
+            }
+            if (saleWarehouseId is > 0)
+            {
+                var moves = await _context.StockMovements.AsNoTracking()
+                    .Where(m => m.ProductId == model.ProductId && m.WarehouseId == saleWarehouseId)
+                    .ToListAsync(cancellationToken);
+                var onHand = ComputeBalances(moves)
+                    .FirstOrDefault(b => b.productId == model.ProductId && b.warehouseId == saleWarehouseId.Value).qty;
+                if (model.Qty > onHand + 0.0005m)
+                    throw new InvalidOperationException($"Not enough stock ({onHand:0.##} available).");
+            }
+            else
+                throw new InvalidOperationException("No stock on hand for this product.");
         }
 
         if (isNew)
@@ -757,7 +789,7 @@ public class ProductsService : IProductsService
         row.Date = model.Date;
         row.CustomerId = model.CustomerId;
         row.ProductId = model.ProductId;
-        row.WarehouseId = model.WarehouseId;
+        row.WarehouseId = saleWarehouseId ?? model.WarehouseId;
         row.ProductName = model.ProductName.Trim();
         row.Qty = model.Qty;
         row.Rate = model.Rate;
@@ -767,14 +799,15 @@ public class ProductsService : IProductsService
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
 
-        if (isNew && model.ProductId is > 0 && model.WarehouseId is > 0)
+        var issueWh = row.WarehouseId;
+        if (isNew && model.ProductId is > 0 && issueWh is > 0)
         {
             _context.StockMovements.Add(new StockMovement
             {
                 Date = model.Date,
                 Type = StockMovementType.Issue,
                 ProductId = model.ProductId.Value,
-                WarehouseId = model.WarehouseId.Value,
+                WarehouseId = issueWh.Value,
                 Qty = model.Qty,
                 UnitCost = 0,
                 Notes = $"Sale · {row.InvoiceNo}",
@@ -1318,16 +1351,44 @@ public class ProductsService : IProductsService
         };
     }
 
-    private static List<MilkingSessionRowViewModel> MapSessions(IEnumerable<MilkingSession> sessions) =>
-        sessions.Select(s => new MilkingSessionRowViewModel
+    private static List<MilkingSessionRowViewModel> MapSessions(
+        IEnumerable<MilkingSession> sessions,
+        IReadOnlyList<Warehouse> warehouses)
+    {
+        var whNames = warehouses.ToDictionary(w => w.Id, w => w.Name);
+        return sessions.Select(s =>
         {
-            Id = s.Id,
-            DateDisplay = s.Date.ToString("yyyy-MM-dd"),
-            Session = s.Session,
-            Breed = s.Breed,
-            Liters = s.Liters,
-            RejectedLiters = s.RejectedLiters
+            var (goats, whId) = ParseMilkingSessionMeta(s.Notes);
+            whNames.TryGetValue(whId, out var whName);
+            return new MilkingSessionRowViewModel
+            {
+                Id = s.Id,
+                DateDisplay = s.Date.ToString("yyyy-MM-dd"),
+                Session = s.Session,
+                Breed = s.Breed,
+                Liters = s.Liters,
+                RejectedLiters = s.RejectedLiters,
+                GoatCount = goats,
+                WarehouseName = string.IsNullOrWhiteSpace(whName) ? null : whName
+            };
         }).ToList();
+    }
+
+    private static (int Goats, int WarehouseId) ParseMilkingSessionMeta(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes)) return (0, 0);
+        try
+        {
+            using var doc = JsonDocument.Parse(notes);
+            var goats = doc.RootElement.TryGetProperty("goats", out var g) ? g.GetInt32() : 0;
+            var wh = doc.RootElement.TryGetProperty("wh", out var w) ? w.GetInt32() : 0;
+            return (goats, wh);
+        }
+        catch
+        {
+            return (0, 0);
+        }
+    }
 
     private readonly record struct BalanceRow(int productId, int warehouseId, decimal qty);
 

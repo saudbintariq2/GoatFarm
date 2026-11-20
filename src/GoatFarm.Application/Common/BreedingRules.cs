@@ -31,6 +31,23 @@ public static class BreedingRules
     /// Breeding-age confirmation for bought does whose age is estimated or unknown. Under-age by a known or
     /// estimated birth date is an error instead (see EligibilityError).
     /// </summary>
+    public const int MinBuckStayDays = 21;
+
+    /// <summary>Warn before saving an ultrasound when the scan date is sooner than this after mating.</summary>
+    public const int MinDaysBeforeUltrasoundScan = 30;
+
+    /// <summary>Warn when kiddings from this cross fall outside the birth group's kid window.</summary>
+    public static string? KidsDueOutsideBirthWindowWarning(
+        DateOnly buckInOrCrossDate, BreedingSeasonBatch batch, BreedingSeasonSettings season, DateOnly today)
+    {
+        var due = buckInOrCrossDate.AddDays(BreedingHelper.GestationDays);
+        var plan = BreedingSeasonHelper.SeasonPlan(batch, season, today);
+        if (due >= plan.KidFrom && due <= plan.KidTo)
+            return null;
+        return $"Kids will come around {due:dd MMM yyyy}, outside the {batch.Name} window " +
+               $"({plan.KidFrom:dd MMM}–{plan.KidTo:dd MMM yyyy}).";
+    }
+
     public static string? AgeVerificationWarning(Goat doe, DateOnly today)
     {
         if (doe.Source == GoatSource.Born) return null;
@@ -40,6 +57,17 @@ public static class BreedingRules
         if (AgeIsEstimated(doe))
             return $"{doe.Tag}'s age is estimated (about {age} days). Confirm she is at least {BreedingHelper.MinBreedingAgeDays} days old.";
         return null;
+    }
+
+    /// <summary>One confirmation line when several bought does lack a known age.</summary>
+    public static string? AggregateAgeWarnings(IReadOnlyList<Goat> does, DateOnly today)
+    {
+        var unknown = does.Where(d => d.Source != GoatSource.Born && AgeDays(d, today) is null).Select(d => d.Tag).ToList();
+        if (unknown.Count == 0) return null;
+        if (unknown.Count == 1)
+            return AgeVerificationWarning(does.First(d => d.Tag == unknown[0]), today);
+        var list = string.Join(", ", unknown);
+        return $"{unknown.Count} does have no age: {list}. Confirm each is at least {BreedingHelper.MinBreedingAgeDays} days old.";
     }
 
     /// <summary>Returns why the doe cannot be prepped or crossed, or null when she can.</summary>

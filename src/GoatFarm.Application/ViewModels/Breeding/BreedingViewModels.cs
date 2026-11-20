@@ -251,7 +251,10 @@ public class BreedingBuckRowViewModel
 {
     public int Id { get; set; }
     public string Tag { get; set; } = string.Empty;
+    /// <summary>Confirmed pregnant does with this buck (scan positive).</summary>
     public int Carrying { get; set; }
+    /// <summary>Does currently in an active group with the buck still in (not yet due to scan).</summary>
+    public int WithBuck { get; set; }
     public int CrossesThisYear { get; set; }
     public string ConceptionText { get; set; } = "—";
     public string ConceptionStyle { get; set; } = string.Empty;
@@ -570,6 +573,7 @@ public class CloseBreedingGroupViewModel
 {
     public string GroupId { get; set; } = string.Empty;
     public DateOnly? EndDate { get; set; }
+    public bool ConfirmShortStay { get; set; }
 }
 
 public class UndoGroupCrossesViewModel
@@ -605,6 +609,7 @@ public class BreedingGroupCardViewModel
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Buck { get; set; } = string.Empty;
+    public int WithBuck { get; set; }
     public string Start { get; set; } = string.Empty;
     public string? End { get; set; }
     public int Max { get; set; } = 15;
@@ -646,6 +651,8 @@ public class BreedingScanGroupViewModel
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Buck { get; set; } = string.Empty;
+    public string? BirthBatchName { get; set; }
+    public string? BuckOutDate { get; set; }
     public string? BirthBatchIcon { get; set; }
     public bool BuckStillWithDoes { get; set; }
     public IReadOnlyList<BreedingScanDoeViewModel> Does { get; set; } = [];
@@ -683,6 +690,7 @@ public class BulkScanSaveViewModel
 {
     public DateOnly ScanDate { get; set; }
     public List<BulkScanResultItemViewModel> Results { get; set; } = [];
+    public bool ConfirmEarlyScan { get; set; }
 }
 
 public class BulkScanSaveResultViewModel
@@ -714,6 +722,7 @@ public class RecordUltrasoundViewModel
     /// <summary>When empty: next, heat, cull, back (v16 scan sheet).</summary>
     public string? EmptyNextStep { get; set; }
     public string? EmptyBirthBatchId { get; set; }
+    public bool ConfirmEarlyScan { get; set; }
 }
 
 public class CrossCheckViewModel

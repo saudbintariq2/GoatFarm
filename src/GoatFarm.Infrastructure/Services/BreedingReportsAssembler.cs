@@ -29,7 +29,7 @@ internal static class BreedingReportsAssembler
             return new BreedingReportsViewModel { HasData = false };
 
         var plan = BreedingSeasonHelper.SeasonPlan(batch, season, today);
-        var batchDoes = BreedingReportAggregator.BatchDoeIds(live, batch);
+        var batchDoes = BreedingReportAggregator.BatchDoeIds(live, batch, plan);
         var goatsById = live.ToDictionary(g => g.Id);
 
         var seasonEventsAll = BreedingReportAggregator.FilterSeasonEvents(breedingEvents, batchDoes, plan, null);
@@ -57,13 +57,7 @@ internal static class BreedingReportsAssembler
         }
 
         var o = BreedingReportAggregator.Aggregate(events, seasonKiddings, allKiddings, goatsById, plan, season, today);
-        if (o.Crossed == 0)
-        {
-            o.Crossed = live.Count(g => batchDoes.Contains(g.Id) &&
-                                        g.MatedDate is { } md && md >= plan.CrossFrom && md <= plan.CrossTo);
-            o.Preg = live.Count(g => batchDoes.Contains(g.Id) && PregnancyRules.IsConfirmedPregnant(g) &&
-                                     g.MatedDate is { } md2 && md2 >= plan.CrossFrom);
-        }
+        BreedingReportAggregator.ApplyLiveCountsWhenEventsMissing(o, live, batchDoes, plan);
         var done = today > plan.WeanTo;
         var buckLab = selectedBuck != "all" ? " · " + selectedBuck : "";
         var kidsExpected = o.ExpKids > 0 ? o.ExpKids : (int)Math.Round(o.Preg * 1.7);
@@ -406,6 +400,8 @@ internal static class BreedingReportsAssembler
             var kd = allKiddings.Where(k => k.DoeId == g.Id).OrderByDescending(k => k.KiddingDate).ToList();
             var kiddings = kd.Count;
             var lastBorn = kd.FirstOrDefault()?.LiveKids;
+            var avg = MotherScoreHelper.DoeAverage(kd);
+            var scoreText = avg.HasValue ? MotherScoreHelper.StarsHtml(avg) : (kiddings > 0 ? "<span class=\"muted\">—</span>" : "—");
             return new BreedingReportMotherRowViewModel
             {
                 DoeId = g.Id,
@@ -413,7 +409,7 @@ internal static class BreedingReportsAssembler
                 Breed = g.Breed ?? "",
                 Kiddings = kiddings,
                 LastBornText = lastBorn is null ? "" : lastBorn + " kid" + (lastBorn == 1 ? "" : "s") + " last time",
-                ScoreText = kiddings >= 3 ? "★ " + Math.Min(5, 3 + kiddings / 2).ToString("0.0") : kiddings > 0 ? "★ 3.5" : "—"
+                ScoreText = scoreText
             };
         }).Where(r => r.Kiddings > 0).OrderByDescending(r => r.Kiddings).Take(5).ToList();
         return rows;

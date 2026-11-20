@@ -161,6 +161,14 @@ public class CreateGoatViewModel
 
     [StringLength(50)]
     public string? DamTag { get; set; }
+
+    public int? PaidFromAccountId { get; set; }
+
+    /// <summary>Bought doe marked pregnant on intake — cross and scan details.</summary>
+    public DateOnly? IntakeMatedDate { get; set; }
+    public string? IntakeBuckTag { get; set; }
+    public int? IntakeKidsCount { get; set; }
+    public DateOnly? IntakeUltrasoundDate { get; set; }
 }
 
 public class BulkMoveViewModel

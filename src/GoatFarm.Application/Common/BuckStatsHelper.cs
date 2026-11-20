@@ -21,7 +21,11 @@ public static class BuckStatsHelper
         if (weights.Count == 0) return null;
         var onBirth = weights.FirstOrDefault(w => w.Date == birth.Value)?.Kg;
         if (onBirth > 0) return onBirth;
-        return weights.OrderBy(w => w.Date).FirstOrDefault()?.Kg;
+        var withinWeek = weights
+            .Where(w => w.Date >= birth.Value && w.Date <= birth.Value.AddDays(7) && w.Kg > 0)
+            .OrderBy(w => w.Date)
+            .FirstOrDefault()?.Kg;
+        return withinWeek;
     }
 
     public static decimal? WeanKg(Goat kid)

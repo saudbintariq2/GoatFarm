@@ -27,6 +27,7 @@ public static class DbSeeder
         var planData = new Dictionary<GoatStatus, (int med, Dictionary<string, int> rations)>
         {
             [GoatStatus.Kid] = (50, new() { ["wanda"] = 150, ["fodder"] = 500 }),
+            [GoatStatus.Meat] = (30, new() { ["wanda"] = 250, ["bran"] = 100, ["fodder"] = 1500 }),
             [GoatStatus.Milking] = (80, new() { ["wanda"] = 500, ["binola"] = 200, ["bran"] = 200, ["maize"] = 100, ["sheera"] = 50, ["fodder"] = 2000 }),
             [GoatStatus.Pregnant] = (150, new() { ["wanda"] = 400, ["binola"] = 150, ["bran"] = 150, ["maize"] = 100, ["sheera"] = 50, ["fodder"] = 1500 }),
             [GoatStatus.Dry] = (40, new() { ["wanda"] = 200, ["bran"] = 100, ["fodder"] = 1500 }),

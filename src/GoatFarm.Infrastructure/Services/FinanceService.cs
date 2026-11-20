@@ -37,7 +37,7 @@ public partial class FinanceService : IFinanceService
         var lv = GetLivestockValue();
         var av = GetAssetsValue();
         var cap = lv + av;
-        var boughtN = await _context.Goats.CountAsync(g => g.PurchasePrice > 0, cancellationToken);
+        var boughtN = await _context.Goats.CountAsync(g => !g.IsArchived && g.PurchasePrice > 0, cancellationToken);
 
         var assets = await _context.Assets.AsNoTracking()
             .OrderByDescending(a => a.Id)
@@ -140,6 +140,7 @@ public partial class FinanceService : IFinanceService
             Expenses = expenses,
             RecurringCosts = recurringCosts,
             Employees = employees,
+            Payroll = await BuildPayrollMonthAsync(month, employees, cancellationToken),
             OwnerInvestments = ownerInvestments,
             NewIncome = new CreateIncomeViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
             NewExpense = new CreateExpenseViewModel { Date = DateOnly.FromDateTime(DateTime.Today) },
@@ -441,7 +442,7 @@ public partial class FinanceService : IFinanceService
     }
 
     public decimal GetLivestockValue() =>
-        _context.Goats.AsNoTracking().Sum(g => g.PurchasePrice);
+        _context.Goats.AsNoTracking().Where(g => !g.IsArchived).Sum(g => g.PurchasePrice);
 
     public decimal GetAssetsValue() =>
         _context.Assets.AsNoTracking().Sum(a => a.Cost);
@@ -834,7 +835,7 @@ public partial class FinanceService : IFinanceService
         page.Capex = capex.Concat(assetCapex).OrderByDescending(x => x.DateDisplay).ToList();
         page.ProjectSpend = await _context.ProjectExpenditures.AsNoTracking().SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0;
         page.FixedAssetRegisterValue = await _context.FixedAssetRegisters.AsNoTracking().SumAsync(a => (decimal?)a.Cost, cancellationToken) ?? 0;
-        page.FeedStockValue = await _context.FeedPrices.AsNoTracking().SumAsync(f => (decimal?)(f.StockKg * f.PricePerKg), cancellationToken) ?? 0;
+        page.FeedStockValue = await _feedService.GetFeedStockBookValueAsync(cancellationToken);
         page.GoatsBoughtMonth = await _context.Goats.AsNoTracking()
             .Where(g => g.Source != GoatSource.Born && g.EventDate >= monthStart && g.EventDate < monthEnd)
             .SumAsync(g => (decimal?)g.PurchasePrice, cancellationToken) ?? 0;

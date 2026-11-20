@@ -240,7 +240,7 @@
                                 <td><b class="breed-goat-link" data-doe-profile="@m.DoeId" role="button" tabindex="0">@m.Tag</b><div class="breed muted small">@m.Breed</div></td>
                                 <td>@(m.Kiddings)&#215;</td>
                                 <td class="breed muted small">@m.LastBornText</td>
-                                <td>@m.ScoreText</td>
+                                <td>@Html.Raw(m.ScoreText)</td>
                             </tr>
                         }
                         </tbody>

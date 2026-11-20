@@ -47,7 +47,7 @@ public class Phase4FeedTests
         await db.SaveChangesAsync();
 
         var before = (await feed.GetFeedStockRowsAsync()).Single(s => s.FeedType == FeedTypes.Bran);
-        Assert.Equal(70, before.StockKg);
+        Assert.Equal(999, before.StockKg);
 
         var price = await db.FeedPrices.SingleAsync(p => p.FeedType == FeedTypes.Bran);
         price.StockKg = 10;

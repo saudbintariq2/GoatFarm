@@ -47,6 +47,7 @@
     var bills = ledger.PayablesList.Where(p => !p.Description.StartsWith("Loan", StringComparison.OrdinalIgnoreCase)).ToList();
     var bs = Model.BalanceSheet;
     var integ = Model.Integrity;
+    var payroll = Model.Payroll;
     var cashNow = bs.CashAndBank;
     var receivables = bs.Receivables;
     var payablesOpen = bs.PayablesOpen;
@@ -270,7 +271,7 @@
     <div class="panel-body">
         <table class="tbl"><thead><tr><th>Cost</th><th class="hide-sm">Date</th><th>Paid from</th><th class="num-cell">Amount</th></tr></thead>
         <tbody id="expenseRows">
-            <tr><td><span class="chip chip-exp">Feed bought</span><div class="name">@Model.FeedBoughtKg.ToString("N1") kg · auto from Feed</div></td><td class="hide-sm"><span class="breed">this month</span></td><td></td><td class="num-cell">@DisplayHelper.FormatRs(Model.FeedBoughtMonthly)</td></tr>
+            <tr><td><span class="chip chip-exp">Feed bought</span><div class="name">@Model.FeedBoughtKg.ToString("N1") kg · auto from Feed · matches Reports</div></td><td class="hide-sm"><span class="breed">this month</span></td><td></td><td class="num-cell">@DisplayHelper.FormatRs(Model.FeedBoughtMonthly)</td></tr>
             <tr><td><span class="chip chip-exp">Medicine (plan)</span><div class="name">from feed plan estimate</div></td><td class="hide-sm"><span class="breed">every month</span></td><td></td><td class="num-cell">@DisplayHelper.FormatRs(Model.MedicineMonthly)</td></tr>
             <tr><td><span class="chip chip-exp">Staff salaries</span><div class="name">@Model.Employees.Count staff · from roster</div></td><td class="hide-sm"><span class="breed">every month</span></td><td></td><td class="num-cell" id="expStaffSal">@DisplayHelper.FormatRs(Model.StaffSalaryMonthly)</td></tr>
             <tr><td><span class="chip chip-exp">Recurring costs</span><div class="name">rent and fixed costs</div></td><td class="hide-sm"><span class="breed">every month</span></td><td></td><td class="num-cell">@DisplayHelper.FormatRs(Model.RecurringMonthly)</td></tr>
@@ -810,21 +811,44 @@
 <div class="stats payroll-stats" style="margin-bottom:16px">
     <div class="stat"><div class="lbl">Active staff</div><div class="num" id="payStaff">@Model.Employees.Count</div><div class="lbl">people on payroll</div></div>
     <div class="stat"><div class="lbl">Monthly payroll</div><div class="num" id="payMonthly">@DisplayHelper.FormatRs(Model.StaffSalaryMonthly)</div><div class="lbl">salary due for this month</div></div>
-    <div class="stat"><div class="lbl">Advances</div><div class="num" id="payAdvance">@DisplayHelper.FormatRs(0)</div><div class="lbl">recorded separately from the roster</div></div>
-    <div class="stat"><div class="lbl">Salary paid</div><div class="num" id="payPaid">@DisplayHelper.FormatRs(0)</div><div class="lbl">cash is the monthly accrual</div></div>
-    <div class="stat"><div class="lbl">Outstanding</div><div class="num" id="payOutstanding">@DisplayHelper.FormatRs(Model.StaffSalaryMonthly)</div><div class="lbl">counted in running costs</div></div>
+    <div class="stat"><div class="lbl">Advances</div><div class="num" id="payAdvance">@DisplayHelper.FormatRs(payroll.TotalAdvance)</div><div class="lbl">recorded separately from the roster</div></div>
+    <div class="stat"><div class="lbl">Salary paid</div><div class="num" id="payPaid">@DisplayHelper.FormatRs(payroll.TotalPaid)</div><div class="lbl">cash leaving accounts</div></div>
+    <div class="stat"><div class="lbl">Outstanding</div><div class="num" id="payOutstanding">@DisplayHelper.FormatRs(payroll.TotalOutstanding)</div><div class="lbl">counted in running costs</div></div>
 </div>
 <div class="panel">
 <div class="panel-head"><h2>Salary payroll</h2><span class="sub">salary due from the roster</span></div>
 <div class="panel-body">
 <div class="note" style="margin:0 0 14px"><b>Salaries are a farm cost every month</b> from this list. Do not also type them as a running cost — that would count the same money twice. Cash leaving a bank account can be recorded on Bank &amp; Cash without adding another expense.</div>
-<div class="filterbar" style="margin-bottom:14px"><div class="field"><label>Payroll month</label><input id="pay-month" type="month" value="@Model.Month"></div></div>
-<table class="tbl"><thead><tr><th>Employee</th><th class="hide-sm">Role</th><th class="num-cell">Salary due</th><th class="num-cell">Advance</th><th class="num-cell">Paid</th><th>Status</th></tr></thead>
+<div class="filterbar" style="margin-bottom:14px">
+    <div class="field"><label>Payroll month</label><input id="pay-month" type="month" value="@Model.Month"></div>
+    <div class="field"><label>Paid from</label>
+        <select id="pay-account">
+            <option value="">Select Cash / Bank…</option>
+            @foreach (var a in ledger.Accounts.Where(a => a.IsActive))
+            {
+                <option value="@a.Id">@a.Name · @DisplayHelper.FormatRs(a.Balance)</option>
+            }
+        </select>
+    </div>
+</div>
+<table class="tbl"><thead><tr><th>Employee</th><th class="hide-sm">Role</th><th class="num-cell">Salary due</th><th class="num-cell">Advance</th><th class="num-cell">Paid</th><th>Status</th><th style="width:170px"></th></tr></thead>
 <tbody id="payRows">
-@if (!Model.Employees.Any()) { <tr><td colspan="6" class="empty">No active employees.</td></tr> }
-@foreach (var e in Model.Employees)
+@if (!payroll.Rows.Any()) { <tr><td colspan="7" class="empty">No active employees.</td></tr> }
+@foreach (var row in payroll.Rows)
 {
-    <tr><td><b>@e.Name</b></td><td class="hide-sm"><span class="breed">@(e.Role ?? "—")</span></td><td class="num-cell">@DisplayHelper.FormatRs(e.MonthlySalary)</td><td class="num-cell">@DisplayHelper.FormatRs(0)</td><td class="num-cell">@DisplayHelper.FormatRs(0)</td><td><span class="breed" style="color:#8a5b13">Due @DisplayHelper.FormatRs(e.MonthlySalary)</span></td></tr>
+    var paid = row.Balance <= 0;
+    <tr data-pay-emp="@row.EmployeeId" data-pay-name="@row.Name" data-pay-bal="@row.Balance.ToString(CultureInfo.InvariantCulture)">
+        <td><b>@row.Name</b></td>
+        <td class="hide-sm"><span class="breed">@(row.Role ?? "—")</span></td>
+        <td class="num-cell">@DisplayHelper.FormatRs(row.Due)</td>
+        <td class="num-cell" style="color:#8a5b13">@DisplayHelper.FormatRs(row.Advance)</td>
+        <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(row.Paid)</td>
+        <td>@(paid ? Html.Raw("<span class=\"breed\" style=\"color:var(--green-dark)\">✓ Paid</span>") : Html.Raw($"<span class=\"breed\" style=\"color:#8a5b13\">Due {DisplayHelper.FormatRs(row.Balance)}</span>"))</td>
+        <td style="white-space:nowrap">
+            <button type="button" class="btn btn-sm" data-advemp="@row.EmployeeId" data-bal="@row.Balance.ToString(CultureInfo.InvariantCulture)">Advance</button>
+            @if (!paid) { <button type="button" class="btn btn-green btn-sm" data-payemp="@row.EmployeeId" data-bal="@row.Balance.ToString(CultureInfo.InvariantCulture)">Pay</button> }
+        </td>
+    </tr>
 }
 </tbody></table>
 </div></div>

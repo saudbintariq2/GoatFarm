@@ -21,7 +21,7 @@ public static class BreedingDoeFlowHelper
     public static string FlowStageLabel(string key) =>
         Steps.FirstOrDefault(s => s.Key == key).Label ?? key;
 
-    public static string? FlowStage(Goat g, DateOnly today)
+    public static string? FlowStage(Goat g, DateOnly today, IReadOnlySet<int>? doesWithBuckIn = null, int kiddingCount = -1)
     {
         if (g.IsArchived || g.Gender != GoatGender.Female || g.Status == GoatStatus.Kid)
             return null;
@@ -35,8 +35,7 @@ public static class BreedingDoeFlowHelper
 
         if (PregnancyRules.IsAwaitingScan(g) && g.MatedDate.HasValue)
         {
-            var since = today.DayNumber - g.MatedDate.Value.DayNumber;
-            if (since < Math.Max(7, BreedingHelper.ScanAfterDays / 3))
+            if (doesWithBuckIn is not null && doesWithBuckIn.Contains(g.Id))
                 return "crossed";
             return "waiting_scan";
         }
@@ -50,7 +49,12 @@ public static class BreedingDoeFlowHelper
         }
 
         if (g.Status == GoatStatus.Milking && !g.MatedDate.HasValue && !g.PrepCrossDate.HasValue && !g.NextCrossDate.HasValue)
-            return "kidded";
+        {
+            var kiddedBefore = kiddingCount >= 0
+                ? kiddingCount + Math.Max(0, g.KiddingsBeforePurchase)
+                : Math.Max(0, g.KiddingsBeforePurchase);
+            return kiddedBefore > 0 ? "kidded" : "getting_ready";
+        }
 
         if (g.Status == GoatStatus.Dry && !g.MatedDate.HasValue)
             return "getting_ready";

@@ -150,11 +150,20 @@ public static class BreedingReportAggregator
         return list.Where(e => string.Equals(BuckTag(e), buckFilter, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
-    public static HashSet<int> BatchDoeIds(IReadOnlyList<Goat> live, BreedingSeasonBatch batch) =>
-        live.Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid &&
-                        string.Equals(g.BirthBatchName, batch.Name, StringComparison.OrdinalIgnoreCase))
-            .Select(g => g.Id)
-            .ToHashSet();
+    public static HashSet<int> BatchDoeIds(IReadOnlyList<Goat> live, BreedingSeasonBatch batch, BreedingSeasonPlan plan)
+    {
+        var ids = new HashSet<int>();
+        foreach (var g in live)
+        {
+            if (g.Gender != GoatGender.Female || g.Status == GoatStatus.Kid)
+                continue;
+            if (string.Equals(g.BirthBatchName, batch.Name, StringComparison.OrdinalIgnoreCase))
+                ids.Add(g.Id);
+            else if (g.MatedDate is { } md && md >= plan.CrossFrom && md <= plan.CrossTo)
+                ids.Add(g.Id);
+        }
+        return ids;
+    }
 
     public static IReadOnlyList<KiddingRecord> SeasonKiddings(
         IReadOnlyList<KiddingRecord> kiddings,
@@ -189,4 +198,28 @@ public static class BreedingReportAggregator
 
     public static int? AverageDays(IReadOnlyList<int> values) =>
         values.Count > 0 ? (int)Math.Round(values.Average()) : null;
+
+    /// <summary>When breeding events are missing or incomplete, count crosses and pregnancies from live does.</summary>
+    public static void ApplyLiveCountsWhenEventsMissing(
+        BreedingReportAgg o,
+        IReadOnlyList<Goat> live,
+        HashSet<int> batchDoes,
+        BreedingSeasonPlan plan)
+    {
+        if (o.Crossed == 0)
+        {
+            o.Crossed = live.Count(g => batchDoes.Contains(g.Id) &&
+                                        g.MatedDate is { } md && md >= plan.CrossFrom && md <= plan.CrossTo);
+        }
+        if (o.Preg == 0)
+        {
+            o.Preg = live.Count(g => batchDoes.Contains(g.Id) && PregnancyRules.IsConfirmedPregnant(g) &&
+                                     g.MatedDate is { } md2 && md2 >= plan.CrossFrom && md2 <= plan.CrossTo);
+        }
+        if (o.ExpKids == 0 && o.Preg > 0)
+        {
+            o.ExpKids = live.Where(g => batchDoes.Contains(g.Id) && PregnancyRules.IsConfirmedPregnant(g))
+                .Sum(g => g.KidsCount is > 0 ? g.KidsCount!.Value : 2);
+        }
+    }
 }

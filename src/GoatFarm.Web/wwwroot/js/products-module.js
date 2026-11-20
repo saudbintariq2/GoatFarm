@@ -2735,7 +2735,9 @@
       const rows = milkRecordSessions();
       milkingSessionRows.innerHTML = rows.length ? rows.slice(0, 30).map(s => {
         const usable = Math.max(0, (s.liters || 0) - (s.rejectedLiters || 0));
-        return `<tr><td>${esc(s.dateDisplay)}</td><td>${esc(s.session)}</td><td class="num-cell">—</td><td class="num-cell">${fmtQ(s.liters, 'L')}</td><td class="num-cell">${fmtQ(s.rejectedLiters, 'L')}</td><td class="num-cell"><b>${fmtQ(usable, 'L')}</b></td><td class="hide-sm">—</td><td></td></tr>`;
+        const goats = s.goatCount > 0 ? fmtN(s.goatCount, 0) : '—';
+        const tank = s.warehouseName ? esc(s.warehouseName) : '—';
+        return `<tr><td>${esc(s.dateDisplay)}</td><td>${esc(s.session)}</td><td class="num-cell">${goats}</td><td class="num-cell">${fmtQ(s.liters, 'L')}</td><td class="num-cell">${fmtQ(s.rejectedLiters, 'L')}</td><td class="num-cell"><b>${fmtQ(usable, 'L')}</b></td><td class="hide-sm">${tank}</td><td></td></tr>`;
       }).join('') : '<tr><td colspan="8" class="empty">No milking parlor sessions recorded yet.</td></tr>';
     }
 
@@ -3069,13 +3071,25 @@
     if (!sessionVal || sessionVal.startsWith('__')) { alert('Choose Morning, Evening or another milking time.'); return; }
     const wh = document.getElementById('mp-warehouse')?.value;
     if (!wh || wh.startsWith('__')) { alert('Choose the raw milk tank the milk goes into.'); return; }
+    const whRow = warehouseById(wh);
+    const cap = N(whRow?.capacity) || 500;
+    const now = N(whRow?.litersOrKg);
+    if (cap > 0 && now + usable > cap + 0.0005) {
+      alert(`${whRow?.name || 'Tank'} would exceed ${fmtN(cap)} L capacity (${fmtQ(now, 'L')} in tank now).`);
+      return;
+    }
+    let goatCount = 0;
+    if (mgMode === 'total') goatCount = +document.getElementById('mp-goats')?.value || 0;
+    else if (mgMode === 'breed') rows.forEach(r => { goatCount += r.goats || 0; });
+    else goatCount = rows.filter(r => (r.total || 0) > 0 || (r.rejected || 0) > 0).length;
     await post('/Products/SaveMilkingSession', {
       date: document.getElementById('mp-date')?.value || today(),
       session: sessionVal,
       breed,
       liters,
       rejectedLiters: rejected,
-      warehouseId: wh ? +wh : null
+      warehouseId: wh ? +wh : null,
+      goatCount
     });
     reload();
   });
@@ -3225,6 +3239,11 @@
     const basis = document.getElementById('sl-sa-basis')?.value || 'unit';
     const amt = basis === 'fixed' ? rate : qty * rate;
     const src = currentSaleSource();
+  if (qty <= 0) { alert('Enter quantity to sell.'); return; }
+  if (src && qty > N(src.qty) + 0.0005) {
+    alert(`Only ${fmtQ(src.qty, src.unit || '')} available in that tank or store.`);
+    return;
+  }
     const type = document.getElementById('sl-sa-type')?.value || 'other';
     const typeLabels = { raw: 'Raw milk', past: 'Pasteurized milk', dairy: 'Dairy product', whole: 'Whole carcass', half: 'Half carcass', cut: 'Meat cuts', other: 'Product' };
     const review = document.getElementById('sl-sa-review');
@@ -3233,13 +3252,19 @@
     review.innerHTML = `<div class="sl-review"><h3>Review sale</h3><dl><dt>Item</dt><dd>${esc(typeLabels[type] || 'Sale')}${src ? ` · ${esc(src.label)}` : ''}</dd><dt>Quantity</dt><dd>${qty}${src?.unit ? ' ' + esc(src.unit) : ''}</dd><dt>Rate</dt><dd>${rs(rate)}</dd><dt>Amount</dt><dd><b>${rs(amt)}</b></dd></dl><div class="sl-review-act"><button type="button" class="btn btn-green" id="sl-sa-post">Post sale</button><button type="button" class="btn btn-ghost" id="sl-sa-cancel-review">Back</button></div></div>`;
     document.getElementById('sl-sa-cancel-review')?.addEventListener('click', () => { review.hidden = true; });
     document.getElementById('sl-sa-post')?.addEventListener('click', async () => {
+      const postSrc = currentSaleSource();
+      const postType = document.getElementById('sl-sa-type')?.value || 'other';
+      const postQty = +document.getElementById('sl-sa-qty')?.value || 0;
+      if (postSrc && postQty > N(postSrc.qty) + 0.0005) {
+        alert(`Only ${fmtQ(postSrc.qty, postSrc.unit || '')} available.`);
+        return;
+      }
       const cust = document.getElementById('sl-sa-cust')?.value;
       const pay = document.getElementById('sl-sa-pay')?.value;
       const isCredit = pay === 'credit' && cust;
       const prodVal = document.getElementById('sl-sa-prod')?.value;
-      const productId = src?.productId || (prodVal && !String(prodVal).startsWith('__') ? +prodVal : null);
-      const src = currentSaleSource();
-      const whId = (type === 'whole' || type === 'half') ? null : (src?.key ? +src.key : null);
+      const productId = postSrc?.productId || (prodVal && !String(prodVal).startsWith('__') ? +prodVal : null);
+      const whId = (postType === 'whole' || postType === 'half') ? null : (postSrc?.key ? +postSrc.key : null);
       const res = await fetch('/Products/SaveSale', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3248,8 +3273,10 @@
           productId: productId || null,
           warehouseId: whId,
           customerId: cust && cust !== '__add' ? +cust : null,
-          productName: typeLabels[type] || 'Sale',
-          qty, rate, isCredit: !!isCredit
+          productName: typeLabels[postType] || 'Sale',
+          qty: postQty,
+          rate: +document.getElementById('sl-sa-rate')?.value || 0,
+          isCredit: !!isCredit
         })
       });
       const j = await res.json().catch(() => ({}));
