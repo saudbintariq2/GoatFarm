@@ -1680,22 +1680,30 @@ const GoatRecords = (() => {
         const resultHtml = esc(it.resultLine || (dup
           ? `✓ already in Finance as ${it.financeDuplicateName} (${it.financeDuplicateWhere || 'Finance'}) — not added again`
           : ''));
-        return `<div class="price-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}">
-          <label>${esc(it.label)}
-          <span class="del feed-foddel" data-delfod="${esc(it.id)}" title="remove" style="font-size:13px">×</span></label>
+        return `<div class="price-row fodder-pool-row" data-foditem="${esc(it.id)}" data-fodlabel="${esc(it.label)}">
+          <label class="fodder-pool-title">${esc(it.label)}
+          <span class="del feed-foddel" data-delfod="${esc(it.id)}" title="remove">×</span></label>
           <div class="price-in"><span class="pre">Rs</span>
-          <input type="number" min="0" data-fodamt="${esc(it.id)}" value="${+it.amount || 0}" style="width:110px">
+          <input type="number" min="0" data-fodamt="${esc(it.id)}" value="${+it.amount || 0}">
           <span class="suf">total</span></div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
-            <label style="font-size:11px;font-weight:600">Paid
-            <input type="date" data-fodpaid="${esc(it.id)}" value="${esc(it.paidDate || defaultPaid)}" style="width:135px;padding:4px 5px"></label>
-            <label style="font-size:11px;font-weight:600">Paid from
-            <select data-fodacct="${esc(it.id)}" style="max-width:140px;padding:4px 5px"><option value="">—</option>${acctOpts}</select></label>
-            <label style="font-size:11px;font-weight:600">Allocate
-            <input type="number" min="1" max="60" data-fodmonths="${esc(it.id)}" value="${months}" style="width:55px;padding:4px 5px"> months</label>
-            <span class="breed" style="font-size:10px">(1–60)</span>
+          <div class="fodder-pool-meta">
+            <div class="field">
+              <label>Paid</label>
+              <input type="date" data-fodpaid="${esc(it.id)}" value="${esc(it.paidDate || defaultPaid)}">
+            </div>
+            <div class="field">
+              <label>Paid from</label>
+              <select data-fodacct="${esc(it.id)}"><option value="">—</option>${acctOpts}</select>
+            </div>
+            <div class="field">
+              <label>Allocate (months)</label>
+              <div class="fodder-alloc-inline">
+                <input type="number" min="1" max="60" data-fodmonths="${esc(it.id)}" value="${months}" aria-label="Allocation months">
+                <span class="field-hint">1–60 for P&amp;L spread</span>
+              </div>
+            </div>
           </div>
-          ${resultHtml ? `<div style="font-size:11.5px;margin-top:4px;${resultStyle}">${resultHtml}</div>` : ''}</div>`;
+          ${resultHtml ? `<div class="fodder-pool-result" style="${resultStyle}">${resultHtml}</div>` : ''}</div>`;
       }).join('') ||
         '<div class="rule" style="grid-column:1/-1">No cost lines yet — add one below.</div>';
       const mode = document.getElementById('fodderMode');

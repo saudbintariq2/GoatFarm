@@ -289,6 +289,83 @@
   .price-in input:focus{outline:none;border-color:var(--green)}
   .price-in .suf{font-size:11px;color:var(--ink-soft)}
 
+  #fodderInputs.price-grid{
+    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:14px;
+    align-items:stretch;
+  }
+  #fodderInputs .fodder-pool-row{
+    min-width:0;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:#fafaf8;
+    gap:8px;
+  }
+  #fodderInputs .fodder-pool-title{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    font-size:13px;
+    font-weight:700;
+    color:var(--ink);
+    text-transform:none;
+    letter-spacing:0;
+  }
+  #fodderInputs .fodder-pool-meta{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top:2px;
+  }
+  #fodderInputs .fodder-pool-meta .field label{
+    font-size:10px;
+  }
+  #fodderInputs .fodder-pool-meta .field input,
+  #fodderInputs .fodder-pool-meta .field select{
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+    padding:7px 9px;
+    font-size:13px;
+  }
+  #fodderInputs .fodder-alloc-inline{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:6px;
+  }
+  #fodderInputs .fodder-alloc-inline input[type=number]{
+    width:4.5rem;
+    flex:0 0 auto;
+    padding:7px 9px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-family:inherit;
+    font-variant-numeric:tabular-nums;
+  }
+  #fodderInputs .fodder-alloc-inline .field-hint{
+    margin-top:0;
+    font-size:11px;
+  }
+  #fodderInputs .fodder-pool-result{
+    font-size:11.5px;
+    line-height:1.45;
+    margin-top:2px;
+  }
+  #feed-plan .panel-feed-fodder-cost{overflow:visible}
+  #feed-plan .panel-feed-fodder-cost > .panel-body{overflow:visible}
+  @media(min-width:1100px){
+    #fodderInputs.price-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  }
+  @media(min-width:761px) and (max-width:1099px){
+    #fodderInputs.price-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media(max-width:760px){
+    #fodderInputs.price-grid{grid-template-columns:1fr}
+  }
+
   .ration-row{display:grid;grid-template-columns:1fr 110px 90px;gap:10px;align-items:center;
     padding:8px 0;border-bottom:1px solid var(--line)}
   .ration-row .rn{font-size:13.5px;font-weight:600}
