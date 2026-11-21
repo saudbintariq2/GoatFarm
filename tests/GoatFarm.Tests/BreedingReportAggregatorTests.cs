@@ -61,4 +61,48 @@ public class BreedingReportAggregatorTests
 
         Assert.Equal(today, crossTo);
     }
+
+    [Fact]
+    public void EffectiveCrossFrom_PullsBackWhenBuckInBeforeNominalSeasonWindow()
+    {
+        var batch = new BreedingSeasonBatch { Id = "b1", Name = "Main group" };
+        var plan = new BreedingSeasonPlan
+        {
+            Batch = batch,
+            CrossFrom = new DateOnly(2027, 4, 4),
+            CrossTo = new DateOnly(2027, 4, 18),
+            WeanTo = new DateOnly(2028, 8, 1)
+        };
+        var today = new DateOnly(2026, 11, 21);
+        var d105 = TestDb.Doe("D-105"); d105.Id = 105; d105.MatedDate = new DateOnly(2026, 11, 17);
+        var batchDoes = new HashSet<int> { 105 };
+        var groups = new List<BreedingGroupDto>
+        {
+            new()
+            {
+                BirthBatchId = "b1",
+                Start = "2026-11-17",
+                Members = [new BreedingGroupMemberDto { GoatId = 105 }]
+            }
+        };
+
+        var from = BreedingReportAggregator.EffectiveCrossFrom(
+            plan, today, batchDoes, [d105], [], groups, batch);
+
+        Assert.Equal(new DateOnly(2026, 11, 17), from);
+    }
+
+    [Fact]
+    public void FilterSeasonEvents_IncludesEarlyCrossesInExtendedWindow()
+    {
+        var batchDoes = new HashSet<int> { 105 };
+        var events = new List<BreedingEvent>
+        {
+            new() { DoeId = 105, MatedDate = new DateOnly(2026, 11, 17), Outcome = BreedingOutcome.Open }
+        };
+        var filtered = BreedingReportAggregator.FilterSeasonEvents(
+            events, batchDoes, new DateOnly(2026, 11, 17), new DateOnly(2026, 11, 21), null);
+
+        Assert.Single(filtered);
+    }
 }

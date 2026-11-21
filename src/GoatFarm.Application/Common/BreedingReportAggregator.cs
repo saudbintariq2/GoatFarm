@@ -139,16 +139,77 @@ public static class BreedingReportAggregator
     public static DateOnly EffectiveCrossTo(BreedingSeasonPlan plan, DateOnly today) =>
         today > plan.WeanTo ? plan.CrossTo : (today > plan.CrossTo ? today : plan.CrossTo);
 
+    /// <summary>
+    /// Season plan can roll to next calendar year while buck-in already happened — pull cross start back to real group or doe dates.
+    /// </summary>
+    public static DateOnly EffectiveCrossFrom(
+        BreedingSeasonPlan plan,
+        DateOnly today,
+        HashSet<int> batchDoes,
+        IReadOnlyList<Goat> live,
+        IReadOnlyList<BreedingEvent> breedingEvents,
+        IReadOnlyList<BreedingGroupDto>? breedingGroups,
+        BreedingSeasonBatch batch)
+    {
+        var from = plan.CrossFrom;
+        if (today > plan.WeanTo)
+            return from;
+
+        if (breedingGroups is { Count: > 0 })
+        {
+            foreach (var grp in breedingGroups)
+            {
+                if (!string.Equals(grp.BirthBatchId, batch.Id, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (DateOnly.TryParse(grp.Start, out var start) && start < from)
+                    from = start;
+            }
+        }
+
+        foreach (var g in live)
+        {
+            if (!batchDoes.Contains(g.Id) || g.MatedDate is not { } md)
+                continue;
+            if (md < from)
+                from = md;
+        }
+
+        foreach (var e in breedingEvents)
+        {
+            if (!batchDoes.Contains(e.DoeId))
+                continue;
+            if (e.MatedDate < from)
+                from = e.MatedDate;
+        }
+
+        return from;
+    }
+
+    public static void AddMatedDoesInCrossWindow(
+        HashSet<int> batchDoes,
+        IReadOnlyList<Goat> live,
+        DateOnly crossFromInclusive,
+        DateOnly crossToInclusive)
+    {
+        foreach (var g in live)
+        {
+            if (g.Gender != GoatGender.Female || g.Status == GoatStatus.Kid)
+                continue;
+            if (g.MatedDate is { } md && md >= crossFromInclusive && md <= crossToInclusive)
+                batchDoes.Add(g.Id);
+        }
+    }
+
     public static IReadOnlyList<BreedingEvent> FilterSeasonEvents(
         IReadOnlyList<BreedingEvent> all,
         HashSet<int> batchDoeIds,
-        BreedingSeasonPlan plan,
+        DateOnly crossFromInclusive,
         DateOnly crossToInclusive,
         string? buckFilter)
     {
         var list = all.Where(e =>
                 batchDoeIds.Contains(e.DoeId) &&
-                e.MatedDate >= plan.CrossFrom && e.MatedDate <= crossToInclusive)
+                e.MatedDate >= crossFromInclusive && e.MatedDate <= crossToInclusive)
             .ToList();
         if (string.IsNullOrWhiteSpace(buckFilter) || buckFilter == "all")
             return list;
@@ -231,18 +292,18 @@ public static class BreedingReportAggregator
         BreedingReportAgg o,
         IReadOnlyList<Goat> live,
         HashSet<int> batchDoes,
-        BreedingSeasonPlan plan,
+        DateOnly crossFromInclusive,
         DateOnly crossToInclusive)
     {
         if (o.Crossed == 0)
         {
             o.Crossed = live.Count(g => batchDoes.Contains(g.Id) &&
-                                        g.MatedDate is { } md && md >= plan.CrossFrom && md <= crossToInclusive);
+                                        g.MatedDate is { } md && md >= crossFromInclusive && md <= crossToInclusive);
         }
         if (o.Preg == 0)
         {
             o.Preg = live.Count(g => batchDoes.Contains(g.Id) && PregnancyRules.IsConfirmedPregnant(g) &&
-                                     g.MatedDate is { } md2 && md2 >= plan.CrossFrom && md2 <= crossToInclusive);
+                                     g.MatedDate is { } md2 && md2 >= crossFromInclusive && md2 <= crossToInclusive);
         }
         if (o.ExpKids == 0 && o.Preg > 0)
         {
