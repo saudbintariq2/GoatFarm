@@ -407,6 +407,8 @@ public class AssistantToolTests
             Task.FromResult(new FinanceIntegrityViewModel());
         public Task<RelinkUnpostedMoneyResultViewModel> RelinkUnpostedMoneyAsync(RelinkUnpostedMoneyViewModel model, CancellationToken cancellationToken = default) =>
             Task.FromResult(new RelinkUnpostedMoneyResultViewModel());
+        public Task<PayrollPaymentResultViewModel> RecordPayrollPaymentAsync(RecordPayrollPaymentViewModel model, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PayrollPaymentResultViewModel());
     }
 
     private sealed class FakeReports : IReportsService

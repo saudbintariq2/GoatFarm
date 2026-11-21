@@ -22,17 +22,19 @@ internal static class BreedingReportsAssembler
         IReadOnlyList<KiddingRecord> allKiddings,
         IReadOnlyList<BreedingEmptyLog> emptyLogs,
         DateOnly today,
-        bool canEditTargets)
+        bool canEditTargets,
+        IReadOnlyList<BreedingGroupDto>? breedingGroups = null)
     {
         var batch = season.Batches.FirstOrDefault(b => b.Id == seasonBatchId) ?? season.Batches.FirstOrDefault();
         if (batch is null)
             return new BreedingReportsViewModel { HasData = false };
 
         var plan = BreedingSeasonHelper.SeasonPlan(batch, season, today);
-        var batchDoes = BreedingReportAggregator.BatchDoeIds(live, batch, plan);
+        var crossTo = BreedingReportAggregator.EffectiveCrossTo(plan, today);
+        var batchDoes = BreedingReportAggregator.BatchDoeIds(live, batch, plan, crossTo, breedingGroups);
         var goatsById = live.ToDictionary(g => g.Id);
 
-        var seasonEventsAll = BreedingReportAggregator.FilterSeasonEvents(breedingEvents, batchDoes, plan, null);
+        var seasonEventsAll = BreedingReportAggregator.FilterSeasonEvents(breedingEvents, batchDoes, plan, crossTo, null);
 
         var buckTags = seasonEventsAll
             .Select(BreedingReportAggregator.BuckTag)
@@ -45,7 +47,8 @@ internal static class BreedingReportsAssembler
             ? "all"
             : buckTags.FirstOrDefault(t => string.Equals(t, buckFilter, StringComparison.OrdinalIgnoreCase)) ?? "all";
 
-        var events = BreedingReportAggregator.FilterSeasonEvents(breedingEvents, batchDoes, plan, selectedBuck == "all" ? null : selectedBuck);
+        var events = BreedingReportAggregator.FilterSeasonEvents(
+            breedingEvents, batchDoes, plan, crossTo, selectedBuck == "all" ? null : selectedBuck);
         var seasonKiddings = BreedingReportAggregator.SeasonKiddings(allKiddings, batchDoes, plan);
         if (selectedBuck != "all")
         {
@@ -57,7 +60,7 @@ internal static class BreedingReportsAssembler
         }
 
         var o = BreedingReportAggregator.Aggregate(events, seasonKiddings, allKiddings, goatsById, plan, season, today);
-        BreedingReportAggregator.ApplyLiveCountsWhenEventsMissing(o, live, batchDoes, plan);
+        BreedingReportAggregator.ApplyLiveCountsWhenEventsMissing(o, live, batchDoes, plan, crossTo);
         var done = today > plan.WeanTo;
         var buckLab = selectedBuck != "all" ? " · " + selectedBuck : "";
         var kidsExpected = o.ExpKids > 0 ? o.ExpKids : (int)Math.Round(o.Preg * 1.7);

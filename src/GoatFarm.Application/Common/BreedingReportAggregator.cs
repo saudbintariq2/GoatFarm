@@ -135,22 +135,32 @@ public static class BreedingReportAggregator
     public static string BuckTag(BreedingEvent e) =>
         e.Buck?.Tag ?? e.BuckTagText ?? "?";
 
+    /// <summary>While a season is still in progress, crosses after the nominal cross end (e.g. late buck-in) stay on the report.</summary>
+    public static DateOnly EffectiveCrossTo(BreedingSeasonPlan plan, DateOnly today) =>
+        today > plan.WeanTo ? plan.CrossTo : (today > plan.CrossTo ? today : plan.CrossTo);
+
     public static IReadOnlyList<BreedingEvent> FilterSeasonEvents(
         IReadOnlyList<BreedingEvent> all,
         HashSet<int> batchDoeIds,
         BreedingSeasonPlan plan,
+        DateOnly crossToInclusive,
         string? buckFilter)
     {
         var list = all.Where(e =>
                 batchDoeIds.Contains(e.DoeId) &&
-                e.MatedDate >= plan.CrossFrom && e.MatedDate <= plan.CrossTo)
+                e.MatedDate >= plan.CrossFrom && e.MatedDate <= crossToInclusive)
             .ToList();
         if (string.IsNullOrWhiteSpace(buckFilter) || buckFilter == "all")
             return list;
         return list.Where(e => string.Equals(BuckTag(e), buckFilter, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
-    public static HashSet<int> BatchDoeIds(IReadOnlyList<Goat> live, BreedingSeasonBatch batch, BreedingSeasonPlan plan)
+    public static HashSet<int> BatchDoeIds(
+        IReadOnlyList<Goat> live,
+        BreedingSeasonBatch batch,
+        BreedingSeasonPlan plan,
+        DateOnly crossToInclusive,
+        IReadOnlyList<BreedingGroupDto>? breedingGroups = null)
     {
         var ids = new HashSet<int>();
         foreach (var g in live)
@@ -159,9 +169,26 @@ public static class BreedingReportAggregator
                 continue;
             if (string.Equals(g.BirthBatchName, batch.Name, StringComparison.OrdinalIgnoreCase))
                 ids.Add(g.Id);
-            else if (g.MatedDate is { } md && md >= plan.CrossFrom && md <= plan.CrossTo)
+            else if (g.MatedDate is { } md && md >= plan.CrossFrom && md <= crossToInclusive)
                 ids.Add(g.Id);
         }
+
+        if (breedingGroups is { Count: > 0 })
+        {
+            var liveIds = live.Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid)
+                .Select(g => g.Id).ToHashSet();
+            foreach (var grp in breedingGroups)
+            {
+                if (!string.Equals(grp.BirthBatchId, batch.Id, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                foreach (var m in grp.Members)
+                {
+                    if (liveIds.Contains(m.GoatId))
+                        ids.Add(m.GoatId);
+                }
+            }
+        }
+
         return ids;
     }
 
@@ -204,17 +231,18 @@ public static class BreedingReportAggregator
         BreedingReportAgg o,
         IReadOnlyList<Goat> live,
         HashSet<int> batchDoes,
-        BreedingSeasonPlan plan)
+        BreedingSeasonPlan plan,
+        DateOnly crossToInclusive)
     {
         if (o.Crossed == 0)
         {
             o.Crossed = live.Count(g => batchDoes.Contains(g.Id) &&
-                                        g.MatedDate is { } md && md >= plan.CrossFrom && md <= plan.CrossTo);
+                                        g.MatedDate is { } md && md >= plan.CrossFrom && md <= crossToInclusive);
         }
         if (o.Preg == 0)
         {
             o.Preg = live.Count(g => batchDoes.Contains(g.Id) && PregnancyRules.IsConfirmedPregnant(g) &&
-                                     g.MatedDate is { } md2 && md2 >= plan.CrossFrom && md2 <= plan.CrossTo);
+                                     g.MatedDate is { } md2 && md2 >= plan.CrossFrom && md2 <= crossToInclusive);
         }
         if (o.ExpKids == 0 && o.Preg > 0)
         {

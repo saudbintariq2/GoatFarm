@@ -273,7 +273,7 @@ public class ProductsService : IProductsService
             Meat = meatDash,
             CustomMilkingSessions = customMilkingSessions,
             ProductDropdownOptions = productDropdownOptions,
-            RecentSessions = MapSessions(recentSessions, warehouses),
+            RecentSessions = MapSessions(recentSessions, warehouses, allMoves),
             HerdGoats = herdGoats,
             MoneyAccounts = ledgerPage.Accounts,
             Customers = customers.Select(c => new ProductCustomerRowViewModel { Id = c.Id, Name = c.Name }).ToList(),
@@ -312,10 +312,10 @@ public class ProductsService : IProductsService
                 Liters = p.Liters,
                 Comment = p.Comment
             }).ToList(),
-            Sessions = MapSessions(sessions, warehouses),
+            Sessions = MapSessions(sessions, warehouses, allMoves),
             Slaughters = slaughters.Select(MapSlaughterRow).ToList(),
             MeatCutStock = meatCutStock,
-            AnalyticsMilkingSessions = MapSessions(allSessions, warehouses),
+            AnalyticsMilkingSessions = MapSessions(allSessions, warehouses, allMoves),
             AnalyticsLegacyMilk = allLegacyMilk.Select(p => new MilkLegacyRowViewModel
             {
                 Id = p.Id,
@@ -1353,12 +1353,15 @@ public class ProductsService : IProductsService
 
     private static List<MilkingSessionRowViewModel> MapSessions(
         IEnumerable<MilkingSession> sessions,
-        IReadOnlyList<Warehouse> warehouses)
+        IReadOnlyList<Warehouse> warehouses,
+        IReadOnlyList<StockMovement>? milkReceiveHints = null)
     {
         var whNames = warehouses.ToDictionary(w => w.Id, w => w.Name);
         return sessions.Select(s =>
         {
             var (goats, whId) = ParseMilkingSessionMeta(s.Notes);
+            if (whId <= 0 && milkReceiveHints is { Count: > 0 })
+                whId = InferMilkingWarehouseId(s, milkReceiveHints);
             whNames.TryGetValue(whId, out var whName);
             return new MilkingSessionRowViewModel
             {
@@ -1372,6 +1375,30 @@ public class ProductsService : IProductsService
                 WarehouseName = string.IsNullOrWhiteSpace(whName) ? null : whName
             };
         }).ToList();
+    }
+
+    private static int InferMilkingWarehouseId(MilkingSession session, IReadOnlyList<StockMovement> moves)
+    {
+        var sessionToken = $"Milking session {session.Session}";
+        foreach (var m in moves)
+        {
+            if (m.Date != session.Date || m.Type != StockMovementType.Receive)
+                continue;
+            if (m.Product?.Sku is not ("MILK-RAW" or "milk-raw"))
+                continue;
+            if (string.IsNullOrEmpty(m.Notes) || !m.Notes.Contains(sessionToken, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (Math.Abs(m.Qty - Math.Max(0, session.Liters - session.RejectedLiters)) > 0.05m)
+                continue;
+            return m.WarehouseId;
+        }
+
+        return moves
+            .Where(m => m.Date == session.Date && m.Type == StockMovementType.Receive
+                        && m.Product?.Sku is "MILK-RAW" or "milk-raw")
+            .OrderByDescending(m => m.Id)
+            .Select(m => m.WarehouseId)
+            .FirstOrDefault();
     }
 
     private static (int Goats, int WarehouseId) ParseMilkingSessionMeta(string? notes)

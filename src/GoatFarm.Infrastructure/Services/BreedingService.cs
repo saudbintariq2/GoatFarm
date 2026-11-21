@@ -168,7 +168,8 @@ public partial class BreedingService : IBreedingService
             string.Equals(g.Status, "active", StringComparison.OrdinalIgnoreCase) &&
             g.Members.Any(m => selectedBatchDoes.Contains(m.GoatId)));
         var reports = BreedingReportsAssembler.Build(
-            season, batchId, reportBuck, goats, breedingEvents, allKiddings, emptyLogs, today, canEditTargets: true);
+            season, batchId, reportBuck, goats, breedingEvents, allKiddings, emptyLogs, today, canEditTargets: true,
+            breedingGroups);
         var goatsById = goats.ToDictionary(g => g.Id);
         var kiddingsByDoe = allKiddings.ToLookup(k => k.DoeId);
         var dueToKidRows = BreedingKiddingAssembler.BuildDueRows(confirmed, kiddingCounts, kiddingsByDoe, today);

@@ -332,6 +332,8 @@ public class AssistantServiceTests
             Task.FromResult(new Application.ViewModels.Finance.FinanceIntegrityViewModel());
         public Task<Application.ViewModels.Finance.RelinkUnpostedMoneyResultViewModel> RelinkUnpostedMoneyAsync(Application.ViewModels.Finance.RelinkUnpostedMoneyViewModel model, CancellationToken cancellationToken = default) =>
             Task.FromResult(new Application.ViewModels.Finance.RelinkUnpostedMoneyResultViewModel());
+        public Task<Application.ViewModels.Finance.PayrollPaymentResultViewModel> RecordPayrollPaymentAsync(Application.ViewModels.Finance.RecordPayrollPaymentViewModel model, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new Application.ViewModels.Finance.PayrollPaymentResultViewModel());
     }
 
     private sealed class UnusedReports : IReportsService
