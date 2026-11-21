@@ -2982,9 +2982,18 @@ const GoatRecords = (() => {
       return '/Finance' + (month ? '?month=' + encodeURIComponent(month) : '');
     }
 
+    function activeFinanceTab() {
+      const fromDom = document.querySelector('#finance-tabs .tab.active')?.dataset.fintab;
+      if (fromDom) return fromDom;
+      const q = new URLSearchParams(location.search).get('tab') || 'overview';
+      if (q === 'transactions') return 'tx';
+      if (q === 'salaries') return 'salary';
+      return q;
+    }
+
     function reloadFinanceWithToast(message, date) {
       sessionStorage.setItem('goatToast', message);
-      const tab = document.querySelector('#finance-tabs .tab.active')?.dataset.fintab || 'overview';
+      const tab = activeFinanceTab();
       const month = date ? date.slice(0, 7) : (document.getElementById('finMonth')?.value || '');
       let url = '/Finance';
       if (month) url += '?month=' + encodeURIComponent(month);
@@ -2999,7 +3008,7 @@ const GoatRecords = (() => {
     }
 
     document.getElementById('finMonth')?.addEventListener('change', e => {
-      const tab = document.querySelector('#finance-tabs .tab.active')?.dataset.fintab || 'overview';
+      const tab = activeFinanceTab();
       location.href = '/Finance?month=' + encodeURIComponent(e.target.value) + '&tab=' + encodeURIComponent(tab);
     });
 

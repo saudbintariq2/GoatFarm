@@ -34,7 +34,7 @@ internal static class BreedingReportsAssembler
         var batchDoes = BreedingReportAggregator.BatchDoeIds(live, batch, plan, crossTo, breedingGroups);
         var crossFrom = BreedingReportAggregator.EffectiveCrossFrom(
             plan, today, batchDoes, live, breedingEvents, breedingGroups, batch);
-        BreedingReportAggregator.AddMatedDoesInCrossWindow(batchDoes, live, crossFrom, crossTo);
+        BreedingReportAggregator.AddBatchDoesByBirthBatchMated(batchDoes, live, batch, crossFrom, crossTo);
         var goatsById = live.ToDictionary(g => g.Id);
 
         var seasonEventsAll = BreedingReportAggregator.FilterSeasonEvents(

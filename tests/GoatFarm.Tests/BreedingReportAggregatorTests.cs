@@ -6,19 +6,34 @@ namespace GoatFarm.Tests;
 
 public class BreedingReportAggregatorTests
 {
+    private static BreedingSeasonPlan Plan(
+        BreedingSeasonBatch batch,
+        DateOnly crossFrom,
+        DateOnly crossTo,
+        DateOnly? kidFrom = null,
+        DateOnly? kidTo = null,
+        DateOnly? weanTo = null) =>
+        new()
+        {
+            Batch = batch,
+            KidFrom = kidFrom ?? crossFrom.AddMonths(5),
+            KidTo = kidTo ?? crossTo.AddMonths(6),
+            CrossFrom = crossFrom,
+            CrossTo = crossTo,
+            BuildFrom = crossFrom.AddMonths(-2),
+            ScanFrom = crossTo.AddDays(30),
+            ScanTo = crossTo.AddMonths(2),
+            DryFrom = crossTo.AddMonths(4),
+            DryTo = crossTo.AddMonths(5),
+            WeanFrom = crossTo.AddMonths(6),
+            WeanTo = weanTo ?? crossTo.AddMonths(10)
+        };
+
     [Fact]
     public void BatchDoeIds_IncludesBreedingGroupMembersForBatch()
     {
         var batch = new BreedingSeasonBatch { Id = "main", Name = "Main group" };
-        var plan = new BreedingSeasonPlan
-        {
-            Batch = batch,
-            CrossFrom = new DateOnly(2026, 10, 1),
-            CrossTo = new DateOnly(2026, 11, 16),
-            KidFrom = new DateOnly(2027, 3, 1),
-            KidTo = new DateOnly(2027, 4, 30),
-            WeanTo = new DateOnly(2027, 8, 1)
-        };
+        var plan = Plan(batch, new DateOnly(2026, 10, 1), new DateOnly(2026, 11, 16));
         var crossTo = BreedingReportAggregator.EffectiveCrossTo(plan, new DateOnly(2026, 11, 21));
         var d101 = TestDb.Doe("D-101"); d101.Id = 101;
         var d102 = TestDb.Doe("D-102"); d102.Id = 102;
@@ -48,13 +63,7 @@ public class BreedingReportAggregatorTests
     public void EffectiveCrossTo_ExtendsThroughTodayWhileSeasonInProgress()
     {
         var batch = new BreedingSeasonBatch { Id = "main", Name = "Main" };
-        var plan = new BreedingSeasonPlan
-        {
-            Batch = batch,
-            CrossFrom = new DateOnly(2026, 10, 1),
-            CrossTo = new DateOnly(2026, 11, 16),
-            WeanTo = new DateOnly(2027, 8, 1)
-        };
+        var plan = Plan(batch, new DateOnly(2026, 10, 1), new DateOnly(2026, 11, 16), weanTo: new DateOnly(2027, 8, 1));
         var today = new DateOnly(2026, 11, 21);
 
         var crossTo = BreedingReportAggregator.EffectiveCrossTo(plan, today);
@@ -66,13 +75,7 @@ public class BreedingReportAggregatorTests
     public void EffectiveCrossFrom_PullsBackWhenBuckInBeforeNominalSeasonWindow()
     {
         var batch = new BreedingSeasonBatch { Id = "b1", Name = "Main group" };
-        var plan = new BreedingSeasonPlan
-        {
-            Batch = batch,
-            CrossFrom = new DateOnly(2027, 4, 4),
-            CrossTo = new DateOnly(2027, 4, 18),
-            WeanTo = new DateOnly(2028, 8, 1)
-        };
+        var plan = Plan(batch, new DateOnly(2027, 4, 4), new DateOnly(2027, 4, 18), weanTo: new DateOnly(2028, 8, 1));
         var today = new DateOnly(2026, 11, 21);
         var d105 = TestDb.Doe("D-105"); d105.Id = 105; d105.MatedDate = new DateOnly(2026, 11, 17);
         var batchDoes = new HashSet<int> { 105 };

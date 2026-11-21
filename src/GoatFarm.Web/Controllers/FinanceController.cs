@@ -51,6 +51,15 @@ public class FinanceController : Controller
         ViewBag.FundingShareholders = await _lookupService.GetListAsync(LookupSettingKeys.FundingShareholders, cancellationToken);
         var tab = Request.Query["tab"].ToString();
         tab = string.IsNullOrWhiteSpace(tab) ? "overview" : tab;
+        tab = tab switch
+        {
+            "transactions" => "tx",
+            "receivables" => "salesar",
+            "payables" => "salesar",
+            "salaries" => "salary",
+            "fixed" => "people",
+            _ => tab
+        };
         ViewBag.FinanceTab = tab;
         ViewBag.SalaryReconciliation = await _financeService.GetSalaryReconciliationAsync(cancellationToken);
 

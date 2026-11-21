@@ -185,15 +185,19 @@ public static class BreedingReportAggregator
         return from;
     }
 
-    public static void AddMatedDoesInCrossWindow(
+    /// <summary>Only does tied to this birth batch — avoids counting other groups' crosses on the same dates.</summary>
+    public static void AddBatchDoesByBirthBatchMated(
         HashSet<int> batchDoes,
         IReadOnlyList<Goat> live,
+        BreedingSeasonBatch batch,
         DateOnly crossFromInclusive,
         DateOnly crossToInclusive)
     {
         foreach (var g in live)
         {
             if (g.Gender != GoatGender.Female || g.Status == GoatStatus.Kid)
+                continue;
+            if (!string.Equals(g.BirthBatchName, batch.Name, StringComparison.OrdinalIgnoreCase))
                 continue;
             if (g.MatedDate is { } md && md >= crossFromInclusive && md <= crossToInclusive)
                 batchDoes.Add(g.Id);
@@ -229,8 +233,6 @@ public static class BreedingReportAggregator
             if (g.Gender != GoatGender.Female || g.Status == GoatStatus.Kid)
                 continue;
             if (string.Equals(g.BirthBatchName, batch.Name, StringComparison.OrdinalIgnoreCase))
-                ids.Add(g.Id);
-            else if (g.MatedDate is { } md && md >= plan.CrossFrom && md <= crossToInclusive)
                 ids.Add(g.Id);
         }
 

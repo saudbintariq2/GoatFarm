@@ -491,8 +491,11 @@ public class ProductsService : IProductsService
         row.Breed = model.Breed;
         row.Liters = model.Liters;
         row.RejectedLiters = model.RejectedLiters;
-        if (model.GoatCount > 0 || model.WarehouseId is > 0)
-            row.Notes = JsonSerializer.Serialize(new { goats = model.GoatCount, wh = model.WarehouseId ?? 0 });
+        row.Notes = JsonSerializer.Serialize(new
+        {
+            goats = Math.Max(0, model.GoatCount),
+            wh = model.WarehouseId ?? 0
+        });
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
 
