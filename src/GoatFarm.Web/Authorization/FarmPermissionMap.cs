@@ -274,6 +274,8 @@ public static class FarmPermissionMap
             ["Finance.Statement"] = (FarmTabs.Finance, FarmActions.View),
             ["Finance.IntegrityCheck"] = (FarmTabs.Finance, FarmActions.View),
             ["Finance.RelinkUnpostedMoney"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.FundLivestockAsOwner"] = (FarmTabs.Finance, FarmActions.Edit),
+            ["Finance.RecordPayrollPayment"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.ReceiveInvoice"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.PayPayable"] = (FarmTabs.Finance, FarmActions.Add),
             ["Finance.DeleteInvoice"] = (FarmTabs.Finance, FarmActions.Delete),

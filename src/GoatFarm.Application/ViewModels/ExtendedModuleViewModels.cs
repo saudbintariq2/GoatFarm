@@ -409,6 +409,7 @@ public class SupplierPayableRowViewModel
     public decimal PaidAmount { get; set; }
     public string Status { get; set; } = "";
     public string? DueDateDisplay { get; set; }
+  public bool CanPayFromUi { get; set; } = true;
 }
 
 public class BudgetRowViewModel
@@ -473,6 +474,7 @@ public class SaveLedgerTransactionViewModel
     public decimal Amount { get; set; }
     public string? Category { get; set; }
     public string? Notes { get; set; }
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class SaveCustomerInvoiceViewModel
@@ -497,6 +499,10 @@ public class SaveSupplierPayableViewModel
     public decimal Amount { get; set; }
     public decimal PaidAmount { get; set; }
     public int? AccountId { get; set; }
+    /// <summary>FN14 — accrual expense in the same transaction (no separate AddExpense).</summary>
+    public bool PostToExpense { get; set; }
+    public string? ExpenseType { get; set; }
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class SaveBudgetLineViewModel
@@ -818,6 +824,7 @@ public class MilkingSessionRowViewModel
     public decimal RejectedLiters { get; set; }
     public int GoatCount { get; set; }
     public string? WarehouseName { get; set; }
+    public string? RecordedBy { get; set; }
 }
 
 public class SlaughterRowViewModel
@@ -854,7 +861,10 @@ public class ProductSaleRowViewModel
     public string ProductName { get; set; } = "";
     public string? Customer { get; set; }
     public decimal Qty { get; set; }
+    public decimal Rate { get; set; }
     public decimal Amount { get; set; }
+    public decimal? CostAmount { get; set; }
+    public decimal? MarginAmount { get; set; }
     public bool IsCredit { get; set; }
 }
 
@@ -891,6 +901,7 @@ public class SaveStockMovementViewModel
     public decimal Qty { get; set; }
     public decimal UnitCost { get; set; }
     public string? Notes { get; set; }
+    public string? RecordedBy { get; set; }
 }
 
 public class SavePasteurizationViewModel
@@ -906,6 +917,7 @@ public class SavePasteurizationViewModel
     public string? RunRef { get; set; }
     public string? HeatTempC { get; set; }
     public string? CoolTempC { get; set; }
+    public string? RecordedBy { get; set; }
 }
 
 public class SaveMilkingSessionViewModel
@@ -918,6 +930,9 @@ public class SaveMilkingSessionViewModel
     public decimal RejectedLiters { get; set; }
     public int? WarehouseId { get; set; }
     public int GoatCount { get; set; }
+    public string? Note { get; set; }
+    public string? RecordedBy { get; set; }
+    public bool SplitByMilkingBreeds { get; set; }
 }
 
 public class SaveSlaughterViewModel
@@ -973,6 +988,8 @@ public class SaveProductSaleViewModel
     public decimal Amount { get; set; }
     public bool IsCredit { get; set; }
     public string? Notes { get; set; }
+    public string? RecordedBy { get; set; }
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 }

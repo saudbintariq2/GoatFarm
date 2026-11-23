@@ -30,7 +30,7 @@ public partial class FinanceService
             .Select(e => new { e.Id, e.Amount, e.Type, e.Date })
             .ToListAsync(cancellationToken);
 
-        int unlinkedFunding = 0, unlinkedIncome = 0, unlinkedExpense = 0;
+        int unlinkedFunding = 0, unlinkedIncome = 0, unlinkedExpense = 0, unlinkedFeed = 0, unlinkedVacc = 0;
         foreach (var o in funding)
         {
             var key = $"fin-funding:{o.Id}";
@@ -72,6 +72,44 @@ public partial class FinanceService
                     Severity = "critical",
                     Code = "UNLINKED_EXPENSE",
                     Message = $"Expense Rs {e.Amount:N0} ({e.Type}) on {e.Date:yyyy-MM-dd} is not posted to an account."
+                });
+            }
+        }
+
+        var feedBuys = await _context.FeedPurchases.AsNoTracking()
+            .Where(p => p.PaidAmount > 0)
+            .Select(p => new { p.Id, p.PaidAmount, p.Date, p.FeedType })
+            .ToListAsync(cancellationToken);
+        foreach (var p in feedBuys)
+        {
+            var key = $"feed_purchase:{p.Id}";
+            if (!linkRefs.Contains(key))
+            {
+                unlinkedFeed++;
+                issues.Add(new FinanceIntegrityIssueViewModel
+                {
+                    Severity = "critical",
+                    Code = "UNLINKED_FEED_PURCHASE",
+                    Message = $"Feed purchase paid Rs {p.PaidAmount:N0} ({p.FeedType}) on {p.Date:yyyy-MM-dd} is not on Bank & Cash."
+                });
+            }
+        }
+
+        var vaccBuys = await _context.VaccinePurchases.AsNoTracking()
+            .Where(v => v.PaidAmount > 0)
+            .Select(v => new { v.Id, v.PaidAmount, v.Date, v.Name })
+            .ToListAsync(cancellationToken);
+        foreach (var v in vaccBuys)
+        {
+            var key = $"vaccine_purchase:{v.Id}";
+            if (!linkRefs.Contains(key))
+            {
+                unlinkedVacc++;
+                issues.Add(new FinanceIntegrityIssueViewModel
+                {
+                    Severity = "critical",
+                    Code = "UNLINKED_VACCINE_PURCHASE",
+                    Message = $"Vaccine purchase paid Rs {v.PaidAmount:N0} ({v.Name}) on {v.Date:yyyy-MM-dd} is not on Bank & Cash."
                 });
             }
         }
@@ -191,6 +229,42 @@ public partial class FinanceService
             }
         }
 
+        var (livestockValue, alreadyFunded, livestockGap) = await ComputeLivestockFundingGapAsync(cancellationToken);
+        if (livestockGap > 1m)
+        {
+            issues.Add(new FinanceIntegrityIssueViewModel
+            {
+                Severity = "critical",
+                Code = "UNFUNDED_LIVESTOCK",
+                Message = $"Livestock on the books is Rs {livestockValue:N0} but only Rs {alreadyFunded:N0} is backed by owner funding or goat-purchase payments. Gap Rs {livestockGap:N0} — use Post livestock as owner funding on staging."
+            });
+        }
+
+        var imbalance = await ComputeBalanceSheetImbalanceAsync(cancellationToken);
+        if (imbalance > 1m)
+        {
+            issues.Add(new FinanceIntegrityIssueViewModel
+            {
+                Severity = "critical",
+                Code = "BALANCE_SHEET_IMBALANCE",
+                Message = $"Balance sheet off by Rs {imbalance:N0}. Run Re-link unposted money, post livestock funding, then refresh."
+            });
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var cumulative = await GetCumulativeProfitAsync(cancellationToken);
+        var stmt = await GetStatementAsync(await GetBooksStartDateAsync(cancellationToken), today, cancellationToken);
+        var stmtProfit = stmt.Income - stmt.Expense;
+        if (Math.Abs(cumulative - stmtProfit) > 1m)
+        {
+            issues.Add(new FinanceIntegrityIssueViewModel
+            {
+                Severity = "warn",
+                Code = "PROFIT_STATEMENT_DRIFT",
+                Message = $"All-time P&L (Rs {stmtProfit:N0}) does not match balance sheet cumulative profit (Rs {cumulative:N0}). Re-link and rebuild feed stock after import."
+            });
+        }
+
         return new FinanceIntegrityViewModel
         {
             Issues = issues.OrderByDescending(i => i.Severity).ThenBy(i => i.Code).ToList(),
@@ -198,8 +272,92 @@ public partial class FinanceService
             WarningCount = issues.Count(i => i.Severity != "critical"),
             UnlinkedFundingCount = unlinkedFunding,
             UnlinkedIncomeCount = unlinkedIncome,
-            UnlinkedExpenseCount = unlinkedExpense
+            UnlinkedExpenseCount = unlinkedExpense,
+            UnlinkedFeedPurchaseCount = unlinkedFeed,
+            UnlinkedVaccinePurchaseCount = unlinkedVacc,
+            UnfundedLivestockGap = livestockGap,
+            StatementProfitAllTime = stmtProfit,
+            BalanceSheetCumulativeProfit = cumulative
         };
+    }
+
+    public async Task<FundLivestockResultViewModel> FundLivestockAsOwnerContributionAsync(
+        FundLivestockAsOwnerViewModel model, CancellationToken cancellationToken = default)
+    {
+        EnsureMoneyAccount(model.AccountId);
+        var (livestockValue, alreadyFunded, gap) = await ComputeLivestockFundingGapAsync(cancellationToken);
+        if (gap <= 1m)
+        {
+            return new FundLivestockResultViewModel
+            {
+                Success = true,
+                DryRun = model.DryRun,
+                LivestockValue = livestockValue,
+                AlreadyFunded = alreadyFunded,
+                AmountToPost = 0,
+                Message = "Livestock is already fully backed by funding or purchase payments."
+            };
+        }
+
+        if (model.DryRun)
+        {
+            return new FundLivestockResultViewModel
+            {
+                Success = true,
+                DryRun = true,
+                LivestockValue = livestockValue,
+                AlreadyFunded = alreadyFunded,
+                AmountToPost = gap,
+                Message = $"Dry run: would post Rs {gap:N0} owner funding for livestock on herd books."
+            };
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        await AddOwnerInvestmentAsync(new CreateOwnerInvestmentViewModel
+        {
+            Amount = gap,
+            Date = today,
+            AccountId = model.AccountId,
+            Shareholder = "Owner",
+            FundingType = "Capital investment",
+            Note = "Owner contribution – livestock (staging bulk)"
+        }, cancellationToken);
+
+        return new FundLivestockResultViewModel
+        {
+            Success = true,
+            LivestockValue = livestockValue,
+            AlreadyFunded = alreadyFunded,
+            AmountToPost = gap,
+            Message = $"Posted Rs {gap:N0} owner funding to balance livestock (Rs {livestockValue:N0} on herd)."
+        };
+    }
+
+    private async Task<(decimal LivestockValue, decimal AlreadyFunded, decimal Gap)> ComputeLivestockFundingGapAsync(
+        CancellationToken cancellationToken)
+    {
+        var livestock = GetLivestockValue();
+        var goatCash = await _context.Expenses.AsNoTracking()
+            .Where(e => e.Type == "Goat purchase")
+            .SumAsync(e => (decimal?)e.Amount, cancellationToken) ?? 0;
+        var ownerLivestock = (await _context.OwnerInvestments.AsNoTracking()
+            .Select(o => new { o.Amount, o.Note })
+            .ToListAsync(cancellationToken))
+            .Where(o => IsLivestockFundingNote(o.Note))
+            .Sum(o => o.Amount);
+        var already = goatCash + ownerLivestock;
+        var gap = Math.Max(0, livestock - already);
+        return (livestock, already, gap);
+    }
+
+    private async Task<DateOnly> GetBooksStartDateAsync(CancellationToken cancellationToken)
+    {
+        var firstIncome = await _context.Incomes.MinAsync(i => (DateOnly?)i.Date, cancellationToken);
+        var firstExpense = await _context.Expenses.MinAsync(e => (DateOnly?)e.Date, cancellationToken);
+        var firstFunding = await _context.OwnerInvestments.MinAsync(o => (DateOnly?)o.Date, cancellationToken);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var candidates = new[] { firstIncome, firstExpense, firstFunding }.Where(d => d.HasValue).Select(d => d!.Value).ToList();
+        return candidates.Count > 0 ? candidates.Min() : today;
     }
 
     private static Dictionary<int, decimal> ComputeMoneyBalances(IReadOnlyList<MoneyAccount> accounts, IReadOnlyList<LedgerTransaction> tx)
@@ -237,7 +395,7 @@ public partial class FinanceService
             .ToListAsync(cancellationToken);
         var have = linkedRefs.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        int funding = 0, income = 0, expense = 0;
+        int funding = 0, income = 0, expense = 0, feed = 0, vacc = 0;
         var messages = new List<string> { $"Default account: {account.Name}" };
 
         if (!model.DryRun)
@@ -272,6 +430,26 @@ public partial class FinanceService
                 have.Add(key);
             }
 
+            foreach (var p in await _context.FeedPurchases.Where(x => x.PaidAmount > 0).ToListAsync(cancellationToken))
+            {
+                var key = $"feed_purchase:{p.Id}";
+                if (have.Contains(key)) continue;
+                await SyncCashMovementAsync(key, p.Date, p.PaidAmount, p.AccountId ?? model.DefaultAccountId,
+                    LedgerTransactionKind.Expense, "Feed purchase", p.Supplier ?? p.FeedType, cancellationToken);
+                feed++;
+                have.Add(key);
+            }
+
+            foreach (var v in await _context.VaccinePurchases.Where(x => x.PaidAmount > 0).ToListAsync(cancellationToken))
+            {
+                var key = $"vaccine_purchase:{v.Id}";
+                if (have.Contains(key)) continue;
+                await SyncCashMovementAsync(key, v.Date, v.PaidAmount, v.AccountId ?? model.DefaultAccountId,
+                    LedgerTransactionKind.Expense, "Vaccine purchase", v.Name, cancellationToken);
+                vacc++;
+                have.Add(key);
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
         }
         else
@@ -282,19 +460,37 @@ public partial class FinanceService
                 if (!have.Contains($"fin-income:{i.Id}")) income++;
             foreach (var e in await _context.Expenses.AsNoTracking().Where(x => x.Amount > 0).ToListAsync(cancellationToken))
                 if (!have.Contains($"fin-expense:{e.Id}")) expense++;
+            foreach (var p in await _context.FeedPurchases.AsNoTracking().Where(x => x.PaidAmount > 0).ToListAsync(cancellationToken))
+                if (!have.Contains($"feed_purchase:{p.Id}")) feed++;
+            foreach (var v in await _context.VaccinePurchases.AsNoTracking().Where(x => x.PaidAmount > 0).ToListAsync(cancellationToken))
+                if (!have.Contains($"vaccine_purchase:{v.Id}")) vacc++;
         }
 
         messages.Add(model.DryRun
-            ? $"Dry run: would link {funding} funding, {income} income, {expense} expense rows."
-            : $"Linked {funding} funding, {income} income, {expense} expense rows.");
+            ? $"Dry run: would link {funding} funding, {income} income, {expense} expenses, {feed} feed buys, {vacc} vaccine buys."
+            : $"Linked {funding} funding, {income} income, {expense} expenses, {feed} feed buys, {vacc} vaccine buys.");
 
         return new RelinkUnpostedMoneyResultViewModel
         {
             FundingLinked = funding,
             IncomeLinked = income,
             ExpenseLinked = expense,
+            FeedPurchaseLinked = feed,
+            VaccinePurchaseLinked = vacc,
             Messages = messages
         };
+    }
+
+    private async Task<decimal> ComputeBalanceSheetImbalanceAsync(CancellationToken cancellationToken)
+    {
+        var month = MonthHelper.CurrentMonthKey();
+        var page = await GetFinancePageAsync(month, new FinancePageLoadOptions
+        {
+            IncludeTabRegisters = true,
+            IncludeIntegrityAndBalance = false
+        }, cancellationToken);
+        var bs = await BuildBalanceSheetAsync(page, cancellationToken);
+        return bs.IsBalanced ? 0 : bs.ImbalanceAmount;
     }
 
     private async Task<FinanceBalanceSheetViewModel> BuildBalanceSheetAsync(FinancePageViewModel page, CancellationToken cancellationToken)
@@ -311,15 +507,9 @@ public partial class FinanceService
         var feed = page.FeedStockValue;
         var totalAssets = cashAndBank + receivables + livestock + fixedAssets + projects + feed;
 
-        var payables = await _context.SupplierPayables.AsNoTracking()
-            .Where(p => p.Status == PayableStatus.Open || p.Status == PayableStatus.Partial)
-            .ToListAsync(cancellationToken);
-        var loansOpen = payables
-            .Where(p => p.Description.StartsWith("Loan", StringComparison.OrdinalIgnoreCase))
-            .Sum(p => Math.Max(0, p.Amount - p.PaidAmount));
-        var payablesOpen = payables
-            .Where(p => !p.Description.StartsWith("Loan", StringComparison.OrdinalIgnoreCase))
-            .Sum(p => Math.Max(0, p.Amount - p.PaidAmount));
+        var monthKey = MonthHelper.CurrentMonthKey();
+        var payrollOpen = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, monthKey, cancellationToken);
+        var (_, payablesOpen, loansOpen) = await FinancePayablesBuilder.BuildAsync(_context, payrollOpen, cancellationToken);
         var totalLiabilities = payablesOpen + loansOpen;
 
         var cumulativeProfit = await GetCumulativeProfitAsync(cancellationToken);
@@ -385,6 +575,14 @@ public partial class FinanceService
 
     private static string Truncate(string text, int max) =>
         text.Length <= max ? text : text[..max] + "…";
+
+    private static bool IsLivestockFundingNote(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note)) return false;
+        return note.Contains("livestock", StringComparison.OrdinalIgnoreCase)
+            || (note.Contains("goat", StringComparison.OrdinalIgnoreCase)
+                && note.Contains("owner contribution", StringComparison.OrdinalIgnoreCase));
+    }
 
     public async Task<IReadOnlyList<FinanceMonthlyClosingRowViewModel>> BuildMonthlyClosingRowsAsync(
         string monthKey, CancellationToken cancellationToken = default)

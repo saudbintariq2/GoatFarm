@@ -49,6 +49,8 @@ public class RecordSaleViewModel
     public int? AccountId { get; set; }
 
     public int? CustomerId { get; set; }
+
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class GoatSaleFormDataViewModel

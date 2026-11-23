@@ -16,12 +16,14 @@ public class ProductsService : IProductsService
 {
     private readonly GoatFarmDbContext _context;
     private readonly ILedgerService _ledger;
+    private readonly IFarmMetricsService _farmMetrics;
     private readonly string _deviceCode;
 
-    public ProductsService(GoatFarmDbContext context, ILedgerService ledger, IConfiguration configuration)
+    public ProductsService(GoatFarmDbContext context, ILedgerService ledger, IConfiguration configuration, IFarmMetricsService farmMetrics)
     {
         _context = context;
         _ledger = ledger;
+        _farmMetrics = farmMetrics;
         _deviceCode = configuration["ApplicationSettings:DeviceCode"] ?? "K7Q";
     }
 
@@ -109,9 +111,10 @@ public class ProductsService : IProductsService
                 WeightKg = s.WeightKg,
                 Cost = g != null ? g.PurchasePrice : 0
             }).ToListAsync(cancellationToken);
-        var sales = await _context.ProductSales.AsNoTracking().Include(s => s.Customer)
+        var sales = await _context.ProductSales.AsNoTracking().Include(s => s.Customer).Include(s => s.Product)
             .Where(s => s.Date >= monthStart && s.Date <= monthEnd)
             .OrderByDescending(s => s.Date).ToListAsync(cancellationToken);
+        var feedCostPerLitreByMonth = new Dictionary<string, decimal?>();
         var customers = await _context.BusinessCustomers.AsNoTracking()
             .Where(c => c.IsActive).OrderBy(c => c.Name).ToListAsync(cancellationToken);
         var goatRows = await _context.Goats.AsNoTracking()
@@ -374,17 +377,7 @@ public class ProductsService : IProductsService
                     ProductName = x.Product.Name,
                     Rate = x.Rate
                 }).ToList(),
-            Sales = sales.Select(s => new ProductSaleRowViewModel
-            {
-                Id = s.Id,
-                DateDisplay = s.Date.ToString("yyyy-MM-dd"),
-                InvoiceNo = s.InvoiceNo,
-                ProductName = s.ProductName,
-                Customer = s.Customer?.Name,
-                Qty = s.Qty,
-                Amount = s.Amount,
-                IsCredit = s.IsCredit
-            }).ToList()
+            Sales = await MapProductSalesAsync(sales, feedCostPerLitreByMonth, cancellationToken)
         };
     }
 
@@ -474,7 +467,7 @@ public class ProductsService : IProductsService
         row.ToWarehouseId = model.ToWarehouseId;
         row.Qty = model.Qty;
         row.UnitCost = model.UnitCost;
-        row.Notes = model.Notes;
+        row.Notes = AppendRecordedBy(model.Notes, model.RecordedBy);
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
         return new { id = row.Id };
@@ -482,6 +475,71 @@ public class ProductsService : IProductsService
 
     public async Task<object> SaveMilkingSessionAsync(SaveMilkingSessionViewModel model, CancellationToken cancellationToken = default)
     {
+        if (model.Id is null or <= 0
+            && model.SplitByMilkingBreeds
+            && string.Equals(model.Breed, "Mixed", StringComparison.OrdinalIgnoreCase))
+            return await SaveMilkingSessionSplitByMilkingBreedsAsync(model, cancellationToken);
+
+        return await SaveMilkingSessionCoreAsync(model, cancellationToken);
+    }
+
+    private async Task<object> SaveMilkingSessionSplitByMilkingBreedsAsync(
+        SaveMilkingSessionViewModel model, CancellationToken cancellationToken)
+    {
+        var milkers = await _context.Goats.AsNoTracking()
+            .Where(g => !g.IsArchived && g.Status == GoatStatus.Milking)
+            .Select(g => new { g.Breed })
+            .ToListAsync(cancellationToken);
+        if (milkers.Count == 0)
+        {
+            model.SplitByMilkingBreeds = false;
+            return await SaveMilkingSessionCoreAsync(model, cancellationToken);
+        }
+
+        var groups = milkers
+            .GroupBy(g => string.IsNullOrWhiteSpace(g.Breed) ? "Mixed" : g.Breed.Trim())
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var splitLiters = DistributeProportionally(model.Liters, groups.Select(g => g.Count()).ToList());
+        var splitRejected = DistributeProportionally(model.RejectedLiters, groups.Select(g => g.Count()).ToList());
+        object? last = null;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var grp = groups[i];
+            var child = CloneMilkingSession(model, grp.Key, splitLiters[i], splitRejected[i], grp.Count());
+            last = await SaveMilkingSessionCoreAsync(child, cancellationToken);
+        }
+
+        return last ?? new { id = 0 };
+    }
+
+    private static SaveMilkingSessionViewModel CloneMilkingSession(
+        SaveMilkingSessionViewModel model, string breed, decimal liters, decimal rejected, int goatCount) =>
+        new()
+        {
+            Id = model.Id,
+            Date = model.Date,
+            Session = model.Session,
+            Breed = breed,
+            Liters = liters,
+            RejectedLiters = rejected,
+            WarehouseId = model.WarehouseId,
+            GoatCount = goatCount,
+            Note = model.Note,
+            RecordedBy = model.RecordedBy,
+            SplitByMilkingBreeds = false
+        };
+
+    private async Task<object> SaveMilkingSessionCoreAsync(SaveMilkingSessionViewModel model, CancellationToken cancellationToken = default)
+    {
+        var goatCount = model.GoatCount;
+        if (goatCount <= 0 && !string.IsNullOrWhiteSpace(model.Breed)
+            && !string.Equals(model.Breed, "Mixed", StringComparison.OrdinalIgnoreCase))
+        {
+            goatCount = await _context.Goats.CountAsync(g => !g.IsArchived && g.Status == GoatStatus.Milking
+                && g.Breed == model.Breed, cancellationToken);
+        }
+
         MilkingSession row;
         if (model.Id is > 0)
             row = await _context.MilkingSessions.FirstAsync(s => s.Id == model.Id, cancellationToken);
@@ -493,8 +551,10 @@ public class ProductsService : IProductsService
         row.RejectedLiters = model.RejectedLiters;
         row.Notes = JsonSerializer.Serialize(new
         {
-            goats = Math.Max(0, model.GoatCount),
-            wh = model.WarehouseId ?? 0
+            goats = Math.Max(0, goatCount),
+            wh = model.WarehouseId ?? 0,
+            recordedBy = string.IsNullOrWhiteSpace(model.RecordedBy) ? null : model.RecordedBy.Trim(),
+            note = string.IsNullOrWhiteSpace(model.Note) ? null : model.Note.Trim()
         });
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
@@ -748,7 +808,22 @@ public class ProductsService : IProductsService
     public async Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default)
     {
         if (model.Qty <= 0) throw new InvalidOperationException("Enter quantity sold.");
-        var amount = model.Qty * model.Rate;
+        var rate = model.Rate;
+        if (rate <= 0 && model.Qty > 0)
+        {
+            if (model.Amount > 0)
+                rate = model.Amount / model.Qty;
+            else if (model.ProductId is > 0)
+            {
+                var catalogRate = await _context.ProductCatalogItems.AsNoTracking()
+                    .Where(c => c.Id == model.ProductId)
+                    .Select(c => c.DefaultPrice)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (catalogRate > 0) rate = catalogRate;
+            }
+        }
+
+        var amount = model.Amount > 0 ? model.Amount : model.Qty * rate;
         var isNew = model.Id is not > 0;
         ProductSale row;
         if (!isNew)
@@ -795,12 +870,26 @@ public class ProductsService : IProductsService
         row.WarehouseId = saleWarehouseId ?? model.WarehouseId;
         row.ProductName = model.ProductName.Trim();
         row.Qty = model.Qty;
-        row.Rate = model.Rate;
+        row.Rate = rate;
         row.Amount = amount;
         row.IsCredit = model.IsCredit;
-        row.Notes = model.Notes;
+        row.Notes = AppendRecordedBy(model.Notes, model.RecordedBy);
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
+
+        decimal? issueUnitCost = null;
+        if (IsMilkProductName(row.ProductName)
+            || (model.ProductId is > 0 && await _context.ProductCatalogItems.AsNoTracking()
+                .Where(c => c.Id == model.ProductId)
+                .Select(c => c.Sku)
+                .FirstOrDefaultAsync(cancellationToken) is { } sku
+                && sku.StartsWith("MILK", StringComparison.OrdinalIgnoreCase)))
+        {
+            var feedCost = await _farmMetrics.FeedCostPerLitreAsync(
+                new DateOnly(model.Date.Year, model.Date.Month, 1), cancellationToken);
+            if (feedCost.HasValue)
+                issueUnitCost = feedCost.Value;
+        }
 
         var issueWh = row.WarehouseId;
         if (isNew && model.ProductId is > 0 && issueWh is > 0)
@@ -812,7 +901,7 @@ public class ProductsService : IProductsService
                 ProductId = model.ProductId.Value,
                 WarehouseId = issueWh.Value,
                 Qty = model.Qty,
-                UnitCost = 0,
+                UnitCost = issueUnitCost ?? 0,
                 Notes = $"Sale · {row.InvoiceNo}",
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
@@ -886,6 +975,7 @@ public class ProductsService : IProductsService
         if (!string.IsNullOrWhiteSpace(model.HeatTempC)) meta.Add($"heat {model.HeatTempC}°C");
         if (!string.IsNullOrWhiteSpace(model.CoolTempC)) meta.Add($"cool {model.CoolTempC}°C");
         if (!string.IsNullOrWhiteSpace(model.Note)) meta.Add(model.Note.Trim());
+        if (!string.IsNullOrWhiteSpace(model.RecordedBy)) meta.Add($"Recorded by: {model.RecordedBy.Trim()}");
         var note = string.Join(" · ", meta);
 
         _context.StockMovements.Add(new StockMovement
@@ -1362,7 +1452,7 @@ public class ProductsService : IProductsService
         var whNames = warehouses.ToDictionary(w => w.Id, w => w.Name);
         return sessions.Select(s =>
         {
-            var (goats, whId) = ParseMilkingSessionMeta(s.Notes);
+            var (goats, whId, recordedBy) = ParseMilkingSessionMeta(s.Notes);
             if (whId <= 0 && milkReceiveHints is { Count: > 0 })
                 whId = InferMilkingWarehouseId(s, milkReceiveHints);
             whNames.TryGetValue(whId, out var whName);
@@ -1375,7 +1465,8 @@ public class ProductsService : IProductsService
                 Liters = s.Liters,
                 RejectedLiters = s.RejectedLiters,
                 GoatCount = goats,
-                WarehouseName = string.IsNullOrWhiteSpace(whName) ? null : whName
+                WarehouseName = string.IsNullOrWhiteSpace(whName) ? null : whName,
+                RecordedBy = recordedBy
             };
         }).ToList();
     }
@@ -1404,20 +1495,107 @@ public class ProductsService : IProductsService
             .FirstOrDefault();
     }
 
-    private static (int Goats, int WarehouseId) ParseMilkingSessionMeta(string? notes)
+    private static (int Goats, int WarehouseId, string? RecordedBy) ParseMilkingSessionMeta(string? notes)
     {
-        if (string.IsNullOrWhiteSpace(notes)) return (0, 0);
+        if (string.IsNullOrWhiteSpace(notes)) return (0, 0, null);
         try
         {
             using var doc = JsonDocument.Parse(notes);
             var goats = doc.RootElement.TryGetProperty("goats", out var g) ? g.GetInt32() : 0;
             var wh = doc.RootElement.TryGetProperty("wh", out var w) ? w.GetInt32() : 0;
-            return (goats, wh);
+            string? recordedBy = null;
+            if (doc.RootElement.TryGetProperty("recordedBy", out var rb) && rb.ValueKind == JsonValueKind.String)
+                recordedBy = rb.GetString();
+            return (goats, wh, recordedBy);
         }
         catch
         {
-            return (0, 0);
+            return (0, 0, null);
         }
+    }
+
+    private async Task<IReadOnlyList<ProductSaleRowViewModel>> MapProductSalesAsync(
+        IReadOnlyList<ProductSale> sales,
+        Dictionary<string, decimal?> feedCostPerLitreByMonth,
+        CancellationToken cancellationToken)
+    {
+        var rows = new List<ProductSaleRowViewModel>(sales.Count);
+        foreach (var s in sales)
+        {
+            var rate = s.Rate > 0 ? s.Rate : (s.Qty > 0 ? s.Amount / s.Qty : 0);
+            decimal? cost = null;
+            if (IsMilkSale(s))
+            {
+                var key = $"{s.Date.Year:D4}-{s.Date.Month:D2}";
+                if (!feedCostPerLitreByMonth.TryGetValue(key, out var perL))
+                {
+                    perL = await _farmMetrics.FeedCostPerLitreAsync(
+                        new DateOnly(s.Date.Year, s.Date.Month, 1), cancellationToken);
+                    feedCostPerLitreByMonth[key] = perL;
+                }
+
+                if (perL.HasValue)
+                    cost = s.Qty * perL.Value;
+            }
+
+            rows.Add(new ProductSaleRowViewModel
+            {
+                Id = s.Id,
+                DateDisplay = s.Date.ToString("yyyy-MM-dd"),
+                InvoiceNo = s.InvoiceNo,
+                ProductName = s.ProductName,
+                Customer = s.Customer?.Name,
+                Qty = s.Qty,
+                Rate = rate,
+                Amount = s.Amount,
+                CostAmount = cost,
+                MarginAmount = cost.HasValue ? s.Amount - cost.Value : null,
+                IsCredit = s.IsCredit
+            });
+        }
+
+        return rows;
+    }
+
+    private static bool IsMilkSale(ProductSale sale) =>
+        IsMilkProductName(sale.ProductName)
+        || (sale.Product?.Sku?.StartsWith("MILK", StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private static bool IsMilkProductName(string? name) =>
+        !string.IsNullOrWhiteSpace(name)
+        && name.Contains("milk", StringComparison.OrdinalIgnoreCase);
+
+    private static string AppendRecordedBy(string? notes, string? recordedBy)
+    {
+        if (string.IsNullOrWhiteSpace(recordedBy)) return notes?.Trim() ?? "";
+        var tag = $"Recorded by: {recordedBy.Trim()}";
+        if (string.IsNullOrWhiteSpace(notes)) return tag;
+        if (notes.Contains("Recorded by:", StringComparison.OrdinalIgnoreCase)) return notes.Trim();
+        return $"{tag} · {notes.Trim()}";
+    }
+
+    private static IReadOnlyList<decimal> DistributeProportionally(decimal total, IReadOnlyList<int> weights)
+    {
+        if (weights.Count == 0) return [];
+        var sum = weights.Sum();
+        if (sum <= 0 || total <= 0)
+            return weights.Select(_ => 0m).ToList();
+
+        var parts = new List<decimal>(weights.Count);
+        var allocated = 0m;
+        for (var i = 0; i < weights.Count; i++)
+        {
+            if (i == weights.Count - 1)
+                parts.Add(Math.Round(total - allocated, 2, MidpointRounding.AwayFromZero));
+            else
+            {
+                var share = Math.Round(total * weights[i] / sum, 2, MidpointRounding.AwayFromZero);
+                parts.Add(share);
+                allocated += share;
+            }
+        }
+
+        return parts;
     }
 
     private readonly record struct BalanceRow(int productId, int warehouseId, decimal qty);

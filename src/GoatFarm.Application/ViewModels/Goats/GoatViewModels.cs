@@ -71,6 +71,7 @@ public class GoatViewModel
     public string? HerdBreedingStatus { get; set; }
     public string? HerdBreedingStatusCss { get; set; }
     public string? HerdNextJob { get; set; }
+    public string? HerdPregnantText { get; set; }
     public int? TimesPregnant { get; set; }
     public int? KiddingsTotal { get; set; }
     public string? LastKiddingDate { get; set; }
@@ -161,6 +162,9 @@ public class CreateGoatViewModel
 
     [StringLength(50)]
     public string? DamTag { get; set; }
+
+    /// <summary>B2 — when adding a born kid with a dam, also create/update her kidding record.</summary>
+    public bool CreateKiddingRecord { get; set; }
 
     public int? PaidFromAccountId { get; set; }
 

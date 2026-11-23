@@ -106,7 +106,7 @@ public class HerdPagingTests
     {
         var (db, _) = Create();
         await HerdFixture.SeedFilterCasesAsync(db);
-        var svc = new GoatService(db);
+        var svc = TestFarmMetrics.CreateGoatService(db);
 
         foreach (var (filter, search, tags) in HerdFixture.Cases)
         {
@@ -123,7 +123,7 @@ public class HerdPagingTests
         var (db, counter) = Create();
         await HerdFixture.SeedManyAsync(db, 60);
         db.ChangeTracker.Clear();
-        var svc = new GoatService(db);
+        var svc = TestFarmMetrics.CreateGoatService(db);
         counter.Reset();
 
         var page2 = await svc.GetHerdPageAsync("all", 2, 10);
@@ -142,7 +142,7 @@ public class HerdPagingTests
     {
         var (db, _) = Create();
         await HerdFixture.SeedManyAsync(db, 25);
-        var svc = new GoatService(db);
+        var svc = TestFarmMetrics.CreateGoatService(db);
 
         var last = await svc.GetHerdPageAsync("all", 99, 10);
         Assert.Equal(3, last.Pagination.Page);

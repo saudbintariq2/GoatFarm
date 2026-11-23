@@ -1107,6 +1107,10 @@ const GoatRecords = (() => {
           await api('/Goat/Update?id=' + editingId, { method: 'PUT', body: JSON.stringify(payload) });
           reloadWithToast('Goat updated successfully');
         } else {
+          if (payload.source === 'Born' && payload.damTag && payload.status === 'Kid') {
+            payload.createKiddingRecord = await showConfirm(
+              'Also record this as a kidding for the mother? (needed for kidding counts on the herd).');
+          }
           await api('/Goat/Create', { method: 'POST', body: JSON.stringify(payload) });
           reloadWithToast('Goat added successfully');
         }
@@ -1976,7 +1980,7 @@ const GoatRecords = (() => {
             style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
           <td class="num-cell">${(+s.kgPerDay).toFixed(1)} kg</td>
           <td class="num-cell" style="${esc(s.daysLeftColor)}">${esc(s.daysLeftText)}</td>
-          <td class="num-cell hide-sm">${rs(s.avgCostPerKg || 0)}</td>
+          <td class="num-cell hide-sm">${s.avgCostPerKg > 0 ? rs(s.avgCostPerKg) : '—'}</td>
           <td class="num-cell hide-sm"><span class="chip ${esc(s.statusCssClass || '')}">${esc(s.statusText || '—')}</span></td></tr>`).join('');
       bindStockInputs();
     }
@@ -3540,24 +3544,48 @@ const GoatRecords = (() => {
       reloadWithToast('Shareholder added');
     });
 
-    document.getElementById('fin-relink-btn')?.addEventListener('click', async () => {
+    const runFinRelink = async (dryRun) => {
       if (!FarmPerms.guardAddEdit('finance', true)) return;
       const defaultAccountId = requireFinAccount('fin-relink-account');
       if (!defaultAccountId) {
         await showModal('Choose the Cash or Bank account for historical entries.');
         return;
       }
-      const ok = await showConfirm(
-        'Post every unlinked owner funding, income and expense row to this account? ' +
-        'Run on a backup copy first if you are unsure.');
-      if (!ok) return;
+      if (!dryRun) {
+        const ok = await showConfirm(
+          'Post every unlinked funding, income, expense, feed purchase (paid) and vaccine purchase (paid) to this account? ' +
+          'Run dry run first on staging.');
+        if (!ok) return;
+      }
       try {
         const data = await api('/Finance/RelinkUnpostedMoney', {
           method: 'POST',
-          body: JSON.stringify({ defaultAccountId, dryRun: false })
+          body: JSON.stringify({ defaultAccountId, dryRun })
         });
-        const msg = (data.messages || []).join(' ') || 'Re-link finished.';
+        const msg = (data.messages || []).join(' ') || (dryRun ? 'Dry run finished.' : 'Re-link finished.');
         reloadFinanceWithToast(msg);
+      } catch { /* api shows error */ }
+    };
+    document.getElementById('fin-relink-btn')?.addEventListener('click', () => runFinRelink(false));
+    document.getElementById('fin-relink-dry-btn')?.addEventListener('click', () => runFinRelink(true));
+
+    document.getElementById('fin-fund-livestock-btn')?.addEventListener('click', async () => {
+      if (!FarmPerms.guardAddEdit('finance', true)) return;
+      const accountId = requireFinAccount('fin-relink-account');
+      if (!accountId) {
+        await showModal('Choose the account that received owner funding for the herd.');
+        return;
+      }
+      const ok = await showConfirm(
+        'Post one owner funding entry for livestock not yet backed by payments or funding? ' +
+        'Use when goats have a purchase price but no Paid from / owner contribution.');
+      if (!ok) return;
+      try {
+        const data = await api('/Finance/FundLivestockAsOwner', {
+          method: 'POST',
+          body: JSON.stringify({ accountId, dryRun: false })
+        });
+        reloadFinanceWithToast(data.message || 'Livestock funding posted.');
       } catch { /* api shows error */ }
     });
 
@@ -3648,8 +3676,13 @@ const GoatRecords = (() => {
       const label = document.getElementById('v-vlabel');
       const val = document.getElementById('v-val');
       if (!label || !val) return;
-      label.textContent = type === 'Age' ? 'Days' : 'Months';
-      val.placeholder = type === 'Age' ? '30' : '12';
+      if (type === 'Repeat') {
+        label.textContent = 'Months';
+        val.placeholder = '12';
+      } else {
+        label.textContent = 'Days';
+        val.placeholder = type === 'BeforeKidding' ? '30' : '30';
+      }
     }
 
     document.getElementById('v-type')?.addEventListener('change', applyVaccRuleLabel);
@@ -3688,6 +3721,8 @@ const GoatRecords = (() => {
       document.getElementById('v-scope').value = 'All';
       document.getElementById('v-type').value = 'Age';
       document.getElementById('v-val').value = '';
+      const minAge = document.getElementById('v-min-age');
+      if (minAge) minAge.value = '';
       const note = document.getElementById('v-note');
       if (note) note.value = '';
       applyVaccRuleLabel();
@@ -3773,6 +3808,8 @@ const GoatRecords = (() => {
       document.getElementById('v-scope').value = row.dataset.scope || 'All';
       document.getElementById('v-type').value = row.dataset.ruleType || 'Age';
       document.getElementById('v-val').value = row.dataset.value || '';
+      const minAge = document.getElementById('v-min-age');
+      if (minAge) minAge.value = row.dataset.minAge && row.dataset.minAge !== '' ? row.dataset.minAge : '';
       const note = document.getElementById('v-note');
       if (note) note.value = row.dataset.note || '';
       applyVaccRuleLabel();
@@ -3881,11 +3918,14 @@ const GoatRecords = (() => {
       const name = document.getElementById('v-name').value.trim();
       const val = +document.getElementById('v-val').value || 0;
       if (!name || name === '__add' || !val) { await showModal('Enter a vaccine name and a number'); return; }
+      const minAgeRaw = document.getElementById('v-min-age')?.value;
+      const minAgeDays = minAgeRaw ? +minAgeRaw : null;
       const payload = {
         name,
         scope: document.getElementById('v-scope').value,
         ruleType: document.getElementById('v-type').value,
         value: val,
+        minAgeDays: minAgeDays && minAgeDays > 0 ? minAgeDays : null,
         note: document.getElementById('v-note')?.value.trim() || null
       };
       if (editingVaccId) {

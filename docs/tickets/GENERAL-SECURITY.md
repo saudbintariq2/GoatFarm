@@ -6,8 +6,8 @@ Track every **G\*** item from the Developer Fix List. Update **Status** when ver
 |--------|-----|----------|--------|-------------------------|
 | **GS-001** | G6 | High | **Code done** · **Ops required** | Dev seed copy removed from Settings/AccessDenied. Login shows dev accounts **only in Development**. `Seed:CreateDefaultAdmin` — production default `false` skips re-creating seed admin when users exist. **Ops:** Create owner account, disable/delete `admin@goatfarm.local`. |
 | **GS-002** | G3 | High | **Code done** · **Config required** | Scheduled JSON backups (`ScheduledBackupHostedService`), Backup Center list, admin-only restore, pre-restore snapshot. **CSV exports** on Backup Center (herd, finance, feed, health, breeding, tasks) — `BackupCenter/ExportCsv`. **Config:** `Backup:AutomaticEnabled` (true in `appsettings.Production.json`). **Ops:** Test restore on staging. |
-| **GS-003** | G1 | High | **Partial** | Default `ApplicationSettings:FarmName` = **Sandeel Farms**; Sandeel palette in `farm-pro.css` / `goat-records.css`. **Open:** Replace `goat-logo.png` with official Sandeel logo kit assets; rust/brown accents on more components if design review asks. |
-| **GS-004** | G5 | Medium | **Partial** | Top bar: **Online/Offline** + `DeviceCode`. `FarmRecordNumberFormat` for day-based refs and **`SF-yyyyMM-DEV-NNNN`** product sales. **Open:** trading bill auto-number; multi-device offline sync. |
+| **GS-003** | G1 | High | **Done (kit)** | `FarmName`, Sandeel palette, **`sandeel-mark.svg`** via `BrandMarkPath` / `BrandFaviconPath` (override with official PNG/SVG from brand kit in `wwwroot/images/`). Legacy `goat-logo.png` unused by default. |
+| **GS-004** | G5 | Medium | **Done** | Header **Online/Offline** + device code on `data-device-code` / `window.__farmDeviceCode`. **`SF-yyyyMM-DEV-NNNN`** (products) and **`TR-yyyyMM-DEV-NNN`** (trading sells, server-assigned). **Ops:** set unique `DeviceCode` per deployment device. Multi-device offline sync not in scope. |
 | **GS-005** | G4 | Medium | **Code done** · **Config** | `Features:AssistantEnabled` true by default; sidebar + **header “Assistant”** opens panel; mic/speak in panel; `[Authorize]` on `AssistantController`. **Ops:** Set OpenAI key in production secrets; confirm `/Assistant/Chat` rejects anonymous (401). |
 | **GS-006** | G2 | Low | **Done** | Top bar: user **name**, role, **Sign out**; optional `ApplicationSettings:FarmLocation` under clock. |
 | **GS-007** | G7 | Low | **Done** | Sidebar labels: **Finance**, **Health**, **Feed**, **Admin** (V242 names). |
@@ -41,4 +41,4 @@ Track every **G\*** item from the Developer Fix List. Update **Status** when ver
 1. Owner account + password policy communication.
 2. HTTPS / hosting (PDF Q5).
 3. Disable legacy seed user on production DB.
-4. Logo image files from Sandeel brand kit → `wwwroot/images/`.
+4. Optional: drop official Sandeel logo into `wwwroot/images/` and set `ApplicationSettings:BrandMarkPath` / `BrandFaviconPath`.

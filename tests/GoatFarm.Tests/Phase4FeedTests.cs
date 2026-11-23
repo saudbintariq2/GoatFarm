@@ -1,7 +1,7 @@
 using GoatFarm.Application.ViewModels.Feed;
 using GoatFarm.Domain.Constants;
-using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
+using GoatFarm.Domain.Entities;
 using GoatFarm.Infrastructure.Persistence;
 using GoatFarm.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -13,8 +13,9 @@ public class Phase4FeedTests
     private static (FeedService Feed, GoatFarmDbContext Db) Create()
     {
         var db = TestDb.Create();
-        var goats = new GoatService(db);
-        return (new FeedService(db, goats, new MilkService(db)), db);
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        return (new FeedService(db, goats, new MilkService(db), metrics), db);
     }
 
     [Fact]
@@ -102,5 +103,53 @@ public class Phase4FeedTests
         });
         db.SaveChanges();
         Assert.Equal(4000, feed.GetFeedPurchasedMonthly(month));
+    }
+
+    [Fact]
+    public async Task AddFeedPurchase_SpreadsPlOverAllocationMonths()
+    {
+        var (feed, db) = Create();
+        db.FeedPrices.Add(new FeedPrice
+        {
+            FeedType = FeedTypes.Bran,
+            DisplayName = "Bran",
+            PricePerKg = 50,
+            StockKg = 0,
+            StockKgFull = 100
+        });
+        await db.SaveChangesAsync();
+        await feed.AddFeedPurchaseAsync(new CreateFeedPurchaseViewModel
+        {
+            Date = TestDb.Today,
+            FeedType = FeedTypes.Bran,
+            Kg = 100,
+            RatePerKg = 50,
+            PaymentStatus = "credit",
+            AllocationMonths = 2
+        });
+        var spread = await db.Expenses.Where(e => e.Comment != null && e.Comment.Contains("feed_purchase:")).ToListAsync();
+        Assert.Equal(2, spread.Count);
+        Assert.Equal(5000, spread.Sum(e => e.Amount));
+        Assert.All(spread, e => Assert.Equal(2500, e.Amount));
+    }
+
+    [Fact]
+    public async Task MilkLitres_IncludesMilkingSessions()
+    {
+        var db = TestDb.Create();
+        db.MilkProductions.Add(new MilkProduction { Date = TestDb.Today, Breed = "Beetal", Liters = 5 });
+        db.MilkingSessions.Add(new MilkingSession
+        {
+            Date = TestDb.Today,
+            Session = "AM",
+            Breed = "Beetal",
+            Liters = 10,
+            RejectedLiters = 2
+        });
+        await db.SaveChangesAsync();
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        var litres = await metrics.MilkLitresAsync(TestDb.Today, TestDb.Today);
+        Assert.Equal(13, litres);
     }
 }

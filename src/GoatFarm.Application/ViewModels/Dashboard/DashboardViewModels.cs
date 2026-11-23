@@ -134,6 +134,9 @@ public class DashboardViewModel
     public int HealthUnderObservation { get; set; }
     public int HealthSick { get; set; }
     public int PendingVaccinations { get; set; }
+    public int VaccinesDueNow { get; set; }
+    public int VaccinesDueSoon { get; set; }
+    public string VaccinationDueSubtext { get; set; } = string.Empty;
     public IReadOnlyList<DashboardActivityViewModel> RecentActivities { get; set; } = [];
     public IReadOnlyList<DashboardLedgerRowViewModel> RecentSales { get; set; } = [];
     public IReadOnlyList<DashboardLedgerRowViewModel> RecentExpenses { get; set; } = [];

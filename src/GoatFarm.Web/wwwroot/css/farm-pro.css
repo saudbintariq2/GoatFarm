@@ -88,6 +88,12 @@ body.farm-pro .side-brand {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+body.farm-pro .goat-logo-mark,
+body.farm-pro .farm-brand-mark {
+  border-radius: 14px;
+  object-fit: cover;
+}
+
 body.farm-pro .goat-logo-mark {
   display: block;
   width: 44px;

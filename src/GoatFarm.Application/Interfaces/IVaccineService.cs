@@ -17,4 +17,7 @@ public interface IVaccineService
     Task<VaccinePurchaseViewModel?> UpdateVaccinePurchaseAsync(int id, CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken = default);
     Task<bool> DeleteVaccinePurchaseAsync(int id, CancellationToken cancellationToken = default);
     decimal GetVaccinePurchasedMonthly(string month);
+
+    /// <summary>Due now (overdue/today) and due within <paramref name="soonDays"/> (exclusive of due now).</summary>
+    Task<(int DueNow, int DueSoon)> GetDueCountsAsync(int soonDays = 7, CancellationToken cancellationToken = default);
 }

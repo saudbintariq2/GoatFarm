@@ -13,27 +13,42 @@ internal static class BreedingPageAssembler
         IReadOnlyList<Goat> goats,
         DateOnly today,
         IReadOnlySet<int>? doesWithBuckIn = null,
-        IReadOnlyDictionary<int, int>? kiddingCounts = null)
+        IReadOnlyDictionary<int, int>? kiddingCounts = null,
+        IReadOnlyDictionary<int, KiddingRecord>? latestKidding = null,
+        IReadOnlyDictionary<int, BreedingEvent>? latestCross = null,
+        IReadOnlyDictionary<int, DateOnly>? rescanDueByGoat = null)
     {
         var counts = BreedingDoeFlowHelper.Steps.ToDictionary(s => s.Key, _ => 0);
+        rescanDueByGoat ??= new Dictionary<int, DateOnly>();
         foreach (var g in goats)
         {
             var here = kiddingCounts?.GetValueOrDefault(g.Id) ?? 0;
-            var flow = BreedingDoeFlowHelper.FlowStage(g, today, doesWithBuckIn, here);
+            BreedingEvent? cross = null;
+            if (latestCross is not null)
+                latestCross.TryGetValue(g.Id, out cross);
+            KiddingRecord? kid = null;
+            if (latestKidding is not null)
+                latestKidding.TryGetValue(g.Id, out kid);
+            rescanDueByGoat.TryGetValue(g.Id, out var rescan);
+            var flow = BreedingDoeFlowHelper.FlowStage(g, today, doesWithBuckIn, here, cross, kid, rescan);
             if (flow is not null && counts.ContainsKey(flow))
                 counts[flow]++;
         }
 
-        return BreedingDoeFlowHelper.Steps
+        return BuildDoeFlowStepsFromKeyCounts(counts);
+    }
+
+    public static IReadOnlyList<BreedingDoeFlowStepViewModel> BuildDoeFlowStepsFromKeyCounts(
+        IReadOnlyDictionary<string, int> counts)
+        => BreedingDoeFlowHelper.Steps
             .Select(s => new BreedingDoeFlowStepViewModel
             {
                 Key = s.Key,
                 Label = s.Label,
-                Count = counts[s.Key],
+                Count = counts.GetValueOrDefault(s.Key),
                 ArrowLabel = s.ArrowAfter
             })
             .ToList();
-    }
 
     public static IReadOnlyList<BreedingPipelineRowViewModel> BuildPipelineRows(
         IReadOnlyList<Goat> goats,
@@ -42,15 +57,22 @@ internal static class BreedingPageAssembler
         DateOnly today,
         Func<int, string> ageLabel,
         IReadOnlySet<int>? doesWithBuckIn = null,
-        IReadOnlyDictionary<int, DateOnly>? rescanDueByGoat = null)
+        IReadOnlyDictionary<int, DateOnly>? rescanDueByGoat = null,
+        IReadOnlyDictionary<int, BreedingEvent>? latestCross = null)
     {
         rescanDueByGoat ??= new Dictionary<int, DateOnly>();
+        latestCross ??= new Dictionary<int, BreedingEvent>();
         var rows = goats
             .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.IsArchived)
             .Select(g =>
             {
                 var here = kiddingsHere.GetValueOrDefault(g.Id);
-                var flow = BreedingDoeFlowHelper.FlowStage(g, today, doesWithBuckIn, here);
+                latestCross.TryGetValue(g.Id, out var cross);
+                KiddingRecord? lastKid = kiddingsByDoe.TryGetValue(g.Id, out var arr)
+                    ? arr.OrderByDescending(k => k.KiddingDate).FirstOrDefault()
+                    : null;
+                rescanDueByGoat.TryGetValue(g.Id, out var rescan);
+                var flow = BreedingDoeFlowHelper.FlowStage(g, today, doesWithBuckIn, here, cross, lastKid, rescan);
                 if (flow is null) return null;
                 return MapPipeline(g, today, flow, kiddingsHere, kiddingsByDoe, ageLabel, rescanDueByGoat);
             })
@@ -319,7 +341,8 @@ internal static class BreedingPageAssembler
         IReadOnlyDictionary<int, int> kiddingCounts,
         IReadOnlyDictionary<int, decimal?> latestWeightKg,
         IReadOnlySet<int> rescanGoatIds,
-        IReadOnlyList<Goat> kids)
+        IReadOnlyList<Goat> kids,
+        IReadOnlyList<BuckHealthCheck> buckChecks)
     {
         var drafts = new List<(DateOnly Sort, BreedingNowJobViewModel Job)>();
         var culture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
@@ -423,10 +446,27 @@ internal static class BreedingPageAssembler
                     Add(plannedIn, "🐐", "Put " + grp.Buck + " in with " + memberCount + " does",
                         grp.Name, [], "var(--pink)", breedView: "bucks");
             }
-            else if (!grp.CrossDeferred && buckIn.HasValue && BreedingHelper.DaysUntil(buckIn.Value) <= 45)
+            else if (!grp.CrossDeferred && buckIn.HasValue && BreedingHelper.DaysUntil(buckIn.Value) <= 45 &&
+                     today < buckIn.Value)
             {
                 Add(buckIn.Value.AddDays(-14), "🩺", "Buck check for " + grp.Buck,
                     "Needed before he goes in · " + grp.Name, [], "var(--blue)", breedView: "bucks", actionLabel: "Check");
+            }
+            else if (buckIn.HasValue && !grp.CrossDeferred && !string.IsNullOrWhiteSpace(grp.Start) && today >= buckIn.Value)
+            {
+                var buckGoat = live.FirstOrDefault(g =>
+                    string.Equals(g.Tag, grp.Buck, StringComparison.OrdinalIgnoreCase) &&
+                    g.Gender == GoatGender.Male);
+                if (buckGoat is not null)
+                {
+                    var check = BuckCheckHelper.LatestCheck(buckChecks, buckGoat.Id);
+                    if (!BuckCheckHelper.IsOkForBuckIn(check, buckIn.Value, today))
+                    {
+                        Add(today, "🩺", "Buck check missed for " + grp.Buck,
+                            "Buck already with does — check now · " + grp.Name, [], "#8a261c",
+                            breedView: "bucks", actionLabel: "Check");
+                    }
+                }
             }
 
             if (buckIn.HasValue && grp.CrossDeferred && BreedingHelper.DaysUntil(buckIn.Value) <= 7)
@@ -849,13 +889,21 @@ internal static class BreedingPageAssembler
         IReadOnlyDictionary<string, int> emptyByBuckTag,
         IReadOnlyList<BuckHealthCheck> buckChecks,
         IReadOnlyList<BreedingGroupDto> groups,
-        DateOnly today)
+        DateOnly today,
+        IReadOnlyDictionary<int, (int Scanned, int Pregnant, int Waiting, decimal? Rate)>? pregnancyRates = null)
     {
         var doesWithBuck = BreedingGroupHelper.DoesWithBuckIn(groups, live.ToDictionary(g => g.Id), today);
         return bucks.Select(x =>
         {
             var check = BuckCheckHelper.LatestCheck(buckChecks, x.Id);
-            var checkOk = BuckCheckHelper.IsOk(check, today);
+            var activeIn = groups.FirstOrDefault(g =>
+                string.Equals(g.Status, "active", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(g.Buck, x.Tag, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(g.Start) &&
+                DateOnly.TryParse(g.Start, out var sd) && today >= sd);
+            var checkOk = activeIn is not null && DateOnly.TryParse(activeIn.Start, out var buckInDate)
+                ? BuckCheckHelper.IsOkForBuckIn(check, buckInDate, today)
+                : BuckCheckHelper.IsOk(check, today);
             var carrying = live.Count(z => PregnancyRules.IsConfirmedPregnant(z) &&
                 string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase));
             var withBuck = live.Count(z =>
@@ -872,10 +920,21 @@ internal static class BreedingPageAssembler
                 string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase) && z.MatedDate >= new DateOnly(today.Year, 1, 1));
             var kpc = crossesYr > 0 ? (kidsSired / (double)crossesYr).ToString("0.0") : "—";
             var empty = emptyByBuckTag.GetValueOrDefault(x.Tag.ToLowerInvariant());
-            var took = kidYr + live.Count(z =>
-                string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase) && z.KidsCount is > 0);
-            var scanned = took + empty;
-            int? conc = scanned > 0 ? (int)Math.Round(took / (double)scanned * 100) : null;
+            int? conc;
+            string? concSubtitle = null;
+            if (pregnancyRates?.TryGetValue(x.Id, out var pr) == true)
+            {
+                conc = pr.Rate is null ? null : (int)pr.Rate;
+                if (pr.Scanned > 0)
+                    concSubtitle = $"{pr.Pregnant} of {pr.Scanned} scanned · {pr.Waiting} waiting scan";
+            }
+            else
+            {
+                var took = kidYr + live.Count(z =>
+                    string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase) && z.KidsCount is > 0);
+                var scanned = took + empty;
+                conc = scanned > 0 ? (int)Math.Round(took / (double)scanned * 100) : null;
+            }
             var dates = live.Where(z => string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase) && z.MatedDate.HasValue)
                 .Select(z => z.MatedDate!.Value)
                 .Concat(kiddingsYear.Where(k =>
@@ -913,7 +972,7 @@ internal static class BreedingPageAssembler
                 AvgBirthKgText = BuckStatsHelper.FormatAvg(avgBirth),
                 Avg90DayKgText = BuckStatsHelper.FormatAvg(avg90),
                 ConceptionPercent = conc,
-                ConceptionText = conc is null ? "—" : conc + "%",
+                ConceptionText = conc is null ? "—" : concSubtitle is null ? conc + "%" : $"{conc}% · {concSubtitle}",
                 ConceptionStyle = conc is null ? ""
                     : conc >= 70 ? "font-weight:700;color:var(--green-dark)" : "font-weight:700;color:#8a261c",
                 LastUsed = dates.Count > 0 ? dates[^1].ToString("yyyy-MM-dd") : null,

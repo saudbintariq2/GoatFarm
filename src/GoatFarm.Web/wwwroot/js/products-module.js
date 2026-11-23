@@ -11,7 +11,11 @@
     const dd = d == null ? (Math.abs(v - Math.round(v)) < 0.005 ? 0 : 1) : d;
     return v.toLocaleString('en-US', { minimumFractionDigits: dd, maximumFractionDigits: dd });
   };
-  const fmtQ = (q, unit) => `${fmtN(q)} ${unit || ''}`.trim();
+  const fmtQ = (q, unit) => {
+    const u = (unit || '').trim();
+    if (u === 'L') return `${fmtN(q, 1)} L`;
+    return `${fmtN(q)} ${u}`.trim();
+  };
   const rs = n => 'Rs ' + Math.round(N(n)).toLocaleString('en-US');
   const money = v => rs(v);
   const pct = (a, b) => b > 0.0005 ? fmtN(a / b * 100, 1) + '%' : '—';
@@ -24,7 +28,10 @@
   ['costTypes', 'shipmentTypes', 'units', 'categories', 'warehouseTypes'].forEach(k => {
     if (!Array.isArray(productDropdownOptions[k])) productDropdownOptions[k] = [];
   });
-  const reload = () => location.reload();
+  const reload = stayOnTab => {
+    if (stayOnTab) sessionStorage.setItem('productsTab', stayOnTab);
+    location.reload();
+  };
   const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   async function postJson(url, body) {
     const res = await post(url, body);
@@ -1673,7 +1680,10 @@
     if (rowsEl) {
       rowsEl.innerHTML = list.length ? list.map(s => {
         const usable = Math.max(0, (s.liters || 0) - (s.rejectedLiters || 0));
-        return `<tr><td><b>${esc(s.session)}</b></td><td>${esc(s.breed || 'Total')}</td><td class="num-cell">—</td><td class="num-cell">${fmtQ(s.liters, 'L')}</td><td class="num-cell">${fmtQ(s.rejectedLiters, 'L')}</td><td class="num-cell"><b>${fmtQ(usable, 'L')}</b></td><td>—</td><td class="hide-sm"></td><td></td></tr>`;
+        const goats = s.goatCount > 0 ? fmtN(s.goatCount, 0) : '—';
+        const tank = s.warehouseName ? esc(s.warehouseName) : '—';
+        const by = s.recordedBy ? esc(s.recordedBy) : '—';
+        return `<tr><td><b>${esc(s.session)}</b></td><td>${esc(s.breed || 'Total')}</td><td class="num-cell">${goats}</td><td class="num-cell">${fmtQ(s.liters, 'L')}</td><td class="num-cell">${fmtQ(s.rejectedLiters, 'L')}</td><td class="num-cell"><b>${fmtQ(usable, 'L')}</b></td><td>${tank}</td><td class="hide-sm">${by}</td><td></td></tr>`;
       }).join('') : '<tr><td colspan="9" class="empty">Nothing recorded for this day yet.</td></tr>';
     }
     mgSummary();
@@ -2141,7 +2151,13 @@
 
   function bootProductsPage() {
     try {
-      activateProductTab(document.querySelector('#productTabs .prod-tab.active')?.dataset.ptab || 'milk');
+      const pendingTab = sessionStorage.getItem('productsTab');
+      if (pendingTab) {
+        sessionStorage.removeItem('productsTab');
+        activateProductTab(pendingTab);
+      } else {
+        activateProductTab(document.querySelector('#productTabs .prod-tab.active')?.dataset.ptab || 'milk');
+      }
       setMilkSub('milking');
       initMilkingUi();
       renderPasteurize();
@@ -2760,9 +2776,12 @@
 
   const salesRows = document.getElementById('sl-sales-rows');
   if (salesRows) {
-    salesRows.innerHTML = (page.sales || []).map(s =>
-      `<tr><td>${esc(s.dateDisplay)}</td><td><b>${esc(s.invoiceNo || '—')}</b></td><td>${esc(s.customer || 'Cash')}</td><td>${esc(s.productName)}</td><td class="num-cell">${s.qty}</td><td class="num-cell hide-sm">—</td><td class="num-cell">${rs(s.amount)}</td><td class="num-cell hide-sm">—</td><td class="num-cell hide-sm">—</td><td>${s.isCredit ? 'Credit' : 'Paid'}</td><td></td></tr>`
-    ).join('') || '<tr><td colspan="11" class="empty">No sales this month yet.</td></tr>';
+    salesRows.innerHTML = (page.sales || []).map(s => {
+      const rate = N(s.rate) > 0 ? money(s.rate) : (s.qty > 0 && N(s.amount) > 0 ? money(s.amount / s.qty) : '—');
+      const cost = s.costAmount != null && N(s.costAmount) > 0 ? money(s.costAmount) : '—';
+      const margin = s.marginAmount != null ? money(s.marginAmount) : '—';
+      return `<tr><td>${esc(s.dateDisplay)}</td><td><b>${esc(s.invoiceNo || '—')}</b></td><td>${esc(s.customer || 'Cash')}</td><td>${esc(s.productName)}</td><td class="num-cell">${fmtN(s.qty, 1)}</td><td class="num-cell hide-sm">${rate}</td><td class="num-cell">${rs(s.amount)}</td><td class="num-cell hide-sm">${cost}</td><td class="num-cell hide-sm">${margin}</td><td>${s.isCredit ? 'Credit' : 'Paid'}</td><td></td></tr>`;
+    }).join('') || '<tr><td colspan="11" class="empty">No sales this month yet.</td></tr>';
   }
 
   let breedPerfRows = [];
@@ -3032,23 +3051,60 @@
     }
   });
 
-  /* Save: milking session (total + breed rows summed) */
+  /* Save: milking session (one row per breed, or server split for one total) */
   document.getElementById('sl-mg-save')?.addEventListener('click', async () => {
     const rows = readMilkingRows();
-    let liters = 0, rejected = 0, breed = 'Mixed';
-    if (mgMode === 'total') {
-      liters = +document.getElementById('mp-total')?.value || 0;
-      rejected = +document.getElementById('mp-reject')?.value || 0;
-    } else if (mgMode === 'breed') {
-      rows.forEach(r => {
-        liters += r.total;
-        rejected += r.rejected;
-        if (r.breed && r.breed !== '__newbreed') breed = r.breed;
-      });
-      if (!liters) {
+    const sessionVal = document.getElementById('mp-session')?.value || '';
+    if (!sessionVal || sessionVal.startsWith('__')) { alert('Choose Morning, Evening or another milking time.'); return; }
+    const wh = document.getElementById('mp-warehouse')?.value;
+    if (!wh || wh.startsWith('__')) { alert('Choose the raw milk tank the milk goes into.'); return; }
+  const note = document.getElementById('mp-note')?.value?.trim() || null;
+    const base = {
+      date: document.getElementById('mp-date')?.value || today(),
+      session: sessionVal,
+      warehouseId: wh ? +wh : null,
+      note
+    };
+    const whRow = warehouseById(wh);
+    const cap = N(whRow?.capacity) || 500;
+    const now = N(whRow?.litersOrKg);
+
+    const assertTank = usableAdd => {
+      if (cap > 0 && now + usableAdd > cap + 0.0005) {
+        alert(`${whRow?.name || 'Tank'} would exceed ${fmtN(cap)} L capacity (${fmtQ(now, 'L')} in tank now).`);
+        return false;
+      }
+      return true;
+    };
+
+    if (mgMode === 'breed') {
+      const lines = rows.filter(r => (r.total || 0) > 0 || (r.rejected || 0) > 0);
+      if (!lines.length) {
         alert('Add at least one breed line with milk litres, or switch to “One total”.');
         return;
       }
+      const usable = lines.reduce((n, r) => n + Math.max(0, (r.total || 0) - (r.rejected || 0)), 0);
+      if (!assertTank(usable)) return;
+      for (const r of lines) {
+        if (!r.breed || r.breed === '__newbreed') continue;
+        await post('/Products/SaveMilkingSession', {
+          ...base,
+          breed: r.breed,
+          liters: r.total,
+          rejectedLiters: r.rejected,
+          goatCount: r.goats || 0
+        });
+      }
+      reload();
+      return;
+    }
+
+    let liters = 0, rejected = 0, breed = 'Mixed';
+    let splitByMilkingBreeds = false;
+    if (mgMode === 'total') {
+      liters = +document.getElementById('mp-total')?.value || 0;
+      rejected = +document.getElementById('mp-reject')?.value || 0;
+      splitByMilkingBreeds = true;
     } else if (mgMode === 'goat') {
       if (!rows.length) {
         alert('Type the litres for at least one goat.');
@@ -3067,29 +3123,17 @@
     if (liters <= 0) { alert('Enter milk litres.'); return; }
     const usable = liters - rejected;
     if (usable <= 0) { alert('There is no usable milk to put in the tank.'); return; }
-    const sessionVal = document.getElementById('mp-session')?.value || '';
-    if (!sessionVal || sessionVal.startsWith('__')) { alert('Choose Morning, Evening or another milking time.'); return; }
-    const wh = document.getElementById('mp-warehouse')?.value;
-    if (!wh || wh.startsWith('__')) { alert('Choose the raw milk tank the milk goes into.'); return; }
-    const whRow = warehouseById(wh);
-    const cap = N(whRow?.capacity) || 500;
-    const now = N(whRow?.litersOrKg);
-    if (cap > 0 && now + usable > cap + 0.0005) {
-      alert(`${whRow?.name || 'Tank'} would exceed ${fmtN(cap)} L capacity (${fmtQ(now, 'L')} in tank now).`);
-      return;
-    }
+    if (!assertTank(usable)) return;
     let goatCount = 0;
     if (mgMode === 'total') goatCount = +document.getElementById('mp-goats')?.value || 0;
-    else if (mgMode === 'breed') rows.forEach(r => { goatCount += r.goats || 0; });
     else goatCount = rows.filter(r => (r.total || 0) > 0 || (r.rejected || 0) > 0).length;
     await post('/Products/SaveMilkingSession', {
-      date: document.getElementById('mp-date')?.value || today(),
-      session: sessionVal,
+      ...base,
       breed,
       liters,
       rejectedLiters: rejected,
-      warehouseId: wh ? +wh : null,
-      goatCount
+      goatCount,
+      splitByMilkingBreeds
     });
     reload();
   });
@@ -3528,7 +3572,7 @@
         note: document.getElementById('tp-note')?.value?.trim() || null,
         paidFromAccountId: acct ? +acct : null
       });
-      reload();
+      reload('transport');
     } catch (err) {
       alert(err.message || 'Could not save transport shipment.');
     }

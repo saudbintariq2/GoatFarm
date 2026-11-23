@@ -1,3 +1,4 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Enums;
@@ -62,7 +63,7 @@ public sealed class FarmAuditActionFilter : IAsyncActionFilter
             userAgent = Truncate(context.HttpContext.Request.Headers.UserAgent.ToString(), 200)
         }, JsonOptions);
 
-        var summary = $"{descriptor.ControllerName}.{descriptor.ActionName}";
+        var summary = AuditText.ToText($"{descriptor.ControllerName}.{descriptor.ActionName}");
         var audit = context.HttpContext.RequestServices.GetRequiredService<IAuditService>();
         await audit.LogAsync(module, action, summary, userId, userDisplay, detailJson: detail,
             showInNotices: action is not (AuditAction.Delete or AuditAction.Import),

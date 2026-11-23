@@ -558,6 +558,8 @@ public class CreateFeedPurchaseViewModel
     [System.ComponentModel.DataAnnotations.Range(1, 12)]
     public int AllocationMonths { get; set; } = 1;
 
+    public bool ConfirmPossibleDuplicate { get; set; }
+
 }
 
 

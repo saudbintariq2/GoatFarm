@@ -71,9 +71,10 @@ public class VaccineService : IVaccineService
             Scope = v.Scope,
             ScopeDisplay = DisplayHelper.GetScopeLabel(v.Scope),
             RuleType = v.RuleType,
-            RuleDisplay = RuleLabel(v),
+            RuleDisplay = VaccineDueHelper.RuleLabel(v),
             Days = v.Days,
             Months = v.Months,
+            MinAgeDays = v.MinAgeDays,
             Note = v.Note
         }).ToList();
 
@@ -141,8 +142,9 @@ public class VaccineService : IVaccineService
             Name = model.Name.Trim(),
             Scope = model.Scope,
             RuleType = model.RuleType,
-            Days = model.RuleType == VaccineRuleType.Age ? model.Value : null,
+            Days = model.RuleType is VaccineRuleType.Age or VaccineRuleType.BeforeKidding ? model.Value : null,
             Months = model.RuleType == VaccineRuleType.Repeat ? model.Value : null,
+            MinAgeDays = model.MinAgeDays is > 0 ? model.MinAgeDays : null,
             Note = string.IsNullOrWhiteSpace(model.Note) ? null : model.Note.Trim()
         };
         _context.Vaccines.Add(entity);
@@ -157,8 +159,9 @@ public class VaccineService : IVaccineService
         entity.Name = model.Name.Trim();
         entity.Scope = model.Scope;
         entity.RuleType = model.RuleType;
-        entity.Days = model.RuleType == VaccineRuleType.Age ? model.Value : null;
+        entity.Days = model.RuleType is VaccineRuleType.Age or VaccineRuleType.BeforeKidding ? model.Value : null;
         entity.Months = model.RuleType == VaccineRuleType.Repeat ? model.Value : null;
+        entity.MinAgeDays = model.MinAgeDays is > 0 ? model.MinAgeDays : null;
         entity.Note = string.IsNullOrWhiteSpace(model.Note) ? null : model.Note.Trim();
         await _context.SaveChangesAsync(cancellationToken);
         return MapVaccine(entity);
@@ -311,6 +314,30 @@ public class VaccineService : IVaccineService
         return true;
     }
 
+    public async Task<(int DueNow, int DueSoon)> GetDueCountsAsync(int soonDays = 7, CancellationToken cancellationToken = default)
+    {
+        var goats = await _context.Goats.AsNoTracking().Where(g => !g.IsArchived).ToListAsync(cancellationToken);
+        var vaccines = await _context.Vaccines.AsNoTracking().ToListAsync(cancellationToken);
+        var log = await _context.VaccinationHistories.AsNoTracking().ToListAsync(cancellationToken);
+
+        var dueNow = 0;
+        var dueSoon = 0;
+        foreach (var v in vaccines)
+        {
+            foreach (var g in GoatsInScope(v, goats))
+            {
+                var next = NextDue(g, v, log);
+                if (next is null) continue;
+                if (next.Value.Days <= 0)
+                    dueNow++;
+                else if (next.Value.Days <= soonDays)
+                    dueSoon++;
+            }
+        }
+
+        return (dueNow, dueSoon);
+    }
+
     public decimal GetVaccinePurchasedMonthly(string month)
     {
         var (monthStart, monthEnd) = MonthHelper.GetMonthRange(month);
@@ -326,9 +353,10 @@ public class VaccineService : IVaccineService
         Scope = entity.Scope,
         ScopeDisplay = DisplayHelper.GetScopeLabel(entity.Scope),
         RuleType = entity.RuleType,
-        RuleDisplay = RuleLabel(entity),
+        RuleDisplay = VaccineDueHelper.RuleLabel(entity),
         Days = entity.Days,
         Months = entity.Months,
+        MinAgeDays = entity.MinAgeDays,
         Note = entity.Note
     };
 
@@ -467,9 +495,6 @@ public class VaccineService : IVaccineService
         return setting is not null && int.TryParse(setting.Value, out var d) ? d : 30;
     }
 
-    private static string RuleLabel(Vaccine v) =>
-        v.RuleType == VaccineRuleType.Age ? $"At {v.Days} days old" : $"Every {v.Months} months";
-
     private static List<Goat> GetDueGoats(Vaccine v, IReadOnlyList<Goat> goats, IReadOnlyList<VaccinationHistory> log) =>
         GoatsInScope(v, goats).Where(g =>
         {
@@ -486,19 +511,7 @@ public class VaccineService : IVaccineService
             .ToList();
 
     private static IEnumerable<Goat> GoatsInScope(Vaccine v, IReadOnlyList<Goat> goats) =>
-        goats.Where(g => v.Scope == VaccineScope.All || StatusMatchesScope(g.Status, v.Scope));
-
-    private static bool StatusMatchesScope(GoatStatus status, VaccineScope scope) =>
-        scope switch
-        {
-            VaccineScope.Kid => status == GoatStatus.Kid,
-            VaccineScope.Milking => status == GoatStatus.Milking,
-            VaccineScope.Pregnant => status == GoatStatus.Pregnant,
-            VaccineScope.Dry => status == GoatStatus.Dry,
-            VaccineScope.Buck => status == GoatStatus.Buck,
-            VaccineScope.Sale => status == GoatStatus.Sale,
-            _ => false
-        };
+        goats.Where(g => VaccineScopeHelper.AppliesToGoat(v, g));
 
     private static (DateOnly Date, int Days)? NextDue(Goat g, Vaccine v, IReadOnlyList<VaccinationHistory> log) =>
         VaccineDueHelper.NextDue(g, v, log, DaysUntil);

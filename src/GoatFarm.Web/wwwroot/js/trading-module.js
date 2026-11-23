@@ -35,7 +35,7 @@ function parseId(v){const n=parseInt(v,10);return Number.isFinite(n)?n:null;}
 async function persistEntry(o){
   const body={type:o.type,date:o.date,itemId:parseId(o.itemId),storeId:parseId(o.storeId),toAccountId:parseId(o.toAccountId),partyId:parseId(o.partyId),accountId:parseId(o.accountId),categoryId:parseId(o.catId),qty:N(o.qty),rate:N(o.rate),amount:N(o.amount),freight:N(o.freight),labour:N(o.labour),paid:N(o.paid),received:N(o.received),payment:o.payment,billNo:o.billNo,reason:o.reason,dueDate:o.dueDate||null,notes:o.note||o.notes||""};
   const r=await postJson("/Trading/SaveEntry",body);
-  return r.id;
+  return r;
 }
 async function persistMaster(kind,rec,isNew){
   const body={kind,id:isNew?null:parseId(rec.id),name:rec.name,isActive:rec.active!==false};
@@ -218,7 +218,8 @@ function render(){
   if(tab==='setup')renderSetup(B);
   if(tab==='parties')renderParties(B);
 }
-function nextBill(){const ym=today().slice(0,7).replace('-',''),dc=(window.SFStock&&SFStock.deviceCode)?SFStock.deviceCode():'',base='TR-'+ym+'-'+(dc?dc+'-':'');let n=entries().filter(e=>String(e.billNo||'').startsWith(base)).length+1,v;do{v=base+String(n++).padStart(3,'0');}while(entries().some(e=>e.billNo===v));return v;}
+function deviceCode(){const dc=document.body?.dataset?.deviceCode||window.__farmDeviceCode||'';return String(dc).trim().toUpperCase();}
+function nextBill(){const ym=today().slice(0,7).replace('-',''),dc=deviceCode(),base='TR-'+ym+'-'+(dc?dc+'-':'');let n=entries().filter(e=>String(e.billNo||'').startsWith(base)).length+1,v;do{v=base+String(n++).padStart(3,'0');}while(entries().some(e=>e.billNo===v));return v;}
 function sumBuy(B){
   const q=num('td-b-qty'),r=rateFrom('b',val('td-b-item')),ex=num('td-b-freight')+num('td-b-labour'),goods=r2(q*r),pay=val('td-b-pay'),u=unitOf(val('td-b-item'));
   $('td-b-paid-f').hidden=pay!=='partial';$('td-b-due-f').hidden=pay==='paid';$('td-b-acct-f').hidden=pay==='credit'&&ex<=0;
@@ -436,13 +437,14 @@ function saveSell(btn){if(!guard('create'))return;run(btn,async()=>{
   const amt=r2(q*r);let rec=pay==='paid'?amt:pay==='credit'?0:num('td-s-recv');
   if(pay==='partial'&&!(rec>0&&rec<amt))throw new Error('For part payment enter an amount between 0 and '+money(amt)+'.');
   if((rec>0||fr>0)&&!byId(acct))throw new Error('Choose the trading account.');
-  const bill=val('td-s-inv')||nextBill();if(entries().some(e=>e.billNo&&e.billNo.toLowerCase()===bill.toLowerCase()))throw new Error('Bill no. '+bill+' is already used.');
-  const e=stamp({id:'td-'+id()+id(),kind:'entry',type:'sell',date,itemId:it,storeId:store,party,partyId:pid,qty:q,rate:r,rateBasis:basisOf('s'),rateEntered:num('td-s-rate'),freight:fr,payment:pay,received:r2(rec),accountId:rec>0||fr>0?acct:'',dueDate:pay==='paid'?'':val('td-s-due'),billNo:bill,note:val('td-s-note')});
+  const e=stamp({id:'td-'+id()+id(),kind:'entry',type:'sell',date,itemId:it,storeId:store,party,partyId:pid,qty:q,rate:r,rateBasis:basisOf('s'),rateEntered:num('td-s-rate'),freight:fr,payment:pay,received:r2(rec),accountId:rec>0||fr>0?acct:'',dueDate:pay==='paid'?'':val('td-s-due'),note:val('td-s-note')});
   const bad=checkStock(e);if(bad)throw new Error(bad);
-  await persistEntry({type:'sell',date,itemId:it,storeId:store,partyId:pid,qty:q,rate:r,freight:fr,payment:pay,received:r2(rec),accountId:rec>0||fr>0?acct:'',dueDate:pay==='paid'?'':val('td-s-due'),billNo:bill,note:val('td-s-note')});
+  const saved=await persistEntry({type:'sell',date,itemId:it,storeId:store,partyId:pid,qty:q,rate:r,freight:fr,payment:pay,received:r2(rec),accountId:rec>0||fr>0?acct:'',dueDate:pay==='paid'?'':val('td-s-due'),note:val('td-s-note')});
+  const bill=saved?.billNo||'';
   const p=(compute().per.get(e.id)||{}).profit;
   ['td-s-qty','td-s-freight','td-s-recv','td-s-due','td-s-inv','td-s-note'].forEach(x=>setVal(x,''));delete $('td-s-rate').dataset.touched;
-  return `Sold ${qtyTxt(q,it)} for ${money(amt)} | profit ${money(p)}`;});}
+  setVal('td-s-inv',bill); /* next save shows suggested no. via UI refresh */
+  return `Sold ${qtyTxt(q,it)} for ${money(amt)} | bill ${bill||'—'} | profit ${money(p)}`;});}
 function saveLoss(btn){if(!guard('create'))return;run(btn,async()=>{
   const it=val('td-l-item'),store=val('td-l-store'),q=num('td-l-qty'),reason=val('td-l-reason'),date=val('td-l-date');
   if(!byId(it)||!byId(store))throw new Error('Choose the item and godown.');if(!(q>0))throw new Error('Enter the quantity.');

@@ -210,6 +210,8 @@ public class Employee : BaseEntity
     public string Name { get; set; } = string.Empty;
     public string? Role { get; set; }
     public decimal MonthlySalary { get; set; }
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
 }
 
 public class BreedingEmptyLog : BaseEntity
@@ -331,6 +333,8 @@ public class Vaccine : BaseEntity
     public VaccineRuleType RuleType { get; set; }
     public int? Days { get; set; }
     public int? Months { get; set; }
+    /// <summary>Do not count as due until the goat is at least this old (V1).</summary>
+    public int? MinAgeDays { get; set; }
     public string? Note { get; set; }
     public ICollection<VaccinationHistory> VaccinationHistories { get; set; } = [];
 }
@@ -342,6 +346,7 @@ public class VaccinationHistory : BaseEntity
     public int VaccineId { get; set; }
     public Vaccine Vaccine { get; set; } = null!;
     public DateOnly VaccinationDate { get; set; }
+    public bool IsOpeningRecord { get; set; }
 }
 
 public class Reminder : BaseEntity

@@ -156,9 +156,9 @@
             {
                 @foreach (var v in Model.Schedule)
                 {
-                    var ruleVal = v.RuleType == VaccineRuleType.Age ? v.Days : v.Months;
+                    var ruleVal = v.RuleType == VaccineRuleType.Repeat ? v.Months : v.Days;
                     <tr class="health-row vacc-row" data-id="@v.Id" data-name="@v.Name" data-scope="@v.Scope.ToString()"
-                        data-rule-type="@v.RuleType" data-value="@ruleVal" data-note="@v.Note">
+                        data-rule-type="@v.RuleType" data-value="@ruleVal" data-min-age="@v.MinAgeDays" data-note="@v.Note">
                         <td><b>@v.Name</b>@if(!string.IsNullOrEmpty(v.Note)){<div class="name">@v.Note</div>}</td>
                         <td><span class="scopechip">@v.ScopeDisplay</span></td>
                         <td class="hide-sm"><span class="rule">@v.RuleDisplay</span></td>
@@ -167,7 +167,7 @@
             }
             else {<tr><td colspan="3" class="empty">No vaccines set up yet — add one below.</td></tr>}
             </tbody></table>
-        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.6fr 1.1fr 1.1fr .9fr 1.4fr auto">
+        <div class="add-grid" style="margin-top:14px;grid-template-columns:1.6fr 1.1fr 1.1fr .9fr .8fr 1.4fr auto">
             <div class="field"><label>Vaccine name</label><select id="v-name" data-lookup="Lookup.VaccineNames">
                 @foreach (var n in vaccineNames){<option>@n</option>}</select></div>
             <div class="field"><label>Applies to</label><select id="v-scope">
@@ -176,8 +176,10 @@
                 <option value="Dry">Dry</option><option value="Buck">Bucks</option>
                 <option value="Sale">For sale</option></select></div>
             <div class="field"><label>Rule</label><select id="v-type">
-                <option value="Age">At age (days)</option><option value="Repeat">Repeat (months)</option></select></div>
+                <option value="Age">At age (days)</option><option value="Repeat">Repeat (months)</option>
+                <option value="BeforeKidding">Before kidding (days)</option></select></div>
             <div class="field"><label id="v-vlabel">Days</label><input type="number" id="v-val" min="1" placeholder="30"></div>
+            <div class="field"><label>Min age (days)</label><input type="number" id="v-min-age" min="0" placeholder="optional"></div>
             <div class="field"><label>Comment</label><input id="v-note" placeholder="optional"></div>
             <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-green" id="addVacc">+ Add</button></div>
         </div>

@@ -74,11 +74,15 @@ public interface IFeedService
 
     decimal CalculateFarmFeedMonthly();
 
+    decimal CalculateFarmFeedDaily();
+
     decimal CalculateFarmMedicineMonthly();
 
     decimal GetFeedPurchasedMonthly(string month);
 
     decimal GetFeedPurchasedKg(string month);
+
+    Task<decimal> GetFeedUsedCostAsync(DateOnly from, DateOnly toExclusive, CancellationToken cancellationToken = default);
 
     Task<decimal> GetFeedStockBookValueAsync(CancellationToken cancellationToken = default);
 

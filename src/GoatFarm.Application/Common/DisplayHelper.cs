@@ -82,6 +82,8 @@ public static class DisplayHelper
     public static string FormatRs(decimal amount) =>
         "Rs " + Math.Round(amount).ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
 
+    public static string Litres(decimal litres) => $"{litres:0.0} L";
+
     public static string StatusKey(GoatStatus status) =>
         status.ToString().ToLowerInvariant();
 

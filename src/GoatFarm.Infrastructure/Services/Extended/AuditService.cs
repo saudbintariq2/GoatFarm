@@ -1,3 +1,4 @@
+using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Admin;
 using GoatFarm.Domain.Entities;
@@ -92,7 +93,7 @@ public class AuditService : IAuditService
             Module = a.Module,
             Summary = a.Summary,
             UserDisplay = a.UserDisplay ?? "System",
-            WhenDisplay = a.CreatedDate.ToLocalTime().ToString("g")
+            WhenDisplay = AuditText.FormatWhenUtc(a.CreatedDate)
         }).ToList();
     }
 
@@ -101,8 +102,12 @@ public class AuditService : IAuditService
         Id = a.Id,
         Module = a.Module,
         Action = a.Action.ToString(),
-        Summary = a.Summary,
+        Summary = LooksLikeCode(a.Summary) ? AuditText.ToText(a.Summary) : a.Summary,
         UserDisplay = a.UserDisplay ?? "System",
-        WhenDisplay = a.CreatedDate.ToLocalTime().ToString("g")
+        WhenDisplay = AuditText.FormatWhenUtc(a.CreatedDate)
     };
+
+    private static bool LooksLikeCode(string summary) =>
+        summary.Contains('.', StringComparison.Ordinal) &&
+        !summary.Contains(' ', StringComparison.Ordinal);
 }

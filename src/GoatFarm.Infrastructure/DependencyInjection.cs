@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IVaccineService, VaccineService>();
         services.AddScoped<IReminderService, ReminderService>();
         services.AddScoped<IStatisticsService, StatisticsService>();
+        services.AddScoped<IFarmMetricsService, FarmMetricsService>();
         services.Configure<BackupOptions>(configuration.GetSection(BackupOptions.SectionName));
         services.AddScoped<IBackupService, BackupService>();
         services.AddHostedService<ScheduledBackupHostedService>();
@@ -60,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IUserSettingsService, UserSettingsService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IDoubleEntryGuardService, DoubleEntryGuardService>();
+        services.AddScoped<DuplicateMoneyCheck>();
         services.AddScoped<ITaskService, TaskService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<IApprovalService, ApprovalService>();

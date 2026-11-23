@@ -355,7 +355,7 @@
                         {<span class="chip @g.HerdBreedingStatusCss">@g.HerdBreedingStatus</span>}
                         else if (!isKid) { <span class="breed">—</span> }</td>
                     <td class="hide-sm herd-doe-col">@if (isDoe) { <span class="breed">@(g.HerdNextJob ?? "—")</span> }</td>
-                    <td class="hide-sm herd-doe-col num-cell">@if (isDoe) { @(g.TimesPregnant?.ToString() ?? "—") }</td>
+                    <td class="hide-sm herd-doe-col">@if (isDoe) { <span class="breed">@(g.HerdPregnantText ?? "—")</span> }</td>
                     <td class="hide-sm herd-doe-col num-cell">@if (isDoe)
                         {
                             var kdTot = g.KiddingsTotal ?? 0;

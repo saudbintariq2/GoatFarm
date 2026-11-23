@@ -1212,6 +1212,9 @@ internal static class BackupImportHelper
     {
         if (string.IsNullOrWhiteSpace(value)) return VaccineRuleType.Repeat;
         if (Enum.TryParse<VaccineRuleType>(value, true, out var parsed)) return parsed;
+        if (value.Equals("beforekidding", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("before kidding", StringComparison.OrdinalIgnoreCase))
+            return VaccineRuleType.BeforeKidding;
         return value.Equals("age", StringComparison.OrdinalIgnoreCase) ? VaccineRuleType.Age : VaccineRuleType.Repeat;
     }
 

@@ -2,6 +2,8 @@ using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Products;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Enums;
+using GoatFarm.Infrastructure.Services;
+using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -11,11 +13,13 @@ public class ProductsController : Controller
 {
     private readonly IProductsService _products;
     private readonly IAuditService _audit;
+    private readonly DuplicateMoneyCheck _duplicateMoney;
 
-    public ProductsController(IProductsService products, IAuditService audit)
+    public ProductsController(IProductsService products, IAuditService audit, DuplicateMoneyCheck duplicateMoney)
     {
         _products = products;
         _audit = audit;
+        _duplicateMoney = duplicateMoney;
     }
 
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
@@ -76,6 +80,7 @@ public class ProductsController : Controller
     public async Task<IActionResult> SaveStockMovement([FromBody] SaveStockMovementViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        model.RecordedBy ??= UserDisplay;
         await _audit.LogAsync(FarmTabs.Products, AuditAction.Create, "Stock movement", UserId, UserDisplay, cancellationToken: cancellationToken);
         return Json(await _products.SaveStockMovementAsync(model, cancellationToken));
     }
@@ -84,6 +89,7 @@ public class ProductsController : Controller
     public async Task<IActionResult> SaveMilkingSession([FromBody] SaveMilkingSessionViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        model.RecordedBy ??= UserDisplay;
         return Json(await _products.SaveMilkingSessionAsync(model, cancellationToken));
     }
 
@@ -135,8 +141,14 @@ public class ProductsController : Controller
     public async Task<IActionResult> SaveSale([FromBody] SaveProductSaleViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var ignoreId = model.Id is > 0 ? model.Id : (int?)null;
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, null,
+            ignoreId is not null ? MoneyDuplicateTabs.ProductSale : null, ignoreId, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
         try
         {
+            model.RecordedBy ??= UserDisplay;
             return Json(await _products.SaveProductSaleAsync(model, cancellationToken));
         }
         catch (InvalidOperationException ex)
@@ -165,6 +177,7 @@ public class ProductsController : Controller
         if (!ModelState.IsValid) return BadRequest(ModelState);
         try
         {
+            model.RecordedBy ??= UserDisplay;
             await _audit.LogAsync(FarmTabs.Products, AuditAction.Create, "Pasteurization", UserId, UserDisplay, cancellationToken: cancellationToken);
             return Json(await _products.SavePasteurizationAsync(model, cancellationToken));
         }

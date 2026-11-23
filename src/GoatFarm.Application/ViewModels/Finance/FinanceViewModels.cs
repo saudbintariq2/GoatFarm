@@ -163,6 +163,9 @@ public class CreateIncomeViewModel
     public string? Comment { get; set; }
 
     public int? AccountId { get; set; }
+
+    /// <summary>Set after the user has seen and accepted a possible-duplicate warning.</summary>
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class CreateExpenseViewModel
@@ -202,6 +205,8 @@ public class CreateOwnerInvestmentViewModel
     public string? Shareholder { get; set; }
     public string? FundingType { get; set; }
     public int? AccountId { get; set; }
+
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class FinanceLineViewModel
@@ -239,6 +244,7 @@ public class CapexRowViewModel
     public string Type { get; set; } = string.Empty;
     public string? Supplier { get; set; }
     public decimal Amount { get; set; }
+    public decimal CashPaid { get; set; }
 }
 
 public class FinanceStatementViewModel
@@ -264,7 +270,11 @@ public class FinancePageViewModel
     public decimal TotalExpense { get; set; }
     public decimal FeedMonthly { get; set; }
     public decimal FeedBoughtMonthly { get; set; }
+    public decimal FeedUsedMonthly { get; set; }
     public decimal FeedBoughtKg { get; set; }
+    public decimal OpexCashPaidMonth { get; set; }
+    public decimal CapexCashPaidMonth { get; set; }
+    public decimal TotalCashPaidMonth { get; set; }
     public decimal MedicineMonthly { get; set; }
     public decimal RecurringMonthly { get; set; }
     public decimal StaffSalaryMonthly { get; set; }

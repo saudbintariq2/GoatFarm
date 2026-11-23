@@ -457,7 +457,7 @@ public class TradingService : ITradingService
             _context.TradeEntries.Add(row);
         }
 
-        if (type == TradeEntryType.Sell && model.Id is null or <= 0 && string.IsNullOrWhiteSpace(model.BillNo))
+        if (type == TradeEntryType.Sell && model.Id is null or <= 0)
             model.BillNo = await NextTradingBillAsync(model.Date, cancellationToken);
 
         row.Type = type;

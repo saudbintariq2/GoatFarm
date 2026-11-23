@@ -17,8 +17,9 @@ public class Phase8FeedProductsTests
   private static (FeedService Feed, GoatFarmDbContext Db) CreateFeed()
   {
     var db = TestDb.Create();
-    var goats = new GoatService(db);
-    return (new FeedService(db, goats, new MilkService(db)), db);
+    var goats = TestFarmMetrics.CreateGoatService(db);
+    var metrics = TestFarmMetrics.Create(db, goats);
+    return (new FeedService(db, goats, new MilkService(db), metrics), db);
   }
 
   private static IConfiguration DeviceConfig() =>
@@ -26,6 +27,13 @@ public class Phase8FeedProductsTests
   {
     ["ApplicationSettings:DeviceCode"] = "K7Q"
   }).Build();
+
+  private static ProductsService CreateProducts(GoatFarmDbContext db)
+  {
+    var goats = TestFarmMetrics.CreateGoatService(db);
+    var metrics = TestFarmMetrics.Create(db, goats);
+    return new ProductsService(db, new LedgerService(db), DeviceConfig(), metrics);
+  }
 
   [Fact]
   public void FeedSeasonHelper_OffSeasonZerosDirectUse()
@@ -93,7 +101,7 @@ public class Phase8FeedProductsTests
     });
     await db.SaveChangesAsync();
 
-    var products = new ProductsService(db, new LedgerService(db), DeviceConfig());
+    var products = CreateProducts(db);
     await products.SaveProductSaleAsync(new SaveProductSaleViewModel
     {
       Date = TestDb.Today,
@@ -130,7 +138,7 @@ public class Phase8FeedProductsTests
     };
     db.SlaughterRecords.Add(slaughter);
     await db.SaveChangesAsync();
-    var products = new ProductsService(db, new LedgerService(db), DeviceConfig());
+    var products = CreateProducts(db);
     await products.SaveMeatSplitAsync(new SaveMeatSplitViewModel
     {
       SlaughterId = slaughter.Id,
@@ -166,7 +174,7 @@ public class Phase8FeedProductsTests
     };
     db.SlaughterRecords.Add(slaughter);
     await db.SaveChangesAsync();
-    var products = new ProductsService(db, new LedgerService(db), DeviceConfig());
+    var products = CreateProducts(db);
     await products.SaveMeatCutAsync(new SaveMeatCutViewModel
     {
       SlaughterId = slaughter.Id,
@@ -201,7 +209,7 @@ public class Phase8FeedProductsTests
       Qty = 5
     });
     await db.SaveChangesAsync();
-    var products = new ProductsService(db, new LedgerService(db), DeviceConfig());
+    var products = CreateProducts(db);
     await Assert.ThrowsAsync<InvalidOperationException>(() => products.SaveProductSaleAsync(new SaveProductSaleViewModel
     {
       Date = TestDb.Today,

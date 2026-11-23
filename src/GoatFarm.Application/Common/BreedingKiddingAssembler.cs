@@ -12,21 +12,17 @@ public static class BreedingKiddingAssembler
         IReadOnlyList<BreedingDueToKidRowViewModel> dueRows,
         IReadOnlyList<BreedingMotherCheckRowViewModel> motherRows,
         IReadOnlyList<BreedingKidGroundRowViewModel> kidRows,
-        IReadOnlyList<Goat> does,
+        int kiddedNursingCount,
         DateOnly today)
     {
         var dueSoon = dueRows.Count(r => r.DaysToDue <= 30);
-        var kiddedMothers = does.Count(d =>
-            d.Status == GoatStatus.Milking &&
-            !PregnancyRules.IsAwaitingScan(d) &&
-            !(d.MatedDate.HasValue && d.KidsCount is > 0));
         var watch = motherRows.Count(r => !string.IsNullOrEmpty(r.RowCssClass));
 
         return new BreedingKiddingStatsViewModel
         {
             DueTotal = dueRows.Count,
             DueSoon30 = dueSoon,
-            KiddedMothers = kiddedMothers,
+            KiddedMothers = kiddedNursingCount,
             KidsOnGround = kidRows.Count(k => k.StatusDisplay == "On milk"),
             MothersToWatch = watch
         };

@@ -86,7 +86,14 @@ public class BreedingController : Controller
         if (goat is null)
             return NotFound(new { error = "No goat with that tag" });
 
-        var extra = goat.Gender != Domain.Enums.GoatGender.Female ? " — note: not marked female" : "";
+        if (goat.Gender != Domain.Enums.GoatGender.Female)
+            return NotFound(new { error = $"{goat.Tag} is not a doe — pick an adult female." });
+        if (string.Equals(goat.StatusKey, "kid", StringComparison.OrdinalIgnoreCase))
+            return NotFound(new { error = $"{goat.Tag} is still a kid — not ready for breeding." });
+        if (goat.AgeDays is { } age && age < BreedingHelper.MinBreedingAgeDays)
+            return NotFound(new { error = $"{goat.Tag} is too young for breeding ({age} days)." });
+
+        var extra = "";
         if (goat.MatedDate.HasValue)
             extra = goat.KidsCount > 0 ? " — confirmed pregnant" : " — crossed, waiting for scan";
 

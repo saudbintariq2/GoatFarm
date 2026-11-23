@@ -1,4 +1,5 @@
 ﻿@model GoatFarm.Application.ViewModels.Trading.TradingPageViewModel
+@inject IConfiguration Configuration
 @using GoatFarm.Application.Common
 @using System.Text.Json
 @section Head {
@@ -69,7 +70,7 @@
 <div class="field" id="td-s-recv-f" hidden><label for="td-s-recv">Received now (Rs)</label><input type="number" id="td-s-recv" min="0" step="1"></div>
 <div class="field" id="td-s-acct-f"><label for="td-s-acct">Received into</label><select id="td-s-acct" class="td-acct-sel"></select></div>
 <div class="field" id="td-s-due-f" hidden><label for="td-s-due">Due date</label><input type="date" id="td-s-due"></div>
-<div class="field"><label for="td-s-inv">Bill no.</label><input id="td-s-inv"></div>
+<div class="field"><label for="td-s-inv">Bill no.</label><input id="td-s-inv" placeholder="Assigned on save (TR-…)" aria-describedby="td-s-inv-hint"><small id="td-s-inv-hint" class="breed">Server uses <code>TR-yyyyMM-@Configuration["ApplicationSettings:DeviceCode"]-NNN</code></small></div>
 <div class="field td-span-2"><label for="td-s-note">Note</label><input id="td-s-note" placeholder="vehicle, village..."></div>
 </div>
 <div class="td-sum" id="td-s-sum"></div>

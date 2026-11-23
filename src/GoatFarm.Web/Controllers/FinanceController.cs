@@ -3,6 +3,8 @@ using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Finance;
 using GoatFarm.Application.ViewModels.Ledger;
 using GoatFarm.Domain.Constants;
+using GoatFarm.Domain.Enums;
+using GoatFarm.Infrastructure.Services;
 using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,6 +23,7 @@ public class FinanceController : Controller
     private readonly ILedgerService _ledgerService;
     private readonly ILookupService _lookupService;
     private readonly IDoubleEntryGuardService _doubleEntryGuard;
+    private readonly DuplicateMoneyCheck _duplicateMoney;
     private readonly IApprovalService _approvalService;
     private readonly IPermissionService _permissionService;
 
@@ -29,6 +32,7 @@ public class FinanceController : Controller
         ILedgerService ledgerService,
         ILookupService lookupService,
         IDoubleEntryGuardService doubleEntryGuard,
+        DuplicateMoneyCheck duplicateMoney,
         IApprovalService approvalService,
         IPermissionService permissionService)
     {
@@ -36,6 +40,7 @@ public class FinanceController : Controller
         _ledgerService = ledgerService;
         _lookupService = lookupService;
         _doubleEntryGuard = doubleEntryGuard;
+        _duplicateMoney = duplicateMoney;
         _approvalService = approvalService;
         _permissionService = permissionService;
     }
@@ -119,6 +124,14 @@ public class FinanceController : Controller
     public async Task<IActionResult> SaveLedgerTransaction([FromBody] SaveLedgerTransactionViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        if (model.Kind is not LedgerTransactionKind.Transfer)
+        {
+            var ignoreId = model.Id is > 0 ? model.Id : (int?)null;
+            var ledgerDup = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+                _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, null,
+                ignoreId is not null ? MoneyDuplicateTabs.LedgerManual : null, ignoreId, cancellationToken);
+            if (ledgerDup is not null) return ledgerDup;
+        }
         return Json(await _ledgerService.SaveTransactionAsync(model, cancellationToken));
     }
 
@@ -133,7 +146,22 @@ public class FinanceController : Controller
     public async Task<IActionResult> SaveSupplierPayable([FromBody] SaveSupplierPayableViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        return Json(await _ledgerService.SavePayableAsync(model, cancellationToken));
+        if (model.Id is null or 0)
+        {
+            var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+                _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, model.SupplierName,
+                MoneyDuplicateTabs.SupplierBill, null, cancellationToken);
+            if (dupConflict is not null) return dupConflict;
+        }
+
+        try
+        {
+            return Json(await _ledgerService.SavePayableAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost]
@@ -192,6 +220,19 @@ public class FinanceController : Controller
     }
 
     [HttpPost]
+    public async Task<IActionResult> FundLivestockAsOwner([FromBody] FundLivestockAsOwnerViewModel model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _financeService.FundLivestockAsOwnerContributionAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
     public async Task<IActionResult> AddAsset([FromBody] CreateAssetViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -202,6 +243,10 @@ public class FinanceController : Controller
     public async Task<IActionResult> AddIncome([FromBody] CreateIncomeViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var incomeDup = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, null,
+            MoneyDuplicateTabs.Income, null, cancellationToken);
+        if (incomeDup is not null) return incomeDup;
         try { return Json(await _financeService.AddIncomeAsync(model, cancellationToken)); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
@@ -218,6 +263,10 @@ public class FinanceController : Controller
         {
             return DoubleEntryResult(ex);
         }
+        var expenseDup = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, null,
+            MoneyDuplicateTabs.Expense, null, cancellationToken);
+        if (expenseDup is not null) return expenseDup;
         try { return Json(await _financeService.AddExpenseAsync(model, cancellationToken)); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
@@ -234,6 +283,10 @@ public class FinanceController : Controller
     public async Task<IActionResult> AddOwnerInvestment([FromBody] CreateOwnerInvestmentViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var fundingDup = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, model.Shareholder,
+            MoneyDuplicateTabs.OwnerFunding, null, cancellationToken);
+        if (fundingDup is not null) return fundingDup;
         try { return Json(await _financeService.AddOwnerInvestmentAsync(model, cancellationToken)); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
@@ -256,6 +309,10 @@ public class FinanceController : Controller
         var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
             FarmTabs.Finance, "Income", id, model, cancellationToken);
         if (pending is not null) return pending;
+        var incomeDup = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, null,
+            MoneyDuplicateTabs.Income, id, cancellationToken);
+        if (incomeDup is not null) return incomeDup;
         try
         {
             var result = await _financeService.UpdateIncomeAsync(id, model, cancellationToken);
@@ -279,6 +336,10 @@ public class FinanceController : Controller
         var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
             FarmTabs.Finance, "Expense", id, model, cancellationToken);
         if (pending is not null) return pending;
+        var expenseDup = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, null,
+            MoneyDuplicateTabs.Expense, id, cancellationToken);
+        if (expenseDup is not null) return expenseDup;
         try
         {
             var result = await _financeService.UpdateExpenseAsync(id, model, cancellationToken);
@@ -294,6 +355,10 @@ public class FinanceController : Controller
         var pending = await ApprovalGate.GuardEditAsync(this, User, _approvalService, _permissionService,
             FarmTabs.Finance, "OwnerInvestment", id, model, cancellationToken);
         if (pending is not null) return pending;
+        var fundingDup = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, model.Shareholder,
+            MoneyDuplicateTabs.OwnerFunding, id, cancellationToken);
+        if (fundingDup is not null) return fundingDup;
         try
         {
             var result = await _financeService.UpdateOwnerInvestmentAsync(id, model, cancellationToken);

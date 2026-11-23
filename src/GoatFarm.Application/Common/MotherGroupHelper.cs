@@ -1,4 +1,5 @@
 using GoatFarm.Application.ViewModels.Breeding;
+using GoatFarm.Domain.Entities;
 
 namespace GoatFarm.Application.Common;
 
@@ -22,5 +23,15 @@ public static class MotherGroupHelper
             2 => "m2",
             _ => "m1"
         };
+    }
+
+  /// <summary>Stored mother group, or suggested from last litter size (B3).</summary>
+    public static string? EffectiveGroupId(string? storedMotherGroupId, KiddingRecord? latestKidding)
+    {
+        if (!string.IsNullOrWhiteSpace(storedMotherGroupId))
+            return storedMotherGroupId;
+        if (latestKidding is null)
+            return null;
+        return SuggestGroupId(latestKidding.LiveKids + latestKidding.Stillborn);
     }
 }

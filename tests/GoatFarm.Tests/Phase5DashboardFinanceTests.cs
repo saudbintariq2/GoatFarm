@@ -17,8 +17,9 @@ public class Phase5DashboardFinanceTests
     public static (FinanceService Finance, StatisticsService Stats, GoatFarmDbContext Db) Create()
     {
         var db = TestDb.Create();
-        var goats = new GoatService(db);
-        var feed = new FeedService(db, goats, new MilkService(db));
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        var feed = new FeedService(db, goats, new MilkService(db), metrics);
         var finance = new FinanceService(db, feed, new MilkService(db), new VaccineService(db));
         var stats = new StatisticsService(
             goats,
@@ -27,9 +28,10 @@ public class Phase5DashboardFinanceTests
             new MilkService(db),
             new VaccineService(db),
             new ReminderService(db),
-            new BreedingService(db, goats, feed),
+            new BreedingService(db, goats, feed, metrics),
             new LedgerService(db),
             new StubApprovalService(),
+            metrics,
             db,
             new MemoryCache(new MemoryCacheOptions()));
         return (finance, stats, db);

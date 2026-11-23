@@ -64,6 +64,8 @@ public class CreateMilkSaleViewModel
 
     [StringLength(500)]
     public string? Comment { get; set; }
+
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class CreateMilkWasteViewModel

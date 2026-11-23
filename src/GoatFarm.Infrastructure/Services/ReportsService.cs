@@ -1,6 +1,7 @@
 using System.Net;
 using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
+using GoatFarm.Application.ViewModels.Feed;
 using GoatFarm.Application.ViewModels.Reports;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
@@ -31,6 +32,7 @@ public class ReportsService : IReportsService
     private readonly IVaccineService _vaccineService;
     private readonly IGoatService _goatService;
     private readonly IReminderService _reminderService;
+    private readonly IFarmMetricsService _farmMetrics;
 
     public ReportsService(
         GoatFarmDbContext context,
@@ -39,7 +41,8 @@ public class ReportsService : IReportsService
         IMilkService milkService,
         IVaccineService vaccineService,
         IGoatService goatService,
-        IReminderService reminderService)
+        IReminderService reminderService,
+        IFarmMetricsService farmMetrics)
     {
         _context = context;
         _feedService = feedService;
@@ -48,6 +51,7 @@ public class ReportsService : IReportsService
         _vaccineService = vaccineService;
         _goatService = goatService;
         _reminderService = reminderService;
+        _farmMetrics = farmMetrics;
     }
 
     public async Task<ReportsPageViewModel> GetReportsPageAsync(
@@ -82,23 +86,26 @@ public class ReportsService : IReportsService
         var assets = await _context.Assets.AsNoTracking().ToListAsync(cancellationToken);
         var reminders = await _reminderService.GetRemindersAsync(cancellationToken);
         var remindDays = await GetRemindDaysAsync(cancellationToken);
+        var employees = await _context.Employees.AsNoTracking().ToListAsync(cancellationToken);
+        var goatSales = await _context.GoatSales.AsNoTracking().ToListAsync(cancellationToken);
+        var productSales = await _context.ProductSales.AsNoTracking().ToListAsync(cancellationToken);
+        var customerInvoices = await _context.CustomerInvoices.AsNoTracking().ToListAsync(cancellationToken);
+        var treatments = await _context.GoatTreatments.AsNoTracking().ToListAsync(cancellationToken);
 
         var range = BuildRange(period, customFrom, customTo, expenses, incomes, feedBuys, vaccineBuys, milkSales, ownerInv);
-        var monthlyFixed = _financeService.GetStaffSalaryMonthlyTotal()
-            + _feedService.CalculateFarmMedicineMonthly()
-            + _financeService.GetRecurringMonthlyTotal();
         var feedMonth = _feedService.CalculateFarmFeedMonthly();
 
-        var incMap = BuildIncomeMap(incomes, milkSales, range);
-        var incTot = incMap.Values.Sum();
-        var expMap = BuildExpenseMap(expenses, feedBuys, vaccineBuys, recurring, range);
-        var expTot = expMap.Values.Sum();
+        var stmt = await _financeService.GetStatementAsync(range.From, range.To, cancellationToken);
+        var incTot = stmt.Income;
+        var expTot = stmt.Expense;
         var profit = incTot - expTot;
+        var incMap = stmt.IncomeLines.ToDictionary(l => l.Label, l => l.Amount, StringComparer.OrdinalIgnoreCase);
+        var expMap = stmt.ExpenseLines.ToDictionary(l => l.Label, l => l.Amount, StringComparer.OrdinalIgnoreCase);
         var ownList = ownerInv.Where(o => range.Test(o.Date)).OrderByDescending(o => o.Date).ToList();
         var ownTot = ownList.Sum(o => o.Amount);
         var feedKgT = feedBuys.Where(x => range.Test(x.Date)).Sum(x => x.Kg);
         var milkL = milkSales.Where(x => range.Test(x.Date)).Sum(x => x.Liters);
-        var milkLp = milkProd.Where(x => range.Test(x.Date)).Sum(x => x.Liters);
+        var milkLp = await _farmMetrics.MilkLitresAsync(range.From, range.To, cancellationToken);
         var milkInc = milkSales.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
         var milkLs = milkL;
         var preRevenue = incTot == 0;
@@ -132,10 +139,9 @@ public class ReportsService : IReportsService
         var waiting = goats.Where(PregnancyRules.IsAwaitingScan).ToList();
         var emptyInRange = emptyLogs.Where(e => range.Test(e.ScanDate)).ToList();
         var emptyCount = emptyInRange.Count;
-        var positiveIds = confirmed.Select(g => g.Id).ToHashSet();
-        var emptyDoeIds = emptyInRange.Select(e => e.GoatId).Where(id => !positiveIds.Contains(id)).Distinct().Count();
-        var scans = positiveIds.Count + emptyDoeIds;
-        var concRate = scans > 0 ? (int)Math.Round(positiveIds.Count / (double)scans * 100) : (int?)null;
+        var (scanned, pregnant, waitingScan, rate) = await _farmMetrics.PregnancyRateAsync(cancellationToken: cancellationToken);
+        var concRate = rate is null ? (int?)null : (int)rate.Value;
+        var scans = scanned;
         var kidsExpected = confirmed.Sum(g => g.KidsCount ?? 0);
         var deathsP = deaths.Where(d => range.Test(d.Date)).ToList();
         var births = goats.Where(g => g.Source == GoatSource.Born && range.Test(g.EventDate)).ToList();
@@ -143,35 +149,39 @@ public class ReportsService : IReportsService
         var openHerd = Math.Max(0, totalGoats - births.Count - bought.Count + deathsP.Count);
         var mortality = openHerd > 0 ? deathsP.Count / (double)openHerd * 100 : 0;
         var vaccCost = vaccineBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
-        var medCost = expenses.Where(e => range.Test(e.Date) && MedExpenseTypes.Contains(e.Type)).Sum(e => e.Amount);
+        var medCost = expenses.Where(e => range.Test(e.Date) && MedExpenseTypes.Contains(e.Type)).Sum(e => e.Amount)
+            + treatments.Where(t => range.Test(t.StartDate)).Sum(t => t.Cost);
         var days = Math.Max(1, range.MonthCount * 30);
         var feedPeriod = feedBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
-        var milkForCost = Math.Max(milkLp, milkLs);
-        var costPerL = milkForCost > 0 ? feedPeriod / milkForCost : (decimal?)null;
+        var costPerL = await _farmMetrics.FeedCostPerLitreAsync(
+            new DateOnly(range.From.Year, range.From.Month, 1), cancellationToken);
+        if (!costPerL.HasValue && milkLp > 0 && feedPeriod > 0)
+            costPerL = Math.Round(feedPeriod / milkLp, 1);
         var avgRate = milkLs > 0 ? milkInc / milkLs : 0;
         var milkingN = _goatService.CountByStatus(GoatStatus.Milking);
         var livestockValue = _financeService.GetLivestockValue();
         var assetsValue = _financeService.GetAssetsValue();
 
-        var mixFeedKeys = feedPrices
-            .Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase))
-            .Select(f => f.FeedType)
-            .ToList();
-        var dailyUse = await BuildDailyUseMapAsync(cancellationToken);
-        var stockVal = feedPrices
-            .Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase))
-            .Sum(f => f.StockKg * f.PricePerKg);
+        var feedStock = await _feedService.GetFeedStockRowsAsync(cancellationToken);
+        var stockVal = await _feedService.GetFeedStockBookValueAsync(cancellationToken);
         int? minDays = null;
-        foreach (var f in feedPrices.Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase)))
+        foreach (var s in feedStock.Where(s => !string.Equals(s.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase)))
         {
-            var du = dailyUse.GetValueOrDefault(f.FeedType);
-            if (du <= 0 || f.StockKg <= 0) continue;
-            var d = (int)Math.Floor(f.StockKg / du);
+            if (s.KgPerDay <= 0 || s.StockKg <= 0 || s.DaysLeft is not > 0) continue;
+            var d = (int)Math.Floor(s.DaysLeft.Value);
             if (minDays is null || d < minDays) minDays = d;
         }
 
+        var outPlanned = feedStock
+            .Where(s => !string.Equals(s.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase)
+                        && s.KgPerDay > 0 && s.StockKg <= 0)
+            .ToList();
+        var feedStockKpi = outPlanned.Count > 0
+            ? $"{outPlanned.Count} feed(s) out"
+            : minDays.HasValue ? $"{minDays} d" : "—";
+
         var vaccDueTotal = vaccines.Sum(v => GetDueGoats(v, goats, vaccLog).Count);
-        var trend = BuildTrendRows(incomes, expenses, feedBuys, vaccineBuys, milkSales, ownerInv, range, monthlyFixed, groupBy, preRevenue);
+        var trend = BuildTrendRows(incomes, expenses, feedBuys, vaccineBuys, milkSales, ownerInv, range, employees, groupBy, preRevenue);
 
         var finance = new ReportFinanceSectionViewModel
         {
@@ -201,24 +211,26 @@ public class ReportsService : IReportsService
             DayNote = BuildDayNote(range, incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, ownerInv)
         };
 
-        var dashboard = BuildDashboard(totalGoats, confirmed, deathsP, minDays, feedPeriod, feedMonth, range, incTot, expTot,
-            vaccDueTotal, mortality, openHerd, concRate, scans, positiveIds.Count, kidsExpected, totalGoats, feedMonth,
+        var dashboard = BuildDashboard(totalGoats, confirmed, deathsP, feedStockKpi, feedPeriod, feedMonth, range, incTot, expTot,
+            vaccDueTotal, mortality, openHerd, concRate, scans, pregnant, kidsExpected, totalGoats, feedMonth,
             costPerL, vaccCost, medCost, trend, preRevenue);
 
-        var herd = BuildHerdSection(goats, totalGoats, openHerd, births, bought, deathsP, livestockValue, range);
+        var herd = BuildHerdSection(goats, totalGoats, openHerd, births, bought, deathsP, goatSales, livestockValue, range);
         var breeding = BuildBreedingSection(confirmed, waiting, emptyLogs, goats, emptyCount, concRate, scans, kidsExpected);
         var growth = BuildGrowthSectionWithAdg(goats, weightRecords, totalGoats, feedMonth);
 
-        var feedSection = BuildFeedSection(feedPrices, feedBuys, feedUsage, dailyUse, feedMonth, feedPeriod, expTot,
-            costPerL, stockVal, range, mixFeedKeys);
+        var feedSection = BuildFeedSection(feedPrices, feedBuys, feedUsage, feedStock, feedMonth, feedPeriod, expTot,
+            costPerL, stockVal, range);
         var health = BuildHealthSection(vaccines, vaccLog, goats, vaccDueTotal, remindDays, range, vaccCost, medCost, totalGoats, deathsP);
         var profitability = BuildProfitabilitySection(totalGoats, expTot, feedMonth, vaccCost, medCost, avgRate, costPerL,
             incTot, incomes, range, milkLp, milkLs, milkInc, milkProd, milkSales, days, milkingN);
-        var inventory = BuildInventorySection(feedPrices, dailyUse, stockVal, livestockValue, assetsValue, assets);
-        var alerts = BuildAlerts(feedPrices, dailyUse, vaccines, goats, vaccLog, confirmed, remindDays, reminders,
+        var inventory = BuildInventorySection(feedStock, feedPrices, stockVal, livestockValue, assetsValue, assets);
+        var alerts = BuildAlerts(feedStock, vaccines, goats, vaccLog, confirmed, remindDays, reminders,
             weightRecords, growth.UnderperformingTags);
         dashboard.Alerts = alerts.Items.Take(10).ToList();
-        var comparison = BuildComparison(incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, ownerInv, deaths, allGoats);
+        var comparison = await BuildComparisonAsync(
+            incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, ownerInv, deaths, allGoats,
+            productSales, customerInvoices, employees, cancellationToken);
         var capexOpex = await BuildCapexOpexSectionAsync(range, cancellationToken);
         var profitShare = await BuildProfitShareSectionAsync(range, incTot - expTot, cancellationToken);
         var projectsAssets = await BuildProjectsSectionAsync(cancellationToken);
@@ -465,7 +477,7 @@ public class ReportsService : IReportsService
     }
 
     private ReportDashboardSectionViewModel BuildDashboard(
-        int totalGoats, List<Goat> confirmed, List<DeathRecord> deathsP, int? minDays,
+        int totalGoats, List<Goat> confirmed, List<DeathRecord> deathsP, string feedStockKpi,
         decimal feedPeriod, decimal feedMonth, ReportRange range, decimal incTot, decimal expTot, int vaccDueTotal,
         double mortality, int openHerd, int? concRate, int scans, int confirmedCount, int kidsExpected,
         int herdSize, decimal feedMonthly, decimal? costPerL, decimal vaccCost, decimal medCost,
@@ -479,7 +491,7 @@ public class ReportsService : IReportsService
             KpiDot("Kids", _goatService.CountByStatus(GoatStatus.Kid).ToString(), "var(--amber)"),
             KpiDot("Pregnant", confirmed.Count.ToString(), "var(--pink)"),
             KpiDot("Deaths", deathsP.Count.ToString(), "var(--red)"),
-            KpiDot("Feed stock", minDays.HasValue ? $"{minDays} d" : "—", "var(--blue)"),
+            KpiDot("Feed stock", feedStockKpi, "var(--blue)"),
             KpiDot("Feed bought", DisplayHelper.FormatRs(feedPeriod), "var(--amber)"),
             Fin(KpiDot("Revenue", DisplayHelper.FormatRs(incTot), "var(--green)")),
             Fin(KpiDot("Expenses", DisplayHelper.FormatRs(expTot), "var(--red)")),
@@ -514,14 +526,16 @@ public class ReportsService : IReportsService
 
     private static ReportHerdSectionViewModel BuildHerdSection(
         IReadOnlyList<Goat> goats, int totalGoats, int openHerd,
-        List<Goat> births, List<Goat> bought, List<DeathRecord> deathsP,
+        List<Goat> births, List<Goat> bought, List<DeathRecord> deathsP, List<GoatSale> goatSales,
         decimal livestockValue, ReportRange range)
     {
+        var sales = goatSales.Where(s => range.Test(s.Date)).ToList();
         var movement = new List<ReportLabelCountRowViewModel>
         {
             new() { Label = "Opening herd", Count = openHerd },
             new() { Label = "Purchases", Count = bought.Count },
             new() { Label = "Births", Count = births.Count },
+            new() { Label = "Sales", Count = sales.Count },
             new() { Label = "Deaths", Count = deathsP.Count },
             new() { Label = "Current herd", Count = totalGoats, IsTotal = true }
         };
@@ -562,7 +576,7 @@ public class ReportsService : IReportsService
         foreach (var grp in goats.GroupBy(g => g.Breed).OrderByDescending(g => g.Count()))
             ageSexBreed.Add(Kpi(grp.Key, grp.Count().ToString(), "breed"));
         ageSexBreed.Add(Kpi("Does (female)", goats.Count(g => g.Gender == GoatGender.Female).ToString()));
-        ageSexBreed.Add(Kpi("Bucks (male)", goats.Count(g => g.Gender == GoatGender.Male).ToString()));
+        ageSexBreed.Add(Kpi("Bucks (status)", goats.Count(g => g.Status == GoatStatus.Buck).ToString()));
 
         var changes = bought.Select(g => new ReportHerdChangeRowViewModel
             {
@@ -587,6 +601,14 @@ public class ReportsService : IReportsService
                 Breed = d.Breed ?? "",
                 EventHtml = "<span class=\"chip chip-exp\">Died</span>",
                 ValueDisplay = d.ValueLost > 0 ? "– " + DisplayHelper.FormatRs(d.ValueLost) : "—"
+            }))
+            .Concat(sales.Select(s => new ReportHerdChangeRowViewModel
+            {
+                Date = s.Date.ToString("yyyy-MM-dd"),
+                Tag = s.Tag,
+                Breed = s.Breed ?? "",
+                EventHtml = "<span class=\"chip chip-sale\">Sold</span>",
+                ValueDisplay = DisplayHelper.FormatRs(s.Price)
             }))
             .OrderByDescending(c => c.Date)
             .ToList();
@@ -684,9 +706,9 @@ public class ReportsService : IReportsService
         IReadOnlyList<FeedPrice> feedPrices,
         IReadOnlyList<FeedPurchase> feedBuys,
         IReadOnlyList<FeedUsageRecord> feedUsage,
-        IReadOnlyDictionary<string, decimal> dailyUse,
+        IReadOnlyList<FeedStockRowViewModel> feedStockRows,
         decimal feedMonth, decimal feedPeriod, decimal expTot, decimal? costPerL,
-        decimal stockVal, ReportRange range, IReadOnlyList<string> mixFeedKeys)
+        decimal stockVal, ReportRange range)
     {
         var feedShare = expTot > 0 ? (int)Math.Round(feedPeriod / expTot * 100) : 0;
         var kpis = new List<ReportKpiViewModel>
@@ -700,29 +722,24 @@ public class ReportsService : IReportsService
             Kpi("Stock value", DisplayHelper.FormatRs(stockVal), "in the store")
         };
 
-        var buyAgg = feedBuys.GroupBy(b => b.FeedType).ToDictionary(g => g.Key, g => new { Kg = g.Sum(x => x.Kg), Amt = g.Sum(x => x.Amount) });
-        var stockRows = feedPrices
-            .Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase))
-            .Select(f =>
+        var priceByType = feedPrices.ToDictionary(f => f.FeedType, f => f, StringComparer.OrdinalIgnoreCase);
+        var stockRows = feedStockRows
+            .Where(s => !string.Equals(s.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase))
+            .Select(s =>
             {
-                var du = dailyUse.GetValueOrDefault(f.FeedType);
-                var days = du > 0 ? (int?)Math.Floor(f.StockKg / du) : null;
-                var pur = feedBuys.Where(b => b.FeedType == f.FeedType).Sum(b => b.Kg);
-                var used = feedUsage.Where(u => u.FeedType == f.FeedType).Sum(u => u.Kg);
-                buyAgg.TryGetValue(f.FeedType, out var ag);
-                var avg = ag is { Kg: > 0 } ? ag.Amt / ag.Kg : f.PricePerKg;
-                var pct = f.StockKgFull > 0 ? f.StockKg / f.StockKgFull : (decimal?)null;
+                priceByType.TryGetValue(s.FeedType, out var fp);
+                var rate = fp?.PricePerKg ?? 0;
                 return new ReportFeedStockRowViewModel
                 {
-                    Name = f.DisplayName,
-                    IsLow = pct is <= 0.2m,
-                    PurchasedKg = pur,
-                    ConsumedKg = used,
-                    StockKg = f.StockKg,
-                    DailyUseKg = du,
-                    DaysLeft = days,
-                    AvgCostPerKg = avg,
-                    StockValue = f.StockKg * f.PricePerKg
+                    Name = s.DisplayName,
+                    IsLow = s.IsLowStock,
+                    PurchasedKg = s.PurchasedKg,
+                    ConsumedKg = s.UsedKg,
+                    StockKg = s.StockKg,
+                    DailyUseKg = s.KgPerDay,
+                    DaysLeft = s.DaysLeft is > 0 ? (int?)Math.Floor(s.DaysLeft.Value) : null,
+                    AvgCostPerKg = rate,
+                    StockValue = s.StockKg * rate
                 };
             }).ToList();
 
@@ -803,7 +820,7 @@ public class ReportsService : IReportsService
         var vaccRows = vaccines.Select(v => new ReportVaccineStatusRowViewModel
         {
             Name = v.Name,
-            RuleLabel = v.RuleType == VaccineRuleType.Age ? $"At {v.Days} days old" : $"Every {v.Months} months",
+            RuleLabel = VaccineDueHelper.RuleLabel(v),
             ScopeLabel = DisplayHelper.GetScopeLabel(v.Scope),
             Done = log.Count(l => l.VaccineId == v.Id && range.Test(l.VaccinationDate)),
             DueNow = GetDueGoats(v, goats, log).Count,
@@ -904,16 +921,16 @@ public class ReportsService : IReportsService
     }
 
     private static ReportInventorySectionViewModel BuildInventorySection(
-        IReadOnlyList<FeedPrice> feedPrices,
-        IReadOnlyDictionary<string, decimal> dailyUse,
+        IReadOnlyList<FeedStockRowViewModel> feedStock, IReadOnlyList<FeedPrice> feedPrices,
         decimal stockVal, decimal livestockValue, decimal assetsValue,
         IReadOnlyList<Asset> assets)
     {
-        int LowCount(IReadOnlyList<FeedPrice> fp) => fp.Count(f =>
-            !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase) &&
-            f.StockKgFull > 0 && f.StockKg / f.StockKgFull <= 0.2m);
-        int OutCount(IReadOnlyList<FeedPrice> fp) => fp.Count(f =>
-            !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase) && f.StockKg <= 0);
+        var rates = feedPrices.ToDictionary(f => f.FeedType, f => f.PricePerKg, StringComparer.OrdinalIgnoreCase);
+        var mix = feedStock
+            .Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var low = mix.Count(s => s.IsLowStock && s.StockKg > 0);
+        var outPlanned = mix.Count(s => s.KgPerDay > 0 && s.StockKg <= 0);
 
         var kpis = new List<ReportKpiViewModel>
         {
@@ -921,29 +938,27 @@ public class ReportsService : IReportsService
             Kpi("Livestock value", DisplayHelper.FormatRs(livestockValue), "bought goats at cost"),
             Fin(Kpi("Assets & equipment", DisplayHelper.FormatRs(assetsValue), assets.Count + " items")),
             Fin(Kpi("Total capital", DisplayHelper.FormatRs(livestockValue + assetsValue), "livestock + assets", "var(--blue)")),
-            Kpi("Low stock items", LowCount(feedPrices).ToString(), "at or under 20%", LowCount(feedPrices) > 0 ? "#8a261c" : "var(--green-dark)"),
-            Kpi("Out of stock", OutCount(feedPrices).ToString(), "nothing left", "#8a261c")
+            Kpi("Low stock items", low.ToString(), "at or under 20%", low > 0 ? "#8a261c" : "var(--green-dark)"),
+            Kpi("Out of stock", outPlanned.ToString(), "planned use, none left", outPlanned > 0 ? "#8a261c" : "var(--green-dark)")
         };
 
-        var feedRows = feedPrices
-            .Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase))
-            .Select(f =>
+        var feedRows = mix.Select(s =>
+        {
+            var status = s.KgPerDay > 0 && s.StockKg <= 0
+                ? "<span class=\"chip chip-exp\">OUT</span>"
+                : s.IsLowStock
+                    ? "<span class=\"chip chip-exp\">LOW</span>"
+                    : "<span class=\"chip chip-inc\">OK</span>";
+            var rate = rates.GetValueOrDefault(s.FeedType);
+            return new ReportInvFeedRowViewModel
             {
-                var pct = f.StockKgFull > 0 ? f.StockKg / f.StockKgFull : (decimal?)null;
-                var status = f.StockKg <= 0
-                    ? "<span class=\"chip chip-exp\">OUT</span>"
-                    : pct is <= 0.2m
-                        ? "<span class=\"chip chip-exp\">LOW</span>"
-                        : "<span class=\"chip chip-inc\">OK</span>";
-                return new ReportInvFeedRowViewModel
-                {
-                    Name = f.DisplayName,
-                    QuantityKg = f.StockKg,
-                    RatePerKg = f.PricePerKg,
-                    Value = f.StockKg * f.PricePerKg,
-                    StatusHtml = status
-                };
-            }).ToList();
+                Name = s.DisplayName,
+                QuantityKg = s.StockKg,
+                RatePerKg = rate,
+                Value = s.StockKg * rate,
+                StatusHtml = status
+            };
+        }).ToList();
 
         var assetRows = assets.Select(a => new ReportInvAssetRowViewModel
         {
@@ -964,8 +979,7 @@ public class ReportsService : IReportsService
     }
 
     private ReportAlertsSectionViewModel BuildAlerts(
-        IReadOnlyList<FeedPrice> feedPrices,
-        IReadOnlyDictionary<string, decimal> dailyUse,
+        IReadOnlyList<FeedStockRowViewModel> feedStock,
         IReadOnlyList<Vaccine> vaccines,
         IReadOnlyList<Goat> goats,
         IReadOnlyList<VaccinationHistory> log,
@@ -977,12 +991,12 @@ public class ReportsService : IReportsService
     {
         var al = new List<ReportAlertItemViewModel>();
 
-        foreach (var f in feedPrices.Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase)))
+        foreach (var s in feedStock.Where(f => !string.Equals(f.FeedType, FeedTypes.Fodder, StringComparison.OrdinalIgnoreCase)))
         {
-            if (f.StockKgFull > 0 && f.StockKg / f.StockKgFull <= 0.2m)
-                al.Add(Alert("#8a261c", $"Low feed stock: <b>{H(f.DisplayName)}</b> — {Math.Round(f.StockKg / f.StockKgFull * 100)}% left"));
-            if (f.StockKg <= 0)
-                al.Add(Alert("#8a261c", $"Out of stock: <b>{H(f.DisplayName)}</b>"));
+            if (s.IsLowStock && s.StockKg > 0 && s.StockPercent is > 0)
+                al.Add(Alert("#8a261c", $"Low feed stock: <b>{H(s.DisplayName)}</b> — {Math.Round(s.StockPercent.Value)}% left"));
+            if (s.KgPerDay > 0 && s.StockKg <= 0)
+                al.Add(Alert("#8a261c", $"Out of stock: <b>{H(s.DisplayName)}</b> — plan uses {s.KgPerDay:N1} kg/day"));
         }
 
         foreach (var v in vaccines)
@@ -1007,11 +1021,12 @@ public class ReportsService : IReportsService
                 al.Add(Alert("var(--pink)", $"Expected kidding: <b>{H(g.Tag)}</b> in {d} days"));
         }
 
-        foreach (var g in goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue))
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        foreach (var g in goats.Where(g => g.NextCrossDate.HasValue && !g.MatedDate.HasValue))
         {
-            var start = g.PrepCrossDate!.Value.AddDays(-BreedingHelper.PrepDietLeadDays);
-            if (BreedingHelper.DaysUntil(start) <= 0)
-                al.Add(Alert("var(--amber)", $"Build-up feeding now: <b>{H(g.Tag)}</b> — cross on {g.PrepCrossDate:yyyy-MM-dd}"));
+            var buildStart = g.NextCrossDate!.Value.AddDays(-HerdRules.BuildUpDays);
+            if (buildStart <= today && g.NextCrossDate.Value > today)
+                al.Add(Alert("var(--amber)", $"Build-up feeding now: <b>{H(g.Tag)}</b> — cross on {g.NextCrossDate:yyyy-MM-dd}"));
         }
 
         foreach (var tag in underperformingTags)
@@ -1036,21 +1051,27 @@ public class ReportsService : IReportsService
         return new ReportAlertsSectionViewModel { Items = al };
     }
 
-    private ReportComparisonSectionViewModel BuildComparison(
+    private async Task<ReportComparisonSectionViewModel> BuildComparisonAsync(
         IReadOnlyList<Income> incomes, IReadOnlyList<Expense> expenses,
         IReadOnlyList<FeedPurchase> feedBuys, IReadOnlyList<VaccinePurchase> vaccineBuys,
         IReadOnlyList<MilkSale> milkSales, IReadOnlyList<MilkProduction> milkProd,
         IReadOnlyList<OwnerInvestment> ownerInv, IReadOnlyList<DeathRecord> deaths,
-        IReadOnlyList<Goat> allGoats)
+        IReadOnlyList<Goat> allGoats, IReadOnlyList<ProductSale> productSales,
+        IReadOnlyList<CustomerInvoice> customerInvoices, IReadOnlyList<Employee> employees,
+        CancellationToken cancellationToken)
     {
+        var sessions = await _context.MilkingSessions.AsNoTracking().ToListAsync(cancellationToken);
+        var medMonthly = _feedService.CalculateFarmMedicineMonthly();
+        var recurMonthly = _financeService.GetRecurringMonthlyTotal();
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
         var nowM = MonthHelper.CurrentMonthKey();
         var lastM = DateOnly.FromDateTime(DateTime.Today).AddMonths(-1).ToString("yyyy-MM");
         var yr = DateTime.Today.Year.ToString();
-        var monthlyFixed = _financeService.GetStaffSalaryMonthlyTotal()
-            + _feedService.CalculateFarmMedicineMonthly()
-            + _financeService.GetRecurringMonthlyTotal();
 
-        PeriodSum SumFor(string prefix) => SumPeriod(prefix, incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, ownerInv, deaths, allGoats, monthlyFixed);
+        PeriodSum SumFor(string prefix) => SumPeriod(
+            prefix, incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, sessions,
+            productSales, customerInvoices, ownerInv, deaths, allGoats, employees, medMonthly, recurMonthly, today);
 
         var a = SumFor(nowM);
         var b = SumFor(lastM);
@@ -1098,18 +1119,28 @@ public class ReportsService : IReportsService
         string prefix, IReadOnlyList<Income> incomes, IReadOnlyList<Expense> expenses,
         IReadOnlyList<FeedPurchase> feedBuys, IReadOnlyList<VaccinePurchase> vaccineBuys,
         IReadOnlyList<MilkSale> milkSales, IReadOnlyList<MilkProduction> milkProd,
-        IReadOnlyList<OwnerInvestment> ownerInv, IReadOnlyList<DeathRecord> deaths,
-        IReadOnlyList<Goat> allGoats, decimal monthlyFixed)
+        IReadOnlyList<MilkingSession> milkingSessions, IReadOnlyList<ProductSale> productSales,
+        IReadOnlyList<CustomerInvoice> customerInvoices, IReadOnlyList<OwnerInvestment> ownerInv,
+        IReadOnlyList<DeathRecord> deaths, IReadOnlyList<Goat> allGoats, IReadOnlyList<Employee> employees,
+        decimal medMonthly, decimal recurMonthly, DateOnly today)
     {
         bool Match(DateOnly d) => prefix.Length == 4 ? d.Year.ToString() == prefix : d.ToString("yyyy-MM") == prefix;
         var inc = milkSales.Where(x => Match(x.Date)).Sum(x => x.Amount)
-            + incomes.Where(x => Match(x.Date)).Sum(x => x.Amount);
-        var months = prefix.Length == 4 ? DateTime.Today.Month : 1;
+            + incomes.Where(x => Match(x.Date)).Sum(x => x.Amount)
+            + productSales.Where(x => Match(x.Date)).Sum(x => x.Amount)
+            + customerInvoices.Where(i => Match(i.Date) && i.Status != InvoiceStatus.Void
+                && !i.Description.StartsWith("Product sale:", StringComparison.Ordinal)
+                && !i.Description.StartsWith("Live goat sale", StringComparison.Ordinal))
+                .Sum(i => i.Amount);
+        var months = prefix.Length == 4 ? (prefix == today.Year.ToString() ? today.Month : 12) : 1;
         var exp = feedBuys.Where(x => Match(x.Date)).Sum(x => x.Amount)
             + vaccineBuys.Where(x => Match(x.Date)).Sum(x => x.Amount)
-            + expenses.Where(x => Match(x.Date)).Sum(x => x.Amount)
-            + monthlyFixed * months;
-        var mp = milkProd.Where(x => Match(x.Date)).Sum(x => x.Liters);
+            + expenses.Where(x => Match(x.Date) && !FinanceExpenseRules.IsDuplicateVaccinePurchase(x.Type)).Sum(x => x.Amount)
+            + StaffSalaryAccrual.ForPeriodPrefix(employees, prefix, today)
+            + medMonthly * months
+            + recurMonthly * months;
+        var mp = milkProd.Where(x => Match(x.Date)).Sum(x => x.Liters)
+            + milkingSessions.Where(s => Match(s.Date)).Sum(s => Math.Max(0, s.Liters - s.RejectedLiters));
         var put = ownerInv.Where(x => Match(x.Date)).Sum(x => x.Amount);
         var dth = deaths.Count(x => Match(x.Date));
         var brn = allGoats.Count(g => g.Source == GoatSource.Born && Match(g.EventDate));
@@ -1123,7 +1154,7 @@ public class ReportsService : IReportsService
         IReadOnlyList<Income> incomes, IReadOnlyList<Expense> expenses,
         IReadOnlyList<FeedPurchase> feedBuys, IReadOnlyList<VaccinePurchase> vaccineBuys,
         IReadOnlyList<MilkSale> milkSales, IReadOnlyList<OwnerInvestment> ownerInv,
-        ReportRange range, decimal monthlyFixed, string groupBy, bool preRevenue)
+        ReportRange range, IReadOnlyList<Employee> employees, string groupBy, bool preRevenue)
     {
         var bucket = new Dictionary<string, (decimal Inc, decimal Out, decimal Put)>(StringComparer.Ordinal);
         void AddTo(DateOnly? d, string field, decimal v)
@@ -1146,7 +1177,11 @@ public class ReportsService : IReportsService
         foreach (var x in expenses) AddTo(x.Date, "out", x.Amount);
         foreach (var x in ownerInv) AddTo(x.Date, "put", x.Amount);
 
-        var share = groupBy == "day" ? monthlyFixed / 30 : groupBy == "week" ? monthlyFixed / 30 * 7 : monthlyFixed;
+        var medMonthly = _feedService.CalculateFarmMedicineMonthly();
+        var recurMonthly = _financeService.GetRecurringMonthlyTotal();
+        decimal FixedForMonth(DateOnly monthStart) =>
+            medMonthly + recurMonthly + StaffSalaryAccrual.ForMonth(employees, monthStart);
+
         if (groupBy == "month")
         {
             var mset = bucket.Keys.Select(k => k.Length >= 7 ? k[..7] : k).ToHashSet();
@@ -1164,11 +1199,17 @@ public class ReportsService : IReportsService
             {
                 if (!bucket.ContainsKey(k)) bucket[k] = (0, 0, 0);
                 var b = bucket[k];
-                bucket[k] = (b.Inc, b.Out + monthlyFixed, b.Put);
+                var fixedAdd = DateOnly.TryParse(k + "-01", out var ms) ? FixedForMonth(ms) : medMonthly + recurMonthly;
+                bucket[k] = (b.Inc, b.Out + fixedAdd, b.Put);
             }
         }
         else
         {
+            var rangeDays = Math.Max(1, range.To.DayNumber - range.From.DayNumber + 1);
+            var rangeFixed = StaffSalaryAccrual.ForRange(employees, range.From, range.To)
+                + medMonthly * range.MonthCount
+                + recurMonthly * range.MonthCount;
+            var share = groupBy == "day" ? rangeFixed / rangeDays : rangeFixed / rangeDays * 7;
             foreach (var k in bucket.Keys.ToList())
             {
                 var b = bucket[k];
@@ -1198,26 +1239,6 @@ public class ReportsService : IReportsService
         return (rows, tIn, tOut, tPut, tIn - tOut);
     }
 
-    private async Task<IReadOnlyDictionary<string, decimal>> BuildDailyUseMapAsync(CancellationToken cancellationToken)
-    {
-        var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
-        var recipe = await _feedService.GetMixRecipeAsync(cancellationToken);
-        var catalog = await _context.FeedPrices.AsNoTracking().ToListAsync(cancellationToken);
-        var mixKeys = MixRecipeHelper.MixFeedKeys(catalog.Select(f => f.FeedType)).ToList();
-        var mixKgDay = StatusOrder.Sum(st =>
-        {
-            var n = _goatService.CountByStatus(st);
-            var plan = plans.FirstOrDefault(p => p.StatusKey == st);
-            return plan is null ? 0 : plan.MixKgPerDay * n;
-        });
-        var total = MixRecipeHelper.MixTotalKg(recipe, mixKeys);
-        var kg = mixKeys.ToDictionary(k => k, _ => 0m);
-        if (total <= 0) return kg;
-        foreach (var k in mixKeys)
-            kg[k] = mixKgDay * (recipe.GetValueOrDefault(k) / total);
-        return kg;
-    }
-
     private async Task<int> GetRemindDaysAsync(CancellationToken cancellationToken)
     {
         var setting = await _context.AppSettings.AsNoTracking()
@@ -1240,18 +1261,7 @@ public class ReportsService : IReportsService
             .ToList();
 
     private static IEnumerable<Goat> GoatsInScope(Vaccine v, IReadOnlyList<Goat> goats) =>
-        goats.Where(g => v.Scope == VaccineScope.All || StatusMatchesScope(g.Status, v.Scope));
-
-    private static bool StatusMatchesScope(GoatStatus status, VaccineScope scope) => scope switch
-    {
-        VaccineScope.Kid => status == GoatStatus.Kid,
-        VaccineScope.Milking => status == GoatStatus.Milking,
-        VaccineScope.Pregnant => status == GoatStatus.Pregnant,
-        VaccineScope.Dry => status == GoatStatus.Dry,
-        VaccineScope.Buck => status == GoatStatus.Buck,
-        VaccineScope.Sale => status == GoatStatus.Sale,
-        _ => false
-    };
+        goats.Where(g => VaccineScopeHelper.AppliesToGoat(v, g));
 
     private static (DateOnly Date, int Days)? NextDue(Goat g, Vaccine v, IReadOnlyList<VaccinationHistory> log) =>
         VaccineDueHelper.NextDue(g, v, log, BreedingHelper.DaysUntil);
@@ -1440,49 +1450,52 @@ public class ReportsService : IReportsService
             && DateOnly.TryParse(customFrom, out var from) && DateOnly.TryParse(customTo, out var to))
         {
             var months = Math.Max(1, (to.Year - from.Year) * 12 + (to.Month - from.Month) + 1);
-            return new ReportRange(d => d >= from && d <= to, months, $"{customFrom} → {customTo}");
+            return new ReportRange(d => d >= from && d <= to, months, $"{customFrom} → {customTo}", from, to);
         }
 
         if (period == "today")
-            return new ReportRange(d => d == today, 1, todayStr);
+            return new ReportRange(d => d == today, 1, todayStr, today, today);
 
         if (period == "week")
         {
             var dow = ((int)today.DayOfWeek + 6) % 7;
             var weekFrom = today.AddDays(-dow);
-            return new ReportRange(d => d >= weekFrom && d <= today, 1, $"{weekFrom:yyyy-MM-dd} → {todayStr}");
+            return new ReportRange(d => d >= weekFrom && d <= today, 1, $"{weekFrom:yyyy-MM-dd} → {todayStr}", weekFrom, today);
         }
 
         if (period == "month")
         {
             var m = MonthHelper.CurrentMonthKey();
-            return new ReportRange(d => d.ToString("yyyy-MM") == m, 1, m);
+            var monthStart = new DateOnly(today.Year, today.Month, 1);
+            return new ReportRange(d => d.ToString("yyyy-MM") == m, 1, m, monthStart, today);
         }
 
         if (period == "lastmonth")
         {
             var lm = today.AddMonths(-1);
             var key = lm.ToString("yyyy-MM");
+            var monthStart = new DateOnly(lm.Year, lm.Month, 1);
             var lastDay = new DateOnly(lm.Year, lm.Month, DateTime.DaysInMonth(lm.Year, lm.Month));
-            return new ReportRange(d => d.ToString("yyyy-MM") == key, 1, key);
+            return new ReportRange(d => d.ToString("yyyy-MM") == key, 1, key, monthStart, lastDay);
         }
 
         if (period == "3m")
         {
             var rangeFrom = today.AddDays(-90);
-            return new ReportRange(d => d >= rangeFrom && d <= today, 3, $"{rangeFrom:yyyy-MM-dd} → {todayStr}");
+            return new ReportRange(d => d >= rangeFrom && d <= today, 3, $"{rangeFrom:yyyy-MM-dd} → {todayStr}", rangeFrom, today);
         }
 
         if (period == "6m")
         {
             var rangeFrom = today.AddDays(-180);
-            return new ReportRange(d => d >= rangeFrom && d <= today, 6, $"{rangeFrom:yyyy-MM-dd} → {todayStr}");
+            return new ReportRange(d => d >= rangeFrom && d <= today, 6, $"{rangeFrom:yyyy-MM-dd} → {todayStr}", rangeFrom, today);
         }
 
         if (period == "year")
         {
             var y = today.Year;
-            return new ReportRange(d => d.Year == y, today.Month, y.ToString());
+            var yearStart = new DateOnly(y, 1, 1);
+            return new ReportRange(d => d.Year == y, today.Month, y.ToString(), yearStart, today);
         }
 
         if (period == "all")
@@ -1492,12 +1505,13 @@ public class ReportsService : IReportsService
             var first = all.FirstOrDefault();
             if (first == default) first = today;
             var months = Math.Max(1, (today.Year - first.Year) * 12 + (today.Month - first.Month) + 1);
-            return new ReportRange(_ => true, months, "all time (from " + first.ToString("yyyy-MM-dd") + ")");
+            return new ReportRange(_ => true, months, "all time (from " + first.ToString("yyyy-MM-dd") + ")", first, today);
         }
 
         var mDefault = MonthHelper.CurrentMonthKey();
-        return new ReportRange(d => d.ToString("yyyy-MM") == mDefault, 1, mDefault);
+        var defaultStart = new DateOnly(today.Year, today.Month, 1);
+        return new ReportRange(d => d.ToString("yyyy-MM") == mDefault, 1, mDefault, defaultStart, today);
     }
 
-    private sealed record ReportRange(Func<DateOnly, bool> Test, int MonthCount, string Label);
+    private sealed record ReportRange(Func<DateOnly, bool> Test, int MonthCount, string Label, DateOnly From, DateOnly To);
 }

@@ -13,6 +13,7 @@ public class VaccineViewModel
     public string RuleDisplay { get; set; } = string.Empty;
     public int? Days { get; set; }
     public int? Months { get; set; }
+    public int? MinAgeDays { get; set; }
     public string? Note { get; set; }
 }
 
@@ -30,6 +31,9 @@ public class CreateVaccineViewModel
 
     [Range(1, int.MaxValue, ErrorMessage = "Enter a number")]
     public int Value { get; set; }
+
+    [Range(0, 3650, ErrorMessage = "Enter min age in days, or leave empty")]
+    public int? MinAgeDays { get; set; }
 
     [StringLength(500)]
     public string? Note { get; set; }
@@ -169,6 +173,8 @@ public class CreateVaccinePurchaseViewModel
     public string? Supplier { get; set; }
 
     public DateOnly? DueDate { get; set; }
+
+    public bool ConfirmPossibleDuplicate { get; set; }
 }
 
 public class VaccineMoneyAccountViewModel

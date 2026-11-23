@@ -54,7 +54,7 @@ public class DateOfBirthPgTests
 
         await using (var ctx = pg.CreateContext())
         {
-            var bought = await new GoatService(ctx).GetByTagAsync("LEGACY-BOUGHT");
+            var bought = await TestFarmMetrics.CreateGoatService(ctx).GetByTagAsync("LEGACY-BOUGHT");
             Assert.Null(bought!.AgeDays);
             Assert.Equal("age unknown", bought.AgeLabel);
             var doe = await ctx.Goats.AsNoTracking().SingleAsync(g => g.Tag == "LEGACY-BOUGHT");
@@ -88,7 +88,7 @@ public class DateOfBirthPgTests
         await using var pg = await PostgresTestDatabase.CreateAsync();
         await using (var ctx = pg.CreateContext())
         {
-            var goats = new GoatService(ctx);
+            var goats = TestFarmMetrics.CreateGoatService(ctx);
             CreateGoatViewModel M(string tag, GoatSource source, DateOnly date, DateOnly? dob = null, bool est = false) => new()
             {
                 Tag = tag, Breed = "Beetal", Gender = GoatGender.Female, Status = GoatStatus.Dry, Source = source,
@@ -100,7 +100,7 @@ public class DateOfBirthPgTests
         }
         await using (var ctx = pg.CreateContext())
         {
-            var page = await new GoatService(ctx).GetHerdPageAsync("age:70:90", 1, 50);
+            var page = await TestFarmMetrics.CreateGoatService(ctx).GetHerdPageAsync("age:70:90", 1, 50);
             Assert.Equal(["BORN-80", "BOUGHT-80"], page.Goats.Select(g => g.Tag).Order());
             var est = page.Goats.Single(g => g.Tag == "BOUGHT-80");
             Assert.True(est.AgeIsEstimated);
@@ -116,7 +116,7 @@ public class DateOfBirthPgTests
         await using (var ctx = pg.CreateContext())
         {
             await FarmScenario.SeedDefaultsAsync(ctx);
-            var goats = new GoatService(ctx);
+            var goats = TestFarmMetrics.CreateGoatService(ctx);
             await goats.CreateAsync(new CreateGoatViewModel { Tag = "B-EST", Breed = "Beetal", Gender = GoatGender.Female, Status = GoatStatus.Dry,
                 Source = GoatSource.Bought, EventDate = Today.AddDays(-10), DateOfBirth = Today.AddDays(-500), DateOfBirthIsEstimated = true });
             await goats.CreateAsync(new CreateGoatViewModel { Tag = "B-NONE", Breed = "Beetal", Gender = GoatGender.Female, Status = GoatStatus.Dry,

@@ -21,7 +21,9 @@ public class GeneralSecurityTests
         var db = TestDb.Create();
         db.Goats.Add(new Goat { Tag = "T100", Gender = GoatGender.Female, Status = GoatStatus.Dry });
         await db.SaveChangesAsync();
-        var feed = new FeedService(db, new GoatService(db), new MilkService(db));
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        var feed = new FeedService(db, goats, new MilkService(db), metrics);
         var svc = new FarmCsvExportService(db, feed);
         var bytes = await svc.ExportHerdAsync();
         var text = System.Text.Encoding.UTF8.GetString(bytes);

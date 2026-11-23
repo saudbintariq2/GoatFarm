@@ -230,7 +230,7 @@ public class SearchService : ISearchService
     }
 
     private static bool GoatInScope(Goat goat, Vaccine vaccine) =>
-        vaccine.Scope == VaccineScope.All || StatusMatchesScope(goat.Status, vaccine.Scope);
+        VaccineScopeHelper.AppliesToGoat(vaccine, goat);
 
     private static bool ReminderAppliesToGoat(Reminder reminder, GoatStatus status) =>
         reminder.Scope == VaccineScope.None ||
@@ -258,8 +258,7 @@ public class SearchService : ISearchService
         return (int)Math.Ceiling((target - DateTime.Today).TotalDays);
     }
 
-    private static string RuleLabel(Vaccine v) =>
-        v.RuleType == VaccineRuleType.Age ? $"At {v.Days} days old" : $"Every {v.Months} months";
+    private static string RuleLabel(Vaccine v) => VaccineDueHelper.RuleLabel(v);
 
     private async Task<int> GetRemindDaysAsync(CancellationToken cancellationToken)
     {

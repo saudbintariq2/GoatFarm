@@ -35,4 +35,5 @@ public interface IFinanceService
     Task<FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
     Task<FinanceIntegrityViewModel> GetIntegrityCheckAsync(CancellationToken cancellationToken = default);
     Task<RelinkUnpostedMoneyResultViewModel> RelinkUnpostedMoneyAsync(RelinkUnpostedMoneyViewModel model, CancellationToken cancellationToken = default);
+    Task<FundLivestockResultViewModel> FundLivestockAsOwnerContributionAsync(FundLivestockAsOwnerViewModel model, CancellationToken cancellationToken = default);
 }

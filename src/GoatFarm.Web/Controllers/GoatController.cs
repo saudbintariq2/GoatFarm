@@ -5,6 +5,8 @@ using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Goats;
 using GoatFarm.Domain.Constants;
+using GoatFarm.Infrastructure.Services;
+using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GoatFarm.Web.Controllers;
@@ -23,6 +25,7 @@ public class GoatController : Controller
     private readonly IPermissionService _permissionService;
     private readonly ITreatmentService _treatmentService;
     private readonly ISearchService _searchService;
+    private readonly DuplicateMoneyCheck _duplicateMoney;
 
     public GoatController(
         IGoatService goatService,
@@ -30,7 +33,8 @@ public class GoatController : Controller
         IApprovalService approvalService,
         IPermissionService permissionService,
         ITreatmentService treatmentService,
-        ISearchService searchService)
+        ISearchService searchService,
+        DuplicateMoneyCheck duplicateMoney)
     {
         _goatService = goatService;
         _lookupService = lookupService;
@@ -38,6 +42,7 @@ public class GoatController : Controller
         _permissionService = permissionService;
         _treatmentService = treatmentService;
         _searchService = searchService;
+        _duplicateMoney = duplicateMoney;
     }
 
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
@@ -213,6 +218,10 @@ public class GoatController : Controller
     public async Task<IActionResult> RecordSale([FromBody] RecordSaleViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Price, model.Buyer,
+            MoneyDuplicateTabs.GoatSale, null, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
         return Json(await _goatService.RecordSaleAsync(model, cancellationToken));
     }
 

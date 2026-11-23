@@ -12,7 +12,7 @@ public class Phase7HerdBreedingTests
     private static (GoatService Goats, GoatFarmDbContext Db) Create()
     {
         var db = TestDb.Create();
-        return (new GoatService(db), db);
+        return (TestFarmMetrics.CreateGoatService(db), db);
     }
 
     [Fact]

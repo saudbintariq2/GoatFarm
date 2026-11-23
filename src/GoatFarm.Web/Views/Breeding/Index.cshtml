@@ -1136,7 +1136,7 @@
                         }
                     </div>
                 </td>
-                <td class="num-cell">@(k.BirthKg?.ToString("0.1") ?? "—")</td>
+                <td class="num-cell">@(k.BirthKg?.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) ?? "—")</td>
                 <td class="num-cell">
                     @if (k.OnMilk)
                     {

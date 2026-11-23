@@ -1,6 +1,7 @@
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Milk;
 using GoatFarm.Domain.Constants;
+using GoatFarm.Infrastructure.Services;
 using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,13 +13,20 @@ public class MilkController : Controller
     private readonly ILookupService _lookupService;
     private readonly IApprovalService _approvalService;
     private readonly IPermissionService _permissionService;
+    private readonly DuplicateMoneyCheck _duplicateMoney;
 
-    public MilkController(IMilkService milkService, ILookupService lookupService, IApprovalService approvalService, IPermissionService permissionService)
+    public MilkController(
+        IMilkService milkService,
+        ILookupService lookupService,
+        IApprovalService approvalService,
+        IPermissionService permissionService,
+        DuplicateMoneyCheck duplicateMoney)
     {
         _milkService = milkService;
         _lookupService = lookupService;
         _approvalService = approvalService;
         _permissionService = permissionService;
+        _duplicateMoney = duplicateMoney;
     }
 
     [HttpGet]
@@ -49,6 +57,11 @@ public class MilkController : Controller
     public async Task<IActionResult> AddSale([FromBody] CreateMilkSaleViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var amount = Math.Round(model.Liters * model.Rate);
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, amount, null,
+            MoneyDuplicateTabs.MilkSale, null, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
         return Json(await _milkService.AddSaleAsync(model, cancellationToken));
     }
 
@@ -71,6 +84,11 @@ public class MilkController : Controller
     public async Task<IActionResult> UpdateSale(int id, [FromBody] CreateMilkSaleViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var amount = Math.Round(model.Liters * model.Rate);
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, amount, null,
+            MoneyDuplicateTabs.MilkSale, id, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
         var result = await _milkService.UpdateSaleAsync(id, model, cancellationToken);
         return result is null ? NotFound() : Json(result);
     }

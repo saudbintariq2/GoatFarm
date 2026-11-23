@@ -8,15 +8,24 @@
     location.href = url.pathname + url.search;
   };
 
-  const post = async (url, body, method = 'POST') => {
+  const post = async (url, body, method = 'POST', confirmDuplicate = false) => {
+    const payload = body && confirmDuplicate ? { ...body, confirmPossibleDuplicate: true } : body;
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: body == null ? undefined : JSON.stringify(body)
+      body: payload == null ? undefined : JSON.stringify(payload)
     });
     if (res.status === 202) { alert('Submitted for approval.'); return null; }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (res.status === 409 && err.requiresConfirmation && body && !confirmDuplicate) {
+        const ask = window.GoatRecords?.showConfirm;
+        const ok = ask
+          ? await ask(err.error + '\n\nSave anyway?')
+          : confirm(err.error + '\n\nSave anyway?');
+        if (ok) return post(url, body, method, true);
+        throw new Error(err.error);
+      }
       throw new Error(err.error || 'Could not save that.');
     }
     return res.json().catch(() => ({}));
@@ -122,17 +131,10 @@
         description: note ? type + ' — ' + note : type,
         amount,
         paidAmount: paid,
-        accountId: postExpense ? null : (accountId || null)
+        accountId: accountId || null,
+        postToExpense: postExpense,
+        expenseType: type
       });
-      if (postExpense) {
-        await post('/Finance/AddExpense', {
-          type,
-          date,
-          amount,
-          comment: supplierName + (note ? ' — ' + note : ''),
-          accountId: accountId || null
-        });
-      }
       reload();
     } catch (e) { alert(e.message); }
   });

@@ -127,9 +127,11 @@
         {
             <div class="note" style="margin:0 0 12px;border-color:var(--amber)">
                 <b>@integ.Issues.Count issue@(integ.Issues.Count == 1 ? "" : "s")</b>
-                (@integ.UnlinkedFundingCount unposted funding,
+                (@integ.UnlinkedFundingCount funding,
                 @integ.UnlinkedIncomeCount income,
-                @integ.UnlinkedExpenseCount expenses).
+                @integ.UnlinkedExpenseCount expenses,
+                @integ.UnlinkedFeedPurchaseCount feed buys,
+                @integ.UnlinkedVaccinePurchaseCount vaccines).
                 @if (ledger.Accounts.Any(a => a.IsActive))
                 {
                     <span> Use <b>Re-link to default account</b> after choosing where historical entries should post.</span>
@@ -163,6 +165,15 @@
             <div class="field"><label>&nbsp;</label>
                 <button type="button" class="btn btn-green" id="fin-relink-btn">Re-link to default account</button>
             </div>
+            <div class="field"><label>&nbsp;</label>
+                <button type="button" class="btn btn-ghost" id="fin-relink-dry-btn">Dry run (count only)</button>
+            </div>
+            @if (integ.UnfundedLivestockGap > 1)
+            {
+                <div class="field"><label>&nbsp;</label>
+                    <button type="button" class="btn btn-amber" id="fin-fund-livestock-btn" title="FN1 staging">Post livestock as owner funding (Rs @integ.UnfundedLivestockGap.ToString("N0"))</button>
+                </div>
+            }
             <div class="field"><label>&nbsp;</label>
                 <button type="button" class="btn btn-ghost" id="fin-integrity-refresh">Refresh check</button>
             </div>
@@ -238,7 +249,7 @@
     <div class="panel-body">
         <table class="tbl"><thead><tr><th>Source</th><th class="hide-sm">Date</th><th>Received into</th><th class="num-cell">Amount</th></tr></thead>
         <tbody id="incomeRows">
-            <tr><td><span class="chip chip-inc">Milk sales</span><div class="name">@Model.MilkLitersSold.ToString("N0") L · auto from Milk</div></td><td class="hide-sm"><span class="breed">this month</span></td><td></td><td class="num-cell">@DisplayHelper.FormatRs(Model.MilkIncome)</td></tr>
+            <tr><td><span class="chip chip-inc">Milk sales</span><div class="name">@Model.MilkLitersSold.ToString("0.0") L · Products + milk register</div></td><td class="hide-sm"><span class="breed">this month</span></td><td></td><td class="num-cell">@DisplayHelper.FormatRs(Model.MilkIncome)</td></tr>
             @foreach (var i in Model.Incomes)
             {
                 <tr class="fin-row fin-income-row" data-id="@i.Id" data-type="@i.Type" data-date="@i.DateDisplay" data-amount="@i.Amount.ToString(CultureInfo.InvariantCulture)" data-comment="@i.Comment" data-account="@(i.AccountId?.ToString() ?? "")">
@@ -391,7 +402,7 @@
             <td><b>@p.SupplierName</b></td><td>@p.Description</td><td class="hide-sm">@p.DateDisplay</td><td class="hide-sm">@(p.DueDateDisplay ?? "—")</td>
             <td class="num-cell">@DisplayHelper.FormatRs(p.Amount)</td><td class="num-cell">@DisplayHelper.FormatRs(p.PaidAmount)</td><td class="num-cell"><b>@DisplayHelper.FormatRs(open)</b></td>
             <td><span class="chip">@p.Status</span></td>
-            <td>@if (open > 0) { <button type="button" class="btn btn-sm" data-pay-ap="@p.Id" data-due="@open.ToString(CultureInfo.InvariantCulture)">Pay</button> } <button type="button" class="del" data-del-ap="@p.Id">×</button></td>
+            <td>@if (open > 0 && p.CanPayFromUi && p.Id > 0) { <button type="button" class="btn btn-sm" data-pay-ap="@p.Id" data-due="@open.ToString(CultureInfo.InvariantCulture)">Pay</button> } @if (p.Id > 0) { <button type="button" class="del" data-del-ap="@p.Id">×</button> }</td>
         </tr>
     }
     </tbody></table></div>
@@ -403,7 +414,7 @@
 <div class="capop-kpis" id="capopCards">
     <div class="stat"><div class="lbl">OPEX</div><div class="num">@DisplayHelper.FormatRs(expense)</div><div class="lbl">Operating cost · included in P&amp;L</div></div>
     <div class="stat"><div class="lbl">CAPEX</div><div class="num">@DisplayHelper.FormatRs(capexTotal)</div><div class="lbl">Long-term investment · excluded from operating P&amp;L</div></div>
-    <div class="stat"><div class="lbl">Cash paid</div><div class="num">@DisplayHelper.FormatRs(expense + capexTotal)</div><div class="lbl">OPEX @DisplayHelper.FormatRs(expense) · CAPEX @DisplayHelper.FormatRs(capexTotal)</div></div>
+    <div class="stat"><div class="lbl">Cash paid</div><div class="num">@DisplayHelper.FormatRs(Model.TotalCashPaidMonth)</div><div class="lbl">OPEX @DisplayHelper.FormatRs(Model.OpexCashPaidMonth) · CAPEX @DisplayHelper.FormatRs(Model.CapexCashPaidMonth)</div></div>
     <div class="stat"><div class="lbl">Open payables</div><div class="num">@DisplayHelper.FormatRs(payablesOpen + loansOpen)</div><div class="lbl">Supplier bills and loans still open</div></div>
 </div>
 <div class="note capop-note"><b>Accounting treatment:</b> OPEX is included in operating P&amp;L. CAPEX is excluded from operating P&amp;L and is shown as project or fixed-asset investment. Both can reduce cash when paid.</div>
@@ -415,7 +426,7 @@
 </tbody></table></div></div>
 <div class="panel"><div class="panel-head"><h2>CAPEX — capital investment</h2><span class="sub" id="capopCapexSub">@plFrom → @plTo</span></div><div class="panel-body table-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Project / asset</th><th>Type</th><th class="hide-sm">Supplier</th><th class="num-cell">Amount</th></tr></thead><tbody id="capopCapexRows">
 @if (!Model.Capex.Any()) { <tr><td colspan="5" class="empty">No capital expenditure in this month.</td></tr> }
-@foreach (var x in Model.Capex) { <tr><td>@x.DateDisplay</td><td><b>@x.Name</b></td><td>@x.Type</td><td class="hide-sm">@(x.Supplier ?? "—")</td><td class="num-cell"><b>@DisplayHelper.FormatRs(x.Amount)</b></td></tr> }
+@foreach (var x in Model.Capex) { <tr><td>@x.DateDisplay</td><td><b>@x.Name</b></td><td>@x.Type</td><td class="hide-sm">@(x.Supplier ?? "—")</td><td class="num-cell"><b>@DisplayHelper.FormatRs(x.Amount)</b><br><span class="sub">Cash @DisplayHelper.FormatRs(x.CashPaid)</span></td></tr> }
 @if (Model.Capex.Any()) { <tr style="background:var(--blue-tint)"><td colspan="4"><b>Total CAPEX</b></td><td class="num-cell"><b>@DisplayHelper.FormatRs(capexTotal)</b></td></tr> }
 </tbody></table></div></div>
 </div>
@@ -549,7 +560,7 @@
         <td class="num-cell hide-sm">@(planned == 0 ? "—" : DisplayHelper.FormatRs(planned - sp))</td>
     </tr>
 }
-<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(tb)</td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(ts)</td><td></td><td class="num-cell hide-sm" style="font-weight:800">@DisplayHelper.FormatRs(tb - ts)</td></tr>
+<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL</td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(tb)</td><td class="num-cell" style="font-weight:800">@DisplayHelper.FormatRs(ts)</td><td></td><td class="num-cell hide-sm" style="font-weight:800">@(tb > 0 ? DisplayHelper.FormatRs(tb - ts) : "No budget set")</td></tr>
 </tbody></table>
 </div></div>
 </div>

@@ -26,6 +26,7 @@ public class StatisticsService : IStatisticsService
     private readonly IBreedingService _breedingService;
     private readonly ILedgerService _ledgerService;
     private readonly IApprovalService _approvalService;
+    private readonly IFarmMetricsService _farmMetrics;
     private readonly GoatFarmDbContext _context;
     private readonly IMemoryCache _cache;
 
@@ -39,6 +40,7 @@ public class StatisticsService : IStatisticsService
         IBreedingService breedingService,
         ILedgerService ledgerService,
         IApprovalService approvalService,
+        IFarmMetricsService farmMetrics,
         GoatFarmDbContext context,
         IMemoryCache cache)
     {
@@ -51,6 +53,7 @@ public class StatisticsService : IStatisticsService
         _breedingService = breedingService;
         _ledgerService = ledgerService;
         _approvalService = approvalService;
+        _farmMetrics = farmMetrics;
         _context = context;
         _cache = cache;
     }
@@ -85,16 +88,8 @@ public class StatisticsService : IStatisticsService
         var todayAtFarm = await BuildTodayAtFarmAsync(breeding.NowJobs, feedStock, today, cancellationToken);
         var weekStart = today.AddDays(-6);
 
-        var milkToday = await _context.MilkProductions.AsNoTracking()
-            .Where(p => p.Date == today)
-            .SumAsync(p => p.Liters, cancellationToken);
-
-        var milkGrouped = await _context.MilkProductions.AsNoTracking()
-            .Where(p => p.Date >= weekStart && p.Date <= today)
-            .GroupBy(p => p.Date)
-            .Select(g => new { g.Key, Liters = g.Sum(p => p.Liters) })
-            .ToListAsync(cancellationToken);
-        var milkByDate = milkGrouped.ToDictionary(x => x.Key, x => x.Liters);
+        var milkByDate = await _farmMetrics.MilkByDayAsync(weekStart, today, cancellationToken);
+        var milkToday = milkByDate.GetValueOrDefault(today);
 
         var milkLast7 = Enumerable.Range(0, 7)
             .Select(i =>
@@ -137,10 +132,7 @@ public class StatisticsService : IStatisticsService
                 or GoatHealthState.Quarantine or GoatHealthState.Injured or GoatHealthState.WeakOffFeed)
             .Sum(h => h.Count);
 
-        var pendingVacc = vaccine.DueNowCount + reminders.Count(r =>
-            r.ReminderDate >= today && r.ReminderDate <= today.AddDays(7) &&
-            (r.Title.Contains("vaccin", StringComparison.OrdinalIgnoreCase) ||
-             r.Title.Contains("dose", StringComparison.OrdinalIgnoreCase)));
+        var (vaccDueNow, vaccDueSoon) = await _vaccineService.GetDueCountsAsync(7, cancellationToken);
 
         var receivables = await _context.CustomerInvoices.AsNoTracking()
             .Where(i => i.Status == InvoiceStatus.Open || i.Status == InvoiceStatus.Partial)
@@ -187,7 +179,7 @@ public class StatisticsService : IStatisticsService
         {
             Month = month,
             HerdStats = stats,
-            BreedingPrepCount = breeding.PrepCount,
+            BreedingPrepCount = (await _farmMetrics.BreedingStageSummaryAsync(today, cancellationToken)).GettingReady,
             BreedingExpectingCount = breeding.ExpectingCount,
             BreedingNextDueText = breeding.NextDueText,
             BreedingUpcoming = breeding.ExpectingRows.Take(5).ToList(),
@@ -218,7 +210,12 @@ public class StatisticsService : IStatisticsService
             HealthHealthy = healthHealthy,
             HealthUnderObservation = healthObs,
             HealthSick = healthSick,
-            PendingVaccinations = pendingVacc,
+            PendingVaccinations = vaccDueNow,
+            VaccinesDueNow = vaccDueNow,
+            VaccinesDueSoon = vaccDueSoon,
+            VaccinationDueSubtext = vaccDueNow == 0 && vaccDueSoon == 0
+                ? "All up to date"
+                : $"{vaccDueNow} due now · {vaccDueSoon} next 7 days",
             RecentActivities = activities,
             RecentSales = recentSales,
             RecentExpenses = recentExpenses,
@@ -256,7 +253,7 @@ public class StatisticsService : IStatisticsService
             });
         }
 
-        var birthSince = today.AddDays(-14);
+        var birthSince = today.AddDays(-2);
         var recentBirths = await _context.KiddingRecords.AsNoTracking()
             .Include(k => k.Doe)
             .Where(k => k.KiddingDate >= birthSince)
@@ -462,11 +459,14 @@ public class StatisticsService : IStatisticsService
         foreach (var a in auditRows)
         {
             var d = DateOnly.FromDateTime(a.CreatedDate.ToLocalTime());
+            var text = a.Summary.Contains('.', StringComparison.Ordinal) && !a.Summary.Contains(' ')
+                ? AuditText.ToText(a.Summary)
+                : a.Summary;
             items.Add(new DashboardActivityViewModel
             {
                 Icon = "📝",
-                Text = a.Summary,
-                When = ActivityWhen(d, today),
+                Text = text,
+                When = AuditText.FormatWhenUtc(a.CreatedDate),
                 SortDate = d,
                 Href = "/Admin"
             });

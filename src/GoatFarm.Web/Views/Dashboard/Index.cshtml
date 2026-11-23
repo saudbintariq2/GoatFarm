@@ -114,9 +114,9 @@
             <a class="dash-kpi" asp-controller="Vaccine" asp-action="Index">
                 <span class="dash-kpi-icon dash-kpi-icon--vax" aria-hidden="true">💉</span>
                 <div class="dash-kpi-body">
-                    <span class="dash-kpi-label">Pending vaccinations</span>
-                    <span class="dash-kpi-value">@Model.PendingVaccinations</span>
-                    <span class="dash-kpi-sub">Due &amp; next 7 days</span>
+                    <span class="dash-kpi-label">Vaccinations due</span>
+                    <span class="dash-kpi-value">@Model.VaccinesDueNow</span>
+                    <span class="dash-kpi-sub">@Model.VaccinationDueSubtext</span>
                 </div>
             </a>
         }
@@ -396,7 +396,7 @@
                                 <div class="dash-bar-track">
                                     <div class="dash-bar-fill @(day.IsToday ? "is-today" : "")" style="height:@(Math.Max(h, day.Liters > 0 ? 8 : 0))%"></div>
                                 </div>
-                                <span class="dash-bar-val">@(day.Liters > 0 ? day.Liters.ToString("N0") : "—")</span>
+                                <span class="dash-bar-val">@day.Liters.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) L</span>
                                 <span class="dash-bar-lbl">@day.Label</span>
                             </div>
                         }

@@ -25,6 +25,7 @@
     'Twins (2)',
     'Triplets (3)',
     '4+ kids',
+    'Not sure (rescan)',
     'Not pregnant (empty)'
   ];
   const SCAN_KIDS_BY_RESULT = {
@@ -32,6 +33,7 @@
     'Twins (2)': 2,
     'Triplets (3)': 3,
     '4+ kids': 4,
+    'Not sure (rescan)': -1,
     'Not pregnant (empty)': 0
   };
   const GESTATION_DAYS = 150;
@@ -266,14 +268,17 @@
       const kd = profile.kiddings || [];
       const live = kd.reduce((a, k) => a + (k.liveKids || 0), 0);
       const before = Math.max(0, +g.kiddingsBeforePurchase || 0);
+      const bought = g.source === 'Bought' || g.source === 'bought';
       const canEditKbp = FarmPerms.can('herd', 'edit');
       html += `<div class="goat-card-h" style="margin-top:10px">Breeding record</div>
-        <div class="breed goat-card-lead">${kd.length} birth(s) on farm · ${before} before purchase · ${live} kids born alive here · ${profile.emptyScanCount || 0} empty scan(s) · ${profile.abortionCount || 0} abortion(s)</div>
-        <div class="field" style="margin-top:8px;max-width:240px">
+        <div class="breed goat-card-lead">${kd.length} birth(s) on farm${bought ? ` · ${before} before purchase` : ''} · ${live} kids born alive here · ${profile.emptyScanCount || 0} empty scan(s) · ${profile.abortionCount || 0} abortion(s)</div>`;
+      if (bought) {
+        html += `<div class="field" style="margin-top:8px;max-width:240px">
           <label for="gmKiddingsBefore">Kiddings before purchase</label>
           <input type="number" id="gmKiddingsBefore" min="0" step="1" value="${before}"${canEditKbp ? '' : ' disabled'}>
           <span class="breed goat-card-hint">Used in herd kiddings total (here + before purchase).</span>
         </div>`;
+      }
       if (kd.length) {
         html += `<table class="tbl goat-card-tbl" style="margin-top:8px"><thead><tr><th>Date</th><th>Sire</th><th class="num-cell">Alive</th><th class="num-cell">Still</th></tr></thead><tbody>
           ${kd.map(k => `<tr><td>${esc(k.dateDisplay)}</td><td>${k.sireGoatId ? `<a href="#" data-goatcard="${k.sireGoatId}">${esc(k.sireTag || '—')}</a>` : esc(k.sireTag || '—')}</td>
@@ -509,21 +514,49 @@
         'Back with buck': 'back'
       })[er.next] || 'next';
     }
-    try {
-      await api('/Breeding/RecordUltrasound', {
+    const postUltrasound = async confirmEarlyScan => {
+      const body = {
+        tag: g.tag,
+        kidsCount: kidsCount < 0 ? 0 : kidsCount,
+        date: when,
+        emptyNextStep,
+        emptyBirthBatchId,
+        confirmEarlyScan: !!confirmEarlyScan,
+        notSure: kidsCount < 0,
+        rescanInDays: 14
+      };
+      const res = await fetch('/Breeding/RecordUltrasound', {
         method: 'POST',
-        body: JSON.stringify({
-          tag: g.tag,
-          kidsCount,
-          date: when,
-          emptyNextStep,
-          emptyBirthBatchId
-        })
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body)
       });
-    } catch { return false; }
-    const msg = kidsCount === 0
-      ? g.tag + ' — not pregnant; next step saved'
-      : g.tag + ' — ' + kidsScanLabel(kidsCount) + ', due ~' + addDaysIso(mated, GESTATION_DAYS);
+      if (res.status === 409) {
+        const err = await res.json().catch(() => ({}));
+        if (err.requiresConfirmation && !confirmEarlyScan) {
+          const lines = err.messages || err.warnings || [];
+          if (!confirm(lines.join('\n') || 'Scan is early — save anyway?')) return false;
+          return postUltrasound(true);
+        }
+        throw new Error(err.error || 'Could not save scan');
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Could not save scan');
+      }
+      return true;
+    };
+    try {
+      if (!await postUltrasound(false)) return false;
+    } catch (e) {
+      toast(e.message || 'Could not save scan', 'error');
+      return false;
+    }
+    const msg = kidsCount < 0
+      ? g.tag + ' — scan not sure; rescan task added'
+      : kidsCount === 0
+        ? g.tag + ' — not pregnant; next step saved'
+        : g.tag + ' — ' + kidsScanLabel(kidsCount) + ', due ~' + addDaysIso(mated, GESTATION_DAYS);
     if (afterSuccess) sessionStorage.setItem('goatToast', msg);
     else toast(msg);
     if (afterSuccess) await afterSuccess();

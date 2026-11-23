@@ -1,2 +1,8 @@
-@* Mascot goat logo (user-provided asset) *@
-<img class="goat-logo-mark" src="~/images/goat-logo.png" width="48" height="48" alt="" asp-append-version="true" />
+@inject IConfiguration Configuration
+@{
+    var farmName = Configuration["ApplicationSettings:FarmName"] ?? "Sandeel Farms";
+    var markPath = Configuration["ApplicationSettings:BrandMarkPath"] ?? "images/sandeel-mark.svg";
+    if (markPath.StartsWith("~/", StringComparison.Ordinal)) markPath = markPath[2..];
+    markPath = markPath.TrimStart('/');
+}
+<img class="goat-logo-mark farm-brand-mark" src="@Url.Content("~/" + markPath)" width="48" height="48" alt="@farmName" asp-append-version="true" />

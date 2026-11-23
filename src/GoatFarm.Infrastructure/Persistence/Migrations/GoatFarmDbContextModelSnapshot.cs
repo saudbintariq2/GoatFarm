@@ -632,6 +632,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
                     b.Property<decimal>("MonthlySalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -644,6 +647,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<string>("Role")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
 
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
@@ -2888,6 +2894,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                     b.Property<int>("GoatId")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsOpeningRecord")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("UpdatedDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -2918,6 +2927,9 @@ namespace GoatFarm.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("Days")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinAgeDays")
                         .HasColumnType("integer");
 
                     b.Property<int?>("Months")

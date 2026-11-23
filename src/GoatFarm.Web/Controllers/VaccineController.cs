@@ -2,6 +2,7 @@ using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Reminders;
 using GoatFarm.Application.ViewModels.Treatments;
 using GoatFarm.Application.ViewModels.Vaccines;
+using GoatFarm.Infrastructure.Services;
 using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Enums;
 using GoatFarm.Web.Helpers;
@@ -17,6 +18,7 @@ public class VaccineController : Controller
     private readonly ITreatmentService _treatmentService;
     private readonly IApprovalService _approvalService;
     private readonly IPermissionService _permissionService;
+    private readonly DuplicateMoneyCheck _duplicateMoney;
 
     public VaccineController(
         IVaccineService vaccineService,
@@ -24,7 +26,8 @@ public class VaccineController : Controller
         ILookupService lookupService,
         ITreatmentService treatmentService,
         IApprovalService approvalService,
-        IPermissionService permissionService)
+        IPermissionService permissionService,
+        DuplicateMoneyCheck duplicateMoney)
     {
         _vaccineService = vaccineService;
         _reminderService = reminderService;
@@ -32,6 +35,7 @@ public class VaccineController : Controller
         _treatmentService = treatmentService;
         _approvalService = approvalService;
         _permissionService = permissionService;
+        _duplicateMoney = duplicateMoney;
     }
 
     [HttpGet]
@@ -151,6 +155,10 @@ public class VaccineController : Controller
     public async Task<IActionResult> AddPurchase([FromBody] CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, model.Supplier,
+            MoneyDuplicateTabs.VaccinePurchase, null, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
         try
         {
             return Json(await _vaccineService.AddVaccinePurchaseAsync(model, cancellationToken));
@@ -165,6 +173,10 @@ public class VaccineController : Controller
     public async Task<IActionResult> UpdatePurchase(int id, [FromBody] CreateVaccinePurchaseViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, model.Amount, model.Supplier,
+            MoneyDuplicateTabs.VaccinePurchase, id, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
         try
         {
             var result = await _vaccineService.UpdateVaccinePurchaseAsync(id, model, cancellationToken);

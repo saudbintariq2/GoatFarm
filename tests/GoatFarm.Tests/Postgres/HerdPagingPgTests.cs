@@ -13,7 +13,7 @@ public class HerdPagingPgTests
             await HerdFixture.SeedFilterCasesAsync(seed);
 
         await using var db = pg.CreateContext();
-        var svc = new GoatService(db);
+        var svc = TestFarmMetrics.CreateGoatService(db);
         foreach (var (filter, search, tags) in HerdFixture.Cases)
         {
             var page = await svc.GetHerdPageAsync(filter, 1, 100, search);
@@ -32,7 +32,7 @@ public class HerdPagingPgTests
         var sql = new List<string>();
         var counter = new GoatMaterializationCounter();
         await using var db = pg.CreateContext(sql.Add, counter);
-        var page = await new GoatService(db).GetHerdPageAsync("st:dry", 3, 10, "h0");
+        var page = await TestFarmMetrics.CreateGoatService(db).GetHerdPageAsync("st:dry", 3, 10, "h0");
 
         Assert.Equal(10, counter.Count);
         Assert.Equal(10, page.Goats.Count);

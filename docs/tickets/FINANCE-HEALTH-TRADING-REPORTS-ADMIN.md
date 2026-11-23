@@ -7,7 +7,8 @@
 | Fi6 | Monthly closing summary on Finance → Bank & cash (6-month carry-forward) |
 | Fi7 | Overview KPI order: spent → funding → income |
 | Fi (vaccines) | Block manual `Vaccines` expense; exclude from totals/reports |
-| V2 | Per-goat vaccination history on Health page |
+| V1 | Vaccine due: min age + repeat first dose; `VaccineDueHelper` shared with Dashboard/Reports | See `docs/tickets/HEALTH.md` |
+| V2 | Per-goat vaccination history; ET **BeforeKidding** rule | See `docs/tickets/HEALTH.md` |
 | T1 | Server trading balance-sheet check + UI subtitle |
 | T2 | Server `TR-yyyyMM-DEV-NNN` on new sells |
 | R (logistics) | Reports logistics tab from `TransportShipments` |

@@ -30,8 +30,8 @@ internal static class FarmScenario
         });
         await db.SaveChangesAsync();
 
-        var goats = new GoatService(db);
-        var breeding = new BreedingService(db, goats, feedService: null!);
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var breeding = new BreedingService(db, goats, feedService: null!, TestFarmMetrics.Create(db, goats));
         var tasks = new TaskService(db);
         var today = DateOnly.FromDateTime(DateTime.Today);
 

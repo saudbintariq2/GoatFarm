@@ -8,6 +8,7 @@ using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 using GoatFarm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GoatFarm.Infrastructure.Services;
 
@@ -15,12 +16,14 @@ public class GoatService : IGoatService
 {
     private const int DefaultPageSize = 10;
     private readonly GoatFarmDbContext _context;
+    private readonly Lazy<IFarmMetricsService> _farmMetrics;
     private Dictionary<GoatStatus, int>? _liveStatusCounts;
     private HerdBreedingContext? _herdBreedingCtx;
 
-    public GoatService(GoatFarmDbContext context)
+    public GoatService(GoatFarmDbContext context, IServiceProvider services)
     {
         _context = context;
+        _farmMetrics = new Lazy<IFarmMetricsService>(services.GetRequiredService<IFarmMetricsService>);
         // Any save in this request may change a status or archive a goat.
         _context.SavedChanges += (_, _) =>
         {
@@ -52,6 +55,7 @@ public class GoatService : IGoatService
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Include(g => g.Group).Include(g => g.Sire).Include(g => g.Dam).Include(g => g.CustomFeedingGroup)
+            .Include(g => g.HeatEvents)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -70,11 +74,18 @@ public class GoatService : IGoatService
         var breedingCtx = await EnsureHerdBreedingContextAsync(cancellationToken);
         var motherGroups = await LoadMotherGroupsAsync(cancellationToken);
         var weights = await LoadLatestWeightsAsync(goats.Select(g => g.Id).ToList(), cancellationToken);
+        var bcs = await LoadLatestBcsAsync(goats.Select(g => g.Id).ToList(), cancellationToken);
+        breedingCtx.LatestBcs = bcs;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var pageDoes = goats
+            .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid)
+            .ToList();
+        var doeStages = await _farmMetrics.Value.DoeStagesForGoatsAsync(pageDoes, today, cancellationToken);
 
         return new HerdPageViewModel
         {
             Stats = BuildStats(statusCounts, confirmedPregnant),
-            Goats = MapGoatsWithWeights(goats, weights, breedingCtx),
+            Goats = MapGoatsWithWeights(goats, weights, breedingCtx, doeStages),
             UnderTreatment = await LoadUnderTreatmentAsync(cancellationToken),
             Groups = groups,
             BirthBatches = batches,
@@ -105,15 +116,22 @@ public class GoatService : IGoatService
     public async Task<GoatViewModel?> GetViewModelForCardAsync(int id, CancellationToken cancellationToken = default)
     {
         var goat = await _context.Goats.Include(g => g.Group).Include(g => g.Sire).Include(g => g.Dam)
-            .Include(g => g.CustomFeedingGroup).AsNoTracking()
+            .Include(g => g.CustomFeedingGroup).Include(g => g.HeatEvents).AsNoTracking()
             .FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
         if (goat is null)
             return null;
         var weights = await LoadLatestWeightsAsync([goat.Id], cancellationToken);
         weights.TryGetValue(goat.Id, out var kg);
         var vm = MapGoat(goat, weights.ContainsKey(goat.Id) ? kg : null);
+        var today = DateOnly.FromDateTime(DateTime.Today);
         var ctx = await EnsureHerdBreedingContextAsync(cancellationToken);
-        HerdBreedingEnricher.Apply(vm, goat, ctx, DateOnly.FromDateTime(DateTime.Today));
+        var bcs = await LoadLatestBcsAsync([goat.Id], cancellationToken);
+        ctx.LatestBcs = bcs;
+        var stages = goat.Gender == GoatGender.Female && goat.Status != GoatStatus.Kid
+            ? await _farmMetrics.Value.DoeStagesForGoatsAsync([goat], today, cancellationToken)
+            : new Dictionary<int, DoeStageResult>();
+        stages.TryGetValue(goat.Id, out var stage);
+        HerdBreedingEnricher.Apply(vm, goat, ctx, today, stage);
         return vm;
     }
 
@@ -221,6 +239,8 @@ public class GoatService : IGoatService
         await ApplyAsync(goat, model, cancellationToken);
         _context.Goats.Add(goat);
         await _context.SaveChangesAsync(cancellationToken);
+        if (model.Source == GoatSource.Born && model.CreateKiddingRecord && goat.DamId is not null)
+            await LinkBornKidToKiddingRecordAsync(goat, cancellationToken);
         if (model.Source == GoatSource.Bought && model.PurchasePrice > 0 && model.PaidFromAccountId is > 0)
             await RecordPurchasePaymentAsync(goat, model, cancellationToken);
         return MapGoat(goat);
@@ -298,6 +318,41 @@ public class GoatService : IGoatService
         goat.SireTagText = sireText;
         goat.DamId = damId;
         goat.DamTagText = damText;
+    }
+
+    private async Task LinkBornKidToKiddingRecordAsync(Goat kid, CancellationToken cancellationToken)
+    {
+        if (kid.DamId is not { } damId) return;
+        var birthDate = kid.DateOfBirth ?? kid.EventDate;
+        var record = await _context.KiddingRecords
+            .Include(k => k.Kids)
+            .FirstOrDefaultAsync(k => k.DoeId == damId && k.KiddingDate == birthDate, cancellationToken);
+        if (record is null)
+        {
+            record = new KiddingRecord
+            {
+                DoeId = damId,
+                KiddingDate = birthDate,
+                LiveKids = 1,
+                Stillborn = 0,
+                Ease = KiddingEase.Easy,
+                Mothering = 4,
+                MilkProduction = 4,
+                BodyCondition = 3,
+                DamHealth = DamAfterKiddingHealth.Good,
+                KeepDecision = DamKeepDecision.Keep,
+                ClientRequestId = Guid.NewGuid()
+            };
+            _context.KiddingRecords.Add(record);
+        }
+        else
+            record.LiveKids++;
+
+        if (record.Kids.All(k => k.Id != kid.Id))
+            record.Kids.Add(kid);
+        kid.KiddingRecord = record;
+        kid.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task RecordPurchasePaymentAsync(Goat goat, CreateGoatViewModel model, CancellationToken cancellationToken)
@@ -694,6 +749,17 @@ public class GoatService : IGoatService
             ValueLost = goat.PurchasePrice
         });
 
+        if (goat.PurchasePrice > 0)
+        {
+            _context.Expenses.Add(new Expense
+            {
+                Type = "Livestock loss – death",
+                Amount = goat.PurchasePrice,
+                Date = model.Date,
+                Comment = $"{goat.Tag} – {model.Reason?.Trim() ?? "death"}"
+            });
+        }
+
         goat.IsArchived = true;
         goat.ArchivedReason = "died";
         goat.ArchivedDate = model.Date;
@@ -914,6 +980,21 @@ public class GoatService : IGoatService
         Meat = counts.GetValueOrDefault(GoatStatus.Meat)
     };
 
+    private async Task<IReadOnlyDictionary<int, decimal?>> LoadLatestBcsAsync(
+        IReadOnlyList<int> goatIds, CancellationToken cancellationToken)
+    {
+        if (goatIds.Count == 0)
+            return new Dictionary<int, decimal?>();
+
+        var rows = await _context.GoatBcsRecords.AsNoTracking()
+            .Where(b => goatIds.Contains(b.GoatId))
+            .Select(b => new { b.GoatId, b.Date, b.Score })
+            .ToListAsync(cancellationToken);
+
+        return rows.GroupBy(b => b.GoatId)
+            .ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.Date).ThenByDescending(x => x.Score).First().Score);
+    }
+
     private async Task<IReadOnlyDictionary<int, decimal>> LoadLatestWeightsAsync(
         IReadOnlyList<int> goatIds, CancellationToken cancellationToken)
     {
@@ -932,7 +1013,8 @@ public class GoatService : IGoatService
     private IReadOnlyList<GoatViewModel> MapGoatsWithWeights(
         IReadOnlyList<Goat> goats,
         IReadOnlyDictionary<int, decimal> latestWeights,
-        HerdBreedingContext? breedingCtx = null)
+        HerdBreedingContext? breedingCtx = null,
+        IReadOnlyDictionary<int, DoeStageResult>? doeStages = null)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         return goats.Select(g =>
@@ -940,7 +1022,11 @@ public class GoatService : IGoatService
             latestWeights.TryGetValue(g.Id, out var kg);
             var vm = MapGoat(g, latestWeights.ContainsKey(g.Id) ? kg : null, today);
             if (breedingCtx is not null)
-                HerdBreedingEnricher.Apply(vm, g, breedingCtx, today);
+            {
+                DoeStageResult? stage = null;
+                doeStages?.TryGetValue(g.Id, out stage);
+                HerdBreedingEnricher.Apply(vm, g, breedingCtx, today, stage);
+            }
             return vm;
         }).ToList();
     }
@@ -968,7 +1054,7 @@ public class GoatService : IGoatService
             EventDate = g.EventDate,
             GroupId = g.GroupId,
             GroupName = g.Group?.Name,
-            DateOfBirth = g.Source == GoatSource.Born ? null : g.DateOfBirth,
+            DateOfBirth = g.DateOfBirth ?? (g.Source == GoatSource.Born ? g.EventDate : null),
             DateOfBirthIsEstimated = g.Source != GoatSource.Born && g.DateOfBirthIsEstimated,
             AgeDays = ageDays,
             AgeIsEstimated = estimated,
@@ -1224,7 +1310,11 @@ public class GoatService : IGoatService
         if (filter.StartsWith("mg:", StringComparison.Ordinal))
         {
             var mgId = filter[3..];
-            return goats.Where(g => g.MotherGroupId == mgId);
+            var ctx = await EnsureHerdBreedingContextAsync(cancellationToken);
+            return goats.Where(g =>
+                g.Gender == GoatGender.Female &&
+                g.Status != GoatStatus.Kid &&
+                HerdBreedingEnricher.EffectiveMotherGroupId(g, ctx) == mgId);
         }
 
         if (filter.Equals("kid:milk", StringComparison.Ordinal))

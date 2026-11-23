@@ -69,8 +69,8 @@ public class DateOfBirthTests
     private static (BreedingService Breeding, GoatService Goats, GoatFarmDbContext Db) Create()
     {
         var db = TestDb.Create();
-        var goats = new GoatService(db);
-        return (new BreedingService(db, goats, feedService: null!), goats, db);
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        return (new BreedingService(db, goats, feedService: null!, TestFarmMetrics.Create(db, goats)), goats, db);
     }
 
     [Fact]

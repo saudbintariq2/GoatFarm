@@ -14,8 +14,8 @@ public class Phase3BreedingTests
     private static (BreedingService Breeding, GoatService Goats, GoatFarmDbContext Db) Create()
     {
         var db = TestDb.Create();
-        var goats = new GoatService(db);
-        return (new BreedingService(db, goats, feedService: null!), goats, db);
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        return (new BreedingService(db, goats, feedService: null!, TestFarmMetrics.Create(db, goats)), goats, db);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class Phase3BreedingTests
         });
         await db.SaveChangesAsync();
 
-        var breeding = new BreedingService(db, goats, feedService: null!);
+        var breeding = new BreedingService(db, goats, feedService: null!, TestFarmMetrics.Create(db, goats));
         var result = await breeding.ReconcilePregnancyAsync();
         Assert.True(result.Adjusted >= 1);
         var saved = await db.Goats.SingleAsync(g => g.Tag == "D3");
@@ -88,7 +88,7 @@ public class Phase3BreedingTests
         db.Goats.Add(doe);
         await db.SaveChangesAsync();
 
-        var breeding = new BreedingService(db, goats, feedService: null!);
+        var breeding = new BreedingService(db, goats, feedService: null!, TestFarmMetrics.Create(db, goats));
         var result = await breeding.ReconcilePregnancyAsync();
         Assert.Equal(1, result.Adjusted);
         var saved = await db.Goats.SingleAsync(g => g.Tag == "D1");

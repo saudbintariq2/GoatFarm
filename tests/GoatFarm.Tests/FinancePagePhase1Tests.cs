@@ -9,11 +9,15 @@ namespace GoatFarm.Tests;
 
 public class FinancePagePhase1Tests
 {
-    private static FinanceService CreateFull(GoatFarmDbContext db) =>
-        new(db,
-            new FeedService(db, new GoatService(db), new MilkService(db)),
+    private static FinanceService CreateFull(GoatFarmDbContext db)
+    {
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        return new(db,
+            new FeedService(db, goats, new MilkService(db), metrics),
             new MilkService(db),
             new VaccineService(db));
+    }
 
     [Fact]
     public async Task GetFinancePage_PopulatesBalanceSheetAndIntegrity()

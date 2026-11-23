@@ -14,8 +14,8 @@ public class BreedingServiceTests
     private static (BreedingService Breeding, GoatService Goats, GoatFarmDbContext Db) Create()
     {
         var db = TestDb.Create();
-        var goats = new GoatService(db);
-        return (new BreedingService(db, goats, feedService: null!), goats, db);
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        return (new BreedingService(db, goats, feedService: null!, TestFarmMetrics.Create(db, goats)), goats, db);
     }
 
     private static async Task<Goat> AddAsync(GoatFarmDbContext db, Goat goat)
@@ -140,7 +140,7 @@ public class BreedingServiceTests
             Results =
             [
                 new BulkScanResultItemViewModel { GoatId = d1.Id, KidsCount = 2 },
-                new BulkScanResultItemViewModel { GoatId = d2.Id, KidsCount = 0 }
+                new BulkScanResultItemViewModel { GoatId = d2.Id, KidsCount = 0, EmptyNextStep = "next" }
             ]
         });
 

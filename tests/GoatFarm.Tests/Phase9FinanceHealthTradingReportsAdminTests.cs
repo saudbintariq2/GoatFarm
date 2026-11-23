@@ -64,13 +64,54 @@ public class Phase9FinanceHealthTradingReportsAdminTests
     }
 
     [Fact]
+    public async Task SaveTradeSell_IgnoresClientSuppliedBillNo()
+    {
+        var db = TestDb.Create();
+        await new TradingService(db, DeviceConfig()).EnsureSeededAsync();
+        var item = await db.TradeItems.FirstAsync();
+        var store = await db.TradeStores.FirstAsync();
+        var acct = await db.TradeAccounts.FirstAsync();
+        var svc = new TradingService(db, DeviceConfig());
+        await svc.SaveEntryAsync(new Application.ViewModels.Trading.SaveTradeEntryViewModel
+        {
+            Type = "buy",
+            Date = TestDb.Today.AddDays(-1),
+            ItemId = item.Id,
+            StoreId = store.Id,
+            AccountId = acct.Id,
+            Qty = 100,
+            Rate = 50,
+            Paid = 5000,
+            Payment = "paid"
+        });
+        await svc.SaveEntryAsync(new Application.ViewModels.Trading.SaveTradeEntryViewModel
+        {
+            Type = "sell",
+            Date = TestDb.Today,
+            ItemId = item.Id,
+            StoreId = store.Id,
+            AccountId = acct.Id,
+            Qty = 5,
+            Rate = 100,
+            Received = 500,
+            Payment = "paid",
+            BillNo = "TR-CLIENT-OVERRIDE"
+        });
+        var row = await db.TradeEntries.OrderByDescending(x => x.Id).FirstAsync();
+        Assert.StartsWith("TR-", row.BillNo);
+        Assert.NotEqual("TR-CLIENT-OVERRIDE", row.BillNo);
+    }
+
+    [Fact]
     public async Task BuildMonthlyClosingRows_CarriesCashForward()
     {
         var db = TestDb.Create();
         var acct = new MoneyAccount { Name = "Cash", Kind = MoneyAccountKind.Cash, OpeningBalance = 1000, IsActive = true };
         db.MoneyAccounts.Add(acct);
         await db.SaveChangesAsync();
-        var feed = new FeedService(db, new GoatService(db), new MilkService(db));
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        var feed = new FeedService(db, goats, new MilkService(db), metrics);
         var finance = new FinanceService(db, feed, new MilkService(db), new VaccineService(db));
         var month = $"{TestDb.Today.Year:0000}-{TestDb.Today.Month:00}";
         var rows = await finance.BuildMonthlyClosingRowsAsync(month);

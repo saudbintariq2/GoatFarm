@@ -13,8 +13,16 @@ public static class BreedingGroupPickerHelper
       decimal? latestWeightKg,
       Goat? buck,
       IReadOnlyDictionary<int, PedigreeNode> pedigree,
-      IReadOnlyDictionary<int, string> doeIdToActiveBuckTag)
+      IReadOnlyDictionary<int, string> doeIdToActiveBuckTag,
+      DoeStageResult? stage = null,
+      KiddingRecord? lastKidding = null)
   {
+    if (stage?.Stage == FarmDoeStage.KiddedNursing && lastKidding is not null)
+      return $"Kidded {lastKidding.KiddingDate:dd MMM} — resting";
+
+    if (stage?.Stage == FarmDoeStage.RescanDue)
+      return "Rescan pending";
+
     if (doe.IsArchived)
       return "Archived";
 

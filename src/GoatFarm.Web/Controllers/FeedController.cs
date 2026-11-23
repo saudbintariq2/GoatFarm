@@ -1,6 +1,7 @@
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Feed;
 using GoatFarm.Domain.Constants;
+using GoatFarm.Infrastructure.Services;
 using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,12 +12,18 @@ public class FeedController : Controller
     private readonly IFeedService _feedService;
     private readonly IApprovalService _approvalService;
     private readonly IPermissionService _permissionService;
+    private readonly DuplicateMoneyCheck _duplicateMoney;
 
-    public FeedController(IFeedService feedService, IApprovalService approvalService, IPermissionService permissionService)
+    public FeedController(
+        IFeedService feedService,
+        IApprovalService approvalService,
+        IPermissionService permissionService,
+        DuplicateMoneyCheck duplicateMoney)
     {
         _feedService = feedService;
         _approvalService = approvalService;
         _permissionService = permissionService;
+        _duplicateMoney = duplicateMoney;
     }
 
 
@@ -197,6 +204,12 @@ public class FeedController : Controller
 
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
+        var amount = Math.Round(model.Kg * model.RatePerKg);
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, amount, model.Supplier,
+            MoneyDuplicateTabs.FeedPurchase, null, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
+
         try
         {
             return Json(await _feedService.AddFeedPurchaseAsync(model, cancellationToken));
@@ -217,6 +230,12 @@ public class FeedController : Controller
     {
 
         if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var amount = Math.Round(model.Kg * model.RatePerKg);
+        var dupConflict = await DuplicateMoneyGate.ConflictIfDuplicateAsync(
+            _duplicateMoney, model.ConfirmPossibleDuplicate, model.Date, amount, model.Supplier,
+            MoneyDuplicateTabs.FeedPurchase, id, cancellationToken);
+        if (dupConflict is not null) return dupConflict;
 
         try
         {

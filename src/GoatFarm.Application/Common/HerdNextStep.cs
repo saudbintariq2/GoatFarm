@@ -96,16 +96,21 @@ public static class HerdNextStep
 
         if (!g.WeanDate.HasValue)
         {
+            var milkLine = KidLabels.KidMilkLine(g, today);
             if (HerdRules.NeedsWean(g, latestWeightKg, today))
                 return new HerdKidStageLine
                 {
-                    Text = $"Powder milk · {WeanNote(g, latestWeightKg, today)} →",
+                    Text = $"{milkLine} · {WeanNote(g, latestWeightKg, today)} →",
                     Color = "var(--green-dark)",
                     WeanLink = true
                 };
             if (age is { } d)
-                return new HerdKidStageLine { Text = $"Powder milk · day {d} of {wDays} · wean in {Math.Max(0, wDays - d)} days", Color = "var(--amber)" };
-            return new HerdKidStageLine { Text = "Powder milk · weaning age unknown", Color = "var(--amber)" };
+                return new HerdKidStageLine
+                {
+                    Text = $"{milkLine} · wean in {Math.Max(0, wDays - d)} days",
+                    Color = "var(--amber)"
+                };
+            return new HerdKidStageLine { Text = $"{milkLine} · weaning age unknown", Color = "var(--amber)" };
         }
 
         var sinceWean = today.DayNumber - g.WeanDate.Value.DayNumber;

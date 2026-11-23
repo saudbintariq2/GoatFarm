@@ -38,6 +38,9 @@ public class LedgerService : ILedgerService
         var monthTx = tx.Where(t => t.Date >= monthStart && t.Date <= monthEnd).Take(300).ToList();
         var invoices = await _context.CustomerInvoices.AsNoTracking().Include(i => i.Customer)
             .OrderByDescending(i => i.Date).Take(400).ToListAsync(cancellationToken);
+        var monthKey = $"{m.Year:0000}-{m.Month:00}";
+        var payrollOpen = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, monthKey, cancellationToken);
+        var (payablesMerged, payablesOpen, _) = await FinancePayablesBuilder.BuildAsync(_context, payrollOpen, cancellationToken);
         var payables = await _context.SupplierPayables.AsNoTracking()
             .OrderByDescending(p => p.Date).Take(400).ToListAsync(cancellationToken);
         var budget = await _context.BudgetLines.AsNoTracking()
@@ -49,9 +52,6 @@ public class LedgerService : ILedgerService
         var activity = AccountIdsWithActivity(tx);
         var receivables = invoices.Where(i => i.Status is InvoiceStatus.Open or InvoiceStatus.Partial)
             .Sum(i => i.Amount - i.PaidAmount);
-        var payablesOpen = payables.Where(p => p.Status is PayableStatus.Open or PayableStatus.Partial)
-            .Sum(p => p.Amount - p.PaidAmount);
-
         return new LedgerPageViewModel
         {
             Month = $"{m.Year:0000}-{m.Month:00}",
@@ -84,17 +84,7 @@ public class LedgerService : ILedgerService
                 Status = i.Status.ToString(),
                 DueDateDisplay = i.DueDate?.ToString("yyyy-MM-dd")
             }).ToList(),
-            PayablesList = payables.Select(p => new SupplierPayableRowViewModel
-            {
-                Id = p.Id,
-                SupplierName = p.SupplierName,
-                DateDisplay = p.Date.ToString("yyyy-MM-dd"),
-                Description = p.Description,
-                Amount = p.Amount,
-                PaidAmount = p.PaidAmount,
-                Status = p.Status.ToString(),
-                DueDateDisplay = p.DueDate?.ToString("yyyy-MM-dd")
-            }).ToList(),
+            PayablesList = payablesMerged,
             Budget = budget.Select(b => new BudgetRowViewModel
             {
                 Id = b.Id, Year = b.Year, Month = b.Month, Category = b.Category, PlannedAmount = b.PlannedAmount
@@ -259,10 +249,22 @@ public class LedgerService : ILedgerService
 
     public async Task<object> SavePayableAsync(SaveSupplierPayableViewModel model, CancellationToken cancellationToken = default)
     {
+        if (model.PaidAmount > 0 && model.AccountId is not > 0)
+            throw new InvalidOperationException("Choose the account for the amount paid now.");
+
+        var useTx = _context.Database.IsRelational();
+        if (useTx)
+            await _context.Database.BeginTransactionAsync(cancellationToken);
+
         SupplierPayable row;
         if (model.Id is > 0)
             row = await _context.SupplierPayables.FirstAsync(p => p.Id == model.Id, cancellationToken);
-        else { row = new SupplierPayable(); _context.SupplierPayables.Add(row); }
+        else
+        {
+            row = new SupplierPayable();
+            _context.SupplierPayables.Add(row);
+        }
+
         row.SupplierName = model.SupplierName.Trim();
         row.Date = model.Date;
         row.DueDate = model.DueDate;
@@ -272,9 +274,23 @@ public class LedgerService : ILedgerService
         row.Status = row.PaidAmount >= row.Amount ? PayableStatus.Paid
             : row.PaidAmount > 0 ? PayableStatus.Partial : PayableStatus.Open;
         row.UpdatedDate = DateTime.UtcNow;
-        var postPayment = model.PaidAmount > 0 && model.AccountId is > 0 && model.Id is null or 0;
         await _context.SaveChangesAsync(cancellationToken);
-        if (postPayment)
+
+        if (model.PostToExpense && model.Id is null or 0)
+        {
+            var expenseType = string.IsNullOrWhiteSpace(model.ExpenseType) ? "Supplier bill" : model.ExpenseType.Trim();
+            var expense = new Expense
+            {
+                Type = expenseType,
+                Amount = model.Amount,
+                Date = model.Date,
+                Comment = row.SupplierName + " · " + row.Description
+            };
+            _context.Expenses.Add(expense);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (model.PaidAmount > 0 && model.AccountId is > 0)
         {
             _context.LedgerTransactions.Add(new LedgerTransaction
             {
@@ -290,6 +306,9 @@ public class LedgerService : ILedgerService
             });
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        if (useTx)
+            await _context.Database.CommitTransactionAsync(cancellationToken);
         return new { id = row.Id };
     }
 

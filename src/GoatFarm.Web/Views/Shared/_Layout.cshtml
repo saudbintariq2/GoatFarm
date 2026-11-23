@@ -19,6 +19,10 @@
     var farmLocation = Configuration["ApplicationSettings:FarmLocation"] ?? "";
     var deviceCode = Configuration["ApplicationSettings:DeviceCode"] ?? "K7Q";
     var brandSubtitle = Configuration["ApplicationSettings:BrandSubtitle"] ?? "Farm management";
+    var brandFavicon = Configuration["ApplicationSettings:BrandFaviconPath"] ?? "images/sandeel-mark.svg";
+    if (brandFavicon.StartsWith("~/", StringComparison.Ordinal)) brandFavicon = brandFavicon[2..];
+    brandFavicon = brandFavicon.TrimStart('/');
+    var faviconIsSvg = brandFavicon.EndsWith(".svg", StringComparison.OrdinalIgnoreCase);
 
     var isAuthenticated = User.Identity?.IsAuthenticated == true;
 
@@ -162,9 +166,7 @@
 
     <title>@farmName — @brandSubtitle</title>
 
-    <link rel="icon" href="~/images/goat-logo.png" type="image/png" asp-append-version="true" />
-
-    <link rel="alternate icon" href="~/images/goat-logo.png" type="image/png" asp-append-version="true" />
+    <link rel="icon" href="@Url.Content("~/" + brandFavicon)" type="@(faviconIsSvg ? "image/svg+xml" : "image/png")" asp-append-version="true" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -180,7 +182,7 @@
 
 </head>
 
-<body class="farm-pro @bodyClass @(useShell ? "has-shell" : "")">
+<body class="farm-pro @bodyClass @(useShell ? "has-shell" : "")" data-farm-name="@farmName" data-device-code="@deviceCode">
 
     @if (useShell)
 
@@ -480,6 +482,9 @@
 
     {
 
+        <script>
+            window.__farmDeviceCode = @System.Text.Json.JsonSerializer.Serialize(deviceCode);
+        </script>
         <script>
 
             (() => {

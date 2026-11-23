@@ -723,6 +723,8 @@ public class RecordUltrasoundViewModel
     public string? EmptyNextStep { get; set; }
     public string? EmptyBirthBatchId { get; set; }
     public bool ConfirmEarlyScan { get; set; }
+    public bool NotSure { get; set; }
+    public int RescanInDays { get; set; } = 14;
 }
 
 public class CrossCheckViewModel

@@ -177,7 +177,8 @@ public class DashboardQueryPgTests(ITestOutputHelper output)
             services.AddInfrastructure(config);
             if (perStatus)
                 services.AddScoped<IGoatService>(s => new PerStatusCountingGoatService(
-                    new GoatService(s.GetRequiredService<GoatFarmDbContext>()), s.GetRequiredService<GoatFarmDbContext>()));
+                    new GoatService(s.GetRequiredService<GoatFarmDbContext>(), s),
+                    s.GetRequiredService<GoatFarmDbContext>()));
             await using var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
             var dash = await scope.ServiceProvider.GetRequiredService<IStatisticsService>().GetDashboardAsync(MonthHelper.CurrentMonthKey());

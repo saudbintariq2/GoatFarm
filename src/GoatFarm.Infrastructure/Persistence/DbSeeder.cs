@@ -103,11 +103,11 @@ public static class DbSeeder
 
         context.Vaccines.AddRange(
             new Vaccine { Name = "Enterotoxaemia (ET)", Scope = VaccineScope.Kid, RuleType = VaccineRuleType.Age, Days = 30 },
-            new Vaccine { Name = "PPR", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 12 },
-            new Vaccine { Name = "FMD", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 6 },
-            new Vaccine { Name = "CCPP", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 12 },
-            new Vaccine { Name = "ET booster (pre-kidding)", Scope = VaccineScope.Pregnant, RuleType = VaccineRuleType.Repeat, Months = 6 },
-            new Vaccine { Name = "Deworming", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 3 }
+            new Vaccine { Name = "PPR", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 12, MinAgeDays = 120 },
+            new Vaccine { Name = "FMD", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 6, MinAgeDays = 90 },
+            new Vaccine { Name = "CCPP", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 12, MinAgeDays = 120 },
+            new Vaccine { Name = "ET booster (pre-kidding)", Scope = VaccineScope.Pregnant, RuleType = VaccineRuleType.BeforeKidding, Days = 30 },
+            new Vaccine { Name = "Deworming", Scope = VaccineScope.All, RuleType = VaccineRuleType.Repeat, Months = 3, MinAgeDays = 60 }
         );
 
         await context.SaveChangesAsync(cancellationToken);

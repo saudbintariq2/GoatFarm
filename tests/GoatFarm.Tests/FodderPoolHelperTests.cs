@@ -43,8 +43,9 @@ public class FodderPoolHelperTests
         db.MoneyAccounts.Add(acct);
         await db.SaveChangesAsync();
 
-        var goats = new GoatService(db);
-        var feed = new FeedService(db, goats, new MilkService(db));
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        var feed = new FeedService(db, goats, new MilkService(db), metrics);
 
         var paid = new DateOnly(2026, 1, 1);
         await feed.UpdateFodderPoolAsync(new Application.ViewModels.Feed.UpdateFodderPoolViewModel

@@ -85,19 +85,28 @@ public partial class FinanceService : IFinanceService
         var ownerInvMonth = ownerInvestments.Sum(o => o.Amount);
         var ownerInvTotal = await _context.OwnerInvestments.AsNoTracking().SumAsync(o => o.Amount, cancellationToken);
 
-        var milkInc = _milkService.GetMilkIncomeMonth(month);
-        var milkL = _milkService.GetMilkLitersSold(month);
+        var milkLegacyInc = _milkService.GetMilkIncomeMonth(month);
+        var milkLegacyL = _milkService.GetMilkLitersSold(month);
+        var milkProductRows = await _context.ProductSales.AsNoTracking()
+            .Where(s => s.Date >= monthStart && s.Date < monthEnd &&
+                        (EF.Functions.ILike(s.ProductName, "%milk%") || EF.Functions.ILike(s.ProductName, "%dairy%")))
+            .ToListAsync(cancellationToken);
+        var milkProductL = milkProductRows.Sum(s => s.Qty);
+        var milkProductInc = milkProductRows.Sum(s => s.Amount);
+        var milkL = milkLegacyL + milkProductL;
+        var milkInc = milkLegacyInc + milkProductInc;
         var incManual = incomes.Sum(i => i.Amount);
         var incTot = incManual + milkInc;
 
         var feedBought = _feedService.GetFeedPurchasedMonthly(month);
+        var feedUsed = await _feedService.GetFeedUsedCostAsync(monthStart, monthEnd, cancellationToken);
         var feedKg = _feedService.GetFeedPurchasedKg(month);
         var medM = _feedService.CalculateFarmMedicineMonthly();
         var recurM = GetRecurringMonthlyTotal();
         var salaryM = GetStaffSalaryMonthlyTotal();
         var vaccBought = _vaccineService.GetVaccinePurchasedMonthly(month);
         var expManual = expenses.Where(e => !FinanceExpenseRules.IsDuplicateVaccinePurchase(e.Type)).Sum(e => e.Amount);
-        var expTot = expManual + feedBought + medM + recurM + vaccBought + salaryM;
+        var expTot = expManual + feedUsed + medM + recurM + vaccBought + salaryM;
 
         var employees = await _context.Employees.AsNoTracking()
             .OrderBy(e => e.Name)
@@ -125,6 +134,7 @@ public partial class FinanceService : IFinanceService
             TotalExpense = expTot,
             FeedMonthly = feedPlanBudget,
             FeedBoughtMonthly = feedBought,
+            FeedUsedMonthly = feedUsed,
             FeedBoughtKg = feedKg,
             MedicineMonthly = medM,
             RecurringMonthly = recurM,
@@ -215,9 +225,10 @@ public partial class FinanceService : IFinanceService
             .GroupBy(e => e.Type)
             .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(x => x.Amount) })
             .ToListAsync(cancellationToken);
-        var feed = await _context.FeedPurchases.AsNoTracking().Where(f => f.Date >= from && f.Date < endExclusive).SumAsync(f => (decimal?)f.Amount, cancellationToken) ?? 0;
+        var feed = await _feedService.GetFeedUsedCostAsync(from, endExclusive, cancellationToken);
         var vacc = await _context.VaccinePurchases.AsNoTracking().Where(v => v.Date >= from && v.Date < endExclusive).SumAsync(v => (decimal?)v.Amount, cancellationToken) ?? 0;
-        var salary = GetStaffSalaryMonthlyTotal() * months;
+        var staff = await _context.Employees.AsNoTracking().ToListAsync(cancellationToken);
+        var salary = StaffSalaryAccrual.ForRange(staff, from, to);
         var recurring = GetRecurringMonthlyTotal() * months;
         var medicine = _feedService.CalculateFarmMedicineMonthly() * months;
 
@@ -227,7 +238,7 @@ public partial class FinanceService : IFinanceService
         if (invoices > 0) inLines.Add(new FinanceLineViewModel { Label = "Other farm sale", Amount = invoices });
         inLines.AddRange(incomes.Where(i => i.Amount > 0));
         var outLines = new List<FinanceLineViewModel>();
-        if (feed > 0) outLines.Add(new FinanceLineViewModel { Label = "Feed bought", Amount = feed });
+        if (feed > 0) outLines.Add(new FinanceLineViewModel { Label = "Feed used", Amount = feed });
         if (medicine > 0) outLines.Add(new FinanceLineViewModel { Label = "Medicine (plan)", Amount = medicine });
         if (vacc > 0) outLines.Add(new FinanceLineViewModel { Label = "Vaccines bought", Amount = vacc });
         if (salary > 0) outLines.Add(new FinanceLineViewModel { Label = "Salaries", Amount = salary });
@@ -701,8 +712,19 @@ public partial class FinanceService : IFinanceService
             incomeLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
         page.IncomeLines = incomeLines.Where(x => x.Amount > 0).OrderByDescending(x => x.Amount).ToList();
 
+        var monthLedger = await _context.LedgerTransactions.AsNoTracking()
+            .Where(t => t.Date >= monthStart && t.Date < monthEnd)
+            .ToListAsync(cancellationToken);
+        var cashOut = monthLedger.Where(t => t.Kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment).ToList();
+        var capexCash = cashOut.Where(t => t.Reference != null && (t.Reference.StartsWith("capex:", StringComparison.OrdinalIgnoreCase)
+            || t.Reference.StartsWith("fixed_asset:", StringComparison.OrdinalIgnoreCase))).Sum(t => t.Amount);
+        page.CapexCashPaidMonth = capexCash;
+        page.TotalCashPaidMonth = cashOut.Sum(t => t.Amount);
+        page.OpexCashPaidMonth = page.TotalCashPaidMonth - capexCash;
+
         var expenseLines = new List<FinanceLineViewModel>();
-        if (page.FeedBoughtMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Feed bought", Amount = page.FeedBoughtMonthly });
+        if (page.FeedUsedMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Feed used", Amount = page.FeedUsedMonthly });
+        else if (page.FeedBoughtMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Feed used", Amount = page.FeedBoughtMonthly });
         if (page.MedicineMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Medicine (plan)", Amount = page.MedicineMonthly });
         if (page.VaccineBoughtMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Vaccines bought", Amount = page.VaccineBoughtMonthly });
         if (page.StaffSalaryMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Salaries", Amount = page.StaffSalaryMonthly });
@@ -811,27 +833,35 @@ public partial class FinanceService : IFinanceService
         }
         page.Sales = sales.OrderByDescending(s => s.DateDisplay).ToList();
 
-        var capex = await _context.ProjectExpenditures.AsNoTracking().Include(p => p.Project)
+        decimal CapexPaid(string prefix, int id) => monthLedger
+            .Where(t => t.Reference != null && (t.Reference == $"{prefix}{id}" || t.Reference.StartsWith($"{prefix}{id}:", StringComparison.OrdinalIgnoreCase)))
+            .Sum(t => t.Amount);
+        var capexEntities = await _context.ProjectExpenditures.AsNoTracking().Include(p => p.Project)
             .Where(p => p.Date >= monthStart && p.Date < monthEnd)
             .OrderByDescending(p => p.Date)
-            .Select(p => new CapexRowViewModel
-            {
-                DateDisplay = p.Date.ToString("yyyy-MM-dd"),
-                Name = p.Project.Name,
-                Type = p.CostType ?? p.Description,
-                Supplier = p.Vendor,
-                Amount = p.Amount
-            }).ToListAsync(cancellationToken);
-        var assetCapex = await _context.FixedAssetRegisters.AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var capex = capexEntities.Select(p => new CapexRowViewModel
+        {
+            DateDisplay = p.Date.ToString("yyyy-MM-dd"),
+            Name = p.Project.Name,
+            Type = p.CostType ?? p.Description,
+            Supplier = p.Vendor,
+            Amount = p.Amount,
+            CashPaid = CapexPaid("capex:", p.Id)
+        }).ToList();
+        var assetEntities = await _context.FixedAssetRegisters.AsNoTracking()
             .Where(a => a.PurchaseDate >= monthStart && a.PurchaseDate < monthEnd)
-            .Select(a => new CapexRowViewModel
-            {
-                DateDisplay = a.PurchaseDate!.Value.ToString("yyyy-MM-dd"),
-                Name = a.Name,
-                Type = a.Category.ToString(),
-                Supplier = a.Notes,
-                Amount = a.Cost
-            }).ToListAsync(cancellationToken);
+            .OrderByDescending(a => a.PurchaseDate)
+            .ToListAsync(cancellationToken);
+        var assetCapex = assetEntities.Select(a => new CapexRowViewModel
+        {
+            DateDisplay = a.PurchaseDate!.Value.ToString("yyyy-MM-dd"),
+            Name = a.Name,
+            Type = a.Category.ToString(),
+            Supplier = a.Notes,
+            Amount = a.Cost,
+            CashPaid = CapexPaid("fixed_asset:", a.Id)
+        }).ToList();
         page.Capex = capex.Concat(assetCapex).OrderByDescending(x => x.DateDisplay).ToList();
         page.ProjectSpend = await _context.ProjectExpenditures.AsNoTracking().SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0;
         page.FixedAssetRegisterValue = await _context.FixedAssetRegisters.AsNoTracking().SumAsync(a => (decimal?)a.Cost, cancellationToken) ?? 0;

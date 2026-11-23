@@ -15,6 +15,11 @@ public class FinanceIntegrityViewModel
     public int UnlinkedFundingCount { get; set; }
     public int UnlinkedIncomeCount { get; set; }
     public int UnlinkedExpenseCount { get; set; }
+    public int UnlinkedFeedPurchaseCount { get; set; }
+    public int UnlinkedVaccinePurchaseCount { get; set; }
+    public decimal UnfundedLivestockGap { get; set; }
+    public decimal StatementProfitAllTime { get; set; }
+    public decimal BalanceSheetCumulativeProfit { get; set; }
 }
 
 public class FinanceBalanceSheetViewModel
@@ -48,5 +53,23 @@ public class RelinkUnpostedMoneyResultViewModel
     public int FundingLinked { get; set; }
     public int IncomeLinked { get; set; }
     public int ExpenseLinked { get; set; }
+    public int FeedPurchaseLinked { get; set; }
+    public int VaccinePurchaseLinked { get; set; }
     public IReadOnlyList<string> Messages { get; set; } = [];
+}
+
+public class FundLivestockAsOwnerViewModel
+{
+    public int AccountId { get; set; }
+    public bool DryRun { get; set; }
+}
+
+public class FundLivestockResultViewModel
+{
+    public bool Success { get; set; }
+    public bool DryRun { get; set; }
+    public decimal LivestockValue { get; set; }
+    public decimal AlreadyFunded { get; set; }
+    public decimal AmountToPost { get; set; }
+    public string Message { get; set; } = "";
 }
