@@ -1,0 +1,1077 @@
+{
+  "formatVersion": 3,
+  "app": "GoatFarmPro",
+  "goats": [],
+  "breedingEvents": [],
+  "kiddingRecords": [],
+  "farmTasks": [],
+  "security": {
+    "restoredOnImport": false,
+    "users": [
+      {
+        "email": "admin@goatfarm.local",
+        "fullName": "Administrator",
+        "roles": [
+          "Admin"
+        ],
+        "usesRolePermissions": true,
+        "permissions": null
+      },
+      {
+        "email": "dev@goatfarm.local",
+        "fullName": "Dev Administrator",
+        "roles": [
+          "Admin"
+        ],
+        "usesRolePermissions": true,
+        "permissions": null
+      }
+    ],
+    "rolePermissions": {
+      "Admin": {
+        "dashboard": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "tasks": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "herd": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "breeding": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "products": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "feed": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "trading": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "vaccines": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "finance": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "projects": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "reports": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "admin": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "search": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "settings": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "backup": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "milk": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "assistant": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        }
+      },
+      "Manager": {
+        "dashboard": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "tasks": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "herd": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "breeding": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "products": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "feed": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "trading": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "vaccines": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "finance": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "projects": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "reports": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "admin": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "search": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "settings": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "backup": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "milk": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "assistant": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        }
+      },
+      "Staff": {
+        "dashboard": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "tasks": {
+          "view": true,
+          "add": true,
+          "edit": false,
+          "delete": false
+        },
+        "herd": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "breeding": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "products": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "feed": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "trading": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "vaccines": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "finance": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "projects": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "reports": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "admin": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "search": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "settings": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "backup": {
+          "view": false,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        "milk": {
+          "view": true,
+          "add": true,
+          "edit": true,
+          "delete": true
+        },
+        "assistant": {
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        }
+      }
+    }
+  },
+  "groups": [],
+  "feedPrices": [
+    {
+      "FeedType": "wanda",
+      "DisplayName": "Wanda (concentrate)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 1,
+      "CreatedDate": "2026-11-24T07:56:29.869816Z",
+      "UpdatedDate": "2026-11-24T07:56:29.869817Z"
+    },
+    {
+      "FeedType": "binola",
+      "DisplayName": "Binola (cottonseed cake)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 2,
+      "CreatedDate": "2026-11-24T07:56:30.229425Z",
+      "UpdatedDate": "2026-11-24T07:56:30.229426Z"
+    },
+    {
+      "FeedType": "sarson",
+      "DisplayName": "Sarson khali (mustard cake)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 3,
+      "CreatedDate": "2026-11-24T07:56:30.231756Z",
+      "UpdatedDate": "2026-11-24T07:56:30.231757Z"
+    },
+    {
+      "FeedType": "bran",
+      "DisplayName": "Wheat bran (choker)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 4,
+      "CreatedDate": "2026-11-24T07:56:30.231868Z",
+      "UpdatedDate": "2026-11-24T07:56:30.231868Z"
+    },
+    {
+      "FeedType": "maize",
+      "DisplayName": "Maize (makai)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 5,
+      "CreatedDate": "2026-11-24T07:56:30.231982Z",
+      "UpdatedDate": "2026-11-24T07:56:30.231982Z"
+    },
+    {
+      "FeedType": "sheera",
+      "DisplayName": "Sheera (molasses)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 6,
+      "CreatedDate": "2026-11-24T07:56:30.232015Z",
+      "UpdatedDate": "2026-11-24T07:56:30.232015Z"
+    },
+    {
+      "FeedType": "fodder",
+      "DisplayName": "Green fodder (chaara)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 7,
+      "CreatedDate": "2026-11-24T07:56:30.232086Z",
+      "UpdatedDate": "2026-11-24T07:56:30.232086Z"
+    },
+    {
+      "FeedType": "fodderdry",
+      "DisplayName": "Dry fodder (toori / bhoosa)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 8,
+      "CreatedDate": "2026-11-24T07:56:30.232114Z",
+      "UpdatedDate": "2026-11-24T07:56:30.232114Z"
+    },
+    {
+      "FeedType": "milkpowder",
+      "DisplayName": "Powder milk (kids)",
+      "PricePerKg": 0.00,
+      "StockKg": 0.00,
+      "StockKgFull": 0.00,
+      "UseType": "recipe",
+      "Id": 9,
+      "CreatedDate": "2026-11-24T07:56:30.232147Z",
+      "UpdatedDate": "2026-11-24T07:56:30.232147Z"
+    }
+  ],
+  "prices": {
+    "wanda": 0.00,
+    "binola": 0.00,
+    "sarson": 0.00,
+    "bran": 0.00,
+    "maize": 0.00,
+    "sheera": 0.00,
+    "fodder": 0.00,
+    "fodderdry": 0.00,
+    "milkpowder": 0.00
+  },
+  "feedStock": {
+    "wanda": 0.00,
+    "binola": 0.00,
+    "sarson": 0.00,
+    "bran": 0.00,
+    "maize": 0.00,
+    "sheera": 0.00,
+    "fodder": 0.00,
+    "fodderdry": 0.00,
+    "milkpowder": 0.00
+  },
+  "feedPlans": [
+    {
+      "id": 1,
+      "statusKey": "Kid",
+      "mixKgPerDay": 0.150,
+      "fodderKgPerDay": 0.500,
+      "fodderDryKgPerDay": 0.100,
+      "medicineCostPerGoatPerMonth": 50.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 150
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "milkpowder",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "statusKey": "Meat",
+      "mixKgPerDay": 0.350,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.400,
+      "medicineCostPerGoatPerMonth": 30.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 250
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "milkpowder",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "statusKey": "Milking",
+      "mixKgPerDay": 1.000,
+      "fodderKgPerDay": 2.000,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 80.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 500
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 200
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 200
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 50
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 2000
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "milkpowder",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "statusKey": "Pregnant",
+      "mixKgPerDay": 0.800,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 150.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 400
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 150
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 150
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 50
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "milkpowder",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "statusKey": "Dry",
+      "mixKgPerDay": 0.300,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 40.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 200
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "milkpowder",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "statusKey": "Buck",
+      "mixKgPerDay": 0.700,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.500,
+      "medicineCostPerGoatPerMonth": 60.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 400
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "milkpowder",
+          "gramsPerDay": 0
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "statusKey": "Sale",
+      "mixKgPerDay": 0.350,
+      "fodderKgPerDay": 1.500,
+      "fodderDryKgPerDay": 0.400,
+      "medicineCostPerGoatPerMonth": 30.00,
+      "items": [
+        {
+          "feedType": "wanda",
+          "gramsPerDay": 250
+        },
+        {
+          "feedType": "binola",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sarson",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "bran",
+          "gramsPerDay": 100
+        },
+        {
+          "feedType": "maize",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "sheera",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "fodder",
+          "gramsPerDay": 1500
+        },
+        {
+          "feedType": "fodderdry",
+          "gramsPerDay": 0
+        },
+        {
+          "feedType": "milkpowder",
+          "gramsPerDay": 0
+        }
+      ]
+    }
+  ],
+  "feedBuys": [],
+  "recurringCosts": [],
+  "vaccineBuys": [],
+  "assets": [],
+  "incomes": [],
+  "expenses": [],
+  "ownerInv": [],
+  "vaccines": [
+    {
+      "Name": "Enterotoxaemia (ET)",
+      "Scope": 1,
+      "RuleType": 0,
+      "Days": 30,
+      "Months": null,
+      "MinAgeDays": null,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 1,
+      "CreatedDate": "2026-11-24T07:56:30.878235Z",
+      "UpdatedDate": "2026-11-24T07:56:30.878235Z"
+    },
+    {
+      "Name": "PPR",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 12,
+      "MinAgeDays": 120,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 2,
+      "CreatedDate": "2026-11-24T07:56:30.878802Z",
+      "UpdatedDate": "2026-11-24T07:56:30.878803Z"
+    },
+    {
+      "Name": "FMD",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 6,
+      "MinAgeDays": 90,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 3,
+      "CreatedDate": "2026-11-24T07:56:30.879029Z",
+      "UpdatedDate": "2026-11-24T07:56:30.879029Z"
+    },
+    {
+      "Name": "CCPP",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 12,
+      "MinAgeDays": 120,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 4,
+      "CreatedDate": "2026-11-24T07:56:30.87903Z",
+      "UpdatedDate": "2026-11-24T07:56:30.87903Z"
+    },
+    {
+      "Name": "ET booster (pre-kidding)",
+      "Scope": 3,
+      "RuleType": 2,
+      "Days": 30,
+      "Months": null,
+      "MinAgeDays": null,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 5,
+      "CreatedDate": "2026-11-24T07:56:30.87903Z",
+      "UpdatedDate": "2026-11-24T07:56:30.87903Z"
+    },
+    {
+      "Name": "Deworming",
+      "Scope": 0,
+      "RuleType": 1,
+      "Days": null,
+      "Months": 3,
+      "MinAgeDays": 60,
+      "Note": null,
+      "VaccinationHistories": [],
+      "Id": 6,
+      "CreatedDate": "2026-11-24T07:56:30.87903Z",
+      "UpdatedDate": "2026-11-24T07:56:30.87903Z"
+    }
+  ],
+  "vaccLog": [],
+  "reminders": [],
+  "remindDays": 30,
+  "milkProd": [],
+  "milkSales": [],
+  "milkWastes": [],
+  "employees": [],
+  "breedingEmptyLogs": [],
+  "mixRecipe": "{\u0022wanda\u0022:25,\u0022binola\u0022:40,\u0022sarson\u0022:0,\u0022bran\u0022:20,\u0022maize\u0022:10,\u0022sheera\u0022:5}",
+  "mixRecipes": {
+    "kid": {
+      "wanda": 40,
+      "binola": 20,
+      "sarson": 0,
+      "bran": 25,
+      "maize": 12,
+      "sheera": 3
+    },
+    "milking": {
+      "wanda": 25,
+      "binola": 40,
+      "sarson": 0,
+      "bran": 20,
+      "maize": 10,
+      "sheera": 5
+    },
+    "pregnant": {
+      "wanda": 28,
+      "binola": 35,
+      "sarson": 0,
+      "bran": 22,
+      "maize": 10,
+      "sheera": 5
+    },
+    "dry": {
+      "wanda": 15,
+      "binola": 25,
+      "sarson": 0,
+      "bran": 45,
+      "maize": 10,
+      "sheera": 5
+    },
+    "buck": {
+      "wanda": 25,
+      "binola": 30,
+      "sarson": 0,
+      "bran": 30,
+      "maize": 12,
+      "sheera": 3
+    },
+    "sale": {
+      "wanda": 30,
+      "binola": 35,
+      "sarson": 0,
+      "bran": 20,
+      "maize": 12,
+      "sheera": 3
+    },
+    "meat": {
+      "wanda": 30,
+      "binola": 35,
+      "sarson": 0,
+      "bran": 20,
+      "maize": 12,
+      "sheera": 3
+    }
+  },
+  "fodderPool": {
+    "Acres": 0,
+    "Mode": "share",
+    "Items": [
+      {
+        "Id": "rent",
+        "Label": "Land rent",
+        "Amount": 0,
+        "PaidDate": null,
+        "AllocateMonths": 12,
+        "AccountId": null,
+        "PaidAmount": 0
+      },
+      {
+        "Id": "seeding",
+        "Label": "Seeding \u0026 ploughing",
+        "Amount": 0,
+        "PaidDate": null,
+        "AllocateMonths": 12,
+        "AccountId": null,
+        "PaidAmount": 0
+      },
+      {
+        "Id": "cutting",
+        "Label": "Cutting \u0026 labour",
+        "Amount": 0,
+        "PaidDate": null,
+        "AllocateMonths": 12,
+        "AccountId": null,
+        "PaidAmount": 0
+      },
+      {
+        "Id": "water",
+        "Label": "Irrigation / water",
+        "Amount": 0,
+        "PaidDate": null,
+        "AllocateMonths": 12,
+        "AccountId": null,
+        "PaidAmount": 0
+      }
+    ]
+  },
+  "feedSettings": {
+    "AutoUsage": true,
+    "LastUsageDate": "2026-11-24",
+    "OpeningStockByFeed": {},
+    "ActiveMonthsByFeed": {}
+  },
+  "feedFull": {},
+  "feedUsage": [],
+  "deaths": [],
+  "goatWeights": [],
+  "lookupSettings": {
+    "Lookup.IncomeTypes": "[\u0022Ghee\u0022,\u0022Paneer\u0022,\u0022Yogurt / Lassi\u0022,\u0022Soap\u0022,\u0022Live goat sale\u0022,\u0022Meat\u0022,\u0022Other\u0022]",
+    "Lookup.ExpenseTypes": "[\u0022Seeding\u0022,\u0022Fodder cutting\u0022,\u0022Irrigation / water\u0022,\u0022Cultivation (fodder)\u0022,\u0022Vaccines\u0022,\u0022Doctor / vet visit\u0022,\u0022Vet / extra medicine\u0022,\u0022Utilities\u0022,\u0022Transport\u0022,\u0022Repairs\u0022,\u0022Land rent\u0022,\u0022Other\u0022]",
+    "Lookup.AssetTypes": "[\u0022Machinery\u0022,\u0022Land\u0022,\u0022Buildings/Sheds\u0022,\u0022Other\u0022]",
+    "Lookup.Breeds": "[\u0022Beetal\u0022,\u0022Makhee Cheeni\u0022]",
+    "Lookup.VaccineNames": "[\u0022Enterotoxaemia (ET)\u0022,\u0022PPR\u0022,\u0022FMD\u0022,\u0022CCPP\u0022,\u0022ET booster (pre-kidding)\u0022,\u0022Deworming\u0022]",
+    "Lookup.VaccineUnits": "[\u0022Box\u0022,\u0022Bottle\u0022,\u0022Dose\u0022,\u0022Vial\u0022,\u0022Other\u0022]",
+    "Lookup.Owners": "[\u0022Farm\u0022]",
+    "Lookup.HealthStates": "[\u0022Healthy\u0022,\u0022Under treatment\u0022,\u0022Quarantine\u0022,\u0022Injured\u0022,\u0022Weak / off feed\u0022]",
+    "Lookup.SaleTypes": "[\u0022Milk\u0022,\u0022Dairy products\u0022,\u0022Meat\u0022,\u0022Live animal / farm sale\u0022,\u0022Other farm sale\u0022]",
+    "Lookup.FundingShareholders": "[\u0022Shareholder 1\u0022,\u0022Shareholder 2\u0022]",
+    "Lookup.ProjectCategories": "[\u0022Construction\u0022,\u0022Milking Parlor\u0022,\u0022Solar / Power\u0022,\u0022Slaughter / Processing\u0022,\u0022Cold Room / Warehouse\u0022,\u0022Water / Utilities\u0022,\u0022Other Capital Project\u0022]",
+    "Lookup.CapexCostTypes": "[\u0022Civil / Construction\u0022,\u0022Solar Panels\u0022,\u0022Solar Inverter\u0022,\u0022Solar Structure / Mounting\u0022,\u0022Battery / Storage\u0022,\u0022Milking Parlor Equipment\u0022,\u0022Milking Machine / Cluster\u0022,\u0022Milk Tank / Chiller\u0022,\u0022Pasteurizer / Dairy Equipment\u0022,\u0022Cold Room Equipment\u0022,\u0022Electrical\u0022,\u0022Plumbing\u0022,\u0022Installation Labour\u0022,\u0022Professional / Approval Fees\u0022,\u0022Transport / Delivery\u0022,\u0022Other Equipment\u0022,\u0022Other Capital Cost\u0022]",
+    "Lookup.ProjectAssetCategories": "[\u0022Buildings / Sheds\u0022,\u0022Milking / Dairy Equipment\u0022,\u0022Solar / Power\u0022,\u0022Slaughter / Meat Equipment\u0022,\u0022Cold Storage\u0022,\u0022Machinery\u0022,\u0022Vehicle\u0022,\u0022Water / Utilities\u0022,\u0022Other Asset\u0022]",
+    "Lookup.ProjectFundingSources": "[\u0022Farm Cash\u0022,\u0022Shareholder Funding\u0022,\u0022Bank / Loan\u0022,\u0022Mixed\u0022]"
+  },
+  "v241Extended": {
+    "auditLog": [],
+    "approvalRequests": [],
+    "tradeItems": [],
+    "tradeStores": [],
+    "tradeAccounts": [],
+    "tradeParties": [],
+    "tradeExpenseCategories": [],
+    "tradeEntries": [],
+    "farmProjects": [],
+    "projectExpenditures": [],
+    "fixedAssetRegisters": [],
+    "solarProductionLogs": [],
+    "moneyAccounts": [
+      {
+        "Name": "Farm Cash",
+        "Kind": 0,
+        "OpeningBalance": 0.00,
+        "OpeningBalanceLocked": false,
+        "IsActive": true,
+        "Id": 1,
+        "CreatedDate": "2026-11-24T07:56:51.036246Z",
+        "UpdatedDate": "2026-11-24T07:56:51.036247Z"
+      },
+      {
+        "Name": "Farm Bank",
+        "Kind": 1,
+        "OpeningBalance": 0.00,
+        "OpeningBalanceLocked": false,
+        "IsActive": true,
+        "Id": 2,
+        "CreatedDate": "2026-11-24T07:56:51.096779Z",
+        "UpdatedDate": "2026-11-24T07:56:51.09678Z"
+      }
+    ],
+    "ledgerTransactions": [],
+    "businessCustomers": [
+      {
+        "Name": "Walk-in customer",
+        "Phone": null,
+        "Place": null,
+        "OpeningBalance": 0,
+        "IsActive": true,
+        "Id": 1,
+        "CreatedDate": "2026-11-24T07:56:51.098302Z",
+        "UpdatedDate": "2026-11-24T07:56:51.098304Z"
+      }
+    ],
+    "customerInvoices": [],
+    "supplierPayables": [],
+    "budgetLines": [],
+    "profitSharePartners": [],
+    "productCatalogItems": [],
+    "warehouses": [],
+    "stockMovements": [],
+    "milkingSessions": [],
+    "slaughterRecords": [],
+    "productSales": [],
+    "goatTreatments": [],
+    "customFeedingGroups": []
+  },
+  "_savedAt": "2026-11-24T07:58:39.6878995Z"
+}

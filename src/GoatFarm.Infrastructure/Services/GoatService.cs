@@ -1310,11 +1310,22 @@ public class GoatService : IGoatService
         if (filter.StartsWith("mg:", StringComparison.Ordinal))
         {
             var mgId = filter[3..];
-            var ctx = await EnsureHerdBreedingContextAsync(cancellationToken);
+            // EF-translatable: same rules as MotherGroupHelper.EffectiveGroupId (stored id, else latest litter → m1–m4).
             return goats.Where(g =>
                 g.Gender == GoatGender.Female &&
                 g.Status != GoatStatus.Kid &&
-                HerdBreedingEnricher.EffectiveMotherGroupId(g, ctx) == mgId);
+                (
+                    (g.MotherGroupId != null && g.MotherGroupId != "" && g.MotherGroupId == mgId)
+                    || ((g.MotherGroupId == null || g.MotherGroupId == "")
+                        && _context.KiddingRecords
+                            .Where(k => k.DoeId == g.Id)
+                            .OrderByDescending(k => k.KiddingDate)
+                            .Take(1)
+                            .Any(k =>
+                                (mgId == "m4" && k.LiveKids + k.Stillborn >= 4)
+                                || (mgId == "m3" && k.LiveKids + k.Stillborn == 3)
+                                || (mgId == "m2" && k.LiveKids + k.Stillborn == 2)
+                                || (mgId == "m1" && k.LiveKids + k.Stillborn == 1)))));
         }
 
         if (filter.Equals("kid:milk", StringComparison.Ordinal))
