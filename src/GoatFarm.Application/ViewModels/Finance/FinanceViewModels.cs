@@ -128,6 +128,8 @@ public class OwnerInvestmentViewModel
     public string DateDisplay => Date.ToString("yyyy-MM-dd");
     public int? AccountId { get; set; }
     public string? AccountName { get; set; }
+    /// <summary>Livestock or other contribution in kind: equity only, no Cash/Bank movement.</summary>
+    public bool IsNonCash { get; set; }
 }
 
 public class CreateAssetViewModel
@@ -311,6 +313,18 @@ public class FinancePageViewModel
     public FinanceBalanceSheetViewModel BalanceSheet { get; set; } = new();
     public FinanceIntegrityViewModel Integrity { get; set; } = new();
     public IReadOnlyList<FinanceMonthlyClosingRowViewModel> MonthlyClosing { get; set; } = [];
+    public FinanceCashFlowViewModel CashFlow { get; set; } = new();
+}
+
+/// <summary>Cash flow read only from Bank &amp; Cash ledger rows. Closing equals the account balances.</summary>
+public class FinanceCashFlowViewModel
+{
+    public decimal Opening { get; set; }
+    public decimal MoneyIn { get; set; }
+    public decimal MoneyOut { get; set; }
+    public decimal Closing { get; set; }
+    public IReadOnlyList<FinanceLineViewModel> InLines { get; set; } = [];
+    public IReadOnlyList<FinanceLineViewModel> OutLines { get; set; } = [];
 }
 
 public class FinanceMonthlyClosingRowViewModel

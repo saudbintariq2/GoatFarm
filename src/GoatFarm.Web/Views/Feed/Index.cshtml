@@ -37,7 +37,7 @@
 <div class="panel-body">
 <div class="stats" id="feedStats" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px"></div>
 <div class="v205-feed-scroll"><table class="tbl"><thead><tr><th>Feed</th>
-<th class="num-cell hide-sm">Purchased</th><th class="num-cell hide-sm">Used</th>
+<th class="num-cell hide-sm">Purchased</th><th class="num-cell hide-sm">Used</th><th class="num-cell hide-sm">Short</th>
 <th class="num-cell">In Stock</th><th class="num-cell">Daily Use</th>
 <th class="num-cell">Days Left</th><th class="num-cell hide-sm">Avg Cost/kg</th>
 <th class="num-cell hide-sm">Status</th></tr></thead>
@@ -141,7 +141,7 @@
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
 <div class="field" style="flex:1;min-width:150px"><label>Add a new feed type</label>
 <input id="nf-name" placeholder="e.g. Silage / Corn gluten" /></div>
-<div class="field"><label>Price (Rs/kg)</label><input id="nf-price" min="0" style="width:110px" type="number" /></div>
+<div class="field"><label>Price (Rs/kg)</label><input id="nf-price" min="1" step="any" required style="width:110px" type="number" placeholder="Required" /></div>
 <div class="field"><label>Use in plan</label><select id="nf-use"><option value="recipe">Recipe ingredient</option><option value="direct">Direct / bulk roughage</option></select></div>
 <button type="button" class="btn btn-green" id="addFeedType">+ Add feed</button>
 </div>

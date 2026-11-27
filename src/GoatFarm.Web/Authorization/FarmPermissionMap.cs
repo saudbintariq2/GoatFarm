@@ -261,6 +261,7 @@ public static class FarmPermissionMap
             ["BackupCenter.ClearFarmData"] = (FarmTabs.Backup, FarmActions.Edit),
             ["BackupCenter.DownloadStored"] = (FarmTabs.Backup, FarmActions.View),
             ["BackupCenter.ExportCsv"] = (FarmTabs.Backup, FarmActions.View),
+            ["BackupCenter.RunNow"] = (FarmTabs.Backup, FarmActions.Edit),
 
             ["Finance.LedgerData"] = (FarmTabs.Finance, FarmActions.View),
             ["Finance.SaveMoneyAccount"] = (FarmTabs.Finance, FarmActions.Edit),

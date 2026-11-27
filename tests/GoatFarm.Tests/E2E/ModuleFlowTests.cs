@@ -25,7 +25,7 @@ public class ModuleFlowTests
     private async Task<BrowserSession> AdminAsync()
     {
         Skip.If(_app.SkipReason is not null, _app.SkipReason);
-        var s = await BrowserSession.LoginAsync(_app, IdentitySeedHelper.DefaultAdminEmail, IdentitySeedHelper.DefaultAdminPassword);
+        var s = await BrowserSession.LoginAsync(_app, IdentitySeedHelper.DevAdminEmail, IdentitySeedHelper.DevAdminPassword);
         s.Page.Dialog += (_, d) => _ = d.DismissAsync();
         return s;
     }
@@ -223,17 +223,15 @@ public class ModuleFlowTests
         await page.ClickAsync("#addProd");
         await Expect(page.Locator("#toastHost")).ToContainTextAsync("Milk collection added");
 
-        await page.FillAsync("#s-liters", "10");
-        await page.FillAsync("#s-rate", "180");
-        await page.FillAsync("#s-note", "sale " + id);
-        await page.ClickAsync("#addSale");
-        await Expect(page.Locator("#toastHost")).ToContainTextAsync("Milk sale added");
+        // N2 — legacy Milk › Sale is closed; sales belong under Products › Sales.
+        var saleRes = await s.ApiAsync("POST", "/Milk/AddSale", new { date = Today(), liters = 10, rate = 180, comment = "sale " + id });
+        Assert.Equal(409, saleRes.Status);
+        Assert.Equal(0, await Sql($"select count(*) from \"MilkSales\" where \"Comment\" = 'sale {id}'"));
 
         await page.ReloadAsync();
         await Expect(page.Locator("#prodRows tr.milk-prod-row", new() { HasText = id })).ToContainTextAsync("<img src=x");
         await AssertNoScriptRanAsync(page);
         Assert.Equal(1, await Sql($"select count(*) from \"MilkProductions\" where \"Comment\" like '%{id}' and \"Liters\" = 12.5"));
-        Assert.Equal(1800, await Sql($"select \"Amount\"::bigint from \"MilkSales\" where \"Comment\" = 'sale {id}'"));
 
         var viewer = await CreateUserAsync(s, "Staff", new Dictionary<string, object>
         {

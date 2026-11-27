@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<IStatisticsService, StatisticsService>();
         services.AddScoped<IFarmMetricsService, FarmMetricsService>();
         services.Configure<BackupOptions>(configuration.GetSection(BackupOptions.SectionName));
+        services.AddSingleton(_ => S3OffsiteBackupStore.FromConfiguration(configuration));
         services.AddScoped<IBackupService, BackupService>();
         services.AddHostedService<ScheduledBackupHostedService>();
         services.AddScoped<IReportsService, ReportsService>();

@@ -70,12 +70,12 @@ internal static class BreedingReportsAssembler
         var kidsExpected = o.ExpKids > 0 ? o.ExpKids : (int)Math.Round(o.Preg * 1.7);
 
         string dz(int n) => n == 1 ? "doe" : "does";
-        var pctCrossPreg = BreedingReportAggregator.Pct(o.Preg, o.Crossed);
+        var pctCrossPreg = BreedingReportAggregator.Pct(o.Preg, o.Scanned);
         var pctWeanBorn = BreedingReportAggregator.Pct(o.Weaned, o.Born);
         var onMilk = o.Alive - o.WeanDue;
         var headline = done
-            ? $"<b>{WebUtility.HtmlEncode(batch.Name)}{WebUtility.HtmlEncode(buckLab)}:</b> {o.Crossed} {dz(o.Crossed)} crossed → <b>{o.Preg} pregnant</b> ({pctCrossPreg}%) → {o.Kidded} kidded → <b>{o.Born} kids</b> born → <b>{o.Weaned} weaned</b> ({pctWeanBorn}% of kids{(onMilk > 0 ? ", " + onMilk + " still on milk" : "")})."
-            : $"<b>{WebUtility.HtmlEncode(batch.Name)}{WebUtility.HtmlEncode(buckLab)} — in progress:</b> {o.Crossed} {dz(o.Crossed)} crossed → <b>{o.Preg} pregnant</b> so far ({pctCrossPreg}%){(o.Kidded > 0 ? " → " + o.Kidded + " kidded, " + o.Born + " kids born" : "")}. About <b>{kidsExpected} kids</b> expected from the scans.";
+            ? $"<b>{WebUtility.HtmlEncode(batch.Name)}{WebUtility.HtmlEncode(buckLab)}:</b> {o.Crossed} {dz(o.Crossed)} crossed → <b>{o.Preg} pregnant</b> ({pctCrossPreg}% of {o.Scanned} scanned) → {o.Kidded} kidded → <b>{o.Born} kids</b> born → <b>{o.Weaned} weaned</b> ({pctWeanBorn}% of kids{(onMilk > 0 ? ", " + onMilk + " still on milk" : "")})."
+            : $"<b>{WebUtility.HtmlEncode(batch.Name)}{WebUtility.HtmlEncode(buckLab)} — in progress:</b> {o.Crossed} {dz(o.Crossed)} crossed → <b>{o.Preg} pregnant</b> so far ({pctCrossPreg}% of {o.Scanned} scanned){(o.Kidded > 0 ? " → " + o.Kidded + " kidded, " + o.Born + " kids born" : "")}. About <b>{kidsExpected} kids</b> expected from the scans.";
 
         var seasons = season.Batches.Select(b =>
         {
@@ -127,8 +127,8 @@ internal static class BreedingReportsAssembler
     {
         var tiles = new (string key, string name, double? v, string u, bool hi, string say)[]
         {
-            ("preg", "Pregnancy rate", o.Crossed > 0 ? BreedingReportAggregator.Pct(o.Preg, o.Crossed) : null, "%", true,
-                $"{o.Preg} of {o.Crossed} does got pregnant"),
+            ("preg", "Pregnancy rate", o.Scanned > 0 ? BreedingReportAggregator.Pct(o.Preg, o.Scanned) : null, "%", true,
+                o.Scanned > 0 ? $"{o.Preg} of {o.Scanned} scanned does got pregnant" : "No scan results yet"),
             ("kpd", "Kids per doe crossed", done && o.Crossed > 0 ? Math.Round(o.Born / (double)o.Crossed, 2) : null, "", true,
                 done ? $"{o.Born} kids from {o.Crossed} does" : ""),
             ("surv", "Kids alive to weaning", done && o.WeanDue > 0 ? BreedingReportAggregator.Pct(o.Weaned, o.WeanDue) : null, "%", true,
@@ -291,7 +291,7 @@ internal static class BreedingReportsAssembler
 
         var metricDefs = new List<(string name, Func<BreedingReportAgg, double> fn, string unit)>
         {
-            ("Pregnancy rate", x => BreedingReportAggregator.Pct(x.Preg, x.Crossed), "%")
+            ("Pregnancy rate", x => BreedingReportAggregator.Pct(x.Preg, x.Scanned), "%")
         };
         if (done)
         {

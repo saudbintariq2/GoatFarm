@@ -19,7 +19,7 @@ public class AssistantFlowTests
     {
         Skip.If(_app.SkipReason is not null, _app.SkipReason);
         await using var s = await BrowserSession.LoginAsync(
-            _app, IdentitySeedHelper.DefaultAdminEmail, IdentitySeedHelper.DefaultAdminPassword);
+            _app, IdentitySeedHelper.DevAdminEmail, IdentitySeedHelper.DevAdminPassword);
         var page = s.Page;
 
         await page.GotoAsync("/Dashboard");
@@ -116,7 +116,7 @@ public class AssistantFlowTests
     {
         Skip.If(_app.SkipReason is not null, _app.SkipReason);
         await using var s = await BrowserSession.LoginAsync(
-            _app, IdentitySeedHelper.DefaultAdminEmail, IdentitySeedHelper.DefaultAdminPassword);
+            _app, IdentitySeedHelper.DevAdminEmail, IdentitySeedHelper.DevAdminPassword);
         var page = s.Page;
 
         await s.Context.AddInitScriptAsync("""

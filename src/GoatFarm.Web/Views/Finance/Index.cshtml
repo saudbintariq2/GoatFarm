@@ -171,7 +171,7 @@
             @if (integ.UnfundedLivestockGap > 1)
             {
                 <div class="field"><label>&nbsp;</label>
-                    <button type="button" class="btn btn-amber" id="fin-fund-livestock-btn" title="FN1 staging">Post livestock as owner funding (Rs @integ.UnfundedLivestockGap.ToString("N0"))</button>
+                    <button type="button" class="btn btn-amber" id="fin-fund-livestock-btn" title="Non-cash: Bank &amp; Cash does not change">Post livestock as owner funding — non-cash (Rs @integ.UnfundedLivestockGap.ToString("N0"))</button>
                 </div>
             }
             <div class="field"><label>&nbsp;</label>
@@ -462,23 +462,23 @@
 
 <div class="finview" id="fin-cash" style="@Pane("cash")">
 @{
-    var cashNet = income + Model.OwnerInvestmentMonthTotal - expense - Model.GoatsBoughtMonth - capexTotal;
+    var cf = Model.CashFlow;
+    var cashNet = cf.MoneyIn - cf.MoneyOut;
 }
 <div class="panel">
 <div class="panel-head"><h2>Cash flow</h2><span class="sub" id="cfSub">@plFrom → @plTo</span></div>
 <div class="panel-body">
-<div class="note" style="margin:0 0 14px"><b>Profit is not cash.</b> This shows money moving: it includes what you put in and what you spent on goats and projects — things the profit statement leaves out.</div>
+<div class="note" style="margin:0 0 14px"><b>Profit is not cash.</b> This shows only money that actually moved through Bank &amp; Cash. Unpaid bills, unpaid salary and credit sales are not here until they are paid.</div>
 <table class="tbl"><tbody id="cfRows">
-    <tr><td style="font-weight:700">Cash at the start (account opening balances)</td><td class="num-cell" style="color:var(--blue)">@DisplayHelper.FormatRs(Model.OpeningCash)</td></tr>
+    <tr><td style="font-weight:700">Cash at the start of the month</td><td class="num-cell" style="color:var(--blue)">@DisplayHelper.FormatRs(cf.Opening)</td></tr>
     <tr style="background:#F6F8F4"><td colspan="2" style="font-weight:800">MONEY CAME IN</td></tr>
-    <tr><td style="padding-left:22px">Customer and farm income</td><td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(income)</td></tr>
-    <tr><td style="padding-left:22px">You put in (owner funding)</td><td class="num-cell" style="color:#8a5b13">@DisplayHelper.FormatRs(Model.OwnerInvestmentMonthTotal)</td></tr>
+    @foreach (var line in cf.InLines) { <tr><td style="padding-left:22px">@line.Label</td><td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(line.Amount)</td></tr> }
+    <tr><td style="font-weight:700">Total money in</td><td class="num-cell" style="font-weight:700;color:var(--green-dark)">@DisplayHelper.FormatRs(cf.MoneyIn)</td></tr>
     <tr style="background:#F6F8F4"><td colspan="2" style="font-weight:800">MONEY WENT OUT</td></tr>
-    <tr><td style="padding-left:22px">Operating costs</td><td class="num-cell" style="color:#8a261c">– @DisplayHelper.FormatRs(expense)</td></tr>
-    <tr><td style="padding-left:22px">Goats bought</td><td class="num-cell" style="color:#8a261c">– @DisplayHelper.FormatRs(Model.GoatsBoughtMonth)</td></tr>
-    <tr><td style="padding-left:22px">Capital projects / assets this month</td><td class="num-cell" style="color:#8a261c">– @DisplayHelper.FormatRs(capexTotal)</td></tr>
+    @foreach (var line in cf.OutLines) { <tr><td style="padding-left:22px">@line.Label</td><td class="num-cell" style="color:#8a261c">– @DisplayHelper.FormatRs(line.Amount)</td></tr> }
+    <tr><td style="font-weight:700">Total money out</td><td class="num-cell" style="font-weight:700;color:#8a261c">– @DisplayHelper.FormatRs(cf.MoneyOut)</td></tr>
     <tr style="background:@(cashNet < 0 ? "var(--red-tint)" : "var(--green-tint)")"><td style="font-weight:800">Cash in or out over the period</td><td class="num-cell" style="font-weight:800">@(cashNet < 0 ? "– " : "")@DisplayHelper.FormatRs(Math.Abs(cashNet))</td></tr>
-    <tr><td style="font-weight:700">Cash held in accounts now</td><td class="num-cell" style="color:var(--blue)">@DisplayHelper.FormatRs(cashNow)</td></tr>
+    <tr><td style="font-weight:700">Cash at the end of the month</td><td class="num-cell" style="color:var(--blue)">@DisplayHelper.FormatRs(cf.Closing)</td></tr>
 </tbody></table>
 <div class="filterbar" style="margin-top:14px">
     <div class="field"><label>Opening balances (all accounts)</label><div class="price-in"><span class="pre">Rs</span><input id="cf-open" value="@Model.OpeningCash.ToString("0.##", CultureInfo.InvariantCulture)" readonly></div></div>
@@ -612,7 +612,7 @@
 @foreach (var o in Model.OwnerInvestments)
 {
     var parts = SplitFunding(o.Note);
-    <tr class="fin-row fin-owner-row" data-id="@o.Id" data-note="@parts.Purpose" data-shareholder="@parts.Who" data-funding="@(parts.Kind == "Monthly top-up" ? "topup" : "capital")" data-date="@o.DateDisplay" data-amount="@o.Amount.ToString(CultureInfo.InvariantCulture)" data-account="@(o.AccountId?.ToString() ?? "")">
+    <tr class="fin-row fin-owner-row" data-id="@o.Id" data-note="@parts.Purpose" data-shareholder="@parts.Who" data-funding="@(parts.Kind == "Monthly top-up" ? "topup" : "capital")" data-date="@o.DateDisplay" data-amount="@o.Amount.ToString(CultureInfo.InvariantCulture)" data-account="@(o.AccountId?.ToString() ?? "")" data-noncash="@(o.IsNonCash ? "1" : "")">
         <td><b>@(string.IsNullOrEmpty(parts.Who) ? "Legacy / unassigned" : parts.Who)</b></td>
         <td><span class="breed">@(string.IsNullOrEmpty(parts.Kind) ? "Capital / funding" : parts.Kind)</span></td>
         <td>@parts.Purpose</td>

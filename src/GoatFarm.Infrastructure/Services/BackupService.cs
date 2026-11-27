@@ -16,19 +16,22 @@ public partial class BackupService : Application.Interfaces.IBackupService
     private readonly IHostEnvironment? _hostEnvironment;
     private readonly ILedgerService? _ledger;
     private readonly ILookupService? _lookup;
+    private readonly IOffsiteBackupStore _offsite;
 
     public BackupService(
         GoatFarmDbContext context,
         ILedgerService? ledger = null,
         ILookupService? lookup = null,
         IOptions<BackupOptions>? backupOptions = null,
-        IHostEnvironment? hostEnvironment = null)
+        IHostEnvironment? hostEnvironment = null,
+        IOffsiteBackupStore? offsite = null)
     {
         _context = context;
         _ledger = ledger;
         _lookup = lookup;
         _backupOptions = backupOptions?.Value ?? new BackupOptions();
         _hostEnvironment = hostEnvironment;
+        _offsite = offsite ?? new NullOffsiteBackupStore();
     }
 
     public static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
@@ -128,6 +131,7 @@ public partial class BackupService : Application.Interfaces.IBackupService
                 .Where(s => s.Key.StartsWith("Lookup."))
                 .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken),
             v241Extended = await BackupV241Helper.ExportAsync(_context, cancellationToken),
+            native = await BackupNativeHelper.ExportAsync(_context, cancellationToken),
             _savedAt = DateTime.UtcNow
         };
     }
@@ -206,7 +210,10 @@ public partial class BackupService : Application.Interfaces.IBackupService
                 _context.FarmTasks.RemoveRange(await _context.FarmTasks.ToListAsync(ct));
                 await _context.SaveChangesAsync(ct);
             }
-            await BackupImportHelper.ImportAsync(_context, root, ct);
+            if (BackupNativeHelper.HasNativeSection(root))
+                await BackupNativeHelper.ImportAsync(_context, root, ct);
+            else
+                await BackupImportHelper.ImportAsync(_context, root, ct);
             await transaction.CommitAsync(ct);
         }, cancellationToken);
         _context.ChangeTracker.Clear();

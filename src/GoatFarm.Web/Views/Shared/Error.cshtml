@@ -1,10 +1,13 @@
 ﻿@{
     ViewData["Title"] = "Error";
+    var refId = Context.Request.Query["ref"].ToString();
+    var refOk = refId.Length is > 0 and <= 8 && refId.All(char.IsDigit);
 }
 <div class="panel" style="margin-top:40px">
     <div class="panel-body empty">
         <h2 style="margin-bottom:12px">Something went wrong</h2>
         <p>We're sorry — an unexpected error occurred. Please try again or contact support.</p>
+        @if (refOk) { <p style="margin-top:8px">Reference: <b>@refId</b> — quote this number when you report the problem.</p> }
         <p style="margin-top:16px"><a asp-controller="Goat" asp-action="Index" class="btn btn-green">Back to Herd</a></p>
     </div>
 </div>

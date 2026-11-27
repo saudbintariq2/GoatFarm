@@ -11,8 +11,12 @@ namespace GoatFarm.Tests;
 
 public class FinanceMoneyAccountTests
 {
-    private static FinanceService CreateService(GoatFarmDbContext db) =>
-        new(db, feedService: null!, milkService: null!, vaccineService: null!);
+    private static FinanceService CreateService(GoatFarmDbContext db)
+    {
+        var goats = TestFarmMetrics.CreateGoatService(db);
+        var metrics = TestFarmMetrics.Create(db, goats);
+        return new FinanceService(db, new FeedService(db, goats, new MilkService(db), metrics), new MilkService(db), new VaccineService(db));
+    }
 
     private static async Task<MoneyAccount> SeedBankAsync(GoatFarmDbContext db)
     {

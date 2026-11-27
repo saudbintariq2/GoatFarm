@@ -34,8 +34,8 @@ public class UiAuditScreenshotTests
             login.AssertHealthy();
         }
 
-        await using var s = await BrowserSession.LoginAsync(_app, IdentitySeedHelper.DefaultAdminEmail,
-            IdentitySeedHelper.DefaultAdminPassword, 1280, 900);
+        await using var s = await BrowserSession.LoginAsync(_app, IdentitySeedHelper.DevAdminEmail,
+            IdentitySeedHelper.DevAdminPassword, 1280, 900);
         var p = s.Page;
 
         await s.CreateGoatAsync("AUDIT1", status: "Milking", name: "Audit Doe");
@@ -74,8 +74,8 @@ public class UiAuditScreenshotTests
             await Shot(p, Path.Combine(dir, file + ".png"));
         }
 
-        await using var mobile = await BrowserSession.LoginAsync(_app, IdentitySeedHelper.DefaultAdminEmail,
-            IdentitySeedHelper.DefaultAdminPassword, 390, 844);
+        await using var mobile = await BrowserSession.LoginAsync(_app, IdentitySeedHelper.DevAdminEmail,
+            IdentitySeedHelper.DevAdminPassword, 390, 844);
         var m = mobile.Page;
         await m.GotoAsync("/Dashboard");
         await m.WaitForSelectorAsync("#navToggle");

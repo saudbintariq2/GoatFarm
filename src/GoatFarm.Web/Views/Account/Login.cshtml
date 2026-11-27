@@ -33,7 +33,7 @@
             @if (Env.IsDevelopment())
             {
                 <p class="note login-hint">Local dev accounts (passwords reset on app startup):<br/>
-                    <b>@IdentitySeedHelper.DefaultAdminEmail</b> / @IdentitySeedHelper.DefaultAdminPassword<br/>
+                    <b>@IdentitySeedHelper.DevAdminEmail</b> / @IdentitySeedHelper.DevAdminPassword<br/>
                     <b>@IdentitySeedHelper.DevUserEmail</b> / @IdentitySeedHelper.DevUserPassword</p>
             }
             <form asp-action="Login" method="post">

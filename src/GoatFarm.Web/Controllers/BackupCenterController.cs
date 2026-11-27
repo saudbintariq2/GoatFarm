@@ -54,6 +54,7 @@ public class BackupCenterController : Controller
         ViewData["ActiveTab"] = "backup";
 
         ViewBag.StoredBackups = await _backup.ListStoredBackupsAsync(cancellationToken);
+        ViewBag.BackupStatus = await _backup.GetStatusAsync(cancellationToken);
 
         ViewBag.CanRestore = string.Equals(
 
@@ -147,6 +148,20 @@ public class BackupCenterController : Controller
     }
 
 
+
+    [HttpPost]
+    public async Task<IActionResult> RunNow(CancellationToken cancellationToken)
+    {
+        var role = await _permissions.GetCurrentUserRoleAsync(cancellationToken) ?? "";
+        if (!string.Equals(role, FarmRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Only an administrator can run a backup." });
+
+        var result = await _backup.RunScheduledBackupAsync(cancellationToken);
+        await _audit.LogAsync(FarmTabs.Backup, AuditAction.Export, result.Message, UserId, UserDisplay, cancellationToken: cancellationToken);
+        return result.Success
+            ? Ok(new { success = true, message = result.Message })
+            : BadRequest(new { error = result.Message });
+    }
 
     [HttpPost]
 

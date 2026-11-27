@@ -180,6 +180,8 @@ public class FeedUsageRecord : BaseEntity
     public DateOnly Date { get; set; }
     public string FeedType { get; set; } = string.Empty;
     public decimal Kg { get; set; }
+    /// <summary>Planned kg that could not be taken because the store was empty.</summary>
+    public decimal ShortfallKg { get; set; }
     public bool IsAutomatic { get; set; }
     public bool IsStockCheck { get; set; }
 }
@@ -285,6 +287,9 @@ public class Income : BaseEntity
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
     public string? Comment { get; set; }
+    /// <summary>Null for entries typed on Finance; otherwise the module record that created it.</summary>
+    public string? SourceType { get; set; }
+    public int? SourceId { get; set; }
 }
 
 public class Expense : BaseEntity
@@ -293,6 +298,9 @@ public class Expense : BaseEntity
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
     public string? Comment { get; set; }
+    /// <summary>Null for entries typed on Finance; otherwise the module record that created it.</summary>
+    public string? SourceType { get; set; }
+    public int? SourceId { get; set; }
 }
 
 public class OwnerInvestment : BaseEntity
@@ -300,6 +308,8 @@ public class OwnerInvestment : BaseEntity
     public string Note { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateOnly Date { get; set; }
+    /// <summary>Contribution in kind (e.g. the opening herd). Counts as equity but never moves Cash/Bank.</summary>
+    public bool IsNonCash { get; set; }
 }
 
 public class MilkProduction : BaseEntity

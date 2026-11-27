@@ -104,9 +104,11 @@ public class ReportsService : IReportsService
         var ownList = ownerInv.Where(o => range.Test(o.Date)).OrderByDescending(o => o.Date).ToList();
         var ownTot = ownList.Sum(o => o.Amount);
         var feedKgT = feedBuys.Where(x => range.Test(x.Date)).Sum(x => x.Kg);
-        var milkL = milkSales.Where(x => range.Test(x.Date)).Sum(x => x.Liters);
+        // Milk income/sold litres: Products › Sales only (legacy MilkSales never counted — N2/R1/R6).
+        var milkProductSales = productSales.Where(s => range.Test(s.Date) && FinanceIncomeRules.IsMilkProduct(s.ProductName)).ToList();
+        var milkL = milkProductSales.Sum(s => s.Qty);
         var milkLp = await _farmMetrics.MilkLitresAsync(range.From, range.To, cancellationToken);
-        var milkInc = milkSales.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
+        var milkInc = milkProductSales.Sum(s => s.Amount);
         var milkLs = milkL;
         var preRevenue = incTot == 0;
 
@@ -227,6 +229,10 @@ public class ReportsService : IReportsService
         var inventory = BuildInventorySection(feedStock, feedPrices, stockVal, livestockValue, assetsValue, assets);
         var alerts = BuildAlerts(feedStock, vaccines, goats, vaccLog, confirmed, remindDays, reminders,
             weightRecords, growth.UnderperformingTags);
+        var stored = (await FarmAlertStore.LoadAsync(_context, cancellationToken))
+            .OrderBy(a => a.Severity == "critical" ? 0 : 1)
+            .Select(a => Alert(a.Severity == "critical" ? "#8a261c" : "var(--amber)", $"<b>{H(a.Message)}</b>"));
+        alerts.Items = stored.Concat(alerts.Items).ToList();
         dashboard.Alerts = alerts.Items.Take(10).ToList();
         var comparison = await BuildComparisonAsync(
             incomes, expenses, feedBuys, vaccineBuys, milkSales, milkProd, ownerInv, deaths, allGoats,
@@ -1125,13 +1131,16 @@ public class ReportsService : IReportsService
         decimal medMonthly, decimal recurMonthly, DateOnly today)
     {
         bool Match(DateOnly d) => prefix.Length == 4 ? d.Year.ToString() == prefix : d.ToString("yyyy-MM") == prefix;
-        var inc = milkSales.Where(x => Match(x.Date)).Sum(x => x.Amount)
-            + incomes.Where(x => Match(x.Date)).Sum(x => x.Amount)
+        // Never MilkSales (N2). Manual incomes + herd goat-sale incomes + product sales + unmatched invoices.
+        static bool CountIncome(Income x) =>
+            x.SourceType is null
+            || string.Equals(x.SourceType, FinanceSourceTypes.GoatSale, StringComparison.Ordinal);
+        var inc = incomes.Where(x => Match(x.Date) && CountIncome(x)).Sum(x => x.Amount)
             + productSales.Where(x => Match(x.Date)).Sum(x => x.Amount)
             + customerInvoices.Where(i => Match(i.Date) && i.Status != InvoiceStatus.Void
-                && !i.Description.StartsWith("Product sale:", StringComparison.Ordinal)
-                && !i.Description.StartsWith("Live goat sale", StringComparison.Ordinal))
+                && !FinanceIncomeRules.IsSaleGeneratedInvoice(i.Description))
                 .Sum(i => i.Amount);
+        _ = milkSales; // retained for call-site compatibility; not used in income (N2)
         var months = prefix.Length == 4 ? (prefix == today.Year.ToString() ? today.Month : 12) : 1;
         var exp = feedBuys.Where(x => Match(x.Date)).Sum(x => x.Amount)
             + vaccineBuys.Where(x => Match(x.Date)).Sum(x => x.Amount)
@@ -1298,40 +1307,6 @@ public class ReportsService : IReportsService
         new() { Color = color, Html = html };
 
     private static string H(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
-
-    private Dictionary<string, decimal> BuildIncomeMap(
-        IReadOnlyList<Income> incomes, IReadOnlyList<MilkSale> milkSales, ReportRange range)
-    {
-        var map = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        var milkInc = milkSales.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
-        if (milkInc > 0) map["Milk sales"] = milkInc;
-        foreach (var i in incomes.Where(x => range.Test(x.Date)))
-            map[i.Type] = map.GetValueOrDefault(i.Type) + i.Amount;
-        return map;
-    }
-
-    private Dictionary<string, decimal> BuildExpenseMap(
-        IReadOnlyList<Expense> expenses, IReadOnlyList<FeedPurchase> feedBuys,
-        IReadOnlyList<VaccinePurchase> vaccineBuys, IReadOnlyList<RecurringCost> recurring, ReportRange range)
-    {
-        var map = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        var feedT = feedBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
-        if (feedT > 0) map["Feed bought"] = feedT;
-        var vT = vaccineBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
-        if (vT > 0) map["Vaccines bought"] = vT;
-        var salT = _financeService.GetStaffSalaryMonthlyTotal() * range.MonthCount;
-        if (salT > 0) map["Staff salaries"] = salT;
-        var medT = _feedService.CalculateFarmMedicineMonthly() * range.MonthCount;
-        if (medT > 0) map["Medicine (estimate)"] = medT;
-        foreach (var rc in recurring)
-        {
-            var v = (rc.Period == RecurringCostPeriod.Year ? rc.Amount / 12m : rc.Amount) * range.MonthCount;
-            if (v > 0) map[rc.Name] = map.GetValueOrDefault(rc.Name) + v;
-        }
-        foreach (var e in expenses.Where(x => range.Test(x.Date) && !FinanceExpenseRules.IsDuplicateVaccinePurchase(x.Type)))
-            map[e.Type] = map.GetValueOrDefault(e.Type) + e.Amount;
-        return map;
-    }
 
     private static List<ReportCategoryRowViewModel> ToCategoryRows(Dictionary<string, decimal> map, decimal total, decimal feedKg)
     {

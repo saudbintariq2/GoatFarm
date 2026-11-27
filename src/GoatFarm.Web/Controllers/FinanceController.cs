@@ -73,7 +73,7 @@ public class FinanceController : Controller
         if (needsFullLedger)
         {
             ViewBag.LedgerPage = await _ledgerService.GetPageAsync(month, cancellationToken);
-            ViewBag.Statements = await _ledgerService.GetStatementsAsync(month, cancellationToken);
+            ViewBag.Statements = await GetStatementsWithProfitAsync(month, cancellationToken);
         }
         else
         {
@@ -90,8 +90,18 @@ public class FinanceController : Controller
         Json(new
         {
             ledger = await _ledgerService.GetPageAsync(month, cancellationToken),
-            statements = await _ledgerService.GetStatementsAsync(month, cancellationToken)
+            statements = await GetStatementsWithProfitAsync(month, cancellationToken)
         });
+
+    private async Task<FinancialStatementsViewModel> GetStatementsWithProfitAsync(string? month, CancellationToken cancellationToken)
+    {
+        var statements = await _ledgerService.GetStatementsAsync(month, cancellationToken);
+        var snapshot = await _financeService.GetFinanceMonthSnapshotAsync(month, cancellationToken);
+        statements.Revenue = snapshot.TotalIncome;
+        statements.Expenses = snapshot.TotalExpense;
+        statements.NetProfit = snapshot.Profit;
+        return statements;
+    }
 
     [HttpPost]
     public async Task<IActionResult> SaveMoneyAccount([FromBody] SaveMoneyAccountViewModel model, CancellationToken cancellationToken)

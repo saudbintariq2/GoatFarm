@@ -101,8 +101,12 @@ public class Phase8FeedProductsTests
     });
     await db.SaveChangesAsync();
 
+    var cash = new MoneyAccount { Name = "Farm Cash", Kind = MoneyAccountKind.Cash, IsActive = true };
+    db.MoneyAccounts.Add(cash);
+    await db.SaveChangesAsync();
+
     var products = CreateProducts(db);
-    await products.SaveProductSaleAsync(new SaveProductSaleViewModel
+    await Assert.ThrowsAsync<InvalidOperationException>(() => products.SaveProductSaleAsync(new SaveProductSaleViewModel
     {
       Date = TestDb.Today,
       ProductId = prod.Id,
@@ -110,12 +114,27 @@ public class Phase8FeedProductsTests
       ProductName = "Raw milk",
       Qty = 10,
       Rate = 120
+    }));
+    await products.SaveProductSaleAsync(new SaveProductSaleViewModel
+    {
+      Date = TestDb.Today,
+      ProductId = prod.Id,
+      WarehouseId = wh.Id,
+      ProductName = "Raw milk",
+      Qty = 10,
+      Rate = 120,
+      AccountId = cash.Id
     });
     var sale = await db.ProductSales.SingleAsync();
     Assert.StartsWith("SF-202", sale.InvoiceNo);
     Assert.Contains("-K7Q-", sale.InvoiceNo);
     var move = db.StockMovements.Single(m => m.Type == StockMovementType.Issue);
     Assert.Equal(10, move.Qty);
+    var tx = await db.LedgerTransactions.SingleAsync();
+    Assert.Equal($"product_sale:{sale.Id}", tx.Reference);
+    Assert.Equal(1200, tx.Amount);
+    Assert.Equal(cash.Id, tx.AccountId);
+    Assert.Equal(LedgerTransactionKind.Income, tx.Kind);
   }
 
   [Fact]

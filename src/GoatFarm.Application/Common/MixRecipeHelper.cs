@@ -119,6 +119,19 @@ public static class MixRecipeHelper
         return total > 0 ? MixBatchCost(recipe, prices, mixFeedKeys) / total : 0;
     }
 
+    /// <summary>Ingredients in the batch (kg &gt; 0) with no usable price.</summary>
+    public static IReadOnlyList<string> MissingPriceKeys(
+        IReadOnlyDictionary<string, decimal> recipe,
+        IReadOnlyDictionary<string, decimal> prices,
+        IEnumerable<string> mixFeedKeys) =>
+        mixFeedKeys.Where(k => recipe.GetValueOrDefault(k) > 0 && prices.GetValueOrDefault(k) <= 0).ToList();
+
+    public static bool HasMissingPrice(
+        IReadOnlyDictionary<string, decimal> recipe,
+        IReadOnlyDictionary<string, decimal> prices,
+        IEnumerable<string> mixFeedKeys) =>
+        MissingPriceKeys(recipe, prices, mixFeedKeys).Count > 0;
+
     public static decimal PlanDailyFeedCost(decimal mixKgPerDay, decimal mixCostPerKg) =>
         mixKgPerDay * mixCostPerKg;
 }

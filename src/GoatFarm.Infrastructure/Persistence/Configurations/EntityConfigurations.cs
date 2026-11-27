@@ -223,6 +223,8 @@ public class IncomeConfiguration : IEntityTypeConfiguration<Income>
         builder.Property(x => x.Type).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.Comment).HasMaxLength(500);
+        builder.Property(x => x.SourceType).HasMaxLength(40);
+        builder.HasIndex(x => new { x.SourceType, x.SourceId });
     }
 }
 
@@ -235,6 +237,8 @@ public class ExpenseConfiguration : IEntityTypeConfiguration<Expense>
         builder.Property(x => x.Type).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.Comment).HasMaxLength(500);
+        builder.Property(x => x.SourceType).HasMaxLength(40);
+        builder.HasIndex(x => new { x.SourceType, x.SourceId });
     }
 }
 
@@ -490,6 +494,7 @@ public class FeedUsageRecordConfiguration : IEntityTypeConfiguration<FeedUsageRe
         builder.HasKey(x => x.Id);
         builder.Property(x => x.FeedType).IsRequired().HasMaxLength(50);
         builder.Property(x => x.Kg).HasPrecision(18, 3);
+        builder.Property(x => x.ShortfallKg).HasPrecision(18, 3);
         builder.HasIndex(x => x.Date);
     }
 }

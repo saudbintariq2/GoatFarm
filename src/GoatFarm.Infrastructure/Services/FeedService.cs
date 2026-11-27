@@ -168,7 +168,7 @@ public class FeedService : IFeedService
         var kidDietState = await LoadKidMilkDietAsync(cancellationToken);
         var dailyUse = AugmentDailyUseWithKidDiet(
             BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, activeMonths),
-            herd, kidDietState.Months, allRecipes, mixFeedKeys);
+            herd, KidMilkDietHelper.ActiveMonths(kidDietState), allRecipes, mixFeedKeys);
 
         var stockFeeds = feedCatalog.Where(f => FeedTypes.IsPurchasable(f.FeedType)).ToList();
 
@@ -176,7 +176,8 @@ public class FeedService : IFeedService
 
         var usedTotals = await GetUsedTotalsAsync(cancellationToken);
 
-        var stock = BuildStockRows(stockFeeds, dailyUse, prices, purchasedTotals, usedTotals, feedSettings);
+        var stock = BuildStockRows(stockFeeds, dailyUse, prices, purchasedTotals, usedTotals, feedSettings,
+            await GetShortTotalsAsync(cancellationToken));
 
         var storeStats = BuildStoreStats(stock, dailyUse, prices);
 
@@ -242,6 +243,8 @@ public class FeedService : IFeedService
                 FodderDryKgPerDay = plan.FodderDryKgPerDay,
                 FodderCostPerGoatPerDay = fodderCostPerGoat,
                 MixCostPerKg = statusMixCost,
+                PriceMissing = (plan.MixKgPerDay > 0 && MixRecipeHelper.HasMissingPrice(statusRecipe, prices, mixFeedKeys))
+                    || (plan.FodderDryKgPerDay > 0 && dryPrice <= 0),
                 DailyCostPerGoat = dailyPerGoat,
                 MedicineCostPerGoatPerMonth = plan.MedicineCostPerGoatPerMonth,
                 MonthlyTotal = feedM,
@@ -317,6 +320,8 @@ public class FeedService : IFeedService
                 FodderDryKgPerDay = fg.FodderDryKgPerDay,
                 FodderCostPerGoatPerDay = fodderCostPerGoat,
                 MixCostPerKg = statusMixCost,
+                PriceMissing = (fg.MixKgPerDay > 0 && MixRecipeHelper.HasMissingPrice(statusRecipe, prices, mixFeedKeys))
+                    || (fg.FodderDryKgPerDay > 0 && dryPrice <= 0),
                 DailyCostPerGoat = dailyPerGoat,
                 MonthlyTotal = feedM,
                 IsCustomGroup = true,
@@ -536,6 +541,9 @@ public class FeedService : IFeedService
 
     {
 
+        if (price < 1)
+            throw new InvalidOperationException("Enter a price of at least Rs 1 per kg — a feed cannot cost Rs 0.");
+
         var entity = await _context.FeedPrices.FirstOrDefaultAsync(p => p.FeedType == feedType, cancellationToken);
 
         if (entity is null) return;
@@ -729,7 +737,9 @@ public class FeedService : IFeedService
 
                 Amount = i.Amount,
 
-                PaidDate = string.IsNullOrWhiteSpace(i.PaidDate) ? null : DateOnly.Parse(i.PaidDate),
+                PaidDate = !string.IsNullOrWhiteSpace(i.PaidDate) ? DateOnly.Parse(i.PaidDate)
+                    : i.Amount > 0 && i.AccountId is > 0 ? DateOnly.FromDateTime(DateTime.Today)
+                    : null,
 
                 AllocateMonths = FodderPoolHelper.EffectiveMonths(i.AllocateMonths),
 
@@ -741,9 +751,11 @@ public class FeedService : IFeedService
 
         };
 
-        await SaveFodderPoolDtoAsync(dto, cancellationToken);
-
-        await SyncFodderPoolFinanceAsync(dto, cancellationToken);
+        await _context.ExecuteInTransactionAsync(async () =>
+        {
+            await SaveFodderPoolDtoAsync(dto, cancellationToken);
+            await SyncFodderPoolFinanceAsync(dto, cancellationToken);
+        }, cancellationToken);
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
@@ -785,8 +797,11 @@ public class FeedService : IFeedService
 
         });
 
-        await SaveFodderPoolDtoAsync(dto, cancellationToken);
-        await SyncFodderPoolFinanceAsync(dto, cancellationToken);
+        await _context.ExecuteInTransactionAsync(async () =>
+        {
+            await SaveFodderPoolDtoAsync(dto, cancellationToken);
+            await SyncFodderPoolFinanceAsync(dto, cancellationToken);
+        }, cancellationToken);
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
@@ -809,8 +824,11 @@ public class FeedService : IFeedService
 
         dto.Items.RemoveAll(i => i.Id == itemId);
 
-        await SaveFodderPoolDtoAsync(dto, cancellationToken);
-        await SyncFodderPoolFinanceAsync(dto, cancellationToken);
+        await _context.ExecuteInTransactionAsync(async () =>
+        {
+            await SaveFodderPoolDtoAsync(dto, cancellationToken);
+            await SyncFodderPoolFinanceAsync(dto, cancellationToken);
+        }, cancellationToken);
 
         var plans = await _context.FeedPlans.AsNoTracking().ToListAsync(cancellationToken);
 
@@ -926,6 +944,7 @@ public class FeedService : IFeedService
 
         var applied = 0;
         var day = lastDate;
+        var shortToday = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         while (day < today && applied < 120)
         {
             day = day.AddDays(1);
@@ -936,25 +955,33 @@ public class FeedService : IFeedService
 
             foreach (var (feedType, kgPerDay) in dailyUse)
             {
-                var kg = Math.Round(kgPerDay, 2);
-                if (kg <= 0) continue;
+                var needKg = Math.Round(kgPerDay, 2);
+                if (needKg <= 0) continue;
+
+                var price = priceEntities.FirstOrDefault(p =>
+                    string.Equals(p.FeedType, feedType, StringComparison.OrdinalIgnoreCase));
+                var inStore = Math.Max(0, price?.StockKg ?? 0);
+                var takeKg = Math.Min(needKg, inStore);
+                var shortKg = needKg - takeKg;
 
                 _context.FeedUsageRecords.Add(new FeedUsageRecord
                 {
                     Date = day,
                     FeedType = feedType,
-                    Kg = kg,
+                    Kg = takeKg,
+                    ShortfallKg = shortKg,
                     IsAutomatic = true,
                     IsStockCheck = false
                 });
 
-                var price = priceEntities.FirstOrDefault(p =>
-                    string.Equals(p.FeedType, feedType, StringComparison.OrdinalIgnoreCase));
                 if (price is not null)
                 {
-                    price.StockKg = Math.Max(0, price.StockKg - kg);
+                    price.StockKg = inStore - takeKg;
                     price.UpdatedDate = DateTime.UtcNow;
                 }
+
+                if (shortKg > 0) shortToday[feedType] = shortKg;
+                else shortToday.Remove(feedType);
             }
             applied++;
         }
@@ -967,11 +994,51 @@ public class FeedService : IFeedService
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        foreach (var feedType in feedTypesNeeded)
+        {
+            if (shortToday.TryGetValue(feedType, out var shortKg))
+            {
+                var name = feedCatalog.FirstOrDefault(f => string.Equals(f.FeedType, feedType, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                    ?? priceEntities.FirstOrDefault(p => string.Equals(p.FeedType, feedType, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                    ?? feedType;
+                await FarmAlertStore.RaiseAsync(_context, new FarmAlert
+                {
+                    Key = ShortageAlertKey(feedType),
+                    Severity = "critical",
+                    Message = $"{name}: short {shortKg:0.#} kg today – not in store",
+                    Href = "/Feed?tab=purchases"
+                }, cancellationToken);
+            }
+            else
+            {
+                await FarmAlertStore.ClearAsync(_context, ShortageAlertKey(feedType), cancellationToken);
+            }
+        }
+
         return applied;
 
     }
 
 
+
+    private static string ShortageAlertKey(string feedType) => "feed-short:" + feedType.ToLowerInvariant();
+
+    private async Task ClearShortageAlertsForStockedFeedsAsync(CancellationToken cancellationToken)
+    {
+        var alerts = await FarmAlertStore.LoadAsync(_context, cancellationToken);
+        var shortKeys = alerts.Where(a => a.Key.StartsWith("feed-short:", StringComparison.Ordinal)).Select(a => a.Key).ToList();
+        if (shortKeys.Count == 0) return;
+        var stocked = await _context.FeedPrices.AsNoTracking()
+            .Where(p => p.StockKg > 0)
+            .Select(p => p.FeedType)
+            .ToListAsync(cancellationToken);
+        foreach (var feedType in stocked)
+        {
+            var key = ShortageAlertKey(feedType);
+            if (shortKeys.Contains(key))
+                await FarmAlertStore.ClearAsync(_context, key, cancellationToken);
+        }
+    }
 
     public async Task<StockCheckResultViewModel> SaveStockCheckAsync(SaveStockCheckViewModel model, CancellationToken cancellationToken = default)
 
@@ -1063,6 +1130,7 @@ public class FeedService : IFeedService
         await SaveFeedSettingsDtoAsync(settings, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
+        await ClearShortageAlertsForStockedFeedsAsync(cancellationToken);
 
 
 
@@ -1127,10 +1195,11 @@ public class FeedService : IFeedService
 
 
 
-    public async Task<FeedPurchaseViewModel> AddFeedPurchaseAsync(CreateFeedPurchaseViewModel model, CancellationToken cancellationToken = default)
+    public Task<FeedPurchaseViewModel> AddFeedPurchaseAsync(CreateFeedPurchaseViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => AddFeedPurchaseCoreAsync(model, cancellationToken), cancellationToken);
 
+    private async Task<FeedPurchaseViewModel> AddFeedPurchaseCoreAsync(CreateFeedPurchaseViewModel model, CancellationToken cancellationToken)
     {
-
         await EnsurePurchasableFeedAsync(model.FeedType, cancellationToken);
         var mapped = MapPurchasePayment(model);
         var entity = new FeedPurchase
@@ -1158,6 +1227,7 @@ public class FeedService : IFeedService
         await SyncFeedPurchasePlExpensesAsync(entity, cancellationToken);
         await RefreshPurchaseRateAsync(model.FeedType, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+        await ClearShortageAlertsForStockedFeedsAsync(cancellationToken);
         return await ToPurchaseVmAsync(entity, cancellationToken);
 
     }
@@ -1171,10 +1241,11 @@ public class FeedService : IFeedService
             throw new InvalidOperationException("Pick a feed from the list.");
     }
 
-    public async Task<FeedPurchaseViewModel?> UpdateFeedPurchaseAsync(int id, CreateFeedPurchaseViewModel model, CancellationToken cancellationToken = default)
+    public Task<FeedPurchaseViewModel?> UpdateFeedPurchaseAsync(int id, CreateFeedPurchaseViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => UpdateFeedPurchaseCoreAsync(id, model, cancellationToken), cancellationToken);
 
+    private async Task<FeedPurchaseViewModel?> UpdateFeedPurchaseCoreAsync(int id, CreateFeedPurchaseViewModel model, CancellationToken cancellationToken)
     {
-
         var entity = await _context.FeedPurchases.FindAsync([id], cancellationToken);
 
         if (entity is null) return null;
@@ -1235,16 +1306,18 @@ public class FeedService : IFeedService
         if (!string.Equals(oldFeedType, model.FeedType, StringComparison.OrdinalIgnoreCase))
             await RefreshPurchaseRateAsync(model.FeedType, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+        await ClearShortageAlertsForStockedFeedsAsync(cancellationToken);
         return await ToPurchaseVmAsync(entity, cancellationToken);
 
     }
 
 
 
-    public async Task<bool> DeleteFeedPurchaseAsync(int id, CancellationToken cancellationToken = default)
+    public Task<bool> DeleteFeedPurchaseAsync(int id, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => DeleteFeedPurchaseCoreAsync(id, cancellationToken), cancellationToken);
 
+    private async Task<bool> DeleteFeedPurchaseCoreAsync(int id, CancellationToken cancellationToken)
     {
-
         var entity = await _context.FeedPurchases.FindAsync([id], cancellationToken);
 
         if (entity is null) return false;
@@ -1252,6 +1325,7 @@ public class FeedService : IFeedService
         var feedType = entity.FeedType;
         await AdjustFeedStockAsync(entity.FeedType, -entity.Kg, cancellationToken: cancellationToken);
         await ReversePurchaseMoneyAsync(entity.Id, cancellationToken);
+        await SyncPurchasePayableAsync(entity, deleted: true, cancellationToken);
         _context.FeedPurchases.Remove(entity);
         await _context.SaveChangesAsync(cancellationToken);
         await RefreshPurchaseRateAsync(feedType, cancellationToken);
@@ -1297,6 +1371,7 @@ public class FeedService : IFeedService
         entity.UpdatedDate = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+        await ClearShortageAlertsForStockedFeedsAsync(cancellationToken);
 
     }
 
@@ -1305,6 +1380,8 @@ public class FeedService : IFeedService
     public async Task<FeedPriceViewModel> AddFeedTypeAsync(AddFeedTypeViewModel model, CancellationToken cancellationToken = default)
 
     {
+        if (model.PricePerKg < 1)
+            throw new InvalidOperationException("Enter a price of at least Rs 1 per kg (or leave the feed off recipes until the price is known).");
 
         var displayName = model.DisplayName.Trim();
 
@@ -1547,7 +1624,7 @@ public class FeedService : IFeedService
 
         var dailyUse = AugmentDailyUseWithKidDiet(
             BuildDailyUseMap(plans, allRecipes, mixFeedKeys, herd, customGroups, feedCatalog, directPlans, seasonAsOf, feedSettings.ActiveMonthsByFeed),
-            herd, kidDietState.Months, allRecipes, mixFeedKeys);
+            herd, KidMilkDietHelper.ActiveMonths(kidDietState), allRecipes, mixFeedKeys);
 
         var stockFeeds = feedCatalog.Where(f => FeedTypes.IsPurchasable(f.FeedType)).ToList();
 
@@ -1555,7 +1632,8 @@ public class FeedService : IFeedService
 
         var usedTotals = await GetUsedTotalsAsync(cancellationToken);
 
-        return BuildStockRows(stockFeeds, dailyUse, prices, purchasedTotals, usedTotals, feedSettings);
+        return BuildStockRows(stockFeeds, dailyUse, prices, purchasedTotals, usedTotals, feedSettings,
+            await GetShortTotalsAsync(cancellationToken));
 
     }
 
@@ -1569,9 +1647,14 @@ public class FeedService : IFeedService
 
         var catalog = await _context.FeedPrices.Where(p => FeedTypes.IsPurchasable(p.FeedType)).ToListAsync(cancellationToken);
 
-        var purchasedTotals = await GetPurchasedTotalsAsync(cancellationToken);
-
-        var usedTotals = await GetUsedTotalsAsync(cancellationToken);
+        var purchasesByFeed = (await _context.FeedPurchases.AsNoTracking()
+                .Select(p => new { p.FeedType, p.Date, p.Kg })
+                .ToListAsync(cancellationToken))
+            .GroupBy(p => p.FeedType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Select(p => (p.Date, p.Kg)).ToList(), StringComparer.OrdinalIgnoreCase);
+        var usageByFeed = (await _context.FeedUsageRecords.ToListAsync(cancellationToken))
+            .GroupBy(u => u.FeedType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
         var adjusted = 0;
 
@@ -1579,13 +1662,12 @@ public class FeedService : IFeedService
 
         {
 
-            var purchased = purchasedTotals.GetValueOrDefault(price.FeedType);
-
-            var used = usedTotals.GetValueOrDefault(price.FeedType);
-
             feedSettings.OpeningStockByFeed.TryGetValue(price.FeedType, out var opening);
 
-            var computed = FeedStockHelper.BookKg(opening, purchased, used);
+            var computed = FeedStockHelper.ReplayUsage(
+                opening,
+                purchasesByFeed.GetValueOrDefault(price.FeedType) ?? [],
+                usageByFeed.GetValueOrDefault(price.FeedType) ?? []);
 
             if (Math.Abs(price.StockKg - computed) >= 0.05m)
 
@@ -1609,9 +1691,8 @@ public class FeedService : IFeedService
 
         await SaveFeedSettingsDtoAsync(feedSettings, cancellationToken);
 
-        if (adjusted > 0)
-
-            await _context.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+        await ClearShortageAlertsForStockedFeedsAsync(cancellationToken);
 
         return new FeedStockRebuildViewModel
 
@@ -2051,6 +2132,7 @@ public class FeedService : IFeedService
             {
                 var months = FodderPoolHelper.EffectiveMonths(i.AllocateMonths);
                 financeMatches.TryGetValue(i.Id, out var match);
+                var posted = financeRefs.Contains("fodder_pool:" + i.Id);
                 var vm = new FodderPoolItemViewModel
                 {
                     Id = i.Id,
@@ -2060,20 +2142,28 @@ public class FeedService : IFeedService
                     AllocateMonths = months,
                     AccountId = i.AccountId,
                     PaidAmount = i.Amount > 0 ? i.Amount : i.PaidAmount,
-                    PostedToFinance = financeRefs.Contains("fodder_pool:" + i.Id),
+                    PostedToFinance = posted,
                     FinanceDuplicateName = match?.Name,
                     FinanceDuplicateWhere = match?.Where
                 };
-                if (match is not null)
-                {
-                    vm.ResultLine = $"✓ already in Finance as {match.Name} — not added again";
-                }
-                else if (i.Amount > 0 && i.PaidDate.HasValue)
+                if (posted && i.PaidDate.HasValue)
                 {
                     var per = FodderPoolHelper.AverageMonthlyAmount(i);
                     vm.ResultLine =
                         $"✓ Cash: {DisplayHelper.FormatRs(i.Amount)} on {FodderPoolHelper.FormatPaidDate(i.PaidDate.Value)} · " +
                         $"P&L: {DisplayHelper.FormatRs(per)}/month × {months} ({FodderPoolHelper.FormatMonthRangeLabel(i.PaidDate.Value, months)})";
+                    if (match is not null)
+                        vm.ResultLine += $" · also looks like {match.Name} ({match.Where}) in Finance — make sure it is not entered twice";
+                }
+                else if (i.Amount > 0)
+                {
+                    vm.ResultLine = i.AccountId is > 0
+                        ? "Not in Finance yet — pick the paid date to post it"
+                        : "Not in Finance yet — choose Paid from (Cash or Bank) to post it";
+                }
+                else if (match is not null)
+                {
+                    vm.ResultLine = $"Similar cost already in Finance as {match.Name} ({match.Where})";
                 }
                 return vm;
             }).ToList(),
@@ -2143,6 +2233,8 @@ public class FeedService : IFeedService
         var batchCost = MixRecipeHelper.MixBatchCost(recipe, prices, mixFeedKeys);
 
         var costPerKg = MixRecipeHelper.MixCostPerKg(recipe, prices, mixFeedKeys);
+        var missingKeys = MixRecipeHelper.MissingPriceKeys(recipe, prices, mixFeedKeys);
+        var priceMissing = missingKeys.Count > 0;
 
 
 
@@ -2150,11 +2242,13 @@ public class FeedService : IFeedService
         var compare = compareKeys.Select(key =>
         {
             var r = allRecipes.GetValueOrDefault(key) ?? recipe;
+            var missing = MixRecipeHelper.HasMissingPrice(r, prices, mixFeedKeys);
             return new MixRecipeCostCompareViewModel
             {
                 StatusKey = key,
                 StatusDisplay = DisplayHelper.FeedRecipeLabel(key),
-                CostPerKg = MixRecipeHelper.MixCostPerKg(r, prices, mixFeedKeys),
+                CostPerKg = missing ? 0 : MixRecipeHelper.MixCostPerKg(r, prices, mixFeedKeys),
+                PriceMissing = missing,
                 IsActive = string.Equals(key, statusKey, StringComparison.OrdinalIgnoreCase)
             };
         }).ToList();
@@ -2173,9 +2267,15 @@ public class FeedService : IFeedService
 
             TotalKg = totalKg,
 
-            BatchCost = batchCost,
+            BatchCost = priceMissing ? 0 : batchCost,
 
-            CostPerKg = costPerKg,
+            CostPerKg = priceMissing ? 0 : costPerKg,
+
+            PriceMissing = priceMissing,
+
+            MissingPriceNames = missingKeys
+                .Select(k => feedCatalog.FirstOrDefault(f => f.FeedType == k)?.DisplayName ?? k)
+                .ToList(),
 
             AllStatusCosts = compare
 
@@ -2206,6 +2306,7 @@ public class FeedService : IFeedService
             var feed = feedCatalog.First(f => f.FeedType == k);
 
             var kg = recipe.GetValueOrDefault(k);
+            var price = prices.GetValueOrDefault(k);
 
             return new MixRecipeItemViewModel
 
@@ -2217,7 +2318,11 @@ public class FeedService : IFeedService
 
                 KgInBatch = kg,
 
-                BatchCost = kg * prices.GetValueOrDefault(k),
+                BatchCost = price > 0 ? kg * price : 0,
+
+                PricePerKg = price > 0 ? price : null,
+
+                PriceMissing = price <= 0,
 
                 Percent = mixTotalKg > 0 ? (int)Math.Round(kg / mixTotalKg * 100) : 0
 
@@ -2246,16 +2351,22 @@ public class FeedService : IFeedService
     private async Task<Dictionary<string, decimal>> GetEffectivePriceDictionaryAsync(CancellationToken cancellationToken)
     {
         var catalog = await GetPriceDictionaryAsync(cancellationToken);
-        var buyAgg = await _context.FeedPurchases.AsNoTracking()
-            .GroupBy(p => p.FeedType)
-            .Select(g => new { FeedType = g.Key, Kg = g.Sum(x => x.Kg), Amt = g.Sum(x => x.Amount) })
-            .ToListAsync(cancellationToken);
-        var result = new Dictionary<string, decimal>(catalog, StringComparer.OrdinalIgnoreCase);
-        foreach (var ag in buyAgg)
+        var lastBuy = (await _context.FeedPurchases.AsNoTracking()
+                .Where(p => p.RatePerKg > 0)
+                .Select(p => new { p.FeedType, p.Date, p.Id, p.RatePerKg })
+                .ToListAsync(cancellationToken))
+            .GroupBy(p => p.FeedType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).First().RatePerKg,
+                StringComparer.OrdinalIgnoreCase);
+        // Master price first, then the last purchase rate. A feed with neither stays out: "Price missing", never Rs 0.
+        var result = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (feedType, master) in catalog)
         {
-            if (ag.Kg > 0)
-                result[ag.FeedType] = Math.Round(ag.Amt / ag.Kg, 2);
+            if (master > 0) result[feedType] = master;
+            else if (lastBuy.TryGetValue(feedType, out var rate)) result[feedType] = rate;
         }
+        foreach (var (feedType, rate) in lastBuy)
+            result.TryAdd(feedType, rate);
         return result;
     }
 
@@ -2272,6 +2383,13 @@ public class FeedService : IFeedService
             .ToDictionaryAsync(x => x.FeedType, x => x.Total, cancellationToken);
 
 
+
+    private async Task<Dictionary<string, decimal>> GetShortTotalsAsync(CancellationToken cancellationToken) =>
+        await _context.FeedUsageRecords.AsNoTracking()
+            .Where(u => u.ShortfallKg > 0)
+            .GroupBy(u => u.FeedType)
+            .Select(g => new { FeedType = g.Key, Total = g.Sum(x => x.ShortfallKg) })
+            .ToDictionaryAsync(x => x.FeedType, x => x.Total, cancellationToken);
 
     private async Task<Dictionary<string, decimal>> GetUsedTotalsAsync(CancellationToken cancellationToken) =>
 
@@ -2304,8 +2422,8 @@ public class FeedService : IFeedService
             var i = KidMilkDietHelper.BandForAge(age);
             if (i < 0 || i >= months.Count) continue;
             var m = months[i];
-            var (pMul, _) = KidMilkDietHelper.MilkTypeFactors(g.KidMilkType);
-            kg[FeedTypes.MilkPowder] = kg.GetValueOrDefault(FeedTypes.MilkPowder) + m.PowderG / 1000m * pMul;
+            var (powderG, _) = KidMilkDietHelper.KidDailyMilk(m, g.KidMilkType, age);
+            kg[FeedTypes.MilkPowder] = kg.GetValueOrDefault(FeedTypes.MilkPowder) + powderG / 1000m;
             kg[FeedTypes.Fodder] = kg.GetValueOrDefault(FeedTypes.Fodder) + m.GreenG / 1000m;
             kg[FeedTypes.FodderDry] = kg.GetValueOrDefault(FeedTypes.FodderDry) + m.DryG / 1000m;
             var mixKg = m.MixG / 1000m;
@@ -2496,7 +2614,9 @@ public class FeedService : IFeedService
 
         IReadOnlyDictionary<string, decimal> usedTotals,
 
-        FeedSettingsDto feedSettings)
+        FeedSettingsDto feedSettings,
+
+        IReadOnlyDictionary<string, decimal> shortTotals)
 
     {
 
@@ -2508,10 +2628,8 @@ public class FeedService : IFeedService
 
             var used = usedTotals.GetValueOrDefault(f.FeedType);
 
-            feedSettings.OpeningStockByFeed.TryGetValue(f.FeedType, out var opening);
-
-            var book = FeedStockHelper.BookKg(opening, purchased, used);
-            var st = Math.Max(book, f.StockKg);
+            // N8 — IN STOCK is the live store book on FeedPrices.StockKg (never inflate with inferred book).
+            var st = Math.Max(0, f.StockKg);
 
             var du = dailyUse.GetValueOrDefault(f.FeedType, 0);
 
@@ -2560,6 +2678,8 @@ public class FeedService : IFeedService
                 PurchasedKg = purchasedTotals.GetValueOrDefault(f.FeedType),
 
                 UsedKg = usedTotals.GetValueOrDefault(f.FeedType),
+
+                ShortKg = shortTotals.GetValueOrDefault(f.FeedType),
 
                 KgPerDay = du,
 
@@ -2652,6 +2772,7 @@ public class FeedService : IFeedService
                 KgPerDay = d,
                 KgPerMonth = m,
                 CostPerMonth = ownLand ? 0 : m * prices.GetValueOrDefault(key),
+                PriceMissing = !ownLand && prices.GetValueOrDefault(key) <= 0,
                 IsOwnLand = ownLand
             });
         }
@@ -2942,6 +3063,10 @@ public class FeedService : IFeedService
     private (decimal Amount, decimal Paid, string Status, string UseAs, int? AccountId, string? Supplier, int AllocMonths)
         MapPurchasePayment(CreateFeedPurchaseViewModel model)
     {
+        if (model.Kg <= 0)
+            throw new InvalidOperationException("Enter the kg bought.");
+        if (model.RatePerKg <= 0)
+            throw new InvalidOperationException("Enter the price per kg — a purchase cannot be Rs 0.");
         var amount = Math.Round(model.Kg * model.RatePerKg);
         var status = (model.PaymentStatus ?? "paid").Trim().ToLowerInvariant();
         if (status is not "paid" and not "partial" and not "credit") status = "paid";
@@ -3006,7 +3131,6 @@ public class FeedService : IFeedService
 
     private async Task SyncFodderPoolFinanceAsync(FodderPoolDto dto, CancellationToken cancellationToken)
     {
-        var matches = await LoadFodderMatchesAsync(dto, cancellationToken);
         const string feedNote = "from Feed › Green fodder cost";
 
         var activeIds = dto.Items.Select(i => i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -3045,29 +3169,26 @@ public class FeedService : IFeedService
             var cashTotal = item.Amount > 0 ? item.Amount : item.PaidAmount;
             item.PaidAmount = cashTotal;
 
-            if (cashTotal <= 0 || !item.PaidDate.HasValue)
+            if (cashTotal <= 0 || !item.PaidDate.HasValue || item.AccountId is not > 0)
                 continue;
 
-            if (matches.TryGetValue(item.Id, out var dup) && dup is not null)
-                continue;
+            var account = await _context.MoneyAccounts.FirstOrDefaultAsync(a => a.Id == item.AccountId && a.IsActive, cancellationToken)
+                ?? throw new InvalidOperationException($"{item.Label}: the Paid from account was not found. Choose Cash or Bank again.");
 
             var months = FodderPoolHelper.EffectiveMonths(item.AllocateMonths);
             var parts = FodderPoolHelper.SpreadOverMonths(cashTotal, months);
 
-            if (item.AccountId is > 0 &&
-                await _context.MoneyAccounts.AnyAsync(a => a.Id == item.AccountId && a.IsActive, cancellationToken))
+            _context.LedgerTransactions.Add(new LedgerTransaction
             {
-                _context.LedgerTransactions.Add(new LedgerTransaction
-                {
-                    Date = item.PaidDate.Value,
-                    Kind = LedgerTransactionKind.Expense,
-                    AccountId = item.AccountId.Value,
-                    Amount = cashTotal,
-                    Category = "Green fodder",
-                    Reference = cashRef,
-                    Notes = $"Green fodder · {item.Label} · {feedNote}"
-                });
-            }
+                Date = item.PaidDate.Value,
+                Kind = LedgerTransactionKind.Expense,
+                AccountId = account.Id,
+                Amount = cashTotal,
+                Category = "Green fodder",
+                Reference = cashRef,
+                Notes = $"Fodder land · {item.Label} · {feedNote}"
+            });
+            account.OpeningBalanceLocked = true;
 
             for (var i = 0; i < months; i++)
             {
@@ -3076,7 +3197,8 @@ public class FeedService : IFeedService
                     Type = "Green fodder",
                     Amount = parts[i],
                     Date = item.PaidDate.Value.AddMonths(i),
-                    Comment = $"{cashRef}:pl:{i} · {item.Label} · {feedNote}"
+                    Comment = $"{cashRef}:pl:{i} · {item.Label} · {feedNote}",
+                    SourceType = FinanceSourceTypes.FodderPl
                 });
             }
         }
@@ -3093,10 +3215,61 @@ public class FeedService : IFeedService
             .Where(e => e.Comment != null && e.Comment.StartsWith(key + ":pl:", StringComparison.Ordinal))
             .ToListAsync(cancellationToken);
         _context.Expenses.RemoveRange(spread);
-        var sid = purchaseId.ToString();
-        var pays = await _context.SupplierPayables.Where(p => p.SourceType == "feed_purchase" && p.SourceId == sid).ToListAsync(cancellationToken);
-        _context.SupplierPayables.RemoveRange(pays);
     }
+
+    /// <summary>
+    /// Keeps the one SupplierPayable for a credit feed purchase in step with the purchase.
+    /// Payments made later from Finance › Payables stay on the bill (they have their own ledger rows).
+    /// </summary>
+    private async Task SyncPurchasePayableAsync(FeedPurchase entity, bool deleted, CancellationToken cancellationToken)
+    {
+        var sid = entity.Id.ToString();
+        var bills = await _context.SupplierPayables
+            .Where(p => p.SourceType == FeedPurchasePayableSource && p.SourceId == sid)
+            .OrderBy(p => p.Id)
+            .ToListAsync(cancellationToken);
+        var bill = bills.FirstOrDefault();
+        if (bills.Count > 1) _context.SupplierPayables.RemoveRange(bills.Skip(1));
+
+        decimal laterPaid = 0;
+        if (bill is not null)
+        {
+            var billRef = $"payable:{bill.Id}";
+            laterPaid = await _context.LedgerTransactions
+                .Where(t => t.Reference == billRef && t.Kind == LedgerTransactionKind.PayablePayment)
+                .SumAsync(t => (decimal?)t.Amount, cancellationToken) ?? 0;
+        }
+
+        if (deleted || entity.PaidAmount + laterPaid >= entity.Amount - 0.005m && laterPaid <= 0)
+        {
+            if (bill is null) return;
+            if (laterPaid > 0)
+            {
+                bill.Status = PayableStatus.Void;
+                bill.UpdatedDate = DateTime.UtcNow;
+            }
+            else
+                _context.SupplierPayables.Remove(bill);
+            return;
+        }
+
+        if (bill is null)
+        {
+            bill = new SupplierPayable { SourceType = FeedPurchasePayableSource, SourceId = sid, CreatedDate = DateTime.UtcNow };
+            _context.SupplierPayables.Add(bill);
+        }
+        bill.SupplierName = entity.Supplier ?? "Feed supplier";
+        bill.Date = entity.Date;
+        bill.DueDate = entity.DueDate;
+        bill.Description = $"Feed purchase · {entity.FeedType} · {entity.Kg:0.##} kg";
+        bill.Amount = entity.Amount;
+        bill.PaidAmount = Math.Min(entity.Amount, entity.PaidAmount + laterPaid);
+        bill.Status = bill.PaidAmount >= bill.Amount - 0.005m ? PayableStatus.Paid
+            : bill.PaidAmount > 0 ? PayableStatus.Partial : PayableStatus.Open;
+        bill.UpdatedDate = DateTime.UtcNow;
+    }
+
+    private const string FeedPurchasePayableSource = "feed_purchase";
 
     private async Task SyncFeedPurchasePlExpensesAsync(FeedPurchase entity, CancellationToken cancellationToken)
     {
@@ -3123,7 +3296,9 @@ public class FeedService : IFeedService
                 Type = "Feed",
                 Amount = parts[i],
                 Date = entity.Date.AddMonths(i),
-                Comment = $"{prefix}{i} · {name} · {feedNote}"
+                Comment = $"{prefix}{i} · {name} · {feedNote}",
+                SourceType = FinanceSourceTypes.FeedPurchasePl,
+                SourceId = entity.Id
             });
         }
     }
@@ -3144,23 +3319,9 @@ public class FeedService : IFeedService
                 Reference = "feed_purchase:" + entity.Id,
                 Notes = $"Feed purchase · {entity.FeedType} · {entity.Supplier}"
             });
+            acct.OpeningBalanceLocked = true;
         }
-        if (entity.PaidAmount < entity.Amount)
-        {
-            _context.SupplierPayables.Add(new SupplierPayable
-            {
-                SupplierName = entity.Supplier ?? "Feed supplier",
-                Date = entity.Date,
-                DueDate = entity.DueDate,
-                Description = $"Feed purchase · {entity.FeedType} · {entity.Kg:0.##} kg",
-                Amount = entity.Amount,
-                PaidAmount = entity.PaidAmount,
-                Status = entity.PaidAmount > 0 ? PayableStatus.Partial : PayableStatus.Open,
-                SourceType = "feed_purchase",
-                SourceId = entity.Id.ToString()
-            });
-        }
-        await Task.CompletedTask;
+        await SyncPurchasePayableAsync(entity, deleted: false, cancellationToken);
     }
 
     private async Task<KidMilkDietViewModel> LoadKidMilkDietAsync(CancellationToken cancellationToken)
@@ -3198,15 +3359,17 @@ public class FeedService : IFeedService
         var months = state.Months.ToList();
         var counts = new[] { 0, 0, 0 };
         decimal powder = 0, mother = 0, mix = 0, green = 0, dry = 0;
+        var started = KidMilkDietHelper.IsStarted(state);
         foreach (var g in kids)
         {
             var age = AgeDaysOn(g, today);
             var i = KidMilkDietHelper.BandForAge(age);
-            var m = months[i];
-            var (pMul, mMul) = KidMilkDietHelper.MilkTypeFactors(g.KidMilkType);
             counts[i]++;
-            powder += m.PowderG / 1000m * pMul;
-            mother += m.MotherMilkMl / 1000m * mMul;
+            if (!started) continue;
+            var m = months[i];
+            var (powderG, motherMl) = KidMilkDietHelper.KidDailyMilk(m, g.KidMilkType, age);
+            powder += powderG / 1000m;
+            mother += motherMl / 1000m;
             mix += m.MixG / 1000m;
             green += m.GreenG / 1000m;
             dry += m.DryG / 1000m;
@@ -3222,6 +3385,7 @@ public class FeedService : IFeedService
             Logs = state.Logs.Take(15).ToList(),
             AutoStartDate = state.AutoStartDate,
             LastAutoDate = state.LastAutoDate,
+            NotStarted = !started,
             UnweanedKids = kids.Count,
             PowderTodayKg = powder,
             MotherTodayL = mother,
@@ -3284,11 +3448,11 @@ public class FeedService : IFeedService
                 var age = AgeDaysOn(goatSnap, day);
                 var i = KidMilkDietHelper.BandForAge(age);
                 var m = months[i];
-                var (pMul, mMul) = KidMilkDietHelper.MilkTypeFactors(g.KidMilkType);
+                var (powderG, motherMl) = KidMilkDietHelper.KidDailyMilk(m, g.KidMilkType, age);
                 kids++;
                 counts[i]++;
-                powder += m.PowderG / 1000m * pMul;
-                mother += m.MotherMilkMl / 1000m * mMul;
+                powder += powderG / 1000m;
+                mother += motherMl / 1000m;
                 mix += m.MixG / 1000m;
                 green += m.GreenG / 1000m;
                 dry += m.DryG / 1000m;
@@ -3333,14 +3497,29 @@ public class FeedService : IFeedService
 
     private async Task RecordKidUsageAsync(DateOnly date, string feedType, decimal kg, CancellationToken cancellationToken)
     {
+        var needKg = Math.Round(kg, 3);
+        var price = _context.FeedPrices.Local.FirstOrDefault(p => p.FeedType == feedType)
+            ?? await _context.FeedPrices.FirstOrDefaultAsync(p => p.FeedType == feedType, cancellationToken);
+        var takeKg = Math.Min(needKg, Math.Max(0, price?.StockKg ?? 0));
         _context.FeedUsageRecords.Add(new FeedUsageRecord
         {
             Date = date,
             FeedType = feedType,
-            Kg = Math.Round(kg, 3),
+            Kg = takeKg,
+            ShortfallKg = needKg - takeKg,
             IsAutomatic = true
         });
-        await AdjustFeedStockAsync(feedType, -kg, cancellationToken: cancellationToken);
+        await AdjustFeedStockAsync(feedType, -takeKg, cancellationToken: cancellationToken);
+        if (needKg > takeKg)
+        {
+            await FarmAlertStore.RaiseAsync(_context, new FarmAlert
+            {
+                Key = ShortageAlertKey(feedType),
+                Severity = "critical",
+                Message = $"{price?.DisplayName ?? feedType}: short {needKg - takeKg:0.#} kg today – not in store",
+                Href = "/Feed?tab=purchases"
+            }, cancellationToken);
+        }
     }
 }
 

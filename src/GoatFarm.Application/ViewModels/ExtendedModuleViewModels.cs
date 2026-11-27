@@ -662,6 +662,7 @@ public class SaveProductCostAllocationViewModel
     public string? Ref { get; set; }
     public decimal Qty { get; set; }
     public string? Note { get; set; }
+    public int? PaidFromAccountId { get; set; }
 }
 
 public class TransportShipmentRowViewModel
@@ -987,6 +988,11 @@ public class SaveProductSaleViewModel
     public decimal Rate { get; set; }
     public decimal Amount { get; set; }
     public bool IsCredit { get; set; }
+    /// <summary>Cash/Bank account that received the money. Required unless the whole sale is on credit.</summary>
+    public int? AccountId { get; set; }
+    /// <summary>Part-paid credit sale: amount received now into <see cref="AccountId"/>.</summary>
+    public decimal? ReceivedNow { get; set; }
+    public DateOnly? DueDate { get; set; }
     public string? Notes { get; set; }
     public string? RecordedBy { get; set; }
     public bool ConfirmPossibleDuplicate { get; set; }

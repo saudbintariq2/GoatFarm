@@ -14,4 +14,6 @@ public static class AppSettingKeys
     public const string MotherGroups = "MotherGroups";
     public const string ProductMilkingSessions = "ProductMilkingSessions";
     public const string ProductDropdownOptions = "ProductDropdownOptions";
+    public const string FarmAlerts = "FarmAlerts";
+    public const string BackupStatus = "BackupStatus";
 }

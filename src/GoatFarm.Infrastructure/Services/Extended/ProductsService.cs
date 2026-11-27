@@ -805,7 +805,10 @@ public class ProductsService : IProductsService
         return new { ok = true, cutsKg = outKg, wasteKg = inKg - outKg, costMethod = method };
     }
 
-    public async Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default)
+    public Task<object> SaveProductSaleAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => SaveProductSaleCoreAsync(model, cancellationToken), cancellationToken);
+
+    private async Task<object> SaveProductSaleCoreAsync(SaveProductSaleViewModel model, CancellationToken cancellationToken)
     {
         if (model.Qty <= 0) throw new InvalidOperationException("Enter quantity sold.");
         var rate = model.Rate;
@@ -824,6 +827,19 @@ public class ProductsService : IProductsService
         }
 
         var amount = model.Amount > 0 ? model.Amount : model.Qty * rate;
+        var receivedNow = model.IsCredit ? Math.Max(0, model.ReceivedNow ?? 0) : amount;
+        if (model.IsCredit && model.CustomerId is not > 0)
+            throw new InvalidOperationException("Choose the customer for a credit or part-paid sale.");
+        if (receivedNow > amount + 0.005m)
+            throw new InvalidOperationException("Received now cannot be more than the sale amount.");
+        MoneyAccount? receivedInto = null;
+        if (receivedNow > 0)
+        {
+            if (model.AccountId is not > 0)
+                throw new InvalidOperationException("Choose Received into: the Cash or Bank account that got the money.");
+            receivedInto = await _context.MoneyAccounts.FirstOrDefaultAsync(a => a.Id == model.AccountId && a.IsActive, cancellationToken)
+                ?? throw new InvalidOperationException("That Cash/Bank account was not found. Set up accounts under Finance → Bank & Cash.");
+        }
         var isNew = model.Id is not > 0;
         ProductSale row;
         if (!isNew)
@@ -873,6 +889,7 @@ public class ProductsService : IProductsService
         row.Rate = rate;
         row.Amount = amount;
         row.IsCredit = model.IsCredit;
+        row.AccountId = model.IsCredit ? null : receivedInto?.Id;
         row.Notes = AppendRecordedBy(model.Notes, model.RecordedBy);
         row.UpdatedDate = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
@@ -909,10 +926,32 @@ public class ProductsService : IProductsService
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        int? invoiceId = null;
-        if (model.IsCredit && model.CustomerId is > 0 && amount > 0)
+        var saleRef = LedgerSourceKey.ProductSale(row.Id);
+        var saleTx = await _context.LedgerTransactions.FirstOrDefaultAsync(t => t.Reference == saleRef, cancellationToken);
+        if (!row.IsCredit && amount > 0)
         {
-            var due = model.Date.AddDays(14);
+            if (saleTx is null)
+            {
+                saleTx = new LedgerTransaction { Reference = saleRef, CreatedDate = DateTime.UtcNow };
+                _context.LedgerTransactions.Add(saleTx);
+            }
+            saleTx.Date = row.Date;
+            saleTx.Kind = LedgerTransactionKind.Income;
+            saleTx.AccountId = receivedInto!.Id;
+            saleTx.Amount = amount;
+            saleTx.Category = "Product sale";
+            saleTx.Notes = $"Sale {row.InvoiceNo} · {row.ProductName}";
+            saleTx.UpdatedDate = DateTime.UtcNow;
+            receivedInto.OpeningBalanceLocked = true;
+        }
+        else if (saleTx is not null)
+            _context.LedgerTransactions.Remove(saleTx);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        int? invoiceId = null;
+        if (isNew && model.IsCredit && model.CustomerId is > 0 && amount > 0)
+        {
+            var due = model.DueDate ?? model.Date.AddDays(14);
             var desc = $"Product sale {row.InvoiceNo}: {row.ProductName} × {model.Qty}";
             if (!string.IsNullOrWhiteSpace(model.Notes)) desc += " — " + model.Notes.Trim();
             var inv = new CustomerInvoice
@@ -922,14 +961,31 @@ public class ProductsService : IProductsService
                 DueDate = due,
                 Description = desc,
                 Amount = amount,
-                PaidAmount = 0,
-                Status = InvoiceStatus.Open,
+                PaidAmount = receivedNow,
+                Status = receivedNow >= amount ? InvoiceStatus.Paid : receivedNow > 0 ? InvoiceStatus.Partial : InvoiceStatus.Open,
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
             };
             _context.CustomerInvoices.Add(inv);
             await _context.SaveChangesAsync(cancellationToken);
             invoiceId = inv.Id;
+            if (receivedNow > 0)
+            {
+                _context.LedgerTransactions.Add(new LedgerTransaction
+                {
+                    Date = model.Date,
+                    Kind = LedgerTransactionKind.InvoicePayment,
+                    AccountId = receivedInto!.Id,
+                    Amount = receivedNow,
+                    Category = "Customer receipt",
+                    Reference = $"invoice:{inv.Id}",
+                    Notes = "Part payment · " + desc,
+                    CreatedDate = DateTime.UtcNow,
+                    UpdatedDate = DateTime.UtcNow
+                });
+                receivedInto.OpeningBalanceLocked = true;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
         }
 
         return new { id = row.Id, invoiceId, invoiceNo = row.InvoiceNo };
@@ -951,7 +1007,10 @@ public class ProductsService : IProductsService
         return candidate;
     }
 
-    public async Task<object> SavePasteurizationAsync(SavePasteurizationViewModel model, CancellationToken cancellationToken = default)
+    public Task<object> SavePasteurizationAsync(SavePasteurizationViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => SavePasteurizationCoreAsync(model, cancellationToken), cancellationToken);
+
+    private async Task<object> SavePasteurizationCoreAsync(SavePasteurizationViewModel model, CancellationToken cancellationToken)
     {
         if (model.InputLiters <= 0 || model.OutputLiters <= 0)
             throw new InvalidOperationException("Enter raw and pasteurized litres.");
@@ -1007,13 +1066,16 @@ public class ProductsService : IProductsService
                 throw new InvalidOperationException("That payment account was not found. Set up accounts under Finance → Bank & Cash.");
 
             const string expenseType = "Milk processing";
-            _context.Expenses.Add(new Expense
+            var processExpense = new Expense
             {
                 Type = expenseType,
                 Amount = model.ProcessCost,
                 Date = model.Date,
-                Comment = $"{runRef} · Pasteurization{(string.IsNullOrWhiteSpace(model.Note) ? "" : " · " + model.Note.Trim())}"
-            });
+                Comment = $"{runRef} · Pasteurization{(string.IsNullOrWhiteSpace(model.Note) ? "" : " · " + model.Note.Trim())}",
+                SourceType = FinanceSourceTypes.MilkProcessing
+            };
+            _context.Expenses.Add(processExpense);
+            await _context.SaveChangesAsync(cancellationToken);
             _context.LedgerTransactions.Add(new LedgerTransaction
             {
                 Date = model.Date,
@@ -1021,19 +1083,33 @@ public class ProductsService : IProductsService
                 AccountId = acct.Id,
                 Amount = model.ProcessCost,
                 Category = expenseType,
+                Reference = $"fin-expense:{processExpense.Id}",
                 Notes = $"Pasteurization {runRef} · {rawWh.Name} → {pastWh.Name}"
             });
+            acct.OpeningBalanceLocked = true;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
         return new { ok = true, runRef };
     }
 
-    public async Task<object> SaveTransportShipmentAsync(SaveTransportShipmentViewModel model, CancellationToken cancellationToken = default)
+    public Task<object> SaveTransportShipmentAsync(SaveTransportShipmentViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => SaveTransportShipmentCoreAsync(model, cancellationToken), cancellationToken);
+
+    private async Task<object> SaveTransportShipmentCoreAsync(SaveTransportShipmentViewModel model, CancellationToken cancellationToken)
     {
         if (model.Qty <= 0) throw new InvalidOperationException("Enter the total quantity moved.");
         if (string.IsNullOrWhiteSpace(model.ToLocation)) throw new InvalidOperationException("Enter the destination city or route.");
         if (model.Cost < 0) throw new InvalidOperationException("Transport cost cannot be negative.");
+        MoneyAccount? paidFrom = null;
+        if (model.Cost > 0)
+        {
+            if (model.PaidFromAccountId is not > 0)
+                throw new InvalidOperationException("Choose Paid from: the Cash or Bank account that paid for the transport.");
+            paidFrom = await _context.MoneyAccounts.FirstOrDefaultAsync(
+                    a => a.Id == model.PaidFromAccountId && a.IsActive, cancellationToken)
+                ?? throw new InvalidOperationException("That payment account was not found. Set up accounts under Finance → Bank & Cash.");
+        }
 
         var cpu = model.Qty > 0 ? model.Cost / model.Qty : 0;
         var refNo = string.IsNullOrWhiteSpace(model.DispatchRef)
@@ -1063,6 +1139,7 @@ public class ProductsService : IProductsService
             UpdatedDate = DateTime.UtcNow
         };
         _context.TransportShipments.Add(row);
+        await _context.SaveChangesAsync(cancellationToken);
 
         if (model.Cost > 0)
         {
@@ -1073,6 +1150,8 @@ public class ProductsService : IProductsService
                 Amount = model.Cost,
                 Date = model.Date,
                 Comment = expenseComment,
+                SourceType = FinanceSourceTypes.Transport,
+                SourceId = row.Id,
                 CreatedDate = DateTime.UtcNow,
                 UpdatedDate = DateTime.UtcNow
             };
@@ -1080,27 +1159,22 @@ public class ProductsService : IProductsService
             await _context.SaveChangesAsync(cancellationToken);
             row.ExpenseId = expense.Id;
 
-            if (model.PaidFromAccountId is > 0)
+            var tx = new LedgerTransaction
             {
-                var acct = await _context.MoneyAccounts.FirstOrDefaultAsync(
-                    a => a.Id == model.PaidFromAccountId && a.IsActive, cancellationToken);
-                if (acct is null)
-                    throw new InvalidOperationException("That payment account was not found. Set up accounts under Finance → Bank & Cash.");
-                var tx = new LedgerTransaction
-                {
-                    Date = model.Date,
-                    Kind = LedgerTransactionKind.Expense,
-                    AccountId = acct.Id,
-                    Amount = model.Cost,
-                    Category = expenseType,
-                    Notes = $"Transport {refNo} · {model.ShipmentType} · {from} to {to}",
-                    CreatedDate = DateTime.UtcNow,
-                    UpdatedDate = DateTime.UtcNow
-                };
-                _context.LedgerTransactions.Add(tx);
-                await _context.SaveChangesAsync(cancellationToken);
-                row.LedgerTransactionId = tx.Id;
-            }
+                Date = model.Date,
+                Kind = LedgerTransactionKind.Expense,
+                AccountId = paidFrom!.Id,
+                Amount = model.Cost,
+                Category = expenseType,
+                Reference = $"fin-expense:{expense.Id}",
+                Notes = $"Transport {refNo} · {model.ShipmentType} · {from} to {to}",
+                CreatedDate = DateTime.UtcNow,
+                UpdatedDate = DateTime.UtcNow
+            };
+            _context.LedgerTransactions.Add(tx);
+            paidFrom.OpeningBalanceLocked = true;
+            await _context.SaveChangesAsync(cancellationToken);
+            row.LedgerTransactionId = tx.Id;
         }
 
         row.UpdatedDate = DateTime.UtcNow;
@@ -1117,23 +1191,31 @@ public class ProductsService : IProductsService
             var exp = await _context.Expenses.FirstOrDefaultAsync(e => e.Id == row.ExpenseId, cancellationToken);
             if (exp is not null) _context.Expenses.Remove(exp);
         }
-        if (row.LedgerTransactionId is > 0)
-        {
-            var tx = await _context.LedgerTransactions.FirstOrDefaultAsync(t => t.Id == row.LedgerTransactionId, cancellationToken);
-            if (tx is not null) _context.LedgerTransactions.Remove(tx);
-        }
+        var expenseRef = row.ExpenseId is > 0 ? $"fin-expense:{row.ExpenseId}" : null;
+        var linked = await _context.LedgerTransactions
+            .Where(t => t.Id == row.LedgerTransactionId || (expenseRef != null && t.Reference == expenseRef))
+            .ToListAsync(cancellationToken);
+        _context.LedgerTransactions.RemoveRange(linked);
         _context.TransportShipments.Remove(row);
         await _context.SaveChangesAsync(cancellationToken);
         return true;
     }
 
-    public async Task<object> SaveProductCostAllocationAsync(SaveProductCostAllocationViewModel model, CancellationToken cancellationToken = default)
+    public Task<object> SaveProductCostAllocationAsync(SaveProductCostAllocationViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => SaveProductCostAllocationCoreAsync(model, cancellationToken), cancellationToken);
+
+    private async Task<object> SaveProductCostAllocationCoreAsync(SaveProductCostAllocationViewModel model, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(model.CostType)) throw new InvalidOperationException("Choose a cost type.");
         if (model.Amount <= 0) throw new InvalidOperationException("Enter the amount.");
         var scope = (model.Scope ?? "general").Trim().ToLowerInvariant();
         if (scope == "product" && model.ProductId is not > 0)
             throw new InvalidOperationException("Choose the product for this allocation.");
+        if (model.PaidFromAccountId is not > 0)
+            throw new InvalidOperationException("Choose Paid from: the Cash or Bank account that paid this cost.");
+        var paidFrom = await _context.MoneyAccounts.FirstOrDefaultAsync(
+                a => a.Id == model.PaidFromAccountId && a.IsActive, cancellationToken)
+            ?? throw new InvalidOperationException("That payment account was not found. Set up accounts under Finance → Bank & Cash.");
 
         var productId = model.ProductId;
         if (productId is not > 0 && !string.IsNullOrWhiteSpace(model.Ref) &&
@@ -1174,13 +1256,28 @@ public class ProductsService : IProductsService
             Amount = model.Amount,
             Date = model.Date,
             Comment = expenseComment,
+            SourceType = FinanceSourceTypes.ProductCostAllocation,
             CreatedDate = DateTime.UtcNow,
             UpdatedDate = DateTime.UtcNow
         };
         _context.Expenses.Add(expense);
         await _context.SaveChangesAsync(cancellationToken);
         row.ExpenseId = expense.Id;
+        expense.SourceId = row.Id;
         row.UpdatedDate = DateTime.UtcNow;
+        _context.LedgerTransactions.Add(new LedgerTransaction
+        {
+            Date = model.Date,
+            Kind = LedgerTransactionKind.Expense,
+            AccountId = paidFrom.Id,
+            Amount = model.Amount,
+            Category = expense.Type,
+            Reference = $"fin-expense:{expense.Id}",
+            Notes = $"{expense.Type} · {expenseComment}",
+            CreatedDate = DateTime.UtcNow,
+            UpdatedDate = DateTime.UtcNow
+        });
+        paidFrom.OpeningBalanceLocked = true;
         await _context.SaveChangesAsync(cancellationToken);
         return new { id = row.Id };
     }
@@ -1193,6 +1290,9 @@ public class ProductsService : IProductsService
         {
             var exp = await _context.Expenses.FirstOrDefaultAsync(e => e.Id == row.ExpenseId, cancellationToken);
             if (exp is not null) _context.Expenses.Remove(exp);
+            var expRef = $"fin-expense:{row.ExpenseId}";
+            _context.LedgerTransactions.RemoveRange(
+                await _context.LedgerTransactions.Where(t => t.Reference == expRef).ToListAsync(cancellationToken));
         }
         _context.ProductCostAllocations.Remove(row);
         await _context.SaveChangesAsync(cancellationToken);

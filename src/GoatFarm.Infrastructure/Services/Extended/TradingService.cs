@@ -78,9 +78,6 @@ public class TradingService : ITradingService
 
         var monthStart = new DateOnly(m.Year, m.Month, 1);
 
-        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-
-
 
         var items = await _context.TradeItems.AsNoTracking().OrderBy(i => i.Name).ToListAsync(cancellationToken);
 
@@ -108,13 +105,9 @@ public class TradingService : ITradingService
 
         var stockValue = ComputeStockValue(items, stores, allEntries.Where(e => !e.IsCancelled).ToList());
 
-        var monthEntries = entries.Where(e => e.Date >= monthStart && e.Date <= monthEnd).ToList();
+        var pnlByMonth = ComputeMonthlyPnL(allEntries.Where(e => !e.IsCancelled).ToList());
 
-        var monthSales = monthEntries.Where(e => e.Type == TradeEntryType.Sell).Sum(e => e.Qty * e.Rate);
-
-        var monthBuys = monthEntries.Where(e => e.Type == TradeEntryType.Buy).Sum(e => e.Qty * e.Rate + e.Freight + e.Labour);
-
-        var monthExp = monthEntries.Where(e => e.Type == TradeEntryType.Expense).Sum(e => e.Amount);
+        var monthPnL = pnlByMonth.GetValueOrDefault((monthStart.Year, monthStart.Month)) ?? new TradePnL();
 
 
 
@@ -128,15 +121,7 @@ public class TradingService : ITradingService
 
             var start = new DateOnly(anchor.Year, anchor.Month, 1);
 
-            var end = start.AddMonths(1).AddDays(-1);
-
-            var slice = allEntries.Where(e => !e.IsCancelled && e.Date >= start && e.Date <= end).ToList();
-
-            var sales = slice.Where(e => e.Type == TradeEntryType.Sell).Sum(e => e.Qty * e.Rate);
-
-            var buys = slice.Where(e => e.Type == TradeEntryType.Buy).Sum(e => e.Qty * e.Rate + e.Freight + e.Labour);
-
-            var exp = slice.Where(e => e.Type == TradeEntryType.Expense).Sum(e => e.Amount);
+            var p = pnlByMonth.GetValueOrDefault((start.Year, start.Month)) ?? new TradePnL();
 
             periodPnL.Add(new TradePeriodPnLRowViewModel
 
@@ -144,13 +129,13 @@ public class TradingService : ITradingService
 
                 Month = $"{start.Year:0000}-{start.Month:00}",
 
-                Sales = sales,
+                Sales = p.Sales,
 
-                Buys = buys,
+                Buys = p.Buys,
 
-                Expenses = exp,
+                Expenses = p.Expenses,
 
-                Profit = sales - buys - exp
+                Profit = p.Net
 
             });
 
@@ -168,13 +153,13 @@ public class TradingService : ITradingService
 
             CashBalance = balances.Values.Sum(),
 
-            MonthSales = monthSales,
+            MonthSales = monthPnL.Sales,
 
-            MonthBuys = monthBuys,
+            MonthBuys = monthPnL.Buys,
 
-            MonthExpenses = monthExp,
+            MonthExpenses = monthPnL.Expenses,
 
-            MonthProfit = monthSales - monthBuys - monthExp,
+            MonthProfit = monthPnL.Net,
 
             PeriodPnL = periodPnL,
 
@@ -996,14 +981,28 @@ public class TradingService : ITradingService
         return (sup, cus);
     }
 
-    private static decimal ComputeLifetimeNetProfit(IReadOnlyList<TradeEntry> live)
+    private static decimal ComputeLifetimeNetProfit(IReadOnlyList<TradeEntry> live) =>
+        ComputeMonthlyPnL(live).Values.Sum(p => p.Net);
+
+    internal sealed class TradePnL
+    {
+        public decimal Sales, Cogs, Delivery, Loss, Expenses, Buys;
+        /// <summary>Sales − cost of goods sold − delivery − losses − trading expenses. Unsold stock is not a cost.</summary>
+        public decimal Net => Sales - Cogs - Delivery - Loss - Expenses;
+    }
+
+    internal static Dictionary<(int Year, int Month), TradePnL> ComputeMonthlyPnL(IReadOnlyList<TradeEntry> live)
     {
         var cost = new Dictionary<int, (decimal Qty, decimal Value)>();
-        decimal sales = 0, cogs = 0, delivery = 0, loss = 0, exp = 0;
+        var byMonth = new Dictionary<(int Year, int Month), TradePnL>();
         foreach (var e in live.OrderBy(x => x.Date).ThenBy(x => x.Id))
         {
+            var key = (e.Date.Year, e.Date.Month);
+            if (!byMonth.TryGetValue(key, out var p))
+                byMonth[key] = p = new TradePnL();
+
             if (e.Type == TradeEntryType.Expense)
-                exp += e.Amount;
+                p.Expenses += e.Amount;
 
             if (e.ItemId is not > 0) continue;
             var itemId = e.ItemId.Value;
@@ -1014,6 +1013,7 @@ public class TradingService : ITradingService
                 case TradeEntryType.Buy:
                     q += e.Qty;
                     v += e.Qty * e.Rate + e.Freight + e.Labour;
+                    p.Buys += e.Qty * e.Rate + e.Freight + e.Labour;
                     break;
                 case TradeEntryType.Sell:
                 {
@@ -1021,9 +1021,9 @@ public class TradingService : ITradingService
                     var take = e.Qty >= q - 0.0005m ? v : avg * e.Qty;
                     q -= e.Qty;
                     v -= take;
-                    sales += e.Qty * e.Rate;
-                    cogs += take;
-                    delivery += e.Freight;
+                    p.Sales += e.Qty * e.Rate;
+                    p.Cogs += take;
+                    p.Delivery += e.Freight;
                     break;
                 }
                 case TradeEntryType.Loss when e.LossReason == "count+":
@@ -1039,7 +1039,7 @@ public class TradingService : ITradingService
                     var take = e.Qty >= q - 0.0005m ? v : avg * e.Qty;
                     q -= e.Qty;
                     v -= take;
-                    loss += take;
+                    p.Loss += take;
                     break;
                 }
             }
@@ -1047,7 +1047,7 @@ public class TradingService : ITradingService
             cost[itemId] = (q, v);
         }
 
-        return sales - cogs - delivery - loss - exp;
+        return byMonth;
     }
 
 }

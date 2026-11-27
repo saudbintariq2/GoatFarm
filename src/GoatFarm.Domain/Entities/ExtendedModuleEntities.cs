@@ -197,6 +197,9 @@ public class LedgerTransaction : BaseEntity
     public string? Category { get; set; }
     public string? Reference { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Set from <see cref="Reference"/> on save when the reference names one source record.</summary>
+    public string? SourceType { get; set; }
+    public string? SourceId { get; set; }
 }
 
 public class BusinessCustomer : BaseEntity
@@ -392,6 +395,8 @@ public class ProductSale : BaseEntity
     public decimal Rate { get; set; }
     public decimal Amount { get; set; }
     public bool IsCredit { get; set; }
+    /// <summary>Cash/Bank account that received a non-credit sale.</summary>
+    public int? AccountId { get; set; }
     public string? Notes { get; set; }
     public string? InvoiceNo { get; set; }
     public int? WarehouseId { get; set; }

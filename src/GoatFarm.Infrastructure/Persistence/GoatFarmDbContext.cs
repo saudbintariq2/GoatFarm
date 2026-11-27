@@ -1,3 +1,4 @@
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -78,5 +79,36 @@ public class GoatFarmDbContext : IdentityDbContext<ApplicationUser, IdentityRole
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(GoatFarmDbContext).Assembly);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampLedgerSourceKeys();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampLedgerSourceKeys();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampLedgerSourceKeys()
+    {
+        foreach (var entry in ChangeTracker.Entries<LedgerTransaction>())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified)) continue;
+            var tx = entry.Entity;
+            if (LedgerSourceKey.TryParse(tx.Reference, out var type, out var id))
+            {
+                tx.SourceType = type;
+                tx.SourceId = id;
+            }
+            else
+            {
+                tx.SourceType = null;
+                tx.SourceId = null;
+            }
+        }
     }
 }

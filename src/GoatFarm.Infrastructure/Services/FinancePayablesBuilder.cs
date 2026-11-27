@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GoatFarm.Infrastructure.Services;
 
-/// <summary>FN8 — one payables list (feed credit, supplier bills, salary due) matching the card total.</summary>
+/// <summary>One payables list (supplier bills incl. feed credit, salary due) used by the card, balance sheet, closing and dashboard.</summary>
 internal static class FinancePayablesBuilder
 {
     private const string PayrollPrefix = "payroll:";
@@ -62,40 +62,13 @@ internal static class FinancePayablesBuilder
         IReadOnlyList<(int EmployeeId, string Name, decimal Balance)> payrollOutstanding,
         CancellationToken cancellationToken = default)
     {
-        var feedNames = await db.FeedPrices.AsNoTracking()
-            .ToDictionaryAsync(f => f.FeedType, f => f.DisplayName, StringComparer.OrdinalIgnoreCase, cancellationToken);
-
-        var feedRows = await db.FeedPurchases.AsNoTracking()
-            .Where(p => p.Amount > p.PaidAmount + 0.01m)
-            .OrderByDescending(p => p.Date)
-            .Take(200)
-            .ToListAsync(cancellationToken);
-
+        // Credit feed purchases already own a SupplierPayable (SourceType "feed_purchase"), so bills are the only source.
         var billRows = await db.SupplierPayables.AsNoTracking()
             .Where(p => p.Status != PayableStatus.Void && p.Amount > p.PaidAmount + 0.01m)
             .OrderByDescending(p => p.Date)
-            .Take(400)
             .ToListAsync(cancellationToken);
 
         var rows = new List<SupplierPayableRowViewModel>();
-
-        foreach (var p in feedRows)
-        {
-            var open = p.Amount - p.PaidAmount;
-            var name = feedNames.GetValueOrDefault(p.FeedType) ?? p.FeedType;
-            rows.Add(new SupplierPayableRowViewModel
-            {
-                Id = 0,
-                SupplierName = string.IsNullOrWhiteSpace(p.Supplier) ? "Feed supplier" : p.Supplier,
-                DateDisplay = p.Date.ToString("yyyy-MM-dd"),
-                Description = $"Feed – {name}",
-                Amount = p.Amount,
-                PaidAmount = p.PaidAmount,
-                Status = open <= 0.01m ? "Paid" : p.PaidAmount > 0 ? "Part paid" : "Open",
-                DueDateDisplay = p.DueDate?.ToString("yyyy-MM-dd"),
-                CanPayFromUi = false
-            });
-        }
 
         foreach (var p in billRows)
         {

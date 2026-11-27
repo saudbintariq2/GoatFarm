@@ -123,11 +123,53 @@ public class FinancePhaseFnTests
             PaidAmount = 200,
             Supplier = "Miller"
         });
+        // FN8 — payables come from SupplierPayables only (feed credit posts a bill with SourceType feed_purchase).
+        db.SupplierPayables.Add(new SupplierPayable
+        {
+            SupplierName = "Miller",
+            Date = TestDb.Today,
+            Description = "Feed – Wheat",
+            Amount = 1000,
+            PaidAmount = 200,
+            Status = PayableStatus.Partial,
+            SourceType = "feed_purchase",
+            SourceId = "1"
+        });
         await db.SaveChangesAsync();
         var ledger = new GoatFarm.Infrastructure.Services.Extended.LedgerService(db);
         var page = await ledger.GetPageAsync(MonthHelper.CurrentMonthKey());
         Assert.Contains(page.PayablesList, p => p.Description.StartsWith("Feed"));
+        Assert.DoesNotContain(page.PayablesList, p => p.Description.Contains("Feed purchase ·", StringComparison.OrdinalIgnoreCase));
         Assert.True(page.Payables >= 800);
+    }
+
+    [Fact]
+    public async Task Statement_CountsMilkFromProductSalesOnly_NotLegacyMilkSales()
+    {
+        var db = TestDb.Create();
+        db.MilkSales.Add(new MilkSale { Date = TestDb.Today, Liters = 1, Rate = 200, Amount = 200, Comment = "legacy" });
+        db.ProductSales.Add(new ProductSale
+        {
+            Date = TestDb.Today,
+            ProductName = "Raw milk",
+            Qty = 1,
+            Rate = 200,
+            Amount = 200,
+            InvoiceNo = "SF-TEST-0001"
+        });
+        db.GoatSales.Add(new GoatSale
+        {
+            Tag = "S-301",
+            Date = TestDb.Today,
+            Price = 45_000,
+            Breed = "Tedda"
+        });
+        await db.SaveChangesAsync();
+        var stmt = await CreateFinance(db).GetStatementAsync(TestDb.Today, TestDb.Today);
+        Assert.Equal(45_200, stmt.Income);
+        Assert.Equal(200, stmt.IncomeLines.Where(l => l.Label.Contains("milk", StringComparison.OrdinalIgnoreCase)).Sum(l => l.Amount));
+        Assert.DoesNotContain(stmt.IncomeLines, l => l.Label == "Milk sales");
+        Assert.Contains(stmt.IncomeLines, l => l.Label == "Live goat sale" && l.Amount == 45_000);
     }
 
     [Fact]

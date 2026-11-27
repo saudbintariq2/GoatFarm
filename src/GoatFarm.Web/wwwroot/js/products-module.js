@@ -36,7 +36,10 @@
   async function postJson(url, body) {
     const res = await post(url, body);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || data.title || 'Save failed');
+    if (!res.ok) {
+      const msg = data.error || data.message || data.title || 'Could not save – please try again.';
+      throw new Error(msg);
+    }
     return data;
   }
 
@@ -605,7 +608,7 @@
     if (!el) return;
     const prev = el.value;
     const accts = page.moneyAccounts || [];
-    el.innerHTML = '<option value="">— record expense only —</option>' +
+    el.innerHTML = '<option value="">Select Cash / Bank…</option>' +
       (accts.length
         ? accts.map(a => `<option value="${a.id}">${esc(a.name)} · ${esc(a.kind || '')}</option>`).join('')
         : '<option value="" disabled>Add cash/bank on Finance → Bank &amp; Cash</option>');
@@ -614,7 +617,7 @@
 
   function fillPaidFromSelects() {
     const html = accountOptionsHtml();
-    ['sl-pz-acct', 'sl-mk-acct', 'sl-sg-acct', 'sl-sa-acct'].forEach(id => {
+    ['sl-pz-acct', 'sl-mk-acct', 'sl-sg-acct', 'sl-sa-acct', 'ca-account'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       const prev = el.value;
@@ -1202,9 +1205,9 @@
   async function addLocationFromForm() {
     const name = document.getElementById('sl-loc-name')?.value?.trim();
     const kind = document.getElementById('sl-loc-kind')?.value || 'other';
-    if (!name) { alert('Enter a name.'); return; }
+    if (!name) { farmNotify('Enter a name.'); return; }
     if ((page.warehouses || []).some(x => String(x.name).toLowerCase() === name.toLowerCase())) {
-      alert('A location with this name already exists.');
+      farmNotify('A location with this name already exists.');
       return;
     }
     await post('/Products/SaveWarehouse', {
@@ -1384,11 +1387,11 @@
     const card = document.querySelector(`.sl-admin-card[data-loc="${CSS.escape(String(locId))}"]`);
     if (!card) return;
     const name = card.querySelector('.sl-tk-name')?.value?.trim();
-    if (!name) { alert('Enter a name.'); return; }
+    if (!name) { farmNotify('Enter a name.'); return; }
     const w = warehouseById(locId);
     if (!w) return;
     if ((page.warehouses || []).some(x => x.id !== +locId && String(x.name).toLowerCase() === name.toLowerCase())) {
-      alert('Another tank or store already has this name.');
+      farmNotify('Another tank or store already has this name.');
       return;
     }
     const cap = card.querySelector('.sl-tk-cap')?.value;
@@ -1432,7 +1435,7 @@
     const name = (prompt(`Name of the new ${label}:`, (prefixes[kind] || 'Store ') + n) || '').trim();
     if (!name) { renderTankAdmin(); return; }
     if ((page.warehouses || []).some(x => String(x.name).toLowerCase() === name.toLowerCase())) {
-      alert('That name is already used.');
+      farmNotify('That name is already used.');
       renderTankAdmin();
       return;
     }
@@ -1716,7 +1719,7 @@
     const name = (prompt('Name of the new meat chiller / freezer:', `Meat chiller ${n}`) || '').trim();
     if (!name) { fillMeatFormSelects(); return; }
     if ((page.warehouses || []).some(x => String(x.name).toLowerCase() === name.toLowerCase())) {
-      alert('That name is already used.');
+      farmNotify('That name is already used.');
       fillMeatFormSelects();
       return;
     }
@@ -1739,7 +1742,7 @@
 
   async function renameDairyProduct() {
     const list = dairyCatalogProducts();
-    if (!list.length) { alert('Add a product first.'); return; }
+    if (!list.length) { farmNotify('Add a product first.'); return; }
     const pick = prompt('Which product? Type its number:\n' + list.map((p, i) => `${i + 1}. ${productLabel(p)}`).join('\n'), '1');
     const p = list[(+pick || 0) - 1];
     if (!p) return;
@@ -1857,7 +1860,7 @@
         } else {
           const custom = customSessions.filter(Boolean);
           if (!custom.length) {
-            alert('Morning and Evening are built in. Add your own milking time first, then you can rename it.');
+            farmNotify('Morning and Evening are built in. Add your own milking time first, then you can rename it.');
             renderMilking();
             return;
           }
@@ -1898,7 +1901,7 @@
           fillCustomerSelect('cp-client');
           t.value = String(data.id);
         } catch (err) {
-          alert(err.message || 'Could not add customer. Add them on Accounting → Sales & receivables.');
+          farmNotify(err.message || 'Could not add customer. Add them on Accounting → Sales & receivables.');
           t.value = '';
         }
         if (x === 'sl-sa-cust') saleSourceChanged(true);
@@ -2028,7 +2031,7 @@
         const tag = document.getElementById('sl-mg-goat-find')?.value || '';
         const g = findGoatByTag(tag);
         if (!g) {
-          alert(tag.trim() ? `No goat with tag ${tag.trim()} in the live herd.` : 'Type a tag first.');
+          farmNotify(tag.trim() ? `No goat with tag ${tag.trim()} in the live herd.` : 'Type a tag first.');
           return;
         }
         addGoatRow(g);
@@ -2419,7 +2422,7 @@
     try {
       await postJson('/Products/SaveProductDropdownOptions', productDropdownOptions);
     } catch (err) {
-      alert(err.message || 'Could not save custom option.');
+      farmNotify(err.message || 'Could not save custom option.');
       return;
     }
     refreshProductCustomDropdowns();
@@ -3033,7 +3036,7 @@
       await postJson('/Products/DeleteDeliveryRoute', { id });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not delete route.');
+      farmNotify(err.message || 'Could not delete route.');
     }
   });
 
@@ -3047,7 +3050,7 @@
       await postJson('/Products/DeleteClientProductPrice', { id });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not delete client rate.');
+      farmNotify(err.message || 'Could not delete client rate.');
     }
   });
 
@@ -3055,9 +3058,9 @@
   document.getElementById('sl-mg-save')?.addEventListener('click', async () => {
     const rows = readMilkingRows();
     const sessionVal = document.getElementById('mp-session')?.value || '';
-    if (!sessionVal || sessionVal.startsWith('__')) { alert('Choose Morning, Evening or another milking time.'); return; }
+    if (!sessionVal || sessionVal.startsWith('__')) { farmNotify('Choose Morning, Evening or another milking time.'); return; }
     const wh = document.getElementById('mp-warehouse')?.value;
-    if (!wh || wh.startsWith('__')) { alert('Choose the raw milk tank the milk goes into.'); return; }
+    if (!wh || wh.startsWith('__')) { farmNotify('Choose the raw milk tank the milk goes into.'); return; }
   const note = document.getElementById('mp-note')?.value?.trim() || null;
     const base = {
       date: document.getElementById('mp-date')?.value || today(),
@@ -3071,7 +3074,7 @@
 
     const assertTank = usableAdd => {
       if (cap > 0 && now + usableAdd > cap + 0.0005) {
-        alert(`${whRow?.name || 'Tank'} would exceed ${fmtN(cap)} L capacity (${fmtQ(now, 'L')} in tank now).`);
+        farmNotify(`${whRow?.name || 'Tank'} would exceed ${fmtN(cap)} L capacity (${fmtQ(now, 'L')} in tank now).`);
         return false;
       }
       return true;
@@ -3080,7 +3083,7 @@
     if (mgMode === 'breed') {
       const lines = rows.filter(r => (r.total || 0) > 0 || (r.rejected || 0) > 0);
       if (!lines.length) {
-        alert('Add at least one breed line with milk litres, or switch to “One total”.');
+        farmNotify('Add at least one breed line with milk litres, or switch to “One total”.');
         return;
       }
       const usable = lines.reduce((n, r) => n + Math.max(0, (r.total || 0) - (r.rejected || 0)), 0);
@@ -3107,11 +3110,11 @@
       splitByMilkingBreeds = true;
     } else if (mgMode === 'goat') {
       if (!rows.length) {
-        alert('Type the litres for at least one goat.');
+        farmNotify('Type the litres for at least one goat.');
         return;
       }
       if (rows.some(r => r.rejected > r.total)) {
-        alert('Rejected milk cannot be more than the milk on the same line.');
+        farmNotify('Rejected milk cannot be more than the milk on the same line.');
         return;
       }
       rows.forEach(r => {
@@ -3120,9 +3123,9 @@
       });
       breed = rows[0].breed || 'Mixed';
     }
-    if (liters <= 0) { alert('Enter milk litres.'); return; }
+    if (liters <= 0) { farmNotify('Enter milk litres.'); return; }
     const usable = liters - rejected;
-    if (usable <= 0) { alert('There is no usable milk to put in the tank.'); return; }
+    if (usable <= 0) { farmNotify('There is no usable milk to put in the tank.'); return; }
     if (!assertTank(usable)) return;
     let goatCount = 0;
     if (mgMode === 'total') goatCount = +document.getElementById('mp-goats')?.value || 0;
@@ -3145,7 +3148,7 @@
       resetCatalogForm();
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save product.');
+      farmNotify(err.message || 'Could not save product.');
     }
   });
 
@@ -3161,7 +3164,7 @@
       resetCatalogForm();
       reload();
     } catch (err) {
-      alert(err.message || 'Could not delete product.');
+      farmNotify(err.message || 'Could not delete product.');
     }
   });
 
@@ -3188,7 +3191,7 @@
         });
         reload();
       } catch (err) {
-        alert(err.message || 'Could not update product status.');
+        farmNotify(err.message || 'Could not update product status.');
       }
       return;
     }
@@ -3202,11 +3205,11 @@
     const store = document.getElementById('sl-sg-store')?.value;
     const carcassKg = +document.getElementById('sl-sg-kg')?.value || 0;
     if (!store || store.startsWith('__')) {
-      alert('Choose the meat chiller / freezer.');
+      farmNotify('Choose the meat chiller / freezer.');
       return;
     }
     if (carcassKg <= 0) {
-      alert('Enter carcass weight (kg).');
+      farmNotify('Enter carcass weight (kg).');
       return;
     }
     try {
@@ -3224,13 +3227,13 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save carcass.');
+      farmNotify(err.message || 'Could not save carcass.');
     }
   });
 
   document.getElementById('sl-sp-save')?.addEventListener('click', async () => {
     const id = +document.getElementById('sl-sp-src')?.value;
-    if (!id) { alert('Choose a whole carcass.'); return; }
+    if (!id) { farmNotify('Choose a whole carcass.'); return; }
     try {
       await postJson('/Products/SaveMeatSplit', {
         slaughterId: id,
@@ -3240,17 +3243,17 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not split carcass.');
+      farmNotify(err.message || 'Could not split carcass.');
     }
   });
 
   document.getElementById('sl-ct-save')?.addEventListener('click', async () => {
     const id = +document.getElementById('sl-ct-src')?.value;
     const store = document.getElementById('sl-ct-store')?.value;
-    if (!id) { alert('Choose the carcass to cut.'); return; }
-    if (!store || store.startsWith('__')) { alert('Choose where the cuts are stored.'); return; }
+    if (!id) { farmNotify('Choose the carcass to cut.'); return; }
+    if (!store || store.startsWith('__')) { farmNotify('Choose where the cuts are stored.'); return; }
     const cuts = readCutRows().filter(r => r.kg > 0 && r.productId).map(r => ({ productId: r.productId, kg: r.kg }));
-    if (!cuts.length) { alert('Weigh at least one cut.'); return; }
+    if (!cuts.length) { farmNotify('Weigh at least one cut.'); return; }
     try {
       await postJson('/Products/SaveMeatCut', {
         slaughterId: id,
@@ -3263,7 +3266,7 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save cuts.');
+      farmNotify(err.message || 'Could not save cuts.');
     }
   });
 
@@ -3283,9 +3286,9 @@
     const basis = document.getElementById('sl-sa-basis')?.value || 'unit';
     const amt = basis === 'fixed' ? rate : qty * rate;
     const src = currentSaleSource();
-  if (qty <= 0) { alert('Enter quantity to sell.'); return; }
+  if (qty <= 0) { farmNotify('Enter quantity to sell.'); return; }
   if (src && qty > N(src.qty) + 0.0005) {
-    alert(`Only ${fmtQ(src.qty, src.unit || '')} available in that tank or store.`);
+    farmNotify(`Only ${fmtQ(src.qty, src.unit || '')} available in that tank or store.`);
     return;
   }
     const type = document.getElementById('sl-sa-type')?.value || 'other';
@@ -3300,12 +3303,17 @@
       const postType = document.getElementById('sl-sa-type')?.value || 'other';
       const postQty = +document.getElementById('sl-sa-qty')?.value || 0;
       if (postSrc && postQty > N(postSrc.qty) + 0.0005) {
-        alert(`Only ${fmtQ(postSrc.qty, postSrc.unit || '')} available.`);
+        farmNotify(`Only ${fmtQ(postSrc.qty, postSrc.unit || '')} available.`);
         return;
       }
       const cust = document.getElementById('sl-sa-cust')?.value;
-      const pay = document.getElementById('sl-sa-pay')?.value;
-      const isCredit = pay === 'credit' && cust;
+      const pay = document.getElementById('sl-sa-pay')?.value || 'paid';
+      const isCredit = pay === 'credit' || pay === 'partial';
+      const custId = cust && !String(cust).startsWith('__') ? +cust : null;
+      const acct = document.getElementById('sl-sa-acct')?.value;
+      const receivedNow = pay === 'partial' ? (+document.getElementById('sl-sa-recv')?.value || 0) : 0;
+      if (isCredit && !custId) { farmNotify('Choose the customer for a credit or part-paid sale.'); return; }
+      if ((pay === 'paid' || receivedNow > 0) && !acct) { farmNotify('Choose Received into: the Cash or Bank account that got the money.'); return; }
       const prodVal = document.getElementById('sl-sa-prod')?.value;
       const productId = postSrc?.productId || (prodVal && !String(prodVal).startsWith('__') ? +prodVal : null);
       const whId = (postType === 'whole' || postType === 'half') ? null : (postSrc?.key ? +postSrc.key : null);
@@ -3316,21 +3324,25 @@
           date: document.getElementById('sl-sa-date')?.value || today(),
           productId: productId || null,
           warehouseId: whId,
-          customerId: cust && cust !== '__add' ? +cust : null,
+          customerId: custId,
           productName: typeLabels[postType] || 'Sale',
           qty: postQty,
           rate: +document.getElementById('sl-sa-rate')?.value || 0,
-          isCredit: !!isCredit
+          isCredit,
+          accountId: acct ? +acct : null,
+          receivedNow: receivedNow || null,
+          dueDate: isCredit ? (document.getElementById('sl-sa-due')?.value || null) : null,
+          notes: document.getElementById('sl-sa-note')?.value?.trim() || null
         })
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) { alert(j.error || 'Could not save sale.'); return; }
+      if (!res.ok) { farmNotify(j.error || 'Could not save sale.'); return; }
       if (j.invoiceNo) {
         const msg = j.invoiceId
           ? `Sale ${j.invoiceNo} recorded — Finance invoice #${j.invoiceId}.`
           : `Sale ${j.invoiceNo} recorded.`;
-        alert(msg);
-      } else if (j.invoiceId) alert('Credit sale recorded — invoice #' + j.invoiceId + ' in Finance.');
+        farmNotify(msg, 'success');
+      } else if (j.invoiceId) farmNotify('Credit sale recorded — invoice #' + j.invoiceId + ' in Finance.', 'success');
       reload();
     });
   });
@@ -3354,15 +3366,15 @@
     const note = document.getElementById('sl-sp2-note')?.value?.trim() || '';
     const date = document.getElementById('sl-sp2-date')?.value || today();
     if (!meta?.productId || !meta.warehouseId) {
-      alert('Choose the tank or product.');
+      farmNotify('Choose the tank or product.');
       return;
     }
     if (!(q > 0)) {
-      alert('Enter the quantity.');
+      farmNotify('Enter the quantity.');
       return;
     }
     if (reason === 'Other' && !note) {
-      alert('Write what happened in the note.');
+      farmNotify('Write what happened in the note.');
       return;
     }
     const notes = [reason, note].filter(Boolean).join(' · ');
@@ -3378,7 +3390,7 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save spoilage.');
+      farmNotify(err.message || 'Could not save spoilage.');
     }
   });
 
@@ -3387,14 +3399,14 @@
     const to = document.getElementById('sl-mvm-to')?.value;
     const q = +document.getElementById('sl-mvm-qty')?.value || 0;
     const date = document.getElementById('sl-mvm-date')?.value || today();
-    if (!from || from.startsWith('__')) { alert('Choose the tank to move milk from.'); return; }
+    if (!from || from.startsWith('__')) { farmNotify('Choose the tank to move milk from.'); return; }
     if (!to || to.startsWith('__')) {
-      alert('Choose the tank to move milk into. Add a second tank first if you have only one.');
+      farmNotify('Choose the tank to move milk into. Add a second tank first if you have only one.');
       return;
     }
-    if (!(q > 0)) { alert('Enter the litres to move.'); return; }
+    if (!(q > 0)) { farmNotify('Enter the litres to move.'); return; }
     if (kindOfWhId(from) !== kindOfWhId(to)) {
-      alert('Raw and pasteurized milk cannot be mixed.');
+      farmNotify('Raw and pasteurized milk cannot be mixed.');
       return;
     }
     const dest = warehouseById(to);
@@ -3405,7 +3417,7 @@
     }
     const sku = kindOfWhId(from) === 'past_tank' ? 'MILK-PAST' : 'MILK-RAW';
     const productId = catalogId(sku);
-    if (!productId) { alert('Milk product setup is missing. Contact your administrator.'); return; }
+    if (!productId) { farmNotify('Milk product setup is missing. Contact your administrator.'); return; }
     const note = document.getElementById('sl-mvm-note')?.value?.trim() || '';
     try {
       await postJson('/Products/SaveStockMovement', {
@@ -3420,7 +3432,7 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not move milk.');
+      farmNotify(err.message || 'Could not move milk.');
     }
   });
 
@@ -3442,17 +3454,17 @@
     const outL = +document.getElementById('sl-pz-out')?.value || 0;
     const cost = +document.getElementById('sl-pz-cost')?.value || 0;
     const acct = document.getElementById('sl-pz-acct')?.value;
-    if (!src || src.startsWith('__')) { alert('Choose the raw milk tank the milk comes from.'); return; }
-    if (!dst || dst.startsWith('__')) { alert('Choose a pasteurized milk tank for the output.'); return; }
-    if (inL <= 0) { alert('Enter the raw milk taken (litres).'); return; }
-    if (outL <= 0) { alert('Enter the pasteurized milk obtained (litres).'); return; }
-    if (outL > inL) { alert('Pasteurized litres cannot be more than the raw litres taken.'); return; }
+    if (!src || src.startsWith('__')) { farmNotify('Choose the raw milk tank the milk comes from.'); return; }
+    if (!dst || dst.startsWith('__')) { farmNotify('Choose a pasteurized milk tank for the output.'); return; }
+    if (inL <= 0) { farmNotify('Enter the raw milk taken (litres).'); return; }
+    if (outL <= 0) { farmNotify('Enter the pasteurized milk obtained (litres).'); return; }
+    if (outL > inL) { farmNotify('Pasteurized litres cannot be more than the raw litres taken.'); return; }
     if (!document.getElementById('sl-pz-qc')?.checked) {
-      alert('Tick the box to confirm pasteurization and cooling were completed and the milk passed the check.');
+      farmNotify('Tick the box to confirm pasteurization and cooling were completed and the milk passed the check.');
       return;
     }
     if (cost > 0 && !acct) {
-      alert('Choose Paid from: Cash in Hand or a Bank account (the same rule as Accounting → Expenses).');
+      farmNotify('Choose Paid from: Cash in Hand or a Bank account (the same rule as Accounting → Expenses).');
       return;
     }
     try {
@@ -3471,7 +3483,7 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save pasteurization.');
+      farmNotify(err.message || 'Could not save pasteurization.');
     }
   });
 
@@ -3481,9 +3493,9 @@
     const qty = N(document.getElementById('sl-tf-qty')?.value);
     const date = document.getElementById('sl-tf-date')?.value || today();
     const note = document.getElementById('sl-tf-note')?.value?.trim() || '';
-    if (!k?.productId) { alert('Choose what to move.'); return; }
-    if (!toWh) { alert('Choose where it goes.'); return; }
-    if (!(qty > 0)) { alert('Enter the quantity to move.'); return; }
+    if (!k?.productId) { farmNotify('Choose what to move.'); return; }
+    if (!toWh) { farmNotify('Choose where it goes.'); return; }
+    if (!(qty > 0)) { farmNotify('Enter the quantity to move.'); return; }
     const batchNote = k.batch ? `Batch/carcass ${k.batch}` : '';
     const notes = [batchNote, note].filter(Boolean).join(' · ') || null;
     try {
@@ -3499,7 +3511,7 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save transfer.');
+      farmNotify(err.message || 'Could not save transfer.');
     }
   });
 
@@ -3510,9 +3522,9 @@
     const reason = document.getElementById('sl-adj-reason')?.value || '';
     const date = document.getElementById('sl-adj-date')?.value || today();
     const note = document.getElementById('sl-adj-note')?.value?.trim() || '';
-    if (!k?.productId) { alert('Choose the item.'); return; }
-    if (!(qty > 0)) { alert('Enter the quantity.'); return; }
-    if (!note && reason === 'Other') { alert('Explain the adjustment in the note.'); return; }
+    if (!k?.productId) { farmNotify('Choose the item.'); return; }
+    if (!(qty > 0)) { farmNotify('Enter the quantity.'); return; }
+    if (!note && reason === 'Other') { farmNotify('Explain the adjustment in the note.'); return; }
     const cost = productUnitCost(k.productId);
     const notes = [reason, k.batch ? `Batch/carcass ${k.batch}` : '', note].filter(Boolean).join(' · ');
     try {
@@ -3527,7 +3539,7 @@
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save adjustment.');
+      farmNotify(err.message || 'Could not save adjustment.');
     }
   });
 
@@ -3546,18 +3558,19 @@
   document.getElementById('addTransportShipment')?.addEventListener('click', async () => {
     const typeEl = document.getElementById('tp-type');
     let type = typeEl?.value || 'Milk';
-    if (type.startsWith('__')) { alert('Choose a shipment type.'); return; }
+    if (type.startsWith('__')) { farmNotify('Choose a shipment type.'); return; }
     let unit = document.getElementById('tp-unit')?.value || 'L';
-    if (unit.startsWith('__')) { alert('Choose a unit.'); return; }
+    if (unit.startsWith('__')) { farmNotify('Choose a unit.'); return; }
     const date = document.getElementById('tp-date')?.value || today();
     const qty = N(document.getElementById('tp-qty')?.value);
     const to = document.getElementById('tp-to')?.value?.trim();
     const cost = N(document.getElementById('tp-cost')?.value);
     if (!date || !(qty > 0) || !to || cost < 0) {
-      alert('Enter date, total quantity and destination.');
+      farmNotify('Enter date, total quantity and destination.');
       return;
     }
     const acct = document.getElementById('tp-account')?.value;
+    if (cost > 0 && !acct) { farmNotify('Choose Paid from: the Cash or Bank account that paid for the transport.'); return; }
     try {
       await postJson('/Products/SaveTransportShipment', {
         date,
@@ -3574,7 +3587,7 @@
       });
       reload('transport');
     } catch (err) {
-      alert(err.message || 'Could not save transport shipment.');
+      farmNotify(err.message || 'Could not save transport shipment.');
     }
   });
 
@@ -3588,13 +3601,13 @@
       await postJson('/Products/DeleteTransportShipment', { id });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not delete shipment.');
+      farmNotify(err.message || 'Could not delete shipment.');
     }
   });
 
   document.getElementById('addCostAllocation')?.addEventListener('click', async () => {
     let type = document.getElementById('ca-type')?.value || '';
-    if (type.startsWith('__')) { alert('Choose a cost type.'); return; }
+    if (type.startsWith('__')) { farmNotify('Choose a cost type.'); return; }
     const date = document.getElementById('ca-date')?.value || today();
     const amount = N(document.getElementById('ca-amount')?.value);
     const scope = document.getElementById('ca-scope')?.value || 'general';
@@ -3604,8 +3617,10 @@
     productId = resolveProductIdForCostAllocation(scope, productId, ref);
     const qty = N(document.getElementById('ca-qty')?.value);
     const note = document.getElementById('ca-note')?.value?.trim() || null;
-    if (!date || !(amount > 0)) { alert('Enter date and amount.'); return; }
-    if (scope === 'product' && !productId) { alert('Choose the product for this allocation.'); return; }
+    if (!date || !(amount > 0)) { farmNotify('Enter date and amount.'); return; }
+    if (scope === 'product' && !productId) { farmNotify('Choose the product for this allocation.'); return; }
+    const paidFrom = document.getElementById('ca-account')?.value;
+    if (!paidFrom) { farmNotify('Choose Paid from: the Cash or Bank account that paid this cost.'); return; }
     try {
       await postJson('/Products/SaveProductCostAllocation', {
         date,
@@ -3615,11 +3630,12 @@
         productId,
         ref,
         qty,
-        note
+        note,
+        paidFromAccountId: +paidFrom
       });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save cost allocation.');
+      farmNotify(err.message || 'Could not save cost allocation.');
     }
   });
 
@@ -3633,7 +3649,7 @@
       await postJson('/Products/DeleteProductCostAllocation', { id });
       reload();
     } catch (err) {
-      alert(err.message || 'Could not delete allocation.');
+      farmNotify(err.message || 'Could not delete allocation.');
     }
   });
 
@@ -3644,7 +3660,7 @@
       resetProductPricingForm();
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save pricing.');
+      farmNotify(err.message || 'Could not save pricing.');
     }
   });
 
@@ -3660,7 +3676,7 @@
       resetProductPricingForm();
       reload();
     } catch (err) {
-      alert(err.message || 'Could not delete pricing profile.');
+      farmNotify(err.message || 'Could not delete pricing profile.');
     }
   });
 
@@ -3675,7 +3691,7 @@
     const qty = N(document.getElementById('rp-qty')?.value);
     const cost = N(document.getElementById('rp-cost')?.value);
     if (!name || !pidRaw || pidRaw.startsWith('__') || !(qty > 0) || cost < 0) {
-      alert('Enter destination/route, product, shipment quantity and transport cost.');
+      farmNotify('Enter destination/route, product, shipment quantity and transport cost.');
       return;
     }
     try {
@@ -3690,7 +3706,7 @@
       document.getElementById('rp-cost').value = '';
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save route.');
+      farmNotify(err.message || 'Could not save route.');
     }
   });
 
@@ -3699,7 +3715,7 @@
     const pidRaw = document.getElementById('cp-product')?.value;
     const rate = N(document.getElementById('cp-rate')?.value);
     if (!cidRaw || cidRaw === '__add' || !pidRaw || pidRaw.startsWith('__') || !(rate > 0)) {
-      alert('Select client, product and special rate.');
+      farmNotify('Select client, product and special rate.');
       return;
     }
     try {
@@ -3711,7 +3727,7 @@
       document.getElementById('cp-rate').value = '';
       reload();
     } catch (err) {
-      alert(err.message || 'Could not save client rate.');
+      farmNotify(err.message || 'Could not save client rate.');
     }
   });
 

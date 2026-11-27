@@ -56,7 +56,7 @@
   const toast = (m, t) => {
     const ui = recordsUi();
     if (ui?.showToast) ui.showToast(m, t);
-    else alert(m);
+    else window.alert(m);
   };
   const modal = (m, o) => recordsUi()?.showModal?.(m, o) ?? Promise.resolve(confirm(m));
   const confirmDlg = m => recordsUi()?.showConfirm?.(m) ?? Promise.resolve(confirm(m));

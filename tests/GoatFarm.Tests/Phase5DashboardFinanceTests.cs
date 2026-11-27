@@ -61,7 +61,15 @@ public class Phase5DashboardFinanceTests
     {
         var (finance, _, db) = Create();
         var month = $"{TestDb.Today.Year:0000}-{TestDb.Today.Month:00}";
-        db.MilkSales.Add(new MilkSale { Date = TestDb.Today, Amount = 500, Liters = 10 });
+        db.ProductSales.Add(new ProductSale
+        {
+            Date = TestDb.Today,
+            ProductName = "Raw milk",
+            Qty = 10,
+            Rate = 50,
+            Amount = 500,
+            InvoiceNo = "SF-TEST-OV"
+        });
         await db.SaveChangesAsync();
 
         var overview = await finance.GetFinancePageAsync(month, FinancePageLoadOptions.Overview);

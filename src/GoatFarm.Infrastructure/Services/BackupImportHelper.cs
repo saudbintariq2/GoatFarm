@@ -30,6 +30,9 @@ internal static class BackupImportHelper
         await BackupV241Helper.ClearV241Async(context, cancellationToken);
         context.FarmTasks.RemoveRange(await context.FarmTasks.ToListAsync(cancellationToken));
         await GoatGraphCleaner.DetachBreedingGraphAsync(context, cancellationToken);
+        context.GoatBcsRecords.RemoveRange(await context.GoatBcsRecords.ToListAsync(cancellationToken));
+        context.GoatHeatEvents.RemoveRange(await context.GoatHeatEvents.ToListAsync(cancellationToken));
+        context.BuckHealthChecks.RemoveRange(await context.BuckHealthChecks.ToListAsync(cancellationToken));
         context.VaccinationHistories.RemoveRange(await context.VaccinationHistories.ToListAsync(cancellationToken));
         context.GoatSales.RemoveRange(await context.GoatSales.ToListAsync(cancellationToken));
         context.Goats.RemoveRange(await context.Goats.ToListAsync(cancellationToken));

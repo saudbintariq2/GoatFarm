@@ -3,13 +3,13 @@
   const api = GR.api || (async (url, opts = {}) => {
     const res = await fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(opts.headers || {}) }, ...opts });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 202) { alert(data.message || 'Submitted for manager approval.'); return data; }
+    if (res.status === 202) { farmNotify(data.message || 'Submitted for manager approval.', 'success'); return data; }
     if (!res.ok) throw new Error(data.error || data.title || 'Request failed');
     return data;
   });
   const showModal = GR.showModal || (msg => Promise.resolve(window.prompt(msg)));
   const showConfirm = GR.showConfirm || (msg => Promise.resolve(window.confirm(msg)));
-  const toast = GR.showToast || (msg => alert(msg));
+  const toast = GR.showToast || (msg => farmNotify(msg));
 
   const rs = n => 'Rs ' + Math.round(+n || 0).toLocaleString('en-US');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

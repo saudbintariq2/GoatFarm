@@ -17,6 +17,7 @@ public class GoatService : IGoatService
     private const int DefaultPageSize = 10;
     private readonly GoatFarmDbContext _context;
     private readonly Lazy<IFarmMetricsService> _farmMetrics;
+    private IReadOnlyDictionary<int, DoeStageResult>? _herdStageCache;
     private Dictionary<GoatStatus, int>? _liveStatusCounts;
     private HerdBreedingContext? _herdBreedingCtx;
 
@@ -44,6 +45,7 @@ public class GoatService : IGoatService
     {
         pageSize = pageSize <= 0 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
         search = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        _herdStageCache = null;
 
         var query = ApplySearch(await ApplyFilterAsync(LiveGoatsQuery(), filter, cancellationToken), search);
         var totalItems = await query.CountAsync(cancellationToken);
@@ -366,7 +368,9 @@ public class GoatService : IGoatService
             Type = "Goat purchase",
             Amount = model.PurchasePrice,
             Date = model.EventDate,
-            Comment = goat.Tag
+            Comment = goat.Tag,
+            SourceType = FinanceSourceTypes.GoatPurchase,
+            SourceId = goat.Id
         };
         _context.Expenses.Add(expense);
         await _context.SaveChangesAsync(cancellationToken);
@@ -756,7 +760,9 @@ public class GoatService : IGoatService
                 Type = "Livestock loss – death",
                 Amount = goat.PurchasePrice,
                 Date = model.Date,
-                Comment = $"{goat.Tag} – {model.Reason?.Trim() ?? "death"}"
+                Comment = $"{goat.Tag} – {model.Reason?.Trim() ?? "death"}",
+                SourceType = FinanceSourceTypes.Death,
+                SourceId = goat.Id
             });
         }
 
@@ -791,8 +797,12 @@ public class GoatService : IGoatService
         return new GoatSaleFormDataViewModel { Accounts = accounts, Customers = customers };
     }
 
-    public async Task<WeightDeathResultViewModel> RecordSaleAsync(
-        RecordSaleViewModel model, CancellationToken cancellationToken = default)
+    public Task<WeightDeathResultViewModel> RecordSaleAsync(
+        RecordSaleViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => RecordSaleCoreAsync(model, cancellationToken), cancellationToken);
+
+    private async Task<WeightDeathResultViewModel> RecordSaleCoreAsync(
+        RecordSaleViewModel model, CancellationToken cancellationToken)
     {
         if (model.Price <= 0)
             return new WeightDeathResultViewModel { Success = false, Message = "Enter the sale price." };
@@ -815,12 +825,21 @@ public class GoatService : IGoatService
         var buyer = string.IsNullOrWhiteSpace(model.Buyer) ? null : model.Buyer.Trim();
         var incomeNote = goat.Tag + (buyer is not null ? " — " + buyer : "");
 
+        if (!model.IsCredit)
+        {
+            if (model.AccountId is null or <= 0)
+                return new WeightDeathResultViewModel { Success = false, Message = "Choose the Cash/Bank account that received the money." };
+            if (!await _context.MoneyAccounts.AsNoTracking().AnyAsync(a => a.Id == model.AccountId && a.IsActive, cancellationToken))
+                return new WeightDeathResultViewModel { Success = false, Message = "That Cash/Bank account was not found." };
+        }
+
         var income = new Income
         {
             Type = "Live goat sale",
             Amount = model.Price,
             Date = model.Date,
-            Comment = incomeNote
+            Comment = incomeNote,
+            SourceType = FinanceSourceTypes.GoatSale
         };
         _context.Incomes.Add(income);
         await _context.SaveChangesAsync(cancellationToken);
@@ -871,11 +890,7 @@ public class GoatService : IGoatService
         }
         else
         {
-            var accountId = model.AccountId;
-            if (accountId is null or <= 0)
-                return new WeightDeathResultViewModel { Success = false, Message = "Choose the Cash/Bank account that received the money." };
-
-            ledgerAccountId = accountId;
+            ledgerAccountId = model.AccountId;
             _context.LedgerTransactions.Add(new LedgerTransaction
             {
                 Date = model.Date,
@@ -911,6 +926,8 @@ public class GoatService : IGoatService
         goat.ArchivedReason = "sold";
         goat.ArchivedDate = model.Date;
         goat.UpdatedDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        income.SourceId = sale.Id;
         await _context.SaveChangesAsync(cancellationToken);
 
         return new WeightDeathResultViewModel
@@ -1163,21 +1180,24 @@ public class GoatService : IGoatService
                  (g.Source != GoatSource.Born && g.DateOfBirth != null && g.DateOfBirth <= cutoff)));
         }
 
-        if (filter.Equals("br:prep", StringComparison.Ordinal))
-            return goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue);
-        if (filter.Equals("br:waiting", StringComparison.Ordinal))
-            return goats.Where(g => g.MatedDate.HasValue && !g.KidsCount.HasValue);
-        if (filter.Equals("br:scan", StringComparison.Ordinal))
+        if (filter is "br:prep" or "br:waiting" or "br:scan" or "br:expecting" or "br:due30")
         {
-            var scanFrom = now.AddDays(-BreedingHelper.ScanAfterDays);
-            return goats.Where(g => g.MatedDate.HasValue && !g.KidsCount.HasValue && g.MatedDate <= scanFrom);
-        }
-        if (filter.Equals("br:expecting", StringComparison.Ordinal))
-            return goats.Where(g => g.MatedDate.HasValue && g.KidsCount > 0);
-        if (filter.Equals("br:due30", StringComparison.Ordinal))
-        {
-            var matedOnOrBefore = now.AddDays(30 - BreedingHelper.GestationDays);
-            return goats.Where(g => g.MatedDate.HasValue && g.KidsCount > 0 && g.MatedDate <= matedOnOrBefore);
+            _herdStageCache ??= await _farmMetrics.Value.DoeStagesAsync(now, cancellationToken: cancellationToken);
+            Func<DoeStageResult, bool> match = filter switch
+            {
+                "br:prep" => s => s.CanBePicked,
+                "br:waiting" => s => s.Stage is FarmDoeStage.Crossed or FarmDoeStage.WaitingScan or FarmDoeStage.RescanDue,
+                "br:scan" => s => s.Stage is FarmDoeStage.WaitingScan or FarmDoeStage.RescanDue && s.NextJobDate <= now,
+                "br:expecting" => s => s.Stage is FarmDoeStage.Pregnant or FarmDoeStage.Dry,
+                _ => s => s.Stage is FarmDoeStage.Pregnant or FarmDoeStage.Dry && s.DueDate <= now.AddDays(30)
+            };
+            var ids = _herdStageCache.Where(kv => match(kv.Value)).Select(kv => kv.Key).ToList();
+            if (filter == "br:prep")
+            {
+                var inHeat = _herdStageCache.Where(kv => kv.Value.Stage == FarmDoeStage.InHeat).Select(kv => kv.Key).ToList();
+                return goats.Where(g => ids.Contains(g.Id) && (g.PrepCrossDate != null || inHeat.Contains(g.Id)));
+            }
+            return goats.Where(g => ids.Contains(g.Id));
         }
 
         if (filter.Equals("dryoff", StringComparison.Ordinal))

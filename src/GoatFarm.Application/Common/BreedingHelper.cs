@@ -7,7 +7,8 @@ public static class BreedingHelper
     public const int KiddingWindowEnd = 155;
     public const int PrepDietLeadDays = 60;
     public const int MinBreedingAgeDays = 300;
-    public const int ScanAfterDays = 45;
+    /// <summary>First ultrasound is due this many days after the cross; the same number gates the early-scan warning.</summary>
+    public const int ScanAfterDays = BreedingRules.MinDaysBeforeUltrasoundScan;
     /// <summary>A birth recorded sooner than this after the cross is flagged for confirmation.</summary>
     public const int MinPlausibleGestationDays = 135;
     public const int MaxKidsPerBirth = 6;

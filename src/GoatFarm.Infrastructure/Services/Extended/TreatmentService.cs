@@ -1,6 +1,7 @@
 using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Treatments;
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 using GoatFarm.Infrastructure.Persistence;
@@ -26,7 +27,10 @@ public class TreatmentService : ITreatmentService
         return new TreatmentsPageViewModel { Active = active, History = history };
     }
 
-    public async Task<object> SaveAsync(SaveTreatmentViewModel model, CancellationToken cancellationToken = default)
+    public Task<object> SaveAsync(SaveTreatmentViewModel model, CancellationToken cancellationToken = default) =>
+        _context.ExecuteInTransactionAsync(() => SaveCoreAsync(model, cancellationToken), cancellationToken);
+
+    private async Task<object> SaveCoreAsync(SaveTreatmentViewModel model, CancellationToken cancellationToken)
     {
         GoatTreatment row;
         if (model.Id is > 0)
@@ -52,43 +56,53 @@ public class TreatmentService : ITreatmentService
             goat.HealthState = GoatHealthState.Healthy;
         goat.UpdatedDate = DateTime.UtcNow;
 
+        await _context.SaveChangesAsync(cancellationToken);
+        var existing = await _context.Expenses.FirstOrDefaultAsync(
+            e => e.SourceType == FinanceSourceTypes.Treatment && e.SourceId == row.Id, cancellationToken);
+        var existingRef = existing is null ? null : $"fin-expense:{existing.Id}";
+        var existingTx = existingRef is null ? null
+            : await _context.LedgerTransactions.FirstOrDefaultAsync(t => t.Reference == existingRef, cancellationToken);
+
         if (model.Cost > 0)
         {
             if (model.AccountId is null or <= 0)
                 throw new InvalidOperationException("Choose the Cash/Bank account the medicine was paid from.");
 
-            var accountOk = await _context.MoneyAccounts.AnyAsync(
-                a => a.Id == model.AccountId && a.IsActive, cancellationToken);
-            if (!accountOk)
-                throw new InvalidOperationException("Selected account was not found. Add accounts on Finance → Bank & Cash.");
+            var account = await _context.MoneyAccounts.FirstOrDefaultAsync(
+                a => a.Id == model.AccountId && a.IsActive, cancellationToken)
+                ?? throw new InvalidOperationException("Selected account was not found. Add accounts on Finance → Bank & Cash.");
 
             var note = goat.Tag + " — " + (string.IsNullOrWhiteSpace(row.Diagnosis) ? "treatment" : row.Diagnosis.Trim());
-            var expense = new Expense
+            var expense = existing ?? new Expense
             {
                 Type = "Vet / extra medicine",
-                Amount = model.Cost,
-                Date = model.StartDate,
-                Comment = note
+                SourceType = FinanceSourceTypes.Treatment,
+                SourceId = row.Id,
+                CreatedDate = DateTime.UtcNow
             };
-            _context.Expenses.Add(expense);
+            expense.Amount = model.Cost;
+            expense.Date = model.StartDate;
+            expense.Comment = note;
+            expense.UpdatedDate = DateTime.UtcNow;
+            if (existing is null) _context.Expenses.Add(expense);
             await _context.SaveChangesAsync(cancellationToken);
 
-            _context.LedgerTransactions.Add(new LedgerTransaction
-            {
-                Date = model.StartDate,
-                Kind = LedgerTransactionKind.Expense,
-                AccountId = model.AccountId,
-                Amount = model.Cost,
-                Category = "Vet / extra medicine",
-                Reference = $"fin-expense:{expense.Id}",
-                Notes = "Expense · Vet / extra medicine · " + goat.Tag,
-                CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
-            });
+            var tx = existingTx ?? new LedgerTransaction { Reference = $"fin-expense:{expense.Id}", CreatedDate = DateTime.UtcNow };
+            tx.Date = model.StartDate;
+            tx.Kind = LedgerTransactionKind.Expense;
+            tx.AccountId = account.Id;
+            tx.Amount = model.Cost;
+            tx.Category = "Vet / extra medicine";
+            tx.Notes = "Expense · Vet / extra medicine · " + goat.Tag;
+            tx.UpdatedDate = DateTime.UtcNow;
+            if (existingTx is null) _context.LedgerTransactions.Add(tx);
+            account.OpeningBalanceLocked = true;
             await _context.SaveChangesAsync(cancellationToken);
             return new { id = row.Id };
         }
 
+        if (existing is not null) _context.Expenses.Remove(existing);
+        if (existingTx is not null) _context.LedgerTransactions.Remove(existingTx);
         await _context.SaveChangesAsync(cancellationToken);
         return new { id = row.Id };
     }

@@ -9,7 +9,8 @@ namespace GoatFarm.Infrastructure.Services;
 /// </summary>
 public static class BackupFormat
 {
-    public const int CurrentVersion = 3;
+    /// <summary>Version 4 adds the <c>native</c> section: every farm table and setting, restored with original ids.</summary>
+    public const int CurrentVersion = 4;
     public const string AppMarker = "GoatFarmPro";
 
     public static readonly string[] RequiredV2Sections = ["goats", "breedingEvents", "kiddingRecords", "farmTasks"];

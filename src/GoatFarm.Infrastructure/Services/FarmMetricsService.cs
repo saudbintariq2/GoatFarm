@@ -87,6 +87,8 @@ public class FarmMetricsService : IFarmMetricsService
             .Select(g => new { DoeId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.DoeId, x => x.Count, cancellationToken);
 
+        var seasonCross = await NextSeasonCrossByBatchAsync(day, cancellationToken);
+
         return does.ToDictionary(
             d => d.Id,
             d => DoeStageResolver.Resolve(
@@ -95,8 +97,39 @@ public class FarmMetricsService : IFarmMetricsService
                 kiddings.GetValueOrDefault(d.Id),
                 day,
                 buckIn,
-                rescanDue.GetValueOrDefault(d.Id),
-                kiddingsHere.GetValueOrDefault(d.Id)));
+                rescanDue.TryGetValue(d.Id, out var due) ? due : (DateOnly?)null,
+                kiddingsHere.GetValueOrDefault(d.Id),
+                NextSeasonCross(seasonCross, d.BirthBatchName)));
+    }
+
+    private static DateOnly? NextSeasonCross(
+        (Dictionary<string, DateOnly> ByBatch, DateOnly? Earliest) season, string? birthBatchName) =>
+        !string.IsNullOrWhiteSpace(birthBatchName) && season.ByBatch.TryGetValue(birthBatchName, out var own)
+            ? own
+            : season.Earliest;
+
+    /// <summary>Start of each season batch's next crossing window that has not ended yet.</summary>
+    private async Task<(Dictionary<string, DateOnly> ByBatch, DateOnly? Earliest)> NextSeasonCrossByBatchAsync(
+        DateOnly day, CancellationToken cancellationToken)
+    {
+        var byBatch = new Dictionary<string, DateOnly>(StringComparer.OrdinalIgnoreCase);
+        var row = await _db.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == AppSettingKeys.BreedingSeason, cancellationToken);
+        if (row?.Value is null) return (byBatch, null);
+        BreedingSeasonSettings? season;
+        try { season = JsonSerializer.Deserialize<BreedingSeasonSettings>(row.Value); }
+        catch (JsonException) { return (byBatch, null); }
+        if (season is null || season.Batches.Count == 0) return (byBatch, null);
+
+        foreach (var batch in season.Batches)
+        {
+            var plan = BreedingSeasonHelper.SeasonPlan(batch, season, day);
+            if (plan.CrossTo < day) continue;
+            var start = plan.CrossFrom < day ? day : plan.CrossFrom;
+            if (!string.IsNullOrWhiteSpace(batch.Name))
+                byBatch[batch.Name] = start;
+        }
+        return (byBatch, byBatch.Count == 0 ? null : byBatch.Values.Min());
     }
 
     public async Task<IReadOnlyDictionary<FarmDoeStage, int>> DoeStageCountsAsync(
@@ -217,14 +250,8 @@ public class FarmMetricsService : IFarmMetricsService
             q = q.Where(b => batchDoes.Contains(b.DoeId));
         }
 
-        var list = await q.ToListAsync(cancellationToken);
-        var pregnant = list.Count(b => b.Outcome is BreedingOutcome.ConfirmedPregnant or BreedingOutcome.Kidded ||
-            (b.Outcome == BreedingOutcome.Open && b.ScanKids is > 0));
-        var empty = list.Count(b => b.Outcome == BreedingOutcome.Empty);
-        var waiting = list.Count(b => b.Outcome == BreedingOutcome.Open && b.ScanKids is null or 0);
-        var scanned = pregnant + empty;
-        decimal? rate = scanned == 0 ? null : Math.Round(100m * pregnant / scanned, 0);
-        return (scanned, pregnant, waiting, rate);
+        var r = PregnancyRateCalculator.Compute(await q.ToListAsync(cancellationToken));
+        return (r.Scanned, r.Pregnant, r.Waiting, r.Rate);
     }
 
     private async Task<List<BreedingGroupDto>> LoadBreedingGroupsAsync(CancellationToken cancellationToken)

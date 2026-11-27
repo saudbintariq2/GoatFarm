@@ -17,11 +17,21 @@ public static class BreedingGroupPickerHelper
       DoeStageResult? stage = null,
       KiddingRecord? lastKidding = null)
   {
-    if (stage?.Stage == FarmDoeStage.KiddedNursing && lastKidding is not null)
-      return $"Kidded {lastKidding.KiddingDate:dd MMM} — resting";
-
-    if (stage?.Stage == FarmDoeStage.RescanDue)
-      return "Rescan pending";
+    if (stage is { CanBePicked: false } && !doe.IsArchived && doe.Gender == GoatGender.Female && doe.Status != GoatStatus.Kid)
+    {
+      return stage.Stage switch
+      {
+        FarmDoeStage.KiddedNursing when lastKidding is not null =>
+          $"Kidded {lastKidding.KiddingDate:dd MMM} — nursing until {stage.NextJobDate:dd MMM}",
+        FarmDoeStage.KiddedNursing => "Kidded · nursing",
+        FarmDoeStage.RescanDue => stage.Label,
+        FarmDoeStage.WaitingScan => $"Waiting scan · {stage.NextJob}",
+        FarmDoeStage.Crossed => "With a buck now",
+        FarmDoeStage.Pregnant or FarmDoeStage.Dry => stage.Label,
+        FarmDoeStage.CullList => "On the cull list",
+        _ => stage.Label
+      };
+    }
 
     if (doe.IsArchived)
       return "Archived";

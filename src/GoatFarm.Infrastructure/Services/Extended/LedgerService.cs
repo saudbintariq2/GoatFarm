@@ -1,6 +1,7 @@
 using GoatFarm.Application.Common;
 using GoatFarm.Application.Interfaces;
 using GoatFarm.Application.ViewModels.Ledger;
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 using GoatFarm.Infrastructure.Persistence;
@@ -38,8 +39,7 @@ public class LedgerService : ILedgerService
         var monthTx = tx.Where(t => t.Date >= monthStart && t.Date <= monthEnd).Take(300).ToList();
         var invoices = await _context.CustomerInvoices.AsNoTracking().Include(i => i.Customer)
             .OrderByDescending(i => i.Date).Take(400).ToListAsync(cancellationToken);
-        var monthKey = $"{m.Year:0000}-{m.Month:00}";
-        var payrollOpen = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, monthKey, cancellationToken);
+        var payrollOpen = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, MonthHelper.CurrentMonthKey(), cancellationToken);
         var (payablesMerged, payablesOpen, _) = await FinancePayablesBuilder.BuildAsync(_context, payrollOpen, cancellationToken);
         var payables = await _context.SupplierPayables.AsNoTracking()
             .OrderByDescending(p => p.Date).Take(400).ToListAsync(cancellationToken);
@@ -122,26 +122,20 @@ public class LedgerService : ILedgerService
         var monthStart = new DateOnly(m.Year, m.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
 
-        var incomes = await _context.Incomes.AsNoTracking()
-            .Where(i => i.Date >= monthStart && i.Date <= monthEnd).SumAsync(i => i.Amount, cancellationToken);
-        var expenses = await _context.Expenses.AsNoTracking()
-            .Where(i => i.Date >= monthStart && i.Date <= monthEnd).SumAsync(i => i.Amount, cancellationToken);
         var tx = await _context.LedgerTransactions.AsNoTracking()
             .Where(t => t.Date >= monthStart && t.Date <= monthEnd).ToListAsync(cancellationToken);
         var assets = await _context.Assets.AsNoTracking().SumAsync(a => a.Cost, cancellationToken)
             + await _context.FixedAssetRegisters.AsNoTracking().SumAsync(a => a.Cost, cancellationToken);
-        var payables = await _context.SupplierPayables.AsNoTracking()
-            .Where(p => p.Status != PayableStatus.Void).SumAsync(p => p.Amount - p.PaidAmount, cancellationToken);
+        var payrollOpen = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, MonthHelper.CurrentMonthKey(), cancellationToken);
+        var (_, payables, _) = await FinancePayablesBuilder.BuildAsync(_context, payrollOpen, cancellationToken);
 
-        var cashIn = tx.Where(t => !IsLinkedMirror(t) && t.Kind is LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment).Sum(t => t.Amount);
-        var cashOut = tx.Where(t => !IsLinkedMirror(t) && t.Kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment).Sum(t => t.Amount);
+        var cashIn = tx.Where(t => t.Kind is LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment).Sum(t => t.Amount);
+        var cashOut = tx.Where(t => t.Kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment).Sum(t => t.Amount);
 
+        // Revenue / Expenses / NetProfit are accrual figures; FinanceController fills them from IFinanceService.
         return new FinancialStatementsViewModel
         {
             Month = $"{m.Year:0000}-{m.Month:00}",
-            Revenue = incomes + cashIn,
-            Expenses = expenses + cashOut,
-            NetProfit = incomes + cashIn - expenses - cashOut,
             CashIn = cashIn,
             CashOut = cashOut,
             AssetsTotal = assets,
@@ -222,7 +216,13 @@ public class LedgerService : ILedgerService
         row.DueDate = model.DueDate;
         row.Description = model.Description.Trim();
         row.Amount = model.Amount;
-        row.PaidAmount = model.PaidAmount;
+        // Receipts on an existing invoice go through ReceiveInvoiceAsync so each one has its own ledger row.
+        if (model.Id is null or 0)
+        {
+            if (model.PaidAmount > 0 && model.AccountId is not > 0)
+                throw new InvalidOperationException("Choose the Cash/Bank account that received the money.");
+            row.PaidAmount = model.PaidAmount;
+        }
         row.Status = row.PaidAmount >= row.Amount ? InvoiceStatus.Paid
             : row.PaidAmount > 0 ? InvoiceStatus.Partial : InvoiceStatus.Open;
         row.UpdatedDate = DateTime.UtcNow;
@@ -251,11 +251,16 @@ public class LedgerService : ILedgerService
     {
         if (model.PaidAmount > 0 && model.AccountId is not > 0)
             throw new InvalidOperationException("Choose the account for the amount paid now.");
+        if (model.Amount <= 0)
+            throw new InvalidOperationException("Enter the bill amount.");
+        if (model.PaidAmount < 0 || model.PaidAmount > model.Amount + 0.005m)
+            throw new InvalidOperationException("Paid now must be between 0 and the bill amount.");
 
-        var useTx = _context.Database.IsRelational();
-        if (useTx)
-            await _context.Database.BeginTransactionAsync(cancellationToken);
+        return await _context.ExecuteInTransactionAsync(() => SavePayableCoreAsync(model, cancellationToken), cancellationToken);
+    }
 
+    private async Task<object> SavePayableCoreAsync(SaveSupplierPayableViewModel model, CancellationToken cancellationToken)
+    {
         SupplierPayable row;
         if (model.Id is > 0)
             row = await _context.SupplierPayables.FirstAsync(p => p.Id == model.Id, cancellationToken);
@@ -270,7 +275,10 @@ public class LedgerService : ILedgerService
         row.DueDate = model.DueDate;
         row.Description = model.Description.Trim();
         row.Amount = model.Amount;
-        row.PaidAmount = model.PaidAmount;
+        // Payments on an existing bill go through PayPayableAsync so each one has its own ledger row.
+        if (model.Id is null or 0) row.PaidAmount = model.PaidAmount;
+        if (row.PaidAmount > row.Amount + 0.005m)
+            throw new InvalidOperationException($"Rs {row.PaidAmount:N0} is already paid on this bill — the amount cannot be lower.");
         row.Status = row.PaidAmount >= row.Amount ? PayableStatus.Paid
             : row.PaidAmount > 0 ? PayableStatus.Partial : PayableStatus.Open;
         row.UpdatedDate = DateTime.UtcNow;
@@ -284,14 +292,19 @@ public class LedgerService : ILedgerService
                 Type = expenseType,
                 Amount = model.Amount,
                 Date = model.Date,
-                Comment = row.SupplierName + " · " + row.Description
+                Comment = row.SupplierName + " · " + row.Description,
+                SourceType = FinanceSourceTypes.SupplierBill,
+                SourceId = row.Id
             };
             _context.Expenses.Add(expense);
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        if (model.PaidAmount > 0 && model.AccountId is > 0)
+        if (model.PaidAmount > 0 && model.AccountId is > 0 && model.Id is null or 0)
         {
+            var paidFrom = await _context.MoneyAccounts.FirstOrDefaultAsync(a => a.Id == model.AccountId && a.IsActive, cancellationToken)
+                ?? throw new InvalidOperationException("That Cash/Bank account was not found.");
+            paidFrom.OpeningBalanceLocked = true;
             _context.LedgerTransactions.Add(new LedgerTransaction
             {
                 Date = model.Date,
@@ -307,8 +320,6 @@ public class LedgerService : ILedgerService
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        if (useTx)
-            await _context.Database.CommitTransactionAsync(cancellationToken);
         return new { id = row.Id };
     }
 
@@ -438,9 +449,6 @@ public class LedgerService : ILedgerService
         await _context.SaveChangesAsync(cancellationToken);
         return true;
     }
-
-    private static bool IsLinkedMirror(LedgerTransaction t) =>
-        t.Category is "Linked income" or "Linked expense" or "Shareholder funding";
 
     private static MoneyAccountRowViewModel MapAccountRow(
         MoneyAccount a,

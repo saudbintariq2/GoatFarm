@@ -55,7 +55,7 @@
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  document.getElementById('audit-apply')?.addEventListener('click', () => loadAudit().catch(() => alert('Could not load audit log.')));
+  document.getElementById('audit-apply')?.addEventListener('click', () => loadAudit().catch(() => farmNotify('Could not load audit log.')));
   document.getElementById('audit-csv')?.addEventListener('click', e => {
     e.preventDefault();
     location.href = '/Admin/ExportAuditCsv?' + auditQuery().toString();
@@ -71,6 +71,6 @@
       })
     });
     const j = await res.json().catch(() => ({}));
-    alert(res.ok ? 'Password updated.' : (j.error || 'Could not update password.'));
+    farmNotify(res.ok ? 'Password updated.' : (j.error || 'Could not update password.'));
   });
 })();

@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
 let tradeRecs = [];
 function loadTradeRecsFromPage(){
   try {
@@ -53,7 +53,7 @@ const r2=v=>Math.round(N(v)*100)/100;
 const EPS=0.0005;
 const H=v=>esc(v);
 const fmtN=(n,d)=>{const v=N(n);const dd=d==null?(Math.abs(v-Math.round(v))<0.005?0:2):d;return v.toLocaleString('en-US',{minimumFractionDigits:dd,maximumFractionDigits:dd});};
-const money=v=>(N(v)<0?'- ':'')+'Rs '+fmtN(Math.abs(r2(v)));
+const money=v=>(N(v)<0?'−':'')+'Rs '+fmtN(Math.abs(r2(v)));
 const val=x=>{const e=$(x);return e?String(e.value||'').trim():'';};
 const num=x=>N(val(x));
 const setVal=(x,v)=>{const e=$(x);if(e)e.value=v;};
@@ -76,7 +76,9 @@ const live=()=>entries().filter(e=>!e.cancelled);
 const byId=i=>(tradeRecs||[]).find(r=>String(r.id)===String(i))||null;
 const nm=i=>{const r=byId(i);return r?r.name:'-';};
 function ensure(){if(!Array.isArray(tradeRecs))tradeRecs=[];return false;}
-function sorted(list){return list.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));}
+// Same-day entries must replay in the order they were saved (buy before the sale that follows it), or the sale takes no cost.
+const entryOrder=e=>{const n=Number(e.id);return Number.isFinite(n)?n:Number.MAX_SAFE_INTEGER;};
+function sorted(list){return list.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||entryOrder(a)-entryOrder(b)||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));}
 
 /* ---------------- the books (one pass over the entries) ---------------- */
 function compute(opts){
@@ -139,7 +141,7 @@ function partyOpts(B,role){return parties(role).map(p=>{const b=partyBal(B,p);re
 /* ---------------- UI state ---------------- */
 let tab=lsGet('tab','stock'),mtype=lsGet('mtype','pay');
 function canDo(a){return can("trade",a);}
-function guard(a){if(!canDo(a)){alert(a==='view'?'You do not have access to Trading.':'You do not have permission for this in Trading. Ask the owner to turn it on in Users & audit.');return false;}return true;}
+function guard(a){if(!canDo(a)){farmNotify(a==='view'?'You do not have access to Trading.':'You do not have permission for this in Trading. Ask the owner to turn it on in Users & audit.');return false;}return true;}
 let busy=false;
 async function run(btn,fn){
   if(busy)return;
@@ -148,12 +150,12 @@ async function run(btn,fn){
   try{
     const msg=await fn();
     if(msg!==false){await reloadTradeRecs();render();if(msg)toast(typeof msg==="string"?msg:msg);}
-  }catch(e){console.warn(e);alert(e.message||String(e));}
+  }catch(e){console.warn(e);farmNotify(e.message||String(e));}
   finally{busy=false;if(btn)btn.disabled=false;}
 }
 function itemOpts(){return items().map(i=>`<option value="${H(i.id)}">${H(i.name)}</option>`).join('')+'<option value="__item">+ Add new item...</option>';}
 function storeOpts(){return stores().map(s=>`<option value="${H(s.id)}">${H(s.name)}</option>`).join('')+'<option value="__store">+ Add new godown...</option>';}
-function acctOpts(B){return accts().map(a=>`<option value="${H(a.id)}">${H(a.name)} - ${money(B.acc[a.id]||0)}</option>`).join('')+'<option value="__acct">+ Add new account...</option>';}
+function acctOpts(B){return accts().map(a=>`<option value="${H(a.id)}">${H(a.name)} · ${money(B.acc[a.id]||0)}</option>`).join('')+'<option value="__acct">+ Add new account...</option>';}
 const isKg=itemId=>String(unitOf(itemId)).toLowerCase()==='kg';
 const KG_PER={kg:1,maund:40,ton:1000};
 function basisOf(p){const b=$('td-'+p+'-basis');return b&&!b.hidden&&KG_PER[b.value]?b.value:'unit';}
@@ -469,13 +471,13 @@ function saveMoney(btn){if(!guard('create'))return;run(btn,async()=>{
 function cancelEntry(eid){
   const e=byId(eid);if(!e||e.cancelled)return;if(!guard('del'))return;
   const reason=prompt(`Cancel this entry?\n${entryLabel(e)} (${e.date})\n\nIt stays in the register as CANCELLED and its stock and money are removed from the books. Reason:`);
-  if(reason===null)return;if(!reason.trim())return alert('A reason is required.');
+  if(reason===null)return;if(!reason.trim())return farmNotify('A reason is required.');
   e.cancelled=true;const B=compute();e.cancelled=false;
-  if(B.negative){return alert(`This cannot be cancelled: later sales or losses use this stock (${nm(B.negative.item)} in ${nm(B.negative.store)} would go below zero on ${B.negative.entry.date}). Cancel those first.`);}
+  if(B.negative){return farmNotify(`This cannot be cancelled: later sales or losses use this stock (${nm(B.negative.item)} in ${nm(B.negative.store)} would go below zero on ${B.negative.entry.date}). Cancel those first.`);}
   run(null,async()=>{await postJson('/Trading/CancelEntry',{id:parseId(eid),reason:reason.trim()});return 'Entry cancelled';});
 }
 function editRec(rid){const r=byId(rid);if(r)openForm(r.kind,r);}
-function toggleRec(rid){const r=byId(rid);if(!r||!guard('edit'))return;if(r.active!==false){if(r.kind==='item'&&Math.abs(stockQty(compute(),r.id))>EPS&&!confirm(r.name+' still has stock. Switch it off anyway?'))return;if(r.kind==='account'&&Math.abs(compute().acc[r.id]||0)>0.5&&!confirm(r.name+' still has money in it. Switch it off anyway?'))return;if(recs(r.kind).filter(x=>x.active!==false).length<=1&&r.kind!=='cat'&&r.kind!=='party')return alert('Keep at least one active '+r.kind+'.');}r.active=r.active===false;const mk=r.kind==='cat'?'category':r.kind;run(null,async()=>{await persistMaster(mk,r,false);return false;});}
+function toggleRec(rid){const r=byId(rid);if(!r||!guard('edit'))return;if(r.active!==false){if(r.kind==='item'&&Math.abs(stockQty(compute(),r.id))>EPS&&!confirm(r.name+' still has stock. Switch it off anyway?'))return;if(r.kind==='account'&&Math.abs(compute().acc[r.id]||0)>0.5&&!confirm(r.name+' still has money in it. Switch it off anyway?'))return;if(recs(r.kind).filter(x=>x.active!==false).length<=1&&r.kind!=='cat'&&r.kind!=='party')return farmNotify('Keep at least one active '+r.kind+'.');}r.active=r.active===false;const mk=r.kind==='cat'?'category':r.kind;run(null,async()=>{await persistMaster(mk,r,false);return false;});}
 function exportCsv(){
   const B=compute();const rows=[['Date','Type','Item','Godown','Party','Qty','Unit','Rate','Kiraya','Labour','Delivery','Amount','Paid/Received','Cost of sold','Profit','Account','Bill','Status','Note']];
   sorted(entries()).forEach(e=>{const p=B.per.get(e.id)||{};const amt=e.type==='buy'?N(e.qty)*N(e.rate):e.type==='sell'?N(e.qty)*N(e.rate):e.type==='loss'?N(p.lossValue):N(e.amount);

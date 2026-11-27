@@ -56,7 +56,14 @@ public class FeedController : Controller
 
     {
 
-        await _feedService.UpdateFeedPriceAsync(request.FeedType, request.Price, cancellationToken);
+        try
+        {
+            await _feedService.UpdateFeedPriceAsync(request.FeedType, request.Price, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
         return Ok(new { success = true });
 
@@ -271,8 +278,14 @@ public class FeedController : Controller
     {
 
         if (string.IsNullOrWhiteSpace(model.DisplayName)) return BadRequest(new { error = "Enter feed name" });
-
-        return Json(await _feedService.AddFeedTypeAsync(model, cancellationToken));
+        try
+        {
+            return Json(await _feedService.AddFeedTypeAsync(model, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
     }
 

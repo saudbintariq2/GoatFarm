@@ -137,11 +137,15 @@ public class StatisticsService : IStatisticsService
         var receivables = await _context.CustomerInvoices.AsNoTracking()
             .Where(i => i.Status == InvoiceStatus.Open || i.Status == InvoiceStatus.Partial)
             .SumAsync(i => i.Amount - i.PaidAmount, cancellationToken);
-        var payables = await _context.SupplierPayables.AsNoTracking()
-            .Where(p => p.Status == PayableStatus.Open || p.Status == PayableStatus.Partial)
-            .SumAsync(p => p.Amount - p.PaidAmount, cancellationToken);
+        var payrollOpen = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, MonthHelper.CurrentMonthKey(), cancellationToken);
+        var (_, payables, _) = await FinancePayablesBuilder.BuildAsync(_context, payrollOpen, cancellationToken);
         var pendingApprovals = await _context.ApprovalRequests.CountAsync(a => a.Status == ApprovalStatus.Pending, cancellationToken);
         var topAlerts = BuildTopAlerts(integrity, feedStock, vaccine.DueNowCount, receivables, payables, pendingApprovals);
+        var storedAlerts = (await FarmAlertStore.LoadAsync(_context, cancellationToken))
+            .OrderBy(a => a.Severity == "critical" ? 0 : 1)
+            .Select(a => new DashboardAlertViewModel { Severity = a.Severity, Message = a.Message, Href = a.Href })
+            .ToList();
+        topAlerts.InsertRange(0, storedAlerts);
 
         var productStockValue = await ComputeProductStockValueAsync(cancellationToken);
 

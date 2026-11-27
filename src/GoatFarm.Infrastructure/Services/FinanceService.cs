@@ -79,34 +79,17 @@ public partial class FinanceService : IFinanceService
         var ownerInvestments = await _context.OwnerInvestments.AsNoTracking()
             .Where(o => o.Date >= monthStart && o.Date < monthEnd)
             .OrderByDescending(o => o.Date)
-            .Select(o => new OwnerInvestmentViewModel { Id = o.Id, Note = o.Note, Amount = o.Amount, Date = o.Date })
+            .Select(o => new OwnerInvestmentViewModel { Id = o.Id, Note = o.Note, Amount = o.Amount, Date = o.Date, IsNonCash = o.IsNonCash })
             .ToListAsync(cancellationToken);
 
         var ownerInvMonth = ownerInvestments.Sum(o => o.Amount);
         var ownerInvTotal = await _context.OwnerInvestments.AsNoTracking().SumAsync(o => o.Amount, cancellationToken);
 
-        var milkLegacyInc = _milkService.GetMilkIncomeMonth(month);
-        var milkLegacyL = _milkService.GetMilkLitersSold(month);
-        var milkProductRows = await _context.ProductSales.AsNoTracking()
-            .Where(s => s.Date >= monthStart && s.Date < monthEnd &&
-                        (EF.Functions.ILike(s.ProductName, "%milk%") || EF.Functions.ILike(s.ProductName, "%dairy%")))
-            .ToListAsync(cancellationToken);
-        var milkProductL = milkProductRows.Sum(s => s.Qty);
-        var milkProductInc = milkProductRows.Sum(s => s.Amount);
-        var milkL = milkLegacyL + milkProductL;
-        var milkInc = milkLegacyInc + milkProductInc;
-        var incManual = incomes.Sum(i => i.Amount);
-        var incTot = incManual + milkInc;
-
+        var pnl = await BuildPnlAsync(monthStart, monthEnd, cancellationToken);
+        var incTot = pnl.Income;
+        var expTot = pnl.Expense;
         var feedBought = _feedService.GetFeedPurchasedMonthly(month);
-        var feedUsed = await _feedService.GetFeedUsedCostAsync(monthStart, monthEnd, cancellationToken);
         var feedKg = _feedService.GetFeedPurchasedKg(month);
-        var medM = _feedService.CalculateFarmMedicineMonthly();
-        var recurM = GetRecurringMonthlyTotal();
-        var salaryM = GetStaffSalaryMonthlyTotal();
-        var vaccBought = _vaccineService.GetVaccinePurchasedMonthly(month);
-        var expManual = expenses.Where(e => !FinanceExpenseRules.IsDuplicateVaccinePurchase(e.Type)).Sum(e => e.Amount);
-        var expTot = expManual + feedUsed + medM + recurM + vaccBought + salaryM;
 
         var employees = await _context.Employees.AsNoTracking()
             .OrderBy(e => e.Name)
@@ -134,15 +117,17 @@ public partial class FinanceService : IFinanceService
             TotalExpense = expTot,
             FeedMonthly = feedPlanBudget,
             FeedBoughtMonthly = feedBought,
-            FeedUsedMonthly = feedUsed,
+            FeedUsedMonthly = pnl.FeedUsed,
             FeedBoughtKg = feedKg,
-            MedicineMonthly = medM,
-            RecurringMonthly = recurM,
-            StaffSalaryMonthly = salaryM,
-            VaccineBoughtMonthly = vaccBought,
-            ManualExpenseMonthly = expManual,
-            MilkIncome = milkInc,
-            MilkLitersSold = milkL,
+            MedicineMonthly = pnl.Medicine,
+            RecurringMonthly = pnl.Recurring,
+            StaffSalaryMonthly = pnl.Salaries,
+            VaccineBoughtMonthly = pnl.Vaccines,
+            ManualExpenseMonthly = pnl.ManualExpense,
+            MilkIncome = pnl.MilkIncome,
+            MilkLitersSold = pnl.MilkLiters,
+            IncomeLines = pnl.IncomeLines,
+            ExpenseLines = pnl.ExpenseLines,
             OwnerInvestmentMonthTotal = ownerInvMonth,
             OwnerInvestmentTotal = ownerInvTotal,
             Assets = assets,
@@ -159,6 +144,8 @@ public partial class FinanceService : IFinanceService
             DisplayExpense = expTot
         };
         await EnrichAccountingAsync(page, monthStart, monthEnd, options.IncludeTabRegisters, cancellationToken);
+        if (options.IncludeTabRegisters || options.IncludeIntegrityAndBalance)
+            page.CashFlow = await BuildCashFlowAsync(monthStart, monthEnd, cancellationToken);
         if (options.IncludeIntegrityAndBalance)
         {
             page.Integrity = await GetIntegrityCheckAsync(cancellationToken);
@@ -200,59 +187,16 @@ public partial class FinanceService : IFinanceService
     public async Task<FinanceStatementViewModel> GetStatementAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
         if (to < from) (from, to) = (to, from);
-        var endExclusive = to.AddDays(1);
-        var months = Math.Max(0, Math.Round((to.DayNumber - from.DayNumber) / 30.44m, 1));
-        if (months == 0 && to >= from) months = 1;
-
-        var incomes = await _context.Incomes.AsNoTracking()
-            .Where(i => i.Date >= from && i.Date < endExclusive)
-            .GroupBy(i => i.Type)
-            .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(x => x.Amount) })
-            .ToListAsync(cancellationToken);
-        var milk = await _context.MilkSales.AsNoTracking().Where(s => s.Date >= from && s.Date < endExclusive).SumAsync(s => (decimal?)s.Amount, cancellationToken) ?? 0;
-        var products = await _context.ProductSales.AsNoTracking()
-            .Where(s => s.Date >= from && s.Date < endExclusive)
-            .GroupBy(s => s.ProductName)
-            .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(x => x.Amount) })
-            .ToListAsync(cancellationToken);
-        var invoices = await _context.CustomerInvoices.AsNoTracking()
-            .Where(i => i.Date >= from && i.Date < endExclusive && i.Status != InvoiceStatus.Void)
-            .Where(i => !i.Description.StartsWith("Product sale:") && !i.Description.StartsWith("Live goat sale"))
-            .SumAsync(i => (decimal?)i.Amount, cancellationToken) ?? 0;
-
-        var expenses = await _context.Expenses.AsNoTracking()
-            .Where(e => e.Date >= from && e.Date < endExclusive)
-            .GroupBy(e => e.Type)
-            .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(x => x.Amount) })
-            .ToListAsync(cancellationToken);
-        var feed = await _feedService.GetFeedUsedCostAsync(from, endExclusive, cancellationToken);
-        var vacc = await _context.VaccinePurchases.AsNoTracking().Where(v => v.Date >= from && v.Date < endExclusive).SumAsync(v => (decimal?)v.Amount, cancellationToken) ?? 0;
-        var staff = await _context.Employees.AsNoTracking().ToListAsync(cancellationToken);
-        var salary = StaffSalaryAccrual.ForRange(staff, from, to);
-        var recurring = GetRecurringMonthlyTotal() * months;
-        var medicine = _feedService.CalculateFarmMedicineMonthly() * months;
-
-        var inLines = new List<FinanceLineViewModel>();
-        if (milk > 0) inLines.Add(new FinanceLineViewModel { Label = "Milk sales", Amount = milk });
-        inLines.AddRange(products.Where(p => p.Amount > 0));
-        if (invoices > 0) inLines.Add(new FinanceLineViewModel { Label = "Other farm sale", Amount = invoices });
-        inLines.AddRange(incomes.Where(i => i.Amount > 0));
-        var outLines = new List<FinanceLineViewModel>();
-        if (feed > 0) outLines.Add(new FinanceLineViewModel { Label = "Feed used", Amount = feed });
-        if (medicine > 0) outLines.Add(new FinanceLineViewModel { Label = "Medicine (plan)", Amount = medicine });
-        if (vacc > 0) outLines.Add(new FinanceLineViewModel { Label = "Vaccines bought", Amount = vacc });
-        if (salary > 0) outLines.Add(new FinanceLineViewModel { Label = "Salaries", Amount = salary });
-        if (recurring > 0) outLines.Add(new FinanceLineViewModel { Label = "Fixed & recurring", Amount = recurring });
-        outLines.AddRange(expenses.Where(e => e.Amount > 0));
+        var pnl = await BuildPnlAsync(from, to.AddDays(1), cancellationToken);
 
         return new FinanceStatementViewModel
         {
             From = from.ToString("yyyy-MM-dd"),
             To = to.ToString("yyyy-MM-dd"),
-            Income = inLines.Sum(x => x.Amount),
-            Expense = outLines.Sum(x => x.Amount),
-            IncomeLines = inLines.OrderByDescending(x => x.Amount).ToList(),
-            ExpenseLines = outLines.OrderByDescending(x => x.Amount).ToList()
+            Income = pnl.Income,
+            Expense = pnl.Expense,
+            IncomeLines = pnl.IncomeLines,
+            ExpenseLines = pnl.ExpenseLines
         };
     }
 
@@ -393,6 +337,14 @@ public partial class FinanceService : IFinanceService
     {
         var entity = await _context.OwnerInvestments.FindAsync([id], cancellationToken);
         if (entity is null) return null;
+        if (entity.IsNonCash)
+        {
+            entity.Amount = model.Amount;
+            entity.Date = model.Date;
+            await RemoveLinkedCashAsync($"fin-funding:{entity.Id}", cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+            return new OwnerInvestmentViewModel { Id = entity.Id, Note = entity.Note, Amount = entity.Amount, Date = entity.Date };
+        }
         EnsureMoneyAccount(model.AccountId);
         entity.Note = ComposeFundingNote(model);
         entity.Amount = model.Amount;
@@ -671,46 +623,22 @@ public partial class FinanceService : IFinanceService
     private async Task EnrichAccountingAsync(FinancePageViewModel page, DateOnly monthStart, DateOnly monthEnd, bool includeTabRegisters, CancellationToken cancellationToken)
     {
         var trendStart = monthStart.AddMonths(-5);
-        var incomeRows = await _context.Incomes.AsNoTracking().Where(i => i.Date >= trendStart && i.Date < monthEnd).Select(i => new { i.Date, i.Amount, i.Type }).ToListAsync(cancellationToken);
-        var milkRows = await _context.MilkSales.AsNoTracking().Where(s => s.Date >= trendStart && s.Date < monthEnd).Select(s => new { s.Date, s.Amount, s.Comment }).ToListAsync(cancellationToken);
         var productRows = await _context.ProductSales.AsNoTracking().Include(s => s.Customer)
             .Where(s => s.Date >= trendStart && s.Date < monthEnd)
             .Select(s => new { s.Id, s.Date, s.Amount, s.ProductName, s.IsCredit, Customer = s.Customer != null ? s.Customer.Name : null, s.Notes, s.CustomerId })
             .ToListAsync(cancellationToken);
         var invoiceRows = await _context.CustomerInvoices.AsNoTracking().Include(i => i.Customer)
             .OrderByDescending(i => i.Date).Take(400).ToListAsync(cancellationToken);
-        var expenseRows = await _context.Expenses.AsNoTracking().Where(e => e.Date >= trendStart && e.Date < monthEnd).Select(e => new { e.Date, e.Amount, e.Type }).ToListAsync(cancellationToken);
-        var feedRows = await _context.FeedPurchases.AsNoTracking().Where(f => f.Date >= trendStart && f.Date < monthEnd).Select(f => new { f.Date, f.Amount }).ToListAsync(cancellationToken);
-        var vaccRows = await _context.VaccinePurchases.AsNoTracking().Where(v => v.Date >= trendStart && v.Date < monthEnd).Select(v => new { v.Date, v.Amount }).ToListAsync(cancellationToken);
         var goatSales = await _context.GoatSales.AsNoTracking().OrderByDescending(g => g.Date).Take(200)
             .Select(g => new { g.Id, g.Date, g.Price, g.Tag, g.Buyer, g.IsCredit, g.CustomerInvoiceId, g.WeightKg }).ToListAsync(cancellationToken);
-        var salary = GetStaffSalaryMonthlyTotal();
-        var recurring = GetRecurringMonthlyTotal();
-        var medicine = _feedService.CalculateFarmMedicineMonthly();
 
         bool InMonth(DateOnly date) => date >= monthStart && date < monthEnd;
-        bool ManualInvoice(CustomerInvoice invoice) =>
-            invoice.Status != InvoiceStatus.Void
-            && !invoice.Description.StartsWith("Product sale:")
-            && !invoice.Description.StartsWith("Live goat sale");
 
-        var monthInvoices = invoiceRows.Where(i => InMonth(i.Date) && ManualInvoice(i)).ToList();
-        var monthProducts = productRows.Where(p => InMonth(p.Date)).ToList();
-        page.DisplayIncome = page.TotalIncome + monthProducts.Sum(p => p.Amount) + monthInvoices.Sum(i => i.Amount);
+        page.DisplayIncome = page.TotalIncome;
         page.DisplayExpense = page.TotalExpense;
         page.Profit = page.DisplayIncome - page.DisplayExpense;
         page.IsLoss = page.Profit < 0;
         page.ProfitNote = page.Profit >= 0 ? "you made money this month" : "costs were higher than income this month";
-
-        var incomeLines = new List<FinanceLineViewModel>();
-        if (page.MilkIncome > 0) incomeLines.Add(new FinanceLineViewModel { Label = "Milk sales", Amount = page.MilkIncome });
-        foreach (var group in monthProducts.GroupBy(p => string.IsNullOrWhiteSpace(p.ProductName) ? "Product sales" : p.ProductName))
-            incomeLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
-        if (monthInvoices.Count > 0)
-            incomeLines.Add(new FinanceLineViewModel { Label = "Other farm sale", Amount = monthInvoices.Sum(i => i.Amount) });
-        foreach (var group in page.Incomes.GroupBy(i => i.Type))
-            incomeLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
-        page.IncomeLines = incomeLines.Where(x => x.Amount > 0).OrderByDescending(x => x.Amount).ToList();
 
         var monthLedger = await _context.LedgerTransactions.AsNoTracking()
             .Where(t => t.Date >= monthStart && t.Date < monthEnd)
@@ -722,34 +650,19 @@ public partial class FinanceService : IFinanceService
         page.TotalCashPaidMonth = cashOut.Sum(t => t.Amount);
         page.OpexCashPaidMonth = page.TotalCashPaidMonth - capexCash;
 
-        var expenseLines = new List<FinanceLineViewModel>();
-        if (page.FeedUsedMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Feed used", Amount = page.FeedUsedMonthly });
-        else if (page.FeedBoughtMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Feed used", Amount = page.FeedBoughtMonthly });
-        if (page.MedicineMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Medicine (plan)", Amount = page.MedicineMonthly });
-        if (page.VaccineBoughtMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Vaccines bought", Amount = page.VaccineBoughtMonthly });
-        if (page.StaffSalaryMonthly > 0) expenseLines.Add(new FinanceLineViewModel { Label = "Salaries", Amount = page.StaffSalaryMonthly });
-        foreach (var cost in page.RecurringCosts.Where(r => r.MonthlyAmount > 0))
-            expenseLines.Add(new FinanceLineViewModel { Label = cost.Name, Amount = cost.MonthlyAmount });
-        foreach (var group in page.Expenses.Where(e => !FinanceExpenseRules.IsDuplicateVaccinePurchase(e.Type)).GroupBy(e => e.Type))
-            expenseLines.Add(new FinanceLineViewModel { Label = group.Key, Amount = group.Sum(x => x.Amount) });
-        page.ExpenseLines = expenseLines.OrderByDescending(x => x.Amount).ToList();
-
         var trend = new List<FinanceTrendMonthViewModel>();
         for (var i = 5; i >= 0; i--)
         {
             var start = monthStart.AddMonths(-i);
             var end = start.AddMonths(1);
             var key = $"{start.Year:0000}-{start.Month:00}";
-            bool In(DateOnly date) => date >= start && date < end;
-            var inc = incomeRows.Where(x => In(x.Date)).Sum(x => x.Amount)
-                + milkRows.Where(x => In(x.Date)).Sum(x => x.Amount)
-                + productRows.Where(x => In(x.Date)).Sum(x => x.Amount)
-                + invoiceRows.Where(x => In(x.Date) && ManualInvoice(x)).Sum(x => x.Amount);
-            var exp = expenseRows.Where(x => In(x.Date) && !FinanceExpenseRules.IsDuplicateVaccinePurchase(x.Type)).Sum(x => x.Amount)
-                + feedRows.Where(x => In(x.Date)).Sum(x => x.Amount)
-                + vaccRows.Where(x => In(x.Date)).Sum(x => x.Amount)
-                + salary + recurring + medicine;
-            trend.Add(new FinanceTrendMonthViewModel { Month = key, Income = inc, Expense = exp });
+            if (i == 0)
+            {
+                trend.Add(new FinanceTrendMonthViewModel { Month = key, Income = page.TotalIncome, Expense = page.TotalExpense });
+                continue;
+            }
+            var monthPnl = await BuildPnlAsync(start, end, cancellationToken);
+            trend.Add(new FinanceTrendMonthViewModel { Month = key, Income = monthPnl.Income, Expense = monthPnl.Expense });
         }
         page.Trend = trend;
 
@@ -758,23 +671,11 @@ public partial class FinanceService : IFinanceService
 
         var matchedInvoiceIds = new HashSet<int>();
         var sales = new List<SaleRegisterRowViewModel>();
-        foreach (var milkSale in milkRows.Where(x => InMonth(x.Date)))
-        {
-            sales.Add(new SaleRegisterRowViewModel
-            {
-                Source = "milk",
-                DateDisplay = milkSale.Date.ToString("yyyy-MM-dd"),
-                Kind = "Direct milk",
-                Customer = string.IsNullOrWhiteSpace(milkSale.Comment) ? "Cash / direct" : milkSale.Comment,
-                Status = "Paid",
-                Amount = milkSale.Amount,
-                Received = milkSale.Amount
-            });
-        }
-        foreach (var sale in productRows)
+        // Sales register: Products + Herd goat sales only (legacy MilkSales excluded — N2).
+        foreach (var sale in productRows.Where(s => InMonth(s.Date)))
         {
             var match = invoiceRows.FirstOrDefault(i =>
-                i.CustomerId == sale.CustomerId && i.Date == sale.Date && i.Amount == sale.Amount && i.Description.StartsWith("Product sale:"));
+                i.CustomerId == sale.CustomerId && i.Date == sale.Date && i.Amount == sale.Amount && i.Description.StartsWith("Product sale"));
             if (match is not null) matchedInvoiceIds.Add(match.Id);
             var received = match?.PaidAmount ?? (sale.IsCredit ? 0 : sale.Amount);
             var due = Math.Max(0, sale.Amount - received);
@@ -793,7 +694,7 @@ public partial class FinanceService : IFinanceService
                 Note = sale.Notes
             });
         }
-        foreach (var sale in goatSales)
+        foreach (var sale in goatSales.Where(s => InMonth(s.Date)))
         {
             var match = sale.CustomerInvoiceId is int invoiceId ? invoiceRows.FirstOrDefault(i => i.Id == invoiceId) : null;
             if (match is not null) matchedInvoiceIds.Add(match.Id);
@@ -814,7 +715,7 @@ public partial class FinanceService : IFinanceService
                 Note = sale.WeightKg is > 0 ? $"{sale.WeightKg:N1} kg" : null
             });
         }
-        foreach (var invoice in invoiceRows.Where(i => !matchedInvoiceIds.Contains(i.Id) && i.Status != InvoiceStatus.Void))
+        foreach (var invoice in invoiceRows.Where(i => !matchedInvoiceIds.Contains(i.Id) && i.Status != InvoiceStatus.Void && InMonth(i.Date)))
         {
             var due = Math.Max(0, invoice.Amount - invoice.PaidAmount);
             sales.Add(new SaleRegisterRowViewModel

@@ -1,3 +1,4 @@
+using System.Net;
 using GoatFarm.Application.Common;
 using GoatFarm.Application.ViewModels.Breeding;
 using GoatFarm.Domain.Entities;
@@ -58,7 +59,8 @@ internal static class BreedingPageAssembler
         Func<int, string> ageLabel,
         IReadOnlySet<int>? doesWithBuckIn = null,
         IReadOnlyDictionary<int, DateOnly>? rescanDueByGoat = null,
-        IReadOnlyDictionary<int, BreedingEvent>? latestCross = null)
+        IReadOnlyDictionary<int, BreedingEvent>? latestCross = null,
+        IReadOnlyDictionary<int, DoeStageResult>? stages = null)
     {
         rescanDueByGoat ??= new Dictionary<int, DateOnly>();
         latestCross ??= new Dictionary<int, BreedingEvent>();
@@ -66,15 +68,17 @@ internal static class BreedingPageAssembler
             .Where(g => g.Gender == GoatGender.Female && g.Status != GoatStatus.Kid && !g.IsArchived)
             .Select(g =>
             {
-                var here = kiddingsHere.GetValueOrDefault(g.Id);
-                latestCross.TryGetValue(g.Id, out var cross);
-                KiddingRecord? lastKid = kiddingsByDoe.TryGetValue(g.Id, out var arr)
-                    ? arr.OrderByDescending(k => k.KiddingDate).FirstOrDefault()
-                    : null;
-                rescanDueByGoat.TryGetValue(g.Id, out var rescan);
-                var flow = BreedingDoeFlowHelper.FlowStage(g, today, doesWithBuckIn, here, cross, lastKid, rescan);
-                if (flow is null) return null;
-                return MapPipeline(g, today, flow, kiddingsHere, kiddingsByDoe, ageLabel, rescanDueByGoat);
+                if (stages is null || !stages.TryGetValue(g.Id, out var stage))
+                {
+                    latestCross.TryGetValue(g.Id, out var cross);
+                    KiddingRecord? lastKid = kiddingsByDoe.TryGetValue(g.Id, out var arr)
+                        ? arr.OrderByDescending(k => k.KiddingDate).FirstOrDefault()
+                        : null;
+                    stage = DoeStageResolver.Resolve(g, cross, lastKid, today, doesWithBuckIn,
+                        rescanDueByGoat.TryGetValue(g.Id, out var rescan) ? rescan : null,
+                        kiddingsHere.GetValueOrDefault(g.Id));
+                }
+                return MapPipeline(g, today, stage, kiddingsHere, kiddingsByDoe, ageLabel);
             })
             .Where(r => r is not null)
             .Cast<BreedingPipelineRowViewModel>()
@@ -88,36 +92,27 @@ internal static class BreedingPageAssembler
         return rows;
     }
 
-    private static string? StageKey(Goat g)
-    {
-        if (g.MatedDate.HasValue)
-            return g.KidsCount is > 0 ? "preg" : "wait";
-        if (g.PrepCrossDate.HasValue)
-            return "prep";
-        if (g.NextCrossDate.HasValue)
-            return "plan";
-        return null;
-    }
-
     private static BreedingPipelineRowViewModel MapPipeline(
         Goat g,
         DateOnly today,
-        string flowStage,
+        DoeStageResult doeStage,
         IReadOnlyDictionary<int, int> kiddingsHere,
         IReadOnlyDictionary<int, KiddingRecord[]> kiddingsByDoe,
-        Func<int, string> ageLabel,
-        IReadOnlyDictionary<int, DateOnly> rescanDueByGoat)
+        Func<int, string> ageLabel)
     {
-        var stage = StageKey(g) ?? flowStage switch
+        var flowStage = doeStage.StatusKey;
+        var stage = doeStage.Stage switch
         {
-            "in_heat" or "getting_ready" => "prep",
-            "crossed" or "waiting_scan" => "wait",
-            "pregnant" or "dry" => "preg",
-            "kidded" => "prep",
+            FarmDoeStage.Crossed or FarmDoeStage.WaitingScan or FarmDoeStage.RescanDue => "wait",
+            FarmDoeStage.Pregnant or FarmDoeStage.Dry => "preg",
+            FarmDoeStage.KiddedNursing => "kidded",
+            FarmDoeStage.CullList => "cull",
+            _ when g.NextCrossDate.HasValue && !g.PrepCrossDate.HasValue => "plan",
             _ => "prep"
         };
-        var flowLabel = BreedingDoeFlowHelper.FlowStageLabel(flowStage);
+        var flowLabel = doeStage.Label;
         var flowCss = BreedingDoeFlowHelper.FlowStageChipClass(flowStage);
+        DateOnly? rescanDue = doeStage.Stage == FarmDoeStage.RescanDue ? doeStage.NextJobDate : null;
 
         var row = new BreedingPipelineRowViewModel
         {
@@ -189,22 +184,23 @@ internal static class BreedingPageAssembler
         {
             var mated = g.MatedDate!.Value;
             var since = today.DayNumber - mated.DayNumber;
-            if (rescanDueByGoat.TryGetValue(g.Id, out var rescanDue))
+            if (rescanDue is { } rescanOn)
             {
-                var until = BreedingHelper.DaysUntil(rescanDue);
+                var until = BreedingHelper.DaysUntil(rescanOn);
                 var rescanNote = until <= 0
                     ? "<span style=\"color:var(--amber);font-weight:700\">rescan now</span>"
-                    : $"rescan on {rescanDue:yyyy-MM-dd}";
-                row.KeyDateHtml = $"<b>{rescanDue:yyyy-MM-dd}</b><div class=\"name\">{rescanNote}</div>";
+                    : $"rescan on {rescanOn:yyyy-MM-dd}";
+                row.KeyDateHtml = $"<b>{rescanOn:yyyy-MM-dd}</b><div class=\"name\">{rescanNote}</div>";
                 row.DaysText = until <= 0 ? "due" : $"in {until}d";
                 if (until <= 0) row.DaysStyle = "color:var(--amber);font-weight:700";
             }
             else
             {
-                var from = mated.AddDays(BreedingHelper.ScanAfterDays);
-                var scanNote = since >= BreedingHelper.ScanAfterDays
+                var from = doeStage.NextJobDate ?? mated.AddDays(DoeStageResolver.FirstScanAfterCrossDays);
+                var untilScan = BreedingHelper.DaysUntil(from);
+                var scanNote = untilScan <= 0
                     ? "<span style=\"color:var(--amber);font-weight:700\">scan now</span>"
-                    : $"scan in {BreedingHelper.ScanAfterDays - since}d";
+                    : $"scan in {untilScan}d";
                 row.KeyDateHtml = $"<b>{from:yyyy-MM-dd}</b><div class=\"name\">{scanNote}</div>";
                 row.DaysText = since + "d since";
             }
@@ -230,7 +226,11 @@ internal static class BreedingPageAssembler
             row.KeyDateHtml = flowStage switch
             {
                 "in_heat" => "<b>In heat</b><div class=\"name\">watch for breeding</div>",
-                "kidded" => "<b>With kids</b><div class=\"name\">ready for next season step</div>",
+                "kidded" => doeStage.NextJobDate is { } readyOn
+                    ? $"<b>Kidded · nursing</b><div class=\"name\">ready again {readyOn:yyyy-MM-dd}</div>"
+                    : "<b>Kidded · nursing</b>",
+                "getting_ready" when doeStage.NextJob is not null =>
+                    $"<b>{WebUtility.HtmlEncode(doeStage.NextJob)}</b><div class=\"name\">next job</div>",
                 "dry" => "<b>Dry</b><div class=\"name\">dry-off before kidding</div>",
                 "crossed" => g.MatedDate.HasValue
                     ? $"<b>Crossed {g.MatedDate:yyyy-MM-dd}</b><div class=\"name\">buck still with does</div>"

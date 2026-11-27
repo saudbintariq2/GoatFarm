@@ -32,6 +32,10 @@ public class MixRecipeItemViewModel
 
     public decimal BatchCost { get; set; }
 
+    public decimal? PricePerKg { get; set; }
+
+    public bool PriceMissing { get; set; }
+
     public int Percent { get; set; }
 
 }
@@ -54,6 +58,11 @@ public class MixRecipeStatusViewModel
 
     public decimal CostPerKg { get; set; }
 
+    /// <summary>An ingredient in the batch has no price; batch cost and Rs/kg must not be shown.</summary>
+    public bool PriceMissing { get; set; }
+
+    public IReadOnlyList<string> MissingPriceNames { get; set; } = [];
+
     public IReadOnlyList<MixRecipeCostCompareViewModel> AllStatusCosts { get; set; } = [];
 
 }
@@ -69,6 +78,8 @@ public class MixRecipeCostCompareViewModel
     public string StatusDisplay { get; set; } = string.Empty;
 
     public decimal CostPerKg { get; set; }
+
+    public bool PriceMissing { get; set; }
 
     public bool IsActive { get; set; }
 
@@ -97,6 +108,8 @@ public class FeedGroupPlanRowViewModel
     public decimal FodderCostPerGoatPerDay { get; set; }
 
     public decimal MixCostPerKg { get; set; }
+
+    public bool PriceMissing { get; set; }
 
     public decimal DailyCostPerGoat { get; set; }
 
@@ -199,6 +212,8 @@ public class FeedBuyingRowViewModel
     public decimal KgPerMonth { get; set; }
 
     public decimal CostPerMonth { get; set; }
+
+    public bool PriceMissing { get; set; }
 
     public bool IsOwnLand { get; set; }
 
@@ -439,6 +454,7 @@ public class FeedStockRowViewModel
     public decimal PurchasedKg { get; set; }
 
     public decimal UsedKg { get; set; }
+    public decimal ShortKg { get; set; }
 
     public decimal KgPerDay { get; set; }
 
@@ -821,6 +837,9 @@ public class KidMilkDietViewModel
     public string? AutoStartDate { get; set; }
 
     public string? LastAutoDate { get; set; }
+
+    /// <summary>Month 1–3 never saved: no milk requirement is counted yet.</summary>
+    public bool NotStarted { get; set; }
 
     public int UnweanedKids { get; set; }
 

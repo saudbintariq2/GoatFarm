@@ -411,7 +411,7 @@ const GoatRecords = (() => {
     setTimeout(() => {
       el.classList.remove('show');
       setTimeout(() => el.remove(), 280);
-    }, 3200);
+    }, type === 'error' ? 7000 : 3200);
     return true;
   }
 
@@ -1372,6 +1372,11 @@ const GoatRecords = (() => {
     if (!FarmPerms.can('feed', 'edit')) return;
     document.querySelectorAll('[data-price]').forEach(inp => {
       inp.onchange = async () => {
+        if (!((+inp.value || 0) >= 1)) {
+          farmNotify('Enter a price of at least Rs 1 per kg — a feed cannot cost Rs 0.');
+          inp.reportValidity?.();
+          return;
+        }
         await api('/Feed/UpdatePrice', {
           method: 'POST',
           body: JSON.stringify({ feedType: inp.dataset.price, price: +inp.value || 0 })
@@ -1649,18 +1654,23 @@ const GoatRecords = (() => {
       mixList.innerHTML = (recipe.items || []).map(m =>
         `<div class="ration-row"><div class="rn">${esc(m.displayName)}${m.percent ? ` <span class="breed"> · ${esc(m.percent)}%</span>` : ''}</div>
           <div class="rin"><input type="number" min="0" step="0.5" data-mix="${esc(m.feedType)}" value="${esc(m.kgInBatch)}"><span class="u">kg</span></div>
-          <div class="rcost">${rs(m.batchCost)}</div></div>`).join('');
+          <div class="rcost">${m.priceMissing ? (+m.kgInBatch > 0 ? '<b style="color:#8a261c">Price missing</b>' : '<span class="breed">no price</span>') : rs(m.batchCost)}</div></div>`).join('');
       const res = document.getElementById('mixResult');
       if (res) {
+        const missing = recipe.priceMissing
+          ? `<div class="v" style="color:#8a261c;font-size:15px">Price missing</div>` : null;
         res.innerHTML =
           `<div class="r"><div class="v">${(+recipe.totalKg || 0).toFixed(1)} kg</div><div class="k">batch size</div></div>
-           <div class="r"><div class="v">${rs(recipe.batchCost || 0)}</div><div class="k">cost of one batch</div></div>
-           <div class="r"><div class="v">${rs(recipe.costPerKg || 0)}</div><div class="k">mix cost per kg</div></div>`;
+           <div class="r">${missing || `<div class="v">${rs(recipe.batchCost || 0)}</div>`}<div class="k">cost of one batch</div></div>
+           <div class="r">${missing || `<div class="v">${rs(recipe.costPerKg || 0)}</div>`}<div class="k">mix cost per kg</div></div>` +
+          (recipe.priceMissing && (recipe.missingPriceNames || []).length
+            ? `<div class="note" style="margin:8px 0 0 0;border-color:#8a261c;grid-column:1/-1">Set a price in Feed Master for: <b>${recipe.missingPriceNames.map(esc).join(', ')}</b></div>`
+            : '');
       }
       const cmp = document.getElementById('mixCompare');
       if (cmp && recipe.allStatusCosts) {
         cmp.innerHTML = '<b>All recipes:</b> ' + recipe.allStatusCosts.map(c =>
-          `<span style="${c.isActive ? 'color:var(--green-dark);font-weight:700' : 'color:var(--ink-soft)'}">${esc(c.statusDisplay)} ${rs(c.costPerKg)}/kg</span>`).join(' · ');
+          `<span style="${c.isActive ? 'color:var(--green-dark);font-weight:700' : 'color:var(--ink-soft)'}">${esc(c.statusDisplay)} ${c.priceMissing ? '<span style="color:#8a261c">price missing</span>' : rs(c.costPerKg) + '/kg'}</span>`).join(' · ');
       }
       const bs = document.getElementById('mixBatch');
       if (bs) {
@@ -1823,12 +1833,14 @@ const GoatRecords = (() => {
       const purchPrices = (data.allPrices || []).filter(p => p.feedType !== 'fodder');
       document.getElementById('priceGrid').innerHTML = purchPrices.map(p =>
         `<div class="price-row"><label>${esc(p.displayName)} <span class="del feed-del" data-delfeed="${esc(p.feedType)}" title="remove feed">×</span></label><div class="price-in"><span class="pre">Rs</span>
-          <input type="number" min="0" data-price="${esc(p.feedType)}" value="${esc(p.pricePerKg)}"><span class="suf">/ kg</span></div></div>`).join('');
+          <input type="number" min="1" step="any" required data-price="${esc(p.feedType)}" value="${(+p.pricePerKg || 0) > 0 ? esc(p.pricePerKg) : ''}" placeholder="Price missing"
+            style="${(+p.pricePerKg || 0) > 0 ? '' : 'border-color:#8a261c'}"><span class="suf">/ kg</span></div></div>`).join('');
 
       const gp = document.getElementById('groupPlanRows');
       if (gp) {
-        let tG = 0, tMix = 0, tD = 0, tF = 0, tM = 0;
+        let tG = 0, tMix = 0, tD = 0, tF = 0, tM = 0, anyMissing = false;
         const rows = (data.groupPlans || []).map(row => {
+          if (row.priceMissing && row.goatCount > 0) anyMissing = true;
           tG += row.goatCount; tMix += (+row.mixKgPerDay || 0) * row.goatCount;
           tD += (+row.dailyCostPerGoat || 0) * row.goatCount;
           tF += (+row.monthlyTotal || 0); tM += (+row.fodderCostPerGoatPerDay || 0) * row.goatCount;
@@ -1841,8 +1853,10 @@ const GoatRecords = (() => {
             <td class="num-cell hide-sm"><input type="number" min="0" step="0.1" data-plan="${row.statusKey}" data-fld="fodderDry" value="${row.fodderDryKgPerDay}"
               style="width:66px;text-align:right;font-family:inherit;font-size:14px;padding:5px 7px;border:1px solid var(--line);border-radius:7px"></td>
             <td class="num-cell hide-sm"><span class="breed">${rs(row.fodderCostPerGoatPerDay || 0)}</span></td>
-            <td class="num-cell" style="font-weight:700">${rs(row.dailyCostPerGoat || 0)}</td>
-            <td class="num-cell" style="color:var(--green-dark);font-weight:700">${rs(row.monthlyTotal || 0)}</td>
+            ${row.priceMissing
+              ? `<td class="num-cell" style="color:#8a261c;font-weight:700">Price missing</td><td class="num-cell" style="color:#8a261c;font-weight:700">—</td>`
+              : `<td class="num-cell" style="font-weight:700">${rs(row.dailyCostPerGoat || 0)}</td>
+            <td class="num-cell" style="color:var(--green-dark);font-weight:700">${rs(row.monthlyTotal || 0)}</td>`}
             <td>${row.isCustomGroup
               ? `<select data-fgrecipe="${esc(row.statusKey)}" title="Mix recipe used" style="font-size:12px;padding:4px">${(data.recipeOptions || []).filter(o => o.key !== 'kidstarter').map(o => `<option value="${esc(o.key)}" ${o.key === (row.recipeFrom || 'milking') ? 'selected' : ''}>${esc(o.name)} mix</option>`).join('')}</select> <span class="del" data-fgdel="${esc(row.statusKey)}" title="remove group">×</span>`
               : `<button type="button" class="btn btn-ghost btn-sm" data-recipe="${esc(row.statusKey)}">Recipe</button>`}</td></tr>`;
@@ -1852,8 +1866,10 @@ const GoatRecords = (() => {
           <td class="num-cell" style="font-weight:800">${tMix.toFixed(1)} kg</td>
           <td class="num-cell hide-sm"></td><td class="num-cell hide-sm"></td>
           <td class="num-cell hide-sm" style="font-weight:800">${rs(tM)}</td>
-          <td class="num-cell" style="font-weight:800">${rs(tD)}</td>
-          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(tF)}</td><td></td></tr>` : '');
+          ${anyMissing
+            ? `<td class="num-cell" style="font-weight:800;color:#8a261c">Price missing</td><td class="num-cell" style="font-weight:800;color:#8a261c">—</td>`
+            : `<td class="num-cell" style="font-weight:800">${rs(tD)}</td>
+          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(tF)}</td>`}<td></td></tr>` : '');
         document.querySelectorAll('[data-recipe]').forEach(b => {
           b.onclick = async () => {
             recipeGroup = b.dataset.recipe;
@@ -1898,12 +1914,15 @@ const GoatRecords = (() => {
         `<tr><td>${esc(b.displayName)}${b.isOwnLand ? '<div class="name">grown on your land — not bought</div>' : '<div class="name">net to buy after store stock</div>'}</td>
           <td class="num-cell hide-sm">${b.kgPerDay.toFixed(1)}</td>
           <td class="num-cell">${Math.round(b.kgPerMonth).toLocaleString('en-US')}</td>
-          <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>' : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
+          <td class="num-cell">${b.isOwnLand ? '<span class="breed">own land</span>'
+            : b.priceMissing ? '<b style="color:#8a261c">Price missing</b>'
+            : `<span style="color:var(--green-dark)">${rs(b.costPerMonth)}</span>`}</td></tr>`).join('');
       if (buyHtml && data.buyingListTotalKg) {
+        const buyMissing = (data.buyingList || []).some(b => b.priceMissing);
         buyHtml += `<tr style="background:var(--green-tint)"><td style="font-weight:800">TOTAL TO BUY</td>
           <td class="num-cell hide-sm"></td>
           <td class="num-cell" style="font-weight:800">${Math.round(data.buyingListTotalKg).toLocaleString('en-US')} kg</td>
-          <td class="num-cell" style="font-weight:800;color:var(--green-dark)">${rs(data.buyingListTotalCost || 0)}</td></tr>`;
+          <td class="num-cell" style="font-weight:800;color:${buyMissing ? '#8a261c' : 'var(--green-dark)'}">${buyMissing ? 'Price missing' : rs(data.buyingListTotalCost || 0)}</td></tr>`;
       }
       document.getElementById('buyRows').innerHTML = buyHtml ||
         '<tr><td colspan="4" class="empty">Set your mix recipe and group amounts first.</td></tr>';
@@ -1969,6 +1988,7 @@ const GoatRecords = (() => {
       bindFeedDeleteButtons();
     }
 
+    const fmtKg1 = n => (Math.round((+n || 0) * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 });
     function renderStock(stock) {
       const stockEl = document.getElementById('stockRows');
       if (!stockEl || !stock) return;
@@ -1976,8 +1996,11 @@ const GoatRecords = (() => {
         `<tr><td>${esc(s.displayName)}${s.isLowStock ? ' <span class="chip chip-exp">LOW</span>' : ''}</td>
           <td class="num-cell hide-sm"><span class="breed">${Math.round(s.purchasedKg || 0).toLocaleString('en-US')} kg</span></td>
           <td class="num-cell hide-sm"><span class="breed">${Math.round(s.usedKg || 0).toLocaleString('en-US')} kg</span></td>
-          <td class="num-cell"><input type="number" min="0" step="0.5" data-stock="${esc(s.feedType)}" value="${Number(s.stockKg ?? 0).toFixed(1)}"
-            style="width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"> kg</td>
+          <td class="num-cell hide-sm">${(+s.shortKg || 0) > 0 ? `<b style="color:#8a261c">${fmtKg1(s.shortKg)} kg</b>` : '<span class="breed">—</span>'}</td>
+          <td class="num-cell"><b class="stock-kg" data-stock-show="${esc(s.feedType)}" title="${FarmPerms.can('feed', 'edit') ? 'Click to correct' : ''}"
+            style="font-variant-numeric:tabular-nums;${FarmPerms.can('feed', 'edit') ? 'cursor:pointer;border-bottom:1px dashed var(--line)' : ''}">${fmtKg1(s.stockKg)} kg</b>
+            <input type="number" min="0" step="0.5" data-stock="${esc(s.feedType)}" value="${Number(s.stockKg ?? 0).toFixed(1)}"
+            style="display:none;width:86px;text-align:right;font-family:inherit;font-size:14px;font-weight:700;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums"></td>
           <td class="num-cell">${(+s.kgPerDay).toFixed(1)} kg</td>
           <td class="num-cell" style="${esc(s.daysLeftColor)}">${esc(s.daysLeftText)}</td>
           <td class="num-cell hide-sm">${s.avgCostPerKg > 0 ? rs(s.avgCostPerKg) : '—'}</td>
@@ -2097,7 +2120,7 @@ const GoatRecords = (() => {
       if (!diet) return;
       const q = id => document.getElementById(id);
       if (q('v182Un')) q('v182Un').textContent = diet.unweanedKids || 0;
-      if (q('v182Pow')) q('v182Pow').textContent = Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US') + ' g';
+      if (q('v182Pow')) q('v182Pow').textContent = diet.notStarted ? 'Not started' : Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US') + ' g';
       if (q('v182Stock')) q('v182Stock').textContent = (+diet.powderStockKg || 0).toFixed(1) + ' kg';
       const as = q('v188AutoStatus');
       if (as) {
@@ -2108,7 +2131,9 @@ const GoatRecords = (() => {
       const req = q('v182Req');
       if (req) {
         const c = diet.counts || [0, 0, 0];
-        req.innerHTML = `<b>Today's requirement:</b> ${c[0] || 0} kid(s) Month 1 · ${c[1] || 0} Month 2 · ${c[2] || 0} Month 3 &nbsp; | &nbsp; Powder milk <b>${Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US')} g/day</b> (${(+diet.powderTodayKg || 0).toFixed(2)} kg) · Mother milk ${(+diet.motherTodayL || 0).toFixed(2)} L · Starter mix ${(+diet.mixTodayKg || 0).toFixed(2)} kg · Green ${(+diet.greenTodayKg || 0).toFixed(2)} kg · Dry ${(+diet.dryTodayKg || 0).toFixed(2)} kg`;
+        req.innerHTML = diet.notStarted
+          ? `<b>Today's requirement:</b> <span style="color:var(--amber);font-weight:700">Not started – save Month 1–3 to begin</span> · ${c[0] || 0} kid(s) Month 1 · ${c[1] || 0} Month 2 · ${c[2] || 0} Month 3`
+          : `<b>Today's requirement:</b> ${c[0] || 0} kid(s) Month 1 · ${c[1] || 0} Month 2 · ${c[2] || 0} Month 3 &nbsp; | &nbsp; Powder milk <b>${Math.round((+diet.powderTodayKg || 0) * 1000).toLocaleString('en-US')} g/day</b> (${(+diet.powderTodayKg || 0).toFixed(2)} kg) · Mother milk ${(+diet.motherTodayL || 0).toFixed(2)} L · Starter mix ${(+diet.mixTodayKg || 0).toFixed(2)} kg · Green ${(+diet.greenTodayKg || 0).toFixed(2)} kg · Dry ${(+diet.dryTodayKg || 0).toFixed(2)} kg`;
       }
       const logs = q('v182Logs');
       if (logs) {
@@ -2131,7 +2156,23 @@ const GoatRecords = (() => {
         document.querySelectorAll('[data-stock]').forEach(inp => { inp.disabled = true; });
         return;
       }
+      document.querySelectorAll('[data-stock-show]').forEach(label => {
+        label.onclick = () => {
+          const inp = label.parentElement.querySelector('[data-stock]');
+          if (!inp) return;
+          label.style.display = 'none';
+          inp.style.display = '';
+          inp.focus();
+          inp.select();
+        };
+      });
       document.querySelectorAll('[data-stock]').forEach(inp => {
+        inp.onblur = () => {
+          const label = inp.parentElement.querySelector('[data-stock-show]');
+          if (!label) return;
+          inp.style.display = 'none';
+          label.style.display = '';
+        };
         inp.onchange = async () => {
           await api('/Feed/UpdateStock', {
             method: 'POST',
@@ -2218,6 +2259,7 @@ const GoatRecords = (() => {
       const pricePerKg = +document.getElementById('nf-price').value || 0;
       const useType = document.getElementById('nf-use')?.value || 'recipe';
       if (!displayName) { await showModal('Enter feed name'); return; }
+      if (!(pricePerKg >= 1)) { await showModal('Enter a price of at least Rs 1 per kg'); return; }
       await api('/Feed/AddFeedType', { method: 'POST', body: JSON.stringify({ displayName, pricePerKg, useType }) });
       document.getElementById('nf-name').value = '';
       document.getElementById('nf-price').value = '';
@@ -3343,8 +3385,9 @@ const GoatRecords = (() => {
       const note = document.getElementById('o-note').value.trim();
       if (!amt || !date) { await showModal('Enter date and amount'); return; }
       if (!note) { await showModal('Enter a note'); return; }
-      const accountId = requireFinAccount('o-account');
-      if (!accountId) { await showModal('Choose Cash or Bank — owner funding must post to an account.'); return; }
+      const nonCash = !!editingOwnerId && !!document.querySelector(`#ownerRows tr.fin-owner-row[data-id="${editingOwnerId}"][data-noncash="1"]`);
+      const accountId = nonCash ? null : requireFinAccount('o-account');
+      if (!nonCash && !accountId) { await showModal('Choose Cash or Bank — owner funding must post to an account.'); return; }
       const payload = {
         note,
         amount: amt,
@@ -3571,19 +3614,15 @@ const GoatRecords = (() => {
 
     document.getElementById('fin-fund-livestock-btn')?.addEventListener('click', async () => {
       if (!FarmPerms.guardAddEdit('finance', true)) return;
-      const accountId = requireFinAccount('fin-relink-account');
-      if (!accountId) {
-        await showModal('Choose the account that received owner funding for the herd.');
-        return;
-      }
       const ok = await showConfirm(
-        'Post one owner funding entry for livestock not yet backed by payments or funding? ' +
-        'Use when goats have a purchase price but no Paid from / owner contribution.');
+        'Post one non-cash owner contribution for livestock not yet backed by payments or funding? ' +
+        'Use when goats came onto the farm with a value but no cash was paid from Bank & Cash. ' +
+        'This does not change any Cash or Bank balance.');
       if (!ok) return;
       try {
         const data = await api('/Finance/FundLivestockAsOwner', {
           method: 'POST',
-          body: JSON.stringify({ accountId, dryRun: false })
+          body: JSON.stringify({ dryRun: false })
         });
         reloadFinanceWithToast(data.message || 'Livestock funding posted.');
       } catch { /* api shows error */ }
@@ -5232,6 +5271,23 @@ const GoatRecords = (() => {
       }
     });
 
+    document.getElementById('backupRunNowBtn')?.addEventListener('click', async e => {
+      const btn = e.currentTarget;
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Backing up…';
+      try {
+        const data = await api('/BackupCenter/RunNow', { method: 'POST' });
+        sessionStorage.setItem('goatToast', data?.message || 'Backup saved.');
+        location.reload();
+      } catch {
+        /* api() shows the error */
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
+
     document.getElementById('clearFarmBtn')?.addEventListener('click', async () => {
       const confirmText = document.getElementById('clearFarmConfirm')?.value?.trim() || '';
       if (confirmText !== 'WIPE ALL FARM DATA') {
@@ -5757,4 +5813,12 @@ const GoatRecords = (() => {
 
   return { initHerd, initBreeding, initFeed, initMilk, initFinance, initReports, initHealth, initSearch, initSettings, initTasks, initAssistant, assistantSpeechText, createAssistantVoice, showModal, showConfirm, showToast, api, reloadWithToast };
 })();
-if (typeof window !== 'undefined') window.GoatRecords = GoatRecords;
+if (typeof window !== 'undefined') {
+  window.GoatRecords = GoatRecords;
+  /** Non-blocking message for module scripts; falls back to a browser alert when the page has no toast host. */
+  window.farmNotify = (message, type = 'error') => {
+    const text = message == null ? '' : String(message);
+    if (!text) return;
+    if (!GoatRecords.showToast(text, type)) window.alert(text);
+  };
+}

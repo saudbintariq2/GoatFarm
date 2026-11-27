@@ -43,10 +43,13 @@ public partial class BreedingService : IBreedingService
             .Where(g => !g.IsArchived)
             .OrderBy(g => g.Tag)
             .ToListAsync(cancellationToken);
-        var prep = goats.Where(g => g.PrepCrossDate.HasValue && !g.MatedDate.HasValue).ToList();
-        var awaitingScan = goats.Where(PregnancyRules.IsAwaitingScan).ToList();
-        var waiting = awaitingScan;
-        var confirmed = goats.Where(PregnancyRules.IsConfirmedPregnant).ToList();
+        var doeStages = await _farmMetrics.DoeStagesAsync(today, cancellationToken: cancellationToken);
+        bool InStage(Goat g, params FarmDoeStage[] wanted) =>
+            doeStages.TryGetValue(g.Id, out var s) && wanted.Contains(s.Stage);
+        var prep = goats.Where(g => g.PrepCrossDate.HasValue && InStage(g, FarmDoeStage.GettingReady, FarmDoeStage.InHeat)).ToList();
+        var waiting = goats.Where(g => g.MatedDate.HasValue &&
+            InStage(g, FarmDoeStage.Crossed, FarmDoeStage.WaitingScan, FarmDoeStage.RescanDue)).ToList();
+        var confirmed = goats.Where(g => g.MatedDate.HasValue && InStage(g, FarmDoeStage.Pregnant, FarmDoeStage.Dry)).ToList();
 
         int? soonest = confirmed.Count > 0
             ? confirmed.Min(g => BreedingHelper.DaysUntil(BreedingHelper.ExpectedKidding(g.MatedDate!.Value)))
@@ -234,7 +237,8 @@ public partial class BreedingService : IBreedingService
             EmptyRows = emptyRows,
             RationRows = rationRows,
             PipelineRows = BreedingPageAssembler.BuildPipelineRows(
-                goats, kiddingCounts, allKiddingsByDoe, Today, _goatService.GetAgeLabel, doesWithBuckIn, rescanDueByGoat, latestCrossByDoe),
+                goats, kiddingCounts, allKiddingsByDoe, Today, _goatService.GetAgeLabel, doesWithBuckIn, rescanDueByGoat, latestCrossByDoe,
+                doeStages),
             DoeFlowSteps = BreedingPageAssembler.BuildDoeFlowStepsFromKeyCounts(flowKeyCounts),
             NowJobs = BreedingPageAssembler.BuildNowJobs(goats, season, today, breedingGroups, kiddingCounts,
                 latestWeights, rescanIds, kidGoats,

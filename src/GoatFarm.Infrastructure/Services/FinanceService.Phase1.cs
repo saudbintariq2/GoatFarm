@@ -1,5 +1,6 @@
 using GoatFarm.Application.Common;
 using GoatFarm.Application.ViewModels.Finance;
+using GoatFarm.Domain.Constants;
 using GoatFarm.Domain.Entities;
 using GoatFarm.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -18,19 +19,39 @@ public partial class FinanceService
         var linkRefs = links.Select(l => l.Reference!).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var funding = await _context.OwnerInvestments.AsNoTracking()
-            .Where(o => o.Amount > 0)
+            .Where(o => o.Amount > 0 && !o.IsNonCash)
             .Select(o => new { o.Id, o.Amount, o.Note, o.Date })
             .ToListAsync(cancellationToken);
-        var incomes = await _context.Incomes.AsNoTracking()
+        var creditIncomeIds = await CreditSaleIncomeIdsAsync(cancellationToken);
+        var incomes = (await _context.Incomes.AsNoTracking()
             .Where(i => i.Amount > 0)
             .Select(i => new { i.Id, i.Amount, i.Type, i.Date })
-            .ToListAsync(cancellationToken);
-        var expenses = await _context.Expenses.AsNoTracking()
+            .ToListAsync(cancellationToken))
+            .Where(i => !creditIncomeIds.Contains(i.Id))
+            .ToList();
+        var expenses = (await _context.Expenses.AsNoTracking()
             .Where(e => e.Amount > 0)
-            .Select(e => new { e.Id, e.Amount, e.Type, e.Date })
-            .ToListAsync(cancellationToken);
+            .Select(e => new { e.Id, e.Amount, e.Type, e.Date, e.SourceType, e.Comment })
+            .ToListAsync(cancellationToken))
+            .Where(e => !FinanceSourceTypes.IsNonCashExpense(e.SourceType, e.Type, e.Comment))
+            .ToList();
 
         int unlinkedFunding = 0, unlinkedIncome = 0, unlinkedExpense = 0, unlinkedFeed = 0, unlinkedVacc = 0;
+
+        var cashProductSales = await _context.ProductSales.AsNoTracking()
+            .Where(s => !s.IsCredit && s.Amount > 0)
+            .Select(s => new { s.Id, s.Amount, s.Date, s.ProductName, s.InvoiceNo })
+            .ToListAsync(cancellationToken);
+        foreach (var s in cashProductSales.Where(s => !linkRefs.Contains(LedgerSourceKey.ProductSale(s.Id))))
+        {
+            unlinkedIncome++;
+            issues.Add(new FinanceIntegrityIssueViewModel
+            {
+                Severity = "critical",
+                Code = "UNLINKED_PRODUCT_SALE",
+                Message = $"Products sale {s.InvoiceNo} ({s.ProductName}) Rs {s.Amount:N0} on {s.Date:yyyy-MM-dd} is not on Bank & Cash."
+            });
+        }
         foreach (var o in funding)
         {
             var key = $"fin-funding:{o.Id}";
@@ -114,7 +135,7 @@ public partial class FinanceService
             }
         }
 
-        foreach (var dup in links.Where(l => l.Reference!.StartsWith("fin-", StringComparison.OrdinalIgnoreCase))
+        foreach (var dup in links.Where(l => LedgerSourceKey.TryParse(l.Reference, out _, out _))
                      .GroupBy(l => l.Reference, StringComparer.OrdinalIgnoreCase)
                      .Where(g => g.Count() > 1))
         {
@@ -284,7 +305,6 @@ public partial class FinanceService
     public async Task<FundLivestockResultViewModel> FundLivestockAsOwnerContributionAsync(
         FundLivestockAsOwnerViewModel model, CancellationToken cancellationToken = default)
     {
-        EnsureMoneyAccount(model.AccountId);
         var (livestockValue, alreadyFunded, gap) = await ComputeLivestockFundingGapAsync(cancellationToken);
         if (gap <= 1m)
         {
@@ -308,20 +328,18 @@ public partial class FinanceService
                 LivestockValue = livestockValue,
                 AlreadyFunded = alreadyFunded,
                 AmountToPost = gap,
-                Message = $"Dry run: would post Rs {gap:N0} owner funding for livestock on herd books."
+                Message = $"Dry run: would post Rs {gap:N0} as a non-cash livestock contribution (no Cash/Bank movement)."
             };
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        await AddOwnerInvestmentAsync(new CreateOwnerInvestmentViewModel
+        _context.OwnerInvestments.Add(new OwnerInvestment
         {
             Amount = gap,
-            Date = today,
-            AccountId = model.AccountId,
-            Shareholder = "Owner",
-            FundingType = "Capital investment",
-            Note = "Owner contribution – livestock (staging bulk)"
-        }, cancellationToken);
+            Date = await GetBooksStartDateAsync(cancellationToken),
+            Note = "Opening herd · Livestock contribution (non-cash)",
+            IsNonCash = true
+        });
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new FundLivestockResultViewModel
         {
@@ -329,7 +347,7 @@ public partial class FinanceService
             LivestockValue = livestockValue,
             AlreadyFunded = alreadyFunded,
             AmountToPost = gap,
-            Message = $"Posted Rs {gap:N0} owner funding to balance livestock (Rs {livestockValue:N0} on herd)."
+            Message = $"Posted Rs {gap:N0} non-cash livestock contribution (Rs {livestockValue:N0} on herd). Bank & Cash is unchanged."
         };
     }
 
@@ -397,10 +415,24 @@ public partial class FinanceService
 
         int funding = 0, income = 0, expense = 0, feed = 0, vacc = 0;
         var messages = new List<string> { $"Default account: {account.Name}" };
+        var creditIncomeIds = await CreditSaleIncomeIdsAsync(cancellationToken);
+        bool CashIncome(Income i) => !creditIncomeIds.Contains(i.Id);
+        static bool CashExpense(Expense e) => !FinanceSourceTypes.IsNonCashExpense(e.SourceType, e.Type, e.Comment);
 
         if (!model.DryRun)
         {
-            foreach (var o in await _context.OwnerInvestments.Where(x => x.Amount > 0).ToListAsync(cancellationToken))
+            foreach (var s in await _context.ProductSales.Where(x => !x.IsCredit && x.Amount > 0).ToListAsync(cancellationToken))
+            {
+                var key = LedgerSourceKey.ProductSale(s.Id);
+                if (have.Contains(key)) continue;
+                s.AccountId ??= model.DefaultAccountId;
+                await SyncCashMovementAsync(key, s.Date, s.Amount, s.AccountId, LedgerTransactionKind.Income,
+                    "Product sale", $"Sale {s.InvoiceNo} · {s.ProductName}", cancellationToken);
+                income++;
+                have.Add(key);
+            }
+
+            foreach (var o in await _context.OwnerInvestments.Where(x => x.Amount > 0 && !x.IsNonCash).ToListAsync(cancellationToken))
             {
                 var key = $"fin-funding:{o.Id}";
                 if (have.Contains(key)) continue;
@@ -410,7 +442,7 @@ public partial class FinanceService
                 have.Add(key);
             }
 
-            foreach (var i in await _context.Incomes.Where(x => x.Amount > 0).ToListAsync(cancellationToken))
+            foreach (var i in (await _context.Incomes.Where(x => x.Amount > 0).ToListAsync(cancellationToken)).Where(CashIncome))
             {
                 var key = $"fin-income:{i.Id}";
                 if (have.Contains(key)) continue;
@@ -420,7 +452,7 @@ public partial class FinanceService
                 have.Add(key);
             }
 
-            foreach (var e in await _context.Expenses.Where(x => x.Amount > 0).ToListAsync(cancellationToken))
+            foreach (var e in (await _context.Expenses.Where(x => x.Amount > 0).ToListAsync(cancellationToken)).Where(CashExpense))
             {
                 var key = $"fin-expense:{e.Id}";
                 if (have.Contains(key)) continue;
@@ -454,11 +486,13 @@ public partial class FinanceService
         }
         else
         {
-            foreach (var o in await _context.OwnerInvestments.AsNoTracking().Where(x => x.Amount > 0).ToListAsync(cancellationToken))
+            foreach (var o in await _context.OwnerInvestments.AsNoTracking().Where(x => x.Amount > 0 && !x.IsNonCash).ToListAsync(cancellationToken))
                 if (!have.Contains($"fin-funding:{o.Id}")) funding++;
-            foreach (var i in await _context.Incomes.AsNoTracking().Where(x => x.Amount > 0).ToListAsync(cancellationToken))
+            foreach (var s in await _context.ProductSales.AsNoTracking().Where(x => !x.IsCredit && x.Amount > 0).ToListAsync(cancellationToken))
+                if (!have.Contains(LedgerSourceKey.ProductSale(s.Id))) income++;
+            foreach (var i in (await _context.Incomes.AsNoTracking().Where(x => x.Amount > 0).ToListAsync(cancellationToken)).Where(CashIncome))
                 if (!have.Contains($"fin-income:{i.Id}")) income++;
-            foreach (var e in await _context.Expenses.AsNoTracking().Where(x => x.Amount > 0).ToListAsync(cancellationToken))
+            foreach (var e in (await _context.Expenses.AsNoTracking().Where(x => x.Amount > 0).ToListAsync(cancellationToken)).Where(CashExpense))
                 if (!have.Contains($"fin-expense:{e.Id}")) expense++;
             foreach (var p in await _context.FeedPurchases.AsNoTracking().Where(x => x.PaidAmount > 0).ToListAsync(cancellationToken))
                 if (!have.Contains($"feed_purchase:{p.Id}")) feed++;
@@ -492,6 +526,14 @@ public partial class FinanceService
         var bs = await BuildBalanceSheetAsync(page, cancellationToken);
         return bs.IsBalanced ? 0 : bs.ImbalanceAmount;
     }
+
+    /// <summary>Incomes created by credit goat sales: their cash arrives later as an invoice receipt, never as the income itself.</summary>
+    private async Task<HashSet<int>> CreditSaleIncomeIdsAsync(CancellationToken cancellationToken) =>
+        (await _context.GoatSales.AsNoTracking()
+            .Where(s => s.IsCredit && s.IncomeId != null)
+            .Select(s => s.IncomeId!.Value)
+            .ToListAsync(cancellationToken))
+        .ToHashSet();
 
     private async Task<FinanceBalanceSheetViewModel> BuildBalanceSheetAsync(FinancePageViewModel page, CancellationToken cancellationToken)
     {
@@ -584,6 +626,48 @@ public partial class FinanceService
                 && note.Contains("owner contribution", StringComparison.OrdinalIgnoreCase));
     }
 
+    private async Task<FinanceCashFlowViewModel> BuildCashFlowAsync(DateOnly from, DateOnly endExclusive, CancellationToken cancellationToken)
+    {
+        var accounts = await _context.MoneyAccounts.AsNoTracking().Where(a => a.IsActive).ToListAsync(cancellationToken);
+        var txs = await _context.LedgerTransactions.AsNoTracking().Where(t => t.Date < endExclusive).ToListAsync(cancellationToken);
+        var opening = ComputeLedgerBalances(accounts, txs.Where(t => t.Date < from).ToList()).Values.Sum();
+        var closing = ComputeLedgerBalances(accounts, txs).Values.Sum();
+        var active = accounts.Select(a => a.Id).ToHashSet();
+        var slice = txs.Where(t => t.Date >= from && t.Kind != LedgerTransactionKind.Transfer
+                                   && t.AccountId is int id && active.Contains(id)).ToList();
+
+        static string Label(LedgerTransaction t)
+        {
+            var r = t.Reference ?? "";
+            if (r.StartsWith("fin-funding:", StringComparison.OrdinalIgnoreCase)) return "You put in (owner funding)";
+            if (t.Kind == LedgerTransactionKind.InvoicePayment) return "Customer payments received";
+            if (t.Kind == LedgerTransactionKind.PayablePayment)
+                return r.StartsWith("payroll:", StringComparison.OrdinalIgnoreCase) ? "Salaries paid" : "Supplier bills paid";
+            if (r.StartsWith("capex:", StringComparison.OrdinalIgnoreCase) || r.StartsWith("fixed_asset:", StringComparison.OrdinalIgnoreCase))
+                return "Capital projects / assets";
+            return string.IsNullOrWhiteSpace(t.Category) ? (t.Kind == LedgerTransactionKind.Income ? "Other money in" : "Other money out") : t.Category!;
+        }
+
+        List<FinanceLineViewModel> Lines(IEnumerable<LedgerTransaction> rows) => rows
+            .GroupBy(Label, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new FinanceLineViewModel { Label = g.Key, Amount = g.Sum(t => t.Amount) })
+            .Where(l => l.Amount > 0)
+            .OrderByDescending(l => l.Amount)
+            .ToList();
+
+        var inRows = slice.Where(t => t.Kind is LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment).ToList();
+        var outRows = slice.Where(t => t.Kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment).ToList();
+        return new FinanceCashFlowViewModel
+        {
+            Opening = opening,
+            MoneyIn = inRows.Sum(t => t.Amount),
+            MoneyOut = outRows.Sum(t => t.Amount),
+            Closing = closing,
+            InLines = Lines(inRows),
+            OutLines = Lines(outRows)
+        };
+    }
+
     public async Task<IReadOnlyList<FinanceMonthlyClosingRowViewModel>> BuildMonthlyClosingRowsAsync(
         string monthKey, CancellationToken cancellationToken = default)
     {
@@ -596,45 +680,39 @@ public partial class FinanceService
         var payables = await _context.SupplierPayables.AsNoTracking()
             .Where(p => p.Status != PayableStatus.Void).ToListAsync(cancellationToken);
 
-        decimal BalanceAt(DateOnly date)
-        {
-            var map = accounts.ToDictionary(a => a.Id, a => a.OpeningBalance);
-            foreach (var t in txs.Where(x => x.Date < date))
-            {
-                if (t.Kind == LedgerTransactionKind.Transfer)
-                {
-                    if (t.AccountId is int from && map.ContainsKey(from)) map[from] -= t.Amount;
-                    if (t.CounterAccountId is int to && map.ContainsKey(to)) map[to] += t.Amount;
-                    continue;
-                }
+        decimal BalanceAt(DateOnly date) =>
+            ComputeLedgerBalances(accounts, txs.Where(x => x.Date < date).ToList()).Values.Sum();
+        var activeIds = accounts.Select(a => a.Id).ToHashSet();
 
-                if (t.AccountId is null || !map.ContainsKey(t.AccountId.Value)) continue;
-                map[t.AccountId.Value] += t.Kind switch
-                {
-                    LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment => t.Amount,
-                    LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment => -t.Amount,
-                    _ => 0
-                };
-            }
-
-            return map.Values.Sum();
-        }
+        var currentKey = MonthHelper.CurrentMonthKey();
+        var payrollNow = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, currentKey, cancellationToken);
+        var (_, payablesNow, _) = await FinancePayablesBuilder.BuildAsync(_context, payrollNow, cancellationToken);
 
         var rows = new List<FinanceMonthlyClosingRowViewModel>();
         for (var i = 5; i >= 0; i--)
         {
             var start = anchorStart.AddMonths(-i);
             var end = start.AddMonths(1);
-            var slice = txs.Where(t => t.Date >= start && t.Date < end).ToList();
+            var slice = txs.Where(t => t.Date >= start && t.Date < end && t.AccountId is int id && activeIds.Contains(id)).ToList();
             var moneyIn = slice.Where(t => t.Kind is LedgerTransactionKind.Income or LedgerTransactionKind.InvoicePayment).Sum(t => t.Amount);
             var moneyOut = slice.Where(t => t.Kind is LedgerTransactionKind.Expense or LedgerTransactionKind.PayablePayment).Sum(t => t.Amount);
             var ar = invoices.Where(inv => inv.Date < end && inv.Status is InvoiceStatus.Open or InvoiceStatus.Partial)
                 .Sum(inv => inv.Amount - inv.PaidAmount);
-            var ap = payables.Where(p => p.Date < end && p.Status is PayableStatus.Open or PayableStatus.Partial)
-                .Sum(p => p.Amount - p.PaidAmount);
+            var key = $"{start.Year:0000}-{start.Month:00}";
+            decimal ap;
+            if (key == currentKey)
+                ap = payablesNow;
+            else
+            {
+                var payroll = await FinancePayablesBuilder.PayrollOutstandingAsync(_context, key, cancellationToken);
+                ap = payables.Where(p => p.Date < end && p.Status is PayableStatus.Open or PayableStatus.Partial
+                                         && !p.Description.StartsWith("Loan", StringComparison.OrdinalIgnoreCase))
+                         .Sum(p => p.Amount - p.PaidAmount)
+                     + payroll.Sum(p => p.Balance);
+            }
             rows.Add(new FinanceMonthlyClosingRowViewModel
             {
-                Month = $"{start.Year:0000}-{start.Month:00}",
+                Month = key,
                 OpeningCash = BalanceAt(start),
                 MoneyIn = moneyIn,
                 MoneyOut = moneyOut,

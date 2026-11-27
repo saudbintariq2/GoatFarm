@@ -87,7 +87,12 @@ public class LedgerTransactionConfiguration : IEntityTypeConfiguration<LedgerTra
         builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.Category).HasMaxLength(120);
         builder.Property(x => x.Reference).HasMaxLength(120);
+        builder.Property(x => x.SourceType).HasMaxLength(40);
+        builder.Property(x => x.SourceId).HasMaxLength(80);
         builder.HasIndex(x => x.Date);
+        builder.HasIndex(x => new { x.SourceType, x.SourceId })
+            .IsUnique()
+            .HasFilter("\"SourceType\" IS NOT NULL");
     }
 }
 

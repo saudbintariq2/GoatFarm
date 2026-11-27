@@ -53,18 +53,13 @@ public static class DatabaseBootstrap
                 logger.LogWarning("Seed:ResetAdminPassword=true — the seeded admin password will be reset. Turn this off after recovery.");
 
             var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
-            var createDefaultAdmin = configuration.GetValue("Seed:CreateDefaultAdmin", true);
-            var hasUsers = await userManager.Users.AnyAsync(cancellationToken);
-            if (createDefaultAdmin || !hasUsers)
-            {
-                await IdentitySeedHelper.SeedAdminUserAsync(
-                    userManager,
-                    resetAdminPassword: resetAdminPassword,
-                    logger: logger,
-                    cancellationToken: cancellationToken);
-            }
-            else
-                logger.LogInformation("Skipped default admin seed (Seed:CreateDefaultAdmin=false and users already exist).");
+            await IdentitySeedHelper.SeedAdminAsync(
+                userManager,
+                configuration,
+                isDevelopment,
+                resetAdminPassword: resetAdminPassword,
+                logger: logger,
+                cancellationToken: cancellationToken);
 
             if (isDevelopment &&
                 string.Equals(configuration["Seed:EnsureDevUser"], "true", StringComparison.OrdinalIgnoreCase))

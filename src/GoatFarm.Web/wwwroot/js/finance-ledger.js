@@ -15,7 +15,7 @@
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: payload == null ? undefined : JSON.stringify(payload)
     });
-    if (res.status === 202) { alert('Submitted for approval.'); return null; }
+    if (res.status === 202) { farmNotify('Submitted for approval.', 'success'); return null; }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       if (res.status === 409 && err.requiresConfirmation && body && !confirmDuplicate) {
@@ -73,12 +73,12 @@
     try {
       await post('/Finance/SaveBusinessCustomer', { name: name.trim() });
       reload();
-    } catch (e) { alert(e.message); }
+    } catch (e) { farmNotify(e.message); }
   });
 
   const chooseAccount = () => {
     const opts = [...document.querySelectorAll('#bank-tx-account option')].filter(o => o.value);
-    if (!opts.length) { alert('Add a Cash or Bank account first.'); return 0; }
+    if (!opts.length) { farmNotify('Add a Cash or Bank account first.'); return 0; }
     const n = +prompt('Choose account:\n' + opts.map((o, i) => (i + 1) + '. ' + o.textContent).join('\n'), '1');
     if (!(n >= 1 && n <= opts.length)) return 0;
     return +opts[n - 1].value;
@@ -88,11 +88,11 @@
     const customerId = +document.getElementById('ar-customer').value || 0;
     const amount = +document.getElementById('ar-amount').value || 0;
     const date = document.getElementById('ar-date').value;
-    if (!customerId) { alert('Choose a customer.'); return; }
-    if (!amount || !date) { alert('Enter the invoice date and total.'); return; }
+    if (!customerId) { farmNotify('Choose a customer.'); return; }
+    if (!amount || !date) { farmNotify('Enter the invoice date and total.'); return; }
     const paid = document.getElementById('ar-payment-status').value === 'paid';
     const accountId = +document.getElementById('ar-account').value || 0;
-    if (paid && !accountId) { alert('Choose the Cash/Bank account that received the money.'); return; }
+    if (paid && !accountId) { farmNotify('Choose the Cash/Bank account that received the money.'); return; }
     const type = document.getElementById('ar-type').value;
     const note = document.getElementById('ar-note').value.trim();
     try {
@@ -106,7 +106,7 @@
         accountId: paid ? accountId : null
       });
       reload();
-    } catch (e) { alert(e.message); }
+    } catch (e) { farmNotify(e.message); }
   });
 
   document.getElementById('addPayable')?.addEventListener('click', async () => {
@@ -117,9 +117,9 @@
     const note = document.getElementById('ap-note').value.trim();
     const paid = +document.getElementById('ap-paid-now').value || 0;
     const accountId = +document.getElementById('ap-account').value || 0;
-    if (!supplierName || !amount || !date) { alert('Enter the supplier, date and amount.'); return; }
+    if (!supplierName || !amount || !date) { farmNotify('Enter the supplier, date and amount.'); return; }
     if (paid > 0 && !accountId && !document.getElementById('ap-post-expense').checked) {
-      alert('Choose the account the payment came from.');
+      farmNotify('Choose the account the payment came from.');
       return;
     }
     try {
@@ -136,14 +136,14 @@
         expenseType: type
       });
       reload();
-    } catch (e) { alert(e.message); }
+    } catch (e) { farmNotify(e.message); }
   });
 
   document.getElementById('addLoan')?.addEventListener('click', async () => {
     const name = document.getElementById('ln-name').value.trim();
     const amount = +document.getElementById('ln-amt').value || 0;
     const note = document.getElementById('ln-note').value.trim();
-    if (!name || !amount) { alert('Enter who the money is owed to, and the amount.'); return; }
+    if (!name || !amount) { farmNotify('Enter who the money is owed to, and the amount.'); return; }
     try {
       await post('/Finance/SaveSupplierPayable', {
         supplierName: name,
@@ -153,7 +153,7 @@
         paidAmount: 0
       });
       reload();
-    } catch (e) { alert(e.message); }
+    } catch (e) { farmNotify(e.message); }
   });
 
   document.querySelectorAll('[data-receive-invoice]').forEach(btn => {
@@ -166,7 +166,7 @@
       try {
         await post('/Finance/ReceiveInvoice', { id: +btn.dataset.receiveInvoice, amount, accountId, date: ymd(new Date()) });
         reload();
-      } catch (e) { alert(e.message); }
+      } catch (e) { farmNotify(e.message); }
     });
   });
 
@@ -180,7 +180,7 @@
       try {
         await post('/Finance/PayPayable', { id: +btn.dataset.payAp, amount, accountId, date: ymd(new Date()) });
         reload();
-      } catch (e) { alert(e.message); }
+      } catch (e) { farmNotify(e.message); }
     });
   });
 
@@ -188,21 +188,21 @@
     btn.addEventListener('click', async () => {
       if (!confirm('Delete this invoice?')) return;
       try { await post('/Finance/DeleteInvoice?id=' + btn.dataset.delInvoice, null, 'DELETE'); reload(); }
-      catch (e) { alert(e.message); }
+      catch (e) { farmNotify(e.message); }
     });
   });
   document.querySelectorAll('[data-del-ap]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('Delete this bill?')) return;
       try { await post('/Finance/DeletePayable?id=' + btn.dataset.delAp, null, 'DELETE'); reload(); }
-      catch (e) { alert(e.message); }
+      catch (e) { farmNotify(e.message); }
     });
   });
   document.querySelectorAll('[data-del-bank]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('Delete this account movement?')) return;
       try { await post('/Finance/DeleteLedgerTransaction?id=' + btn.dataset.delBank, null, 'DELETE'); reload(); }
-      catch (e) { alert(e.message); }
+      catch (e) { farmNotify(e.message); }
     });
   });
 
@@ -226,14 +226,14 @@
     const accountId = +document.getElementById('bank-tx-account').value || 0;
     const date = document.getElementById('bank-tx-date').value;
     const source = document.getElementById('bank-tx-source').value;
-    if (!amount || !accountId || !date) { alert('Enter the date, account and amount.'); return; }
+    if (!amount || !accountId || !date) { farmNotify('Enter the date, account and amount.'); return; }
     if (mode !== 'transfer' && ['sale', 'capital', 'expense'].includes(source)) {
       if (!confirm('Use this only when the money was not already posted from Sales, Funding or Expenses. Continue?')) return;
     }
     const person = document.getElementById('bank-tx-person').value.trim();
     const note = document.getElementById('bank-tx-note').value.trim();
     const to = +document.getElementById('bank-tx-to').value || 0;
-    if (mode === 'transfer' && (!to || to === accountId)) { alert('Choose a different account to transfer to.'); return; }
+    if (mode === 'transfer' && (!to || to === accountId)) { farmNotify('Choose a different account to transfer to.'); return; }
     try {
       await post('/Finance/SaveLedgerTransaction', {
         date,
@@ -245,7 +245,7 @@
         notes: [person, note].filter(Boolean).join(' — ')
       });
       reload();
-    } catch (e) { alert(e.message); }
+    } catch (e) { farmNotify(e.message); }
   });
 
   document.getElementById('addMoneyAccount')?.addEventListener('click', () => {
@@ -265,12 +265,12 @@
     const raw = prompt('Enter the opening balance (Rs). This can be set once only.');
     if (raw === null) return;
     const amount = Number(String(raw).replace(/,/g, ''));
-    if (!Number.isFinite(amount) || amount < 0) { alert('Enter a valid opening balance of 0 or more.'); return; }
+    if (!Number.isFinite(amount) || amount < 0) { farmNotify('Enter a valid opening balance of 0 or more.'); return; }
     if (!confirm('Set and lock this opening balance?')) return;
     try {
       await post('/Finance/SetOpeningBalance', { id, openingBalance: amount });
       reload();
-    } catch (err) { alert(err.message); }
+    } catch (err) { farmNotify(err.message); }
   });
 
   document.getElementById('saveMoneyAccounts')?.addEventListener('click', async () => {
@@ -295,7 +295,7 @@
         await post('/Finance/SaveMoneyAccount', body);
       }
       reload();
-    } catch (e) { alert(e.message); }
+    } catch (e) { farmNotify(e.message); }
   });
 
   document.querySelectorAll('[data-budget]').forEach(inp => {
@@ -310,7 +310,7 @@
           plannedAmount: +inp.value || 0
         });
         reload();
-      } catch (e) { alert(e.message); }
+      } catch (e) { farmNotify(e.message); }
     });
   });
 
@@ -346,7 +346,7 @@
         });
       }
       reload();
-    } catch (e) { alert(e.message); }
+    } catch (e) { farmNotify(e.message); }
   });
 
   const loadStatement = async () => {

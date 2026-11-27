@@ -10,8 +10,8 @@ namespace GoatFarm.Tests.E2E;
 [Trait("Category", "E2E")]
 public class BrowserFlowTests
 {
-    private const string AdminEmail = IdentitySeedHelper.DefaultAdminEmail;
-    private const string AdminPassword = IdentitySeedHelper.DefaultAdminPassword;
+    private const string AdminEmail = IdentitySeedHelper.DevAdminEmail;
+    private const string AdminPassword = IdentitySeedHelper.DevAdminPassword;
     private const string StrongPassword = "Str0ng!Passw0rd";
 
     private readonly E2eApp _app;

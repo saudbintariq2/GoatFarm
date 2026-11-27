@@ -71,6 +71,8 @@ public class GoatViewModel
     public string? HerdBreedingStatus { get; set; }
     public string? HerdBreedingStatusCss { get; set; }
     public string? HerdNextJob { get; set; }
+    /// <summary>False while the doe is nursing, crossed, waiting scan, pregnant or on the cull list.</summary>
+    public bool HerdCanBePicked { get; set; }
     public string? HerdPregnantText { get; set; }
     public int? TimesPregnant { get; set; }
     public int? KiddingsTotal { get; set; }

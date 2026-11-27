@@ -52,16 +52,33 @@ public static class KidMilkDietHelper
         };
     }
 
+    /// <summary>The diet counts toward feed use only after Month 1–3 have been saved once.</summary>
+    public static bool IsStarted(KidMilkDietViewModel state) =>
+        !string.IsNullOrWhiteSpace(state.AutoStartDate);
+
+    public static IReadOnlyList<KidMilkMonthViewModel> ActiveMonths(KidMilkDietViewModel state) =>
+        IsStarted(state) ? state.Months : [];
+
     public static int BandForAge(int ageDays) =>
         ageDays <= 30 ? 0 : ageDays <= 60 ? 1 : 2;
 
-    /// <summary>How much of the band ration counts toward powder vs dam milk for feed planning.</summary>
-    public static (decimal PowderFactor, decimal MotherFactor) MilkTypeFactors(KidMilkType milkType) => milkType switch
+    /// <summary>Dam milk a suckling kid takes when the diet leaves Mother milk at 0 ml.</summary>
+    public static decimal DefaultMotherMl(int ageDays) =>
+        ageDays <= 30 ? 800m : ageDays <= 60 ? 1000m : 600m;
+
+    /// <summary>
+    /// One kid's daily milk by its own milk type: Powder and Foster kids drink the powder ration,
+    /// Mother kids suckle (default dam milk when the band says 0 ml), Mixed kids get half of each.
+    /// </summary>
+    public static (decimal PowderG, decimal MotherMl) KidDailyMilk(KidMilkMonthViewModel month, KidMilkType milkType, int ageDays)
     {
-        KidMilkType.Mother => (0m, 1m),
-        KidMilkType.Powder => (1m, 0m),
-        KidMilkType.Mixed => (0.55m, 0.45m),
-        KidMilkType.Foster => (0.35m, 0.65m),
-        _ => (1m, 0m)
-    };
+        var motherMl = month.MotherMilkMl > 0 ? month.MotherMilkMl : DefaultMotherMl(ageDays);
+        return milkType switch
+        {
+            KidMilkType.Mother => (0m, motherMl),
+            KidMilkType.Mixed => (month.PowderG / 2m, motherMl / 2m),
+            KidMilkType.Foster => (month.PowderG, 0m),
+            _ => (month.PowderG, 0m)
+        };
+    }
 }

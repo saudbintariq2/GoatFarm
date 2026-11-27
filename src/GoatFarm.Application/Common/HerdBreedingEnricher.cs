@@ -104,7 +104,8 @@ public static class HerdBreedingEnricher
 
         vm.HerdBreedingStatus = stage.Label;
         vm.HerdBreedingStatusCss = BreedingDoeFlowHelper.FlowStageChipClass(stage.StatusKey);
-        vm.HerdNextJob = stage.NextJob ?? "None";
+        vm.HerdNextJob = stage.NextJob ?? "—";
+        vm.HerdCanBePicked = stage.CanBePicked;
         vm.HerdPregnantText = stage.IsPregnant
             ? $"Yes · due {stage.DueDate:dd MMM yyyy}"
             : stage.Stage is FarmDoeStage.WaitingScan or FarmDoeStage.Crossed or FarmDoeStage.RescanDue

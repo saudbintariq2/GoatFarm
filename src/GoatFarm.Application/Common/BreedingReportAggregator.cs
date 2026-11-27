@@ -7,6 +7,8 @@ public sealed class BreedingReportAgg
 {
     public int Crossed { get; set; }
     public int Preg { get; set; }
+    /// <summary>Does with a scan result (pregnant, kidded or empty) — the pregnancy-rate denominator.</summary>
+    public int Scanned { get; set; }
     public int Empty { get; set; }
     public int Lost { get; set; }
     public int Services { get; set; }
@@ -73,11 +75,9 @@ public static class BreedingReportAggregator
             }
         }
 
-        o.Preg = events
-            .Where(e => e.Outcome is BreedingOutcome.ConfirmedPregnant or BreedingOutcome.Kidded || e.ScanKids is > 0)
-            .Select(e => e.DoeId)
-            .Distinct()
-            .Count();
+        var rate = PregnancyRateCalculator.Compute(events);
+        o.Preg = rate.Pregnant;
+        o.Scanned = rate.Scanned;
 
         foreach (var k in seasonKiddings)
         {
@@ -307,6 +307,7 @@ public static class BreedingReportAggregator
             o.Preg = live.Count(g => batchDoes.Contains(g.Id) && PregnancyRules.IsConfirmedPregnant(g) &&
                                      g.MatedDate is { } md2 && md2 >= crossFromInclusive && md2 <= crossToInclusive);
         }
+        o.Scanned = Math.Max(o.Scanned, o.Preg + o.Empty);
         if (o.ExpKids == 0 && o.Preg > 0)
         {
             o.ExpKids = live.Where(g => batchDoes.Contains(g.Id) && PregnancyRules.IsConfirmedPregnant(g))

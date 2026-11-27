@@ -6,6 +6,8 @@
 
     var canRestore = ViewBag.CanRestore as bool? == true;
 
+    var status = ViewBag.BackupStatus as BackupStatusViewModel;
+
 }
 
 
@@ -66,15 +68,38 @@
 
 <div class="panel">
 
-    <div class="panel-head"><h2>Automatic backups</h2><span class="sub">weekly when enabled in server config</span></div>
+    <div class="panel-head"><h2>Automatic backups</h2><span class="sub">@(status is null ? "" : status.AutomaticEnabled ? status.ScheduleDisplay : "turned off in server config")</span></div>
 
     <div class="panel-body table-wrap">
+
+        @if (status is not null)
+        {
+            <p class="sub" style="margin:0 0 8px">
+                Last good backup: <b>@status.LastSuccessDisplay</b>@(status.LastGoats > 0 ? $" · {status.LastGoats} goats" : "")
+                · Off-site copy: <b>@(status.OffsiteConfigured ? "on" : "not set up")</b>
+            </p>
+            @if (status.LastFailureUtc is { } failed && (status.LastSuccessUtc is null || failed > status.LastSuccessUtc))
+            {
+                <p class="note" style="border-color:#e8c4c0;color:#8a261c">@status.LastFailureMessage</p>
+            }
+            @if (!status.OffsiteConfigured)
+            {
+                <p class="note" style="border-color:var(--amber)">Backups stay on the app server only, which is wiped on every redeploy. Set <code>BACKUP_BUCKET</code>, <code>BACKUP_KEY</code>, <code>BACKUP_SECRET</code> and <code>BACKUP_ENDPOINT</code> (S3 / Cloudflare R2 / Backblaze B2).</p>
+            }
+        }
+
+        @if (canRestore)
+        {
+            <div class="backup-actions" style="margin-bottom:12px">
+                <button type="button" class="btn btn-ghost btn-sm" id="backupRunNowBtn">Back up now</button>
+            </div>
+        }
 
         @if (!stored.Any())
 
         {
 
-            <p class="empty">No server-stored backups yet. Enable <code>Backup:AutomaticEnabled</code> on the server, or restore will still save a pre-restore snapshot.</p>
+            <p class="empty">No stored backups yet. The first automatic backup runs at the next scheduled time; restore also saves a pre-restore snapshot.</p>
 
         }
 
@@ -84,7 +109,7 @@
 
             <table class="tbl">
 
-                <thead><tr><th>When</th><th>Type</th><th class="num-cell">Size</th><th></th></tr></thead>
+                <thead><tr><th>When (PKT)</th><th>Type</th><th>Where</th><th class="num-cell">Size</th><th></th></tr></thead>
 
                 <tbody>
 
@@ -97,6 +122,8 @@
                         <td>@b.CreatedDisplay</td>
 
                         <td>@b.Label</td>
+
+                        <td>@b.LocationDisplay</td>
 
                         <td class="num-cell">@(b.SizeBytes / 1024) KB</td>
 
