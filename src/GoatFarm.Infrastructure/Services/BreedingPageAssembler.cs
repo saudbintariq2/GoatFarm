@@ -357,7 +357,8 @@ internal static class BreedingPageAssembler
             string? filter = null,
             string? breedView = null,
             string actionLabel = "Open",
-            bool openScan = false)
+            bool openScan = false,
+            string? actionKey = null)
         {
             var days = BreedingHelper.DaysUntil(sortDate);
             var urgency = days < 0 ? "no" : days == 0 ? "no" : days <= 60 ? "wt" : "ok";
@@ -377,7 +378,8 @@ internal static class BreedingPageAssembler
                 WhenSubtext = whenSub,
                 ActionLabel = actionLabel,
                 BreedView = breedView,
-                OpenScan = openScan
+                OpenScan = openScan,
+                ActionKey = actionKey
             }));
         }
 
@@ -414,7 +416,8 @@ internal static class BreedingPageAssembler
             var feedStart = plan.BuildFrom;
             if (BreedingHelper.DaysUntil(feedStart) is <= 14 and >= -30)
                 Add(feedStart, "🌾", "Start extra feed", bb.Name + " · " + season.BuildUp + " days before crossing",
-                    [], "var(--amber)", breedView: "plan", actionLabel: "Plan");
+                    [], "var(--amber)", breedView: "plan", actionLabel: "Plan",
+                    actionKey: FlushingFeedHelper.PlanActionKey);
 
             var stopMilk = plan.CrossFrom.AddDays(-season.DryBeforeCross);
             if (BreedingHelper.DaysUntil(stopMilk) is <= 7 and >= -3)
@@ -446,13 +449,7 @@ internal static class BreedingPageAssembler
                     Add(plannedIn, "🐐", "Put " + grp.Buck + " in with " + memberCount + " does",
                         grp.Name, [], "var(--pink)", breedView: "bucks");
             }
-            else if (!grp.CrossDeferred && buckIn.HasValue && BreedingHelper.DaysUntil(buckIn.Value) <= 45 &&
-                     today < buckIn.Value)
-            {
-                Add(buckIn.Value.AddDays(-14), "🩺", "Buck check for " + grp.Buck,
-                    "Needed before he goes in · " + grp.Name, [], "var(--blue)", breedView: "bucks", actionLabel: "Check");
-            }
-            else if (buckIn.HasValue && !grp.CrossDeferred && !string.IsNullOrWhiteSpace(grp.Start) && today >= buckIn.Value)
+            else if (!grp.CrossDeferred && buckIn.HasValue && BreedingHelper.DaysUntil(buckIn.Value) <= 45)
             {
                 var buckGoat = live.FirstOrDefault(g =>
                     string.Equals(g.Tag, grp.Buck, StringComparison.OrdinalIgnoreCase) &&
@@ -460,10 +457,13 @@ internal static class BreedingPageAssembler
                 if (buckGoat is not null)
                 {
                     var check = BuckCheckHelper.LatestCheck(buckChecks, buckGoat.Id);
-                    if (!BuckCheckHelper.IsOkForBuckIn(check, buckIn.Value, today))
+                    var status = BuckCheckHelper.Evaluate(check, today, buckIn.Value);
+                    if (status.State is BuckCheckState.Due or BuckCheckState.Missed)
                     {
-                        Add(today, "🩺", "Buck check missed for " + grp.Buck,
-                            "Buck already with does — check now · " + grp.Name, [], "#8a261c",
+                        var sort = status.DueDate ?? (today >= buckIn.Value ? today : buckIn.Value.AddDays(-14));
+                        var tone = status.State == BuckCheckState.Missed ? "#8a261c" : "var(--blue)";
+                        Add(sort, "🩺", status.TodayTitle(grp.Buck),
+                            status.TodaySubtext(grp.Name), [], tone,
                             breedView: "bucks", actionLabel: "Check");
                     }
                 }
@@ -900,10 +900,12 @@ internal static class BreedingPageAssembler
                 string.Equals(g.Status, "active", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(g.Buck, x.Tag, StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(g.Start) &&
-                DateOnly.TryParse(g.Start, out var sd) && today >= sd);
-            var checkOk = activeIn is not null && DateOnly.TryParse(activeIn.Start, out var buckInDate)
-                ? BuckCheckHelper.IsOkForBuckIn(check, buckInDate, today)
-                : BuckCheckHelper.IsOk(check, today);
+                DateOnly.TryParse(g.Start, out _));
+            DateOnly? buckInDate = activeIn is not null && DateOnly.TryParse(activeIn.Start, out var parsedIn)
+                ? parsedIn
+                : null;
+            var buckStatus = BuckCheckHelper.Evaluate(check, today, buckInDate);
+            var checkOk = buckStatus.IsOk;
             var carrying = live.Count(z => PregnancyRules.IsConfirmedPregnant(z) &&
                 string.Equals(z.BuckTag, x.Tag, StringComparison.OrdinalIgnoreCase));
             var withBuck = live.Count(z =>
@@ -980,13 +982,7 @@ internal static class BreedingPageAssembler
                 LoadColor = load.Item2,
                 BuckCheckOk = checkOk,
                 LastCheckDate = check?.CheckDate.ToString("yyyy-MM-dd"),
-                BuckCheckLineHtml = checkOk
-                    ? "Buck check done " + check!.CheckDate.ToString("d MMM yyyy") +
-                      (check.Bcs is not null ? " · BCS " + check.Bcs.Value.ToString("0.#") : "") +
-                      (check.WeightKg is not null ? " · " + check.WeightKg.Value.ToString("0.#") + " kg" : "")
-                    : check is null
-                        ? "Buck check needed"
-                        : "Last check " + check.CheckDate.ToString("d MMM yyyy") + " — check again"
+                BuckCheckLineHtml = buckStatus.BucksLineHtml
             };
         }).ToList();
     }

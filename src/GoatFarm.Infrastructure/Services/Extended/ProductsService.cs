@@ -114,7 +114,7 @@ public class ProductsService : IProductsService
         var sales = await _context.ProductSales.AsNoTracking().Include(s => s.Customer).Include(s => s.Product)
             .Where(s => s.Date >= monthStart && s.Date <= monthEnd)
             .OrderByDescending(s => s.Date).ToListAsync(cancellationToken);
-        var feedCostPerLitreByMonth = new Dictionary<string, decimal?>();
+        var feedCostPerLitreByMonth = new Dictionary<string, FeedCostPerLitreResult>();
         var customers = await _context.BusinessCustomers.AsNoTracking()
             .Where(c => c.IsActive).OrderBy(c => c.Name).ToListAsync(cancellationToken);
         var goatRows = await _context.Goats.AsNoTracking()
@@ -265,6 +265,7 @@ public class ProductsService : IProductsService
         }).ToList();
 
         var milkInTanks = rawTankLiters + pastTankLiters;
+        var milkCostResult = await _farmMetrics.FeedCostPerLitreAsync(monthStart, cancellationToken: cancellationToken);
 
         return new ProductsPageViewModel
         {
@@ -272,6 +273,8 @@ public class ProductsService : IProductsService
             StockValue = stockValue,
             MonthSalesTotal = monthSalesTotal,
             MilkInTanksLiters = milkInTanks,
+            MilkCostPerLitre = milkCostResult.CostPerLitre,
+            MilkCostIsEstimate = milkCostResult.IsEstimate,
             Milk = milkDash,
             Meat = meatDash,
             CustomMilkingSessions = customMilkingSessions,
@@ -903,9 +906,11 @@ public class ProductsService : IProductsService
                 && sku.StartsWith("MILK", StringComparison.OrdinalIgnoreCase)))
         {
             var feedCost = await _farmMetrics.FeedCostPerLitreAsync(
-                new DateOnly(model.Date.Year, model.Date.Month, 1), cancellationToken);
-            if (feedCost.HasValue)
-                issueUnitCost = feedCost.Value;
+                new DateOnly(model.Date.Year, model.Date.Month, 1),
+                model.ProductId,
+                cancellationToken);
+            if (feedCost.CostPerLitre.HasValue)
+                issueUnitCost = feedCost.CostPerLitre.Value;
         }
 
         var issueWh = row.WarehouseId;
@@ -1616,7 +1621,7 @@ public class ProductsService : IProductsService
 
     private async Task<IReadOnlyList<ProductSaleRowViewModel>> MapProductSalesAsync(
         IReadOnlyList<ProductSale> sales,
-        Dictionary<string, decimal?> feedCostPerLitreByMonth,
+        Dictionary<string, FeedCostPerLitreResult> feedCostPerLitreByMonth,
         CancellationToken cancellationToken)
     {
         var rows = new List<ProductSaleRowViewModel>(sales.Count);
@@ -1626,16 +1631,18 @@ public class ProductsService : IProductsService
             decimal? cost = null;
             if (IsMilkSale(s))
             {
-                var key = $"{s.Date.Year:D4}-{s.Date.Month:D2}";
+                var key = $"{s.Date.Year:D4}-{s.Date.Month:D2}|{s.ProductId ?? 0}";
                 if (!feedCostPerLitreByMonth.TryGetValue(key, out var perL))
                 {
                     perL = await _farmMetrics.FeedCostPerLitreAsync(
-                        new DateOnly(s.Date.Year, s.Date.Month, 1), cancellationToken);
+                        new DateOnly(s.Date.Year, s.Date.Month, 1),
+                        s.ProductId,
+                        cancellationToken);
                     feedCostPerLitreByMonth[key] = perL;
                 }
 
-                if (perL.HasValue)
-                    cost = s.Qty * perL.Value;
+                if (perL.CostPerLitre.HasValue)
+                    cost = s.Qty * perL.CostPerLitre.Value;
             }
 
             rows.Add(new ProductSaleRowViewModel

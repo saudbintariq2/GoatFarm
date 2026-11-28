@@ -317,4 +317,39 @@ public class BreedingServiceTests
             Source = GoatSource.Born, EventDate = TestDb.Today, SireTag = "DAM"
         }));
     }
+
+    [Fact]
+    public async Task ApplyFlushingPlan_CreatesGroupAndMovesSecondGroupDoesInWindow()
+    {
+        var (svc, _, db) = Create();
+        db.FeedPlans.Add(new FeedPlan
+        {
+            StatusKey = GoatStatus.Dry,
+            MixKgPerDay = 0.3m,
+            FodderKgPerDay = 1.5m,
+            FodderDryKgPerDay = 0.5m
+        });
+        var doe = TestDb.Doe("SG1");
+        doe.BirthBatchName = FlushingFeedHelper.SecondBatchName;
+        await AddAsync(db, doe);
+
+        // Kid window ≈ today + gestation + 30d → cross ≈ today+30, build ≈ today-30 (in Flushing window).
+        var kid = TestDb.Today.AddDays(BreedingHelper.GestationDays + 30);
+        await svc.UpdateSeasonAsync(new UpdateBreedingSeasonViewModel
+        {
+            NewBatchName = FlushingFeedHelper.SecondBatchName,
+            BatchFrom = kid.ToString("MM-dd"),
+            BatchTo = kid.AddDays(10).ToString("MM-dd"),
+            BuildUp = 60
+        });
+
+        var result = await svc.ApplyFlushingPlanAsync();
+        Assert.True(result.FlushingGroupId > 0);
+        Assert.Equal(1, result.MovedIn);
+
+        var flushing = await db.CustomFeedingGroups.SingleAsync(g => g.Name == FlushingFeedHelper.GroupName);
+        Assert.Equal(0.6m, flushing.MixKgPerDay); // dry 0.3 + extra 0.3
+        var moved = await db.Goats.SingleAsync(g => g.Id == doe.Id);
+        Assert.Equal(flushing.Id, moved.CustomFeedingGroupId);
+    }
 }

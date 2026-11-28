@@ -46,7 +46,7 @@ public static class FarmTabs
         (Search, "Search"),
         (Settings, "Settings"),
         (Backup, "Backup Center"),
-        (Milk, "Milk (legacy tab)"),
+        // Milk constant kept for legacy permission restore; omitted from All so new seeds skip it.
         (Assistant, "AI Assistant")
     ];
 }

@@ -551,6 +551,9 @@ public class ProductsPageViewModel
     public decimal StockValue { get; set; }
     public decimal MonthSalesTotal { get; set; }
     public decimal MilkInTanksLiters { get; set; }
+    /// <summary>Milk cost/L from Pricing landed cost or milking-group feed ÷ litres.</summary>
+    public decimal? MilkCostPerLitre { get; set; }
+    public bool MilkCostIsEstimate { get; set; }
     public ProductsMilkDashboardViewModel Milk { get; set; } = new();
     public ProductsMeatDashboardViewModel Meat { get; set; } = new();
     public IReadOnlyList<string> CustomMilkingSessions { get; set; } = [];

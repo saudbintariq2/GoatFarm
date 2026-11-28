@@ -148,15 +148,18 @@ public class ReportsService : IReportsService
         var deathsP = deaths.Where(d => range.Test(d.Date)).ToList();
         var births = goats.Where(g => g.Source == GoatSource.Born && range.Test(g.EventDate)).ToList();
         var bought = goats.Where(g => g.Source != GoatSource.Born && range.Test(g.EventDate)).ToList();
-        var openHerd = Math.Max(0, totalGoats - births.Count - bought.Count + deathsP.Count);
+        // N9: opening = current − births − purchases + sales + deaths
+        var salesInRange = goatSales.Count(s => range.Test(s.Date));
+        var openHerd = Math.Max(0, totalGoats - births.Count - bought.Count + salesInRange + deathsP.Count);
         var mortality = openHerd > 0 ? deathsP.Count / (double)openHerd * 100 : 0;
         var vaccCost = vaccineBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
         var medCost = expenses.Where(e => range.Test(e.Date) && MedExpenseTypes.Contains(e.Type)).Sum(e => e.Amount)
             + treatments.Where(t => range.Test(t.StartDate)).Sum(t => t.Cost);
         var days = Math.Max(1, range.MonthCount * 30);
         var feedPeriod = feedBuys.Where(x => range.Test(x.Date)).Sum(x => x.Amount);
-        var costPerL = await _farmMetrics.FeedCostPerLitreAsync(
-            new DateOnly(range.From.Year, range.From.Month, 1), cancellationToken);
+        var costPerLResult = await _farmMetrics.FeedCostPerLitreAsync(
+            new DateOnly(range.From.Year, range.From.Month, 1), cancellationToken: cancellationToken);
+        var costPerL = costPerLResult.CostPerLitre;
         if (!costPerL.HasValue && milkLp > 0 && feedPeriod > 0)
             costPerL = Math.Round(feedPeriod / milkLp, 1);
         var avgRate = milkLs > 0 ? milkInc / milkLs : 0;
@@ -221,8 +224,9 @@ public class ReportsService : IReportsService
         var breeding = BuildBreedingSection(confirmed, waiting, emptyLogs, goats, emptyCount, concRate, scans, kidsExpected);
         var growth = BuildGrowthSectionWithAdg(goats, weightRecords, totalGoats, feedMonth);
 
+        var feedUsedCost = await _feedService.GetFeedUsedCostAsync(range.From, range.To.AddDays(1), cancellationToken);
         var feedSection = BuildFeedSection(feedPrices, feedBuys, feedUsage, feedStock, feedMonth, feedPeriod, expTot,
-            costPerL, stockVal, range);
+            costPerL, stockVal, range, feedUsedCost);
         var health = BuildHealthSection(vaccines, vaccLog, goats, vaccDueTotal, remindDays, range, vaccCost, medCost, totalGoats, deathsP);
         var profitability = BuildProfitabilitySection(totalGoats, expTot, feedMonth, vaccCost, medCost, avgRate, costPerL,
             incTot, incomes, range, milkLp, milkLs, milkInc, milkProd, milkSales, days, milkingN);
@@ -714,9 +718,10 @@ public class ReportsService : IReportsService
         IReadOnlyList<FeedUsageRecord> feedUsage,
         IReadOnlyList<FeedStockRowViewModel> feedStockRows,
         decimal feedMonth, decimal feedPeriod, decimal expTot, decimal? costPerL,
-        decimal stockVal, ReportRange range)
+        decimal stockVal, ReportRange range, decimal feedUsedCost = 0)
     {
-        var feedShare = expTot > 0 ? (int)Math.Round(feedPeriod / expTot * 100) : 0;
+        // N9 — share = feed USED ÷ P&L costs (not feed bought).
+        var feedShare = expTot > 0 ? (int)Math.Round(feedUsedCost / expTot * 100) : 0;
         var kpis = new List<ReportKpiViewModel>
         {
             Kpi("Feed cost / day", DisplayHelper.FormatRs(feedMonth / 30), "from your plan"),
@@ -724,7 +729,7 @@ public class ReportsService : IReportsService
             Kpi("Cost per litre", costPerL.HasValue ? "Rs " + costPerL.Value.ToString("F1") : "—", "feed ÷ milk collected",
                 costPerL is > 60 ? "#8a261c" : "var(--green-dark)"),
             Kpi("Feed bought", DisplayHelper.FormatRs(feedPeriod), "actual spend"),
-            Fin(Kpi("Feed share of costs", feedShare + "%", "of running costs", feedShare > 75 ? "#8a261c" : null)),
+            Fin(Kpi("Feed share of costs", feedShare + "%", "feed used ÷ P&L costs", feedShare > 75 ? "#8a261c" : null)),
             Kpi("Stock value", DisplayHelper.FormatRs(stockVal), "in the store")
         };
 

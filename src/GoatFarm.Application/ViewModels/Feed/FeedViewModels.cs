@@ -401,6 +401,8 @@ public class FeedPageViewModel
 
     public decimal? FeedCostPerLitre { get; set; }
 
+    public bool FeedCostPerLitreIsEstimate { get; set; }
+
     public string FeedCostPerLitreText { get; set; } = "— per litre of milk";
 
     public decimal MilkLitersThisMonth { get; set; }

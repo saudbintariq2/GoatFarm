@@ -124,6 +124,8 @@ public class BreedingNowJobViewModel
     /// <summary>Breeding sub-view: does, plan, bucks, kidding.</summary>
     public string? BreedView { get; set; }
     public bool OpenScan { get; set; }
+    /// <summary>Server action for Plan etc. (e.g. flushing-plan).</summary>
+    public string? ActionKey { get; set; }
 }
 
 public class BreedingTodayTimelineMarkerViewModel
@@ -333,6 +335,14 @@ public class BreedingPageViewModel
     public IReadOnlyList<BreedingKidAutoWeanBarViewModel> KidAutoWeanBars { get; set; } = [];
     public IReadOnlyList<MotherGroupDto> MotherGroups { get; set; } = [];
     public IReadOnlyList<BreedingMotherGroupRowViewModel> MotherGroupRows { get; set; } = [];
+}
+
+public class ApplyFlushingPlanResultViewModel
+{
+    public int FlushingGroupId { get; set; }
+    public int MovedIn { get; set; }
+    public int MovedOut { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
 
 public class CreateMotherGroupViewModel

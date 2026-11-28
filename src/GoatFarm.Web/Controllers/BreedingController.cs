@@ -298,6 +298,19 @@ public class BreedingController : Controller
         Run(() => _breedingService.RecordBuckCheckAsync(model, cancellationToken));
 
     [HttpPost]
+    public async Task<IActionResult> ApplyFlushingPlan(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Json(await _breedingService.ApplyFlushingPlanAsync(cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
     public async Task<IActionResult> UpdateKiddingDam([FromBody] UpdateKiddingDamViewModel model, CancellationToken cancellationToken)
     {
         try

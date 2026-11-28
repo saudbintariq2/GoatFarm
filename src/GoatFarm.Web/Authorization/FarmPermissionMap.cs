@@ -91,6 +91,7 @@ public static class FarmPermissionMap
             ["Breeding.ReopenGroup"] = (FarmTabs.Breeding, FarmActions.Edit),
             ["Breeding.UndoGroupCrosses"] = (FarmTabs.Breeding, FarmActions.Delete),
             ["Breeding.RecordBuckCheck"] = (FarmTabs.Breeding, FarmActions.Edit),
+            ["Breeding.ApplyFlushingPlan"] = (FarmTabs.Breeding, FarmActions.Edit),
             ["Breeding.UpdateKiddingDam"] = (FarmTabs.Breeding, FarmActions.Edit),
             ["Breeding.CreateMotherGroup"] = (FarmTabs.Breeding, FarmActions.Add),
             ["Breeding.MoveMothersToGroup"] = (FarmTabs.Breeding, FarmActions.Edit),

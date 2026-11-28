@@ -55,4 +55,4 @@ $sql | & $psql -h $hostName -p $port -U $user -d $db -v ON_ERROR_STOP=1
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 
 Write-Host "Done. Restart the web app (Development). Role permissions will be re-seeded on startup."
-Write-Host 'Sign in: admin@goatfarm.local / Admin123!  (or your password if you changed it)'
+Write-Host 'Sign in: admin@goatfarm.local / Admin1234!  (or your password if you changed it)'

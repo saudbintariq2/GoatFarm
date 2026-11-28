@@ -3,6 +3,9 @@ using GoatFarm.Domain.Entities;
 
 namespace GoatFarm.Application.Interfaces;
 
+/// <summary>Milk cost per litre with estimate flag when based on fewer than 7 milking days.</summary>
+public sealed record FeedCostPerLitreResult(decimal? CostPerLitre, bool IsEstimate);
+
 /// <summary>Step 0 — single source for milk, finance totals, feed cost/litre, and doe stage counts.</summary>
 public interface IFarmMetricsService
 {
@@ -32,7 +35,15 @@ public interface IFarmMetricsService
 
     Task<(decimal PerDay, int GoatCount)> FeedCostPerDayAsync(CancellationToken cancellationToken = default);
 
-    Task<decimal?> FeedCostPerLitreAsync(DateOnly monthStart, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Milk cost/L: Products › Pricing landed cost when set on the milk product;
+    /// otherwise milking-group feed cost ÷ litres. <see cref="FeedCostPerLitreResult.IsEstimate"/>
+    /// is true until there are 7+ distinct milking days (feed-derived path only).
+    /// </summary>
+    Task<FeedCostPerLitreResult> FeedCostPerLitreAsync(
+        DateOnly monthStart,
+        int? productId = null,
+        CancellationToken cancellationToken = default);
 
     Task<(int Scanned, int Pregnant, int Waiting, decimal? Rate)> PregnancyRateAsync(
         int? buckId = null,

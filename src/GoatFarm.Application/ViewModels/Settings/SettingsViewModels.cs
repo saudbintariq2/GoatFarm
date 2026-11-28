@@ -52,7 +52,7 @@ public class ResetPasswordViewModel
 
 public class PasswordPolicyViewModel
 {
-    public int RequiredLength { get; set; } = 8;
+    public int RequiredLength { get; set; } = 10;
     public bool RequireDigit { get; set; } = true;
     public bool RequireLowercase { get; set; } = true;
     public bool RequireUppercase { get; set; }
@@ -76,6 +76,8 @@ public class TabPermissionViewModel
     };
 
     public static TabPermissionViewModel FullAccess => new() { View = true, Add = true, Edit = true, Delete = true };
+    /// <summary>A3 — Staff: view/add/edit but never delete.</summary>
+    public static TabPermissionViewModel ViewAddEdit => new() { View = true, Add = true, Edit = true, Delete = false };
     public static TabPermissionViewModel NoAccess => new();
 }
 

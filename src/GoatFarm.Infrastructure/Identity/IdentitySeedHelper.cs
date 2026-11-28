@@ -10,11 +10,11 @@ public static class IdentitySeedHelper
 {
     /// <summary>Local-dev administrator. Created only in the Development environment, never on a live server.</summary>
     public const string DevAdminEmail = "admin@goatfarm.local";
-    public const string DevAdminPassword = "Admin123!";
+    public const string DevAdminPassword = "Admin1234!";
 
     /// <summary>Secondary local-dev administrator (Development seed only).</summary>
     public const string DevUserEmail = "dev@goatfarm.local";
-    public const string DevUserPassword = "DevFarm123!";
+    public const string DevUserPassword = "DevFarm1234!";
 
     public const string AdminEmailKey = "ADMIN_EMAIL";
     public const string AdminPasswordKey = "ADMIN_PASSWORD";

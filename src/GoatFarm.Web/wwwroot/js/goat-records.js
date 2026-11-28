@@ -1828,7 +1828,12 @@ const GoatRecords = (() => {
       document.getElementById('grandDay').textContent = rs(data.grandDaily);
       document.getElementById('grandHead').textContent = data.grandHeadText || ('for ' + data.totalGoats + ' goats');
       const perL = document.getElementById('grandPerL');
-      if (perL) perL.textContent = data.feedCostPerLitreText || '— per litre of milk';
+      if (perL) {
+        perL.textContent = data.feedCostPerLitreText || '— per litre of milk';
+        perL.title = data.feedCostPerLitreIsEstimate
+          ? 'Estimate — fewer than 7 days of milkings this month'
+          : '';
+      }
 
       const purchPrices = (data.allPrices || []).filter(p => p.feedType !== 'fodder');
       document.getElementById('priceGrid').innerHTML = purchPrices.map(p =>
@@ -4971,8 +4976,8 @@ const GoatRecords = (() => {
     document.getElementById('repProfitNote').innerHTML = pr.noteHtml || '';
     document.getElementById('repMilkKpi').innerHTML = (pr.milkEconomics || []).map(repKpiHtml).join('');
     document.getElementById('repMilkRows').innerHTML = (pr.milkByMonth?.length ? pr.milkByMonth.map(m =>
-      `<tr><td><b>${esc(m.month)}</b></td><td class="num-cell">${Math.round(m.collectedLiters).toLocaleString('en-US')} L</td>
-        <td class="num-cell">${Math.round(m.soldLiters).toLocaleString('en-US')} L</td>
+      `<tr><td><b>${esc(m.month)}</b></td><td class="num-cell">${(+m.collectedLiters || 0).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
+        <td class="num-cell">${(+m.soldLiters || 0).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
         <td class="num-cell hide-sm"><span class="breed">${m.avgRate != null ? 'Rs ' + Math.round(m.avgRate) : '—'}</span></td>
         <td class="num-cell" style="color:var(--green-dark)">${rs(m.income)}</td></tr>`).join('') :
       `<tr><td colspan="5" class="empty">No milk recorded in this period.</td></tr>`);
@@ -5460,7 +5465,7 @@ const GoatRecords = (() => {
     }
 
     function startEdit(card) {
-      if (!canEdit) return;
+      if (!canEdit || card.dataset.readonly === '1') return;
       const d = card.dataset;
       editingId = Number(d.taskId);
       fields.title.value = d.title || '';
@@ -5516,6 +5521,7 @@ const GoatRecords = (() => {
     document.querySelector('.task-board')?.addEventListener('click', async e => {
       const card = e.target.closest('.task-card');
       if (!card) return;
+      if (card.dataset.readonly === '1') return;
       const statusBtn = e.target.closest('[data-task-status]');
       if (statusBtn) {
         statusBtn.disabled = true;

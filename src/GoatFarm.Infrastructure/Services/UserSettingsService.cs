@@ -307,7 +307,7 @@ public class UserSettingsService : IUserSettingsService
         var parsed = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, TabPermissionViewModel>>>(json, JsonOptions);
         var permissions = parsed ?? DefaultRolePermissions();
         EnsureAdminSettingsAccess(permissions);
-        EnsureStaffVaccineAccess(permissions);
+        EnsureStaffNoDelete(permissions);
         EnsureMissingTabs(permissions);
         return new RolePermissionsViewModel { Permissions = permissions };
     }
@@ -358,7 +358,7 @@ public class UserSettingsService : IUserSettingsService
         }
 
         EnsureAdminSettingsAccess(result);
-        EnsureStaffVaccineAccess(result);
+        EnsureStaffNoDelete(result);
         EnsureMissingTabs(result);
         return result;
     }
@@ -483,11 +483,11 @@ public class UserSettingsService : IUserSettingsService
 
     public static PasswordPolicyViewModel DefaultPasswordPolicy() => new()
     {
-        RequiredLength = 8,
+        RequiredLength = 10,
         RequireDigit = true,
         RequireLowercase = true,
-        RequireUppercase = false,
-        RequireNonAlphanumeric = false
+        RequireUppercase = true,
+        RequireNonAlphanumeric = true
     };
 
     public static Dictionary<string, Dictionary<string, TabPermissionViewModel>> DefaultRolePermissions()
@@ -498,40 +498,54 @@ public class UserSettingsService : IUserSettingsService
             var tabs = new Dictionary<string, TabPermissionViewModel>();
             foreach (var tab in FarmTabs.All.Select(t => t.Key))
             {
+                // A3 — Staff: no Finance/Trading/Projects/Settings/Backup/Admin; no Delete on any tab.
                 var hasTab = role switch
                 {
                     FarmRoles.Admin => true,
                     FarmRoles.Manager => tab is not (FarmTabs.Settings or FarmTabs.Admin or FarmTabs.Backup),
-                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Tasks or FarmTabs.Herd or FarmTabs.Breeding or FarmTabs.Search or FarmTabs.Feed or FarmTabs.Products or FarmTabs.Milk or FarmTabs.Vaccines or FarmTabs.Reports,
+                    FarmRoles.Staff => tab is FarmTabs.Dashboard or FarmTabs.Tasks or FarmTabs.Herd or FarmTabs.Breeding
+                        or FarmTabs.Search or FarmTabs.Feed or FarmTabs.Products or FarmTabs.Vaccines or FarmTabs.Reports
+                        or FarmTabs.Assistant,
                     _ => false
                 };
-                tabs[tab] = hasTab ? TabPermissionViewModel.FullAccess : TabPermissionViewModel.NoAccess;
+                if (!hasTab)
+                    tabs[tab] = TabPermissionViewModel.NoAccess;
+                else if (role == FarmRoles.Staff)
+                    tabs[tab] = TabPermissionViewModel.ViewAddEdit;
+                else
+                    tabs[tab] = TabPermissionViewModel.FullAccess;
             }
             if (role == FarmRoles.Staff)
             {
                 tabs[FarmTabs.Tasks] = new TabPermissionViewModel { View = true, Add = true, Edit = false, Delete = false };
                 tabs[FarmTabs.Assistant] = new TabPermissionViewModel { View = true };
+                tabs[FarmTabs.Finance] = TabPermissionViewModel.NoAccess;
+                tabs[FarmTabs.Trading] = TabPermissionViewModel.NoAccess;
+                tabs[FarmTabs.Projects] = TabPermissionViewModel.NoAccess;
+                tabs[FarmTabs.Settings] = TabPermissionViewModel.NoAccess;
+                tabs[FarmTabs.Backup] = TabPermissionViewModel.NoAccess;
+                tabs[FarmTabs.Admin] = TabPermissionViewModel.NoAccess;
             }
             result[role] = tabs;
         }
 
         EnsureAdminSettingsAccess(result);
-        EnsureStaffVaccineAccess(result);
+        EnsureStaffNoDelete(result);
         return result;
     }
 
-    private static void EnsureStaffVaccineAccess(Dictionary<string, Dictionary<string, TabPermissionViewModel>> permissions)
+    /// <summary>A3 — Staff never gets Delete, even if an older seed granted FullAccess.</summary>
+    private static void EnsureStaffNoDelete(Dictionary<string, Dictionary<string, TabPermissionViewModel>> permissions)
     {
         if (!permissions.TryGetValue(FarmRoles.Staff, out var staffTabs))
             return;
-
-        if (!staffTabs.TryGetValue(FarmTabs.Vaccines, out var vaccines) || !vaccines.View)
+        foreach (var key in staffTabs.Keys.ToList())
         {
-            staffTabs[FarmTabs.Vaccines] = TabPermissionViewModel.FullAccess;
-            return;
+            var p = staffTabs[key];
+            if (p.Delete)
+                staffTabs[key] = new TabPermissionViewModel { View = p.View, Add = p.Add, Edit = p.Edit, Delete = false };
         }
-
-        if (vaccines.View && !vaccines.Add && !vaccines.Edit && !vaccines.Delete)
-            staffTabs[FarmTabs.Vaccines] = TabPermissionViewModel.FullAccess;
+        if (staffTabs.TryGetValue(FarmTabs.Vaccines, out var vaccines) && vaccines.View && !vaccines.Add && !vaccines.Edit)
+            staffTabs[FarmTabs.Vaccines] = TabPermissionViewModel.ViewAddEdit;
     }
 }

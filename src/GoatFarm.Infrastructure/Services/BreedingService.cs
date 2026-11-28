@@ -37,6 +37,7 @@ public partial class BreedingService : IBreedingService
         CancellationToken cancellationToken = default)
     {
         await ApplyAutoWeanDueKidsAsync(cancellationToken);
+        await EnsureFlushingGroupAsync(cancellationToken);
         var today = Today;
         var goats = await _context.Goats.AsNoTracking()
             .Include(g => g.HeatEvents)
@@ -271,6 +272,186 @@ public partial class BreedingService : IBreedingService
         };
     }
 
+    public async Task<IReadOnlyList<BreedingNowJobViewModel>> GetNowJobsAsync(CancellationToken cancellationToken = default)
+    {
+        await ApplyAutoWeanDueKidsAsync(cancellationToken);
+        var today = Today;
+        var goats = await _context.Goats.AsNoTracking()
+            .Include(g => g.HeatEvents)
+            .Where(g => !g.IsArchived)
+            .OrderBy(g => g.Tag)
+            .ToListAsync(cancellationToken);
+        var season = await LoadSeasonSettingsAsync(cancellationToken);
+        var breedingGroups = await LoadBreedingGroupsAsync(cancellationToken);
+        var allKiddings = await _context.KiddingRecords.AsNoTracking()
+            .Select(k => new { k.DoeId })
+            .ToListAsync(cancellationToken);
+        var kiddingCounts = allKiddings.GroupBy(k => k.DoeId).ToDictionary(g => g.Key, g => g.Count());
+        var latestWeights = await _context.GoatWeightRecords.AsNoTracking()
+            .GroupBy(w => w.GoatId)
+            .Select(g => new { g.Key, Kg = g.OrderByDescending(x => x.Date).Select(x => x.Kg).FirstOrDefault() })
+            .ToDictionaryAsync(x => x.Key, x => (decimal?)x.Kg, cancellationToken);
+        var rescanIds = await _context.FarmTasks.AsNoTracking()
+            .Where(t => t.Status == FarmTaskStatus.ToDo && t.Title.StartsWith("Rescan") && t.GoatId != null)
+            .Select(t => t.GoatId!.Value)
+            .ToListAsync(cancellationToken);
+        var kidGoats = goats.Where(g => g.Status == GoatStatus.Kid && !g.WeanDate.HasValue).ToList();
+        var buckChecks = await _context.BuckHealthChecks.AsNoTracking().ToListAsync(cancellationToken);
+        return BreedingPageAssembler.BuildNowJobs(
+            goats, season, today, breedingGroups, kiddingCounts, latestWeights,
+            rescanIds.ToHashSet(), kidGoats, buckChecks);
+    }
+
+    public async Task<ApplyFlushingPlanResultViewModel> ApplyFlushingPlanAsync(CancellationToken cancellationToken = default)
+    {
+        var today = Today;
+        var season = await LoadSeasonSettingsAsync(cancellationToken);
+        var second = FlushingFeedHelper.FindSecondGroup(season);
+        var flushing = await EnsureFlushingGroupAsync(cancellationToken);
+
+        if (second is null)
+        {
+            return new ApplyFlushingPlanResultViewModel
+            {
+                FlushingGroupId = flushing.Id,
+                Message = "Flushing group ready. Add a birth group named \"" + FlushingFeedHelper.SecondBatchName +
+                          "\" on Season plan to move does automatically."
+            };
+        }
+
+        var plan = BreedingSeasonHelper.SeasonPlan(second, season, today);
+        var restore = await LoadFlushingRestoreAsync(cancellationToken);
+        var does = await _context.Goats
+            .Where(g => !g.IsArchived &&
+                        g.Gender == GoatGender.Female &&
+                        g.Status != GoatStatus.Kid &&
+                        g.BirthBatchName != null &&
+                        g.BirthBatchName.ToLower() == FlushingFeedHelper.SecondBatchName.ToLower())
+            .ToListAsync(cancellationToken);
+
+        var movedIn = 0;
+        var movedOut = 0;
+        var inWindow = today >= plan.BuildFrom && today < plan.CrossFrom;
+
+        if (inWindow)
+        {
+            foreach (var doe in does)
+            {
+                if (doe.CustomFeedingGroupId == flushing.Id) continue;
+                restore[doe.Id.ToString()] = doe.CustomFeedingGroupId;
+                doe.CustomFeedingGroupId = flushing.Id;
+                doe.UpdatedDate = DateTime.UtcNow;
+                movedIn++;
+            }
+        }
+        else
+        {
+            // After crossing (or before build-up): restore anyone still in Flushing that we moved.
+            foreach (var doe in does.Where(d => d.CustomFeedingGroupId == flushing.Id))
+            {
+                var key = doe.Id.ToString();
+                if (restore.TryGetValue(key, out var prev))
+                {
+                    doe.CustomFeedingGroupId = prev;
+                    restore.Remove(key);
+                }
+                else
+                {
+                    doe.CustomFeedingGroupId = null;
+                }
+
+                doe.UpdatedDate = DateTime.UtcNow;
+                movedOut++;
+            }
+
+            // Also restore any recorded goats no longer matching Second group (sold/rebatched).
+            foreach (var key in restore.Keys.ToList())
+            {
+                if (!int.TryParse(key, out var goatId)) continue;
+                var goat = await _context.Goats.FirstOrDefaultAsync(g => g.Id == goatId, cancellationToken);
+                if (goat is null || goat.CustomFeedingGroupId != flushing.Id)
+                {
+                    restore.Remove(key);
+                    continue;
+                }
+
+                goat.CustomFeedingGroupId = restore[key];
+                goat.UpdatedDate = DateTime.UtcNow;
+                restore.Remove(key);
+                movedOut++;
+            }
+        }
+
+        await SaveFlushingRestoreAsync(restore, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        var msg = inWindow
+            ? $"Moved {movedIn} Second group doe(s) into Flushing (until crossing {plan.CrossFrom:yyyy-MM-dd})."
+            : today < plan.BuildFrom
+                ? $"Flushing starts {plan.BuildFrom:yyyy-MM-dd}. Moved {movedOut} doe(s) back out for now."
+                : $"Crossing started — moved {movedOut} doe(s) out of Flushing.";
+
+        return new ApplyFlushingPlanResultViewModel
+        {
+            FlushingGroupId = flushing.Id,
+            MovedIn = movedIn,
+            MovedOut = movedOut,
+            Message = msg
+        };
+    }
+
+    private async Task<CustomFeedingGroup> EnsureFlushingGroupAsync(CancellationToken cancellationToken)
+    {
+        var existing = await _context.CustomFeedingGroups
+            .FirstOrDefaultAsync(g => g.Name.ToLower() == FlushingFeedHelper.GroupName.ToLower(), cancellationToken);
+        if (existing is not null)
+        {
+            // Keep mix at dry + extra if somehow left at 0.
+            if (existing.MixKgPerDay <= 0)
+            {
+                var dry = await _context.FeedPlans.AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.StatusKey == GoatStatus.Dry, cancellationToken);
+                existing.MixKgPerDay = (dry?.MixKgPerDay ?? FlushingFeedHelper.ExtraMixKg) + FlushingFeedHelper.ExtraMixKg;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            return existing;
+        }
+
+        var dryPlan = await _context.FeedPlans.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.StatusKey == GoatStatus.Dry, cancellationToken);
+        var group = new CustomFeedingGroup
+        {
+            Name = FlushingFeedHelper.GroupName,
+            Description = "Extra feed before crossing (Second group)",
+            RecipeFrom = "dry",
+            MixKgPerDay = (dryPlan?.MixKgPerDay ?? FlushingFeedHelper.ExtraMixKg) + FlushingFeedHelper.ExtraMixKg,
+            FodderKgPerDay = dryPlan?.FodderKgPerDay ?? MixRecipeHelper.DefaultPlans[GoatStatus.Dry].Fodder,
+            FodderDryKgPerDay = dryPlan?.FodderDryKgPerDay ?? MixRecipeHelper.DefaultPlans[GoatStatus.Dry].FodderDry
+        };
+        _context.CustomFeedingGroups.Add(group);
+        await _context.SaveChangesAsync(cancellationToken);
+        return group;
+    }
+
+    private async Task<Dictionary<string, int?>> LoadFlushingRestoreAsync(CancellationToken cancellationToken)
+    {
+        var row = await _context.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == FlushingFeedHelper.RestoreSettingKey, cancellationToken);
+        if (row?.Value is null) return new Dictionary<string, int?>();
+        return JsonSerializer.Deserialize<Dictionary<string, int?>>(row.Value) ?? new Dictionary<string, int?>();
+    }
+
+    private async Task SaveFlushingRestoreAsync(Dictionary<string, int?> map, CancellationToken cancellationToken)
+    {
+        var json = JsonSerializer.Serialize(map);
+        var row = await _context.AppSettings.FirstOrDefaultAsync(s => s.Key == FlushingFeedHelper.RestoreSettingKey, cancellationToken);
+        if (row is null)
+            _context.AppSettings.Add(new AppSetting { Key = FlushingFeedHelper.RestoreSettingKey, Value = json });
+        else
+            row.Value = json;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<BreedingGroupCandidateViewModel>> GetGroupPickerAsync(
         string? buckTag,
         CancellationToken cancellationToken = default)
@@ -405,8 +586,8 @@ public partial class BreedingService : IBreedingService
             .Where(k => k.DoeId == goatId)
             .ToListAsync(cancellationToken);
 
-        var kidsAlive = await _context.Goats.AsNoTracking()
-            .CountAsync(g => g.DamId == goatId && !g.IsArchived, cancellationToken);
+        // N7 — same as Herd H4 / HerdBreedingEnricher litter LiveAtBirth (sum of LiveKids).
+        var kidsAlive = kiddings.Sum(k => k.LiveKids);
 
         var today = Today;
         return BreedingDoeProfileBuilder.Build(

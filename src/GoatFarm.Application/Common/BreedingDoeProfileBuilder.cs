@@ -18,6 +18,8 @@ public static class BreedingDoeProfileBuilder
         var kiddingsHere = kiddings.Count;
         var before = Math.Max(0, goat.KiddingsBeforePurchase);
         var kidsBorn = kiddings.Sum(k => k.LiveKids + k.Stillborn);
+        // N7 — prefer litter LiveKids sum (same as Herd H4); fall back to caller only if no records.
+        var alive = kiddings.Count > 0 ? kiddings.Sum(k => k.LiveKids) : kidsAlive;
         var timesPregnant = events.Count(e =>
             e.Outcome is BreedingOutcome.ConfirmedPregnant or BreedingOutcome.Kidded
             || e.ScanKids is > 0);
@@ -69,7 +71,7 @@ public static class BreedingDoeProfileBuilder
             KiddingsBeforePurchase = before,
             KiddingsTotal = kiddingsHere + before,
             KidsBorn = kidsBorn,
-            KidsAlive = kidsAlive,
+            KidsAlive = alive,
             TimesPregnant = timesPregnant,
             DueRangeText = dueRange,
             DueStatLabel = dueLabel,

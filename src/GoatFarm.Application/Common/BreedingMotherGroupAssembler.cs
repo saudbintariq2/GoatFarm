@@ -20,6 +20,7 @@ public static class BreedingMotherGroupAssembler
                 var born = latest is null ? (int?)null : latest.LiveKids + latest.Stillborn;
                 allKiddingsByDoe.TryGetValue(d.Id, out var all);
                 var avg = all is null ? null : MotherScoreHelper.DoeAverage(all);
+                var effective = MotherGroupHelper.EffectiveGroupId(d.MotherGroupId, latest);
                 return new BreedingMotherGroupRowViewModel
                 {
                     DoeId = d.Id,
@@ -29,8 +30,10 @@ public static class BreedingMotherGroupAssembler
                     LastLitterBorn = born,
                     LastLitterText = born is null ? "—" : $"{born} kid{(born == 1 ? "" : "s")}",
                     MotherScoreHtml = avg.HasValue ? MotherScoreHelper.StarsHtml(avg) : "<span class=\"muted\">—</span>",
-                    MotherGroupId = d.MotherGroupId,
-                    SuggestedGroupId = string.IsNullOrWhiteSpace(d.MotherGroupId) ? MotherGroupHelper.SuggestGroupId(born) : null
+                    MotherGroupId = effective,
+                    SuggestedGroupId = string.IsNullOrWhiteSpace(d.MotherGroupId) && string.IsNullOrWhiteSpace(effective)
+                        ? MotherGroupHelper.SuggestGroupId(born)
+                        : null
                 };
             })
             .OrderByDescending(r => r.LastLitterBorn ?? 0)

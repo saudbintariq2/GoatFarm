@@ -257,13 +257,13 @@
             <button type="button" class="btn btn-green" id="moveBtn">Move</button>
             <button type="button" class="btn btn-ghost" id="newGroupBtn">+ New group</button>
         </div>
-        <p class="breed muted small" style="margin:0 0 10px">Scroll sideways for breeding columns (does) and kid milk columns. Use the filter dropdown or chips for kiddings, mother score, cull, mother group, and milk type.</p>
+        <p class="breed muted small herd-scroll-hint" style="margin:0 0 10px">Scroll sideways for breeding columns (does) and kid milk columns. Use the filter dropdown or chips for kiddings, mother score, cull, mother group, and milk type.</p>
         <div class="herd-table-scroll">
-        <table class="tbl herd-breed-cols"><thead><tr>
-            <th style="width:34px"><input type="checkbox" id="checkAll"></th>
-            <th>Tag</th><th class="hide-sm">Breed</th><th>Age</th><th>Status</th>
-            <th class="hide-sm herd-doe-col">Breeding</th>
-            <th class="hide-sm herd-doe-col">Next job</th>
+        <table class="tbl herd-table herd-breed-cols"><thead><tr>
+            <th class="c-check" style="width:34px"><input type="checkbox" id="checkAll"></th>
+            <th class="c-tag">Tag</th><th class="hide-sm">Breed</th><th class="c-age">Age</th><th class="c-status">Status</th>
+            <th class="c-breeding herd-doe-col">Breeding</th>
+            <th class="c-nextjob herd-doe-col">Next job</th>
             <th class="hide-sm herd-doe-col num-cell">Pregnant</th>
             <th class="hide-sm herd-doe-col num-cell">Kiddings</th>
             <th class="hide-sm herd-doe-col">Last kidding</th>
@@ -275,7 +275,7 @@
             <th class="hide-sm herd-doe-col">Mother grp</th>
             <th class="hide-sm herd-kid-col">Mother</th>
             <th class="hide-sm herd-kid-col">Milk type</th>
-            <th class="hide-sm herd-kid-col">Milk</th>
+            <th class="c-milk herd-kid-col">Milk</th>
             <th class="hide-sm herd-kid-col">Wean date</th>
             <th class="hide-sm num-cell">Price</th><th class="hide-sm">Date</th>
         </tr></thead><tbody id="rows">
@@ -297,8 +297,8 @@
                     data-owner="@g.Owner"
                     data-sire="@g.SireTag"
                     data-dam="@g.DamTag">
-                    <td><input type="checkbox" data-id="@g.Id"></td>
-                    <td>
+                    <td class="c-check"><input type="checkbox" data-id="@g.Id"></td>
+                    <td class="c-tag" data-label="Tag">
                         <a class="tag tag-link" href="/Search?tag=@Uri.EscapeDataString(g.Tag)" title="Open full profile">@g.Tag</a>
                         <a href="#" class="breed" data-goatcard="@g.Id" title="Quick card" style="margin-left:4px;font-size:11px">card</a>
                         @if (g.IsTemporaryTag)
@@ -314,12 +314,12 @@
                         @if(!string.IsNullOrEmpty(g.Owner)){<div class="name">Owner: @g.Owner</div>}
                         @if(!string.IsNullOrEmpty(g.Comment)){<div class="name" style="opacity:.75">@g.Comment</div>}
                     </td>
-                    <td class="hide-sm"><span class="breed">@g.Breed</span></td>
-                    <td>@if (g.AgeDays is { } days)
+                    <td class="hide-sm" data-label="Breed"><span class="breed">@g.Breed</span></td>
+                    <td class="c-age" data-label="Age">@if (g.AgeDays is { } days)
                         {<span class="age-d">@(g.AgeIsEstimated ? "~" : "")@days</span> <span class="age-m">days · @g.AgeLabel@(g.AgeIsEstimated ? " · estimated" : "")</span>}
                         else
                         {<span class="age-m" title="Bought goat without a date of birth">age unknown</span>}</td>
-                    <td><span class="chip @g.StatusCssClass">@g.StatusDisplay</span>
+                    <td class="c-status" data-label="Status"><span class="chip @g.StatusCssClass">@g.StatusDisplay</span>
                         @if (g.HealthState != GoatHealthState.Healthy)
                         {<span class="chip chip-urgent">@g.HealthDisplay</span>}
                         @if (!string.IsNullOrEmpty(g.BreedingHint))
@@ -351,10 +351,10 @@
                         var isKid = g.Status == GoatStatus.Kid;
                         var isDoe = g.Gender == GoatGender.Female && !isKid;
                     }
-                    <td class="hide-sm herd-doe-col">@if (isDoe && !string.IsNullOrEmpty(g.HerdBreedingStatus))
+                    <td class="c-breeding herd-doe-col" data-label="Breeding">@if (isDoe && !string.IsNullOrEmpty(g.HerdBreedingStatus))
                         {<span class="chip @g.HerdBreedingStatusCss">@g.HerdBreedingStatus</span>}
                         else if (!isKid) { <span class="breed">—</span> }</td>
-                    <td class="hide-sm herd-doe-col">@if (isDoe) { <span class="breed">@(g.HerdNextJob ?? "—")</span> }</td>
+                    <td class="c-nextjob herd-doe-col" data-label="Next job">@if (isDoe) { <span class="breed">@(g.HerdNextJob ?? "—")</span> }</td>
                     <td class="hide-sm herd-doe-col">@if (isDoe) { <span class="breed">@(g.HerdPregnantText ?? "—")</span> }</td>
                     <td class="hide-sm herd-doe-col num-cell">@if (isDoe)
                         {
@@ -380,10 +380,10 @@
                     <td class="hide-sm herd-doe-col">@if (isDoe) { <span class="breed">@(g.KeepDecision ?? "—")</span> }</td>
                     <td class="hide-sm herd-doe-col">@if (isDoe && !string.IsNullOrEmpty(g.MotherGroupName))
                         {<span style="color:@(g.MotherGroupColor ?? "var(--green)");font-weight:700">● @g.MotherGroupName</span>}</td>
-                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidMotherTag ?? "—")</span> }</td>
-                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidMilkTypeDisplay ?? "—")</span> }</td>
-                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidMilkStatus ?? "—")</span> }</td>
-                    <td class="hide-sm herd-kid-col">@if (isKid) { <span class="breed">@(g.KidWeanDateDisplay ?? "—")</span> }</td>
+                    <td class="hide-sm herd-kid-col" data-label="Mother">@if (isKid) { <span class="breed">@(g.KidMotherTag ?? "—")</span> }</td>
+                    <td class="hide-sm herd-kid-col" data-label="Milk type">@if (isKid) { <span class="breed">@(g.KidMilkTypeDisplay ?? "—")</span> }</td>
+                    <td class="c-milk herd-kid-col" data-label="Milk">@if (isKid) { <span class="breed">@(g.KidMilkStatus ?? "—")</span> } else { <span class="breed">—</span> }</td>
+                    <td class="hide-sm herd-kid-col" data-label="Wean date">@if (isKid) { <span class="breed">@(g.KidWeanDateDisplay ?? "—")</span> }</td>
                     <td class="hide-sm num-cell">@if(g.Source == GoatSource.Born){<span class="breed">home-bred</span>}else{<span class="breed">@DisplayHelper.FormatRs(g.PurchasePrice)</span>}</td>
                     <td class="hide-sm"><span class="breed">@g.EventDateDisplay</span></td>
                 </tr>

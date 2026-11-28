@@ -74,7 +74,7 @@
                 <span class="dash-kpi-icon dash-kpi-icon--milk" aria-hidden="true">🥛</span>
                 <div class="dash-kpi-body">
                     <span class="dash-kpi-label">Milk Today</span>
-                    <span class="dash-kpi-value">@Model.MilkTodayLiters.ToString("N0") L</span>
+                    <span class="dash-kpi-value">@Model.MilkTodayLiters.ToString("0.0") L</span>
                     @if (trend.Count > 0)
                     {
                         <div class="dash-kpi-spark dash-kpi-spark--milk" aria-hidden="true" title="Monthly milk — last 6 months">
@@ -380,12 +380,12 @@
             </div>
         </div>
 
-        @if (visibleTabs.Contains(FarmTabs.Milk))
+        @if (visibleTabs.Contains(FarmTabs.Products) || visibleTabs.Contains(FarmTabs.Milk))
         {
             <div class="panel dash-card">
                 <div class="panel-head dash-card-head">
                     <h2>Daily milk production</h2>
-                    <a class="dash-card-link" asp-controller="Milk" asp-action="Index">View all</a>
+                    <a class="dash-card-link" asp-controller="Products" asp-action="Index">View all</a>
                 </div>
                 <div class="panel-body dash-card-body dash-card-body--chart">
                     <div class="dash-bars" role="img" aria-label="Milk production last 7 days">
@@ -691,9 +691,9 @@
                     {
                         <a class="dash-quick" asp-controller="Goat" asp-action="Index"><span class="dash-quick-ico" style="background:#d8f3dc">🐐</span><span>Add Goat</span></a>
                     }
-                    @if (visibleTabs.Contains(FarmTabs.Milk))
+                    @if (visibleTabs.Contains(FarmTabs.Products) || visibleTabs.Contains(FarmTabs.Milk))
                     {
-                        <a class="dash-quick" asp-controller="Milk" asp-action="Index"><span class="dash-quick-ico" style="background:#dbeafe">🥛</span><span>Add Milk</span></a>
+                        <a class="dash-quick" asp-controller="Products" asp-action="Index"><span class="dash-quick-ico" style="background:#dbeafe">🥛</span><span>Add Milk</span></a>
                     }
                     @if (visibleTabs.Contains(FarmTabs.Vaccines))
                     {

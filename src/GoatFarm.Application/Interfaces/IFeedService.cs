@@ -76,6 +76,9 @@ public interface IFeedService
 
     decimal CalculateFarmFeedDaily();
 
+    /// <summary>Daily feed cost for goats on the Milking status plan only (not whole-farm).</summary>
+    decimal CalculateMilkingGroupFeedDaily();
+
     decimal CalculateFarmMedicineMonthly();
 
     decimal GetFeedPurchasedMonthly(string month);

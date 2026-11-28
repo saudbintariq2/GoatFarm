@@ -11,9 +11,11 @@
     const dd = d == null ? (Math.abs(v - Math.round(v)) < 0.005 ? 0 : 1) : d;
     return v.toLocaleString('en-US', { minimumFractionDigits: dd, maximumFractionDigits: dd });
   };
+  /** Always one decimal for milk volumes (litres). */
+  const fmtL = n => fmtN(n, 1);
   const fmtQ = (q, unit) => {
     const u = (unit || '').trim();
-    if (u === 'L') return `${fmtN(q, 1)} L`;
+    if (u === 'L') return `${fmtL(q)} L`;
     return `${fmtN(q)} ${u}`.trim();
   };
   const rs = n => 'Rs ' + Math.round(N(n)).toLocaleString('en-US');
@@ -46,7 +48,7 @@
   const revEl = document.getElementById('productRevenueMonth');
   if (revEl) revEl.textContent = rs(page.monthSalesTotal);
   const tankEl = document.getElementById('productStockCount');
-  if (tankEl) tankEl.textContent = `${Math.round(page.milkInTanksLiters || 0).toLocaleString('en-US')} L`;
+  if (tankEl) tankEl.textContent = `${fmtL(page.milkInTanksLiters || 0)} L`;
 
   function renderMilkPane() {
     const raw = N(milk.rawTankLiters);
@@ -74,8 +76,8 @@
       const fill = cap > 0 ? Math.min(100, Math.max(0, q / cap * 100)) : 0;
       const isRaw = item === 'raw';
       return `<div class="sl-tank ${isRaw ? 'raw' : 'past'}"><div class="sl-tank-top"><b>${esc(w.name)}</b>${w.targetTempC != null ? `<span class="sl-temp">${esc(w.targetTempC)}°C</span>` : ''}</div>
-        <div class="sl-tank-q">${fmtN(q)} <small>L</small></div>
-        ${cap > 0 ? `<div class="sl-bar" role="img" aria-label="${fmtN(fill, 0)}% full"><i style="width:${fill}%"></i></div><small>${fmtN(fill, 0)}% of ${fmtN(cap)} L</small>` : ''}
+        <div class="sl-tank-q">${fmtL(q)} <small>L</small></div>
+        ${cap > 0 ? `<div class="sl-bar" role="img" aria-label="${fmtN(fill, 0)}% full"><i style="width:${fill}%"></i></div><small>${fmtN(fill, 0)}% of ${fmtL(cap)} L</small>` : ''}
         <div class="sl-tank-act">${isRaw ? `<button type="button" class="btn btn-sm btn-green" data-sl-sub="pasteurize" data-sl-src="${w.id}">Pasteurize</button>` : ''}<button type="button" class="btn btn-sm btn-ghost" data-sl-sub="make" data-sl-src="${w.id}">Bottle</button><button type="button" class="btn btn-sm btn-ghost" data-sl-sub="move" data-sl-src="${w.id}">Move</button><button type="button" class="btn btn-sm btn-ghost" data-sl-sell="${isRaw ? 'raw' : 'past'}" data-sl-src="${w.id}">Sell</button></div></div>`;
     };
 
@@ -83,11 +85,11 @@
     const f = document.getElementById('sl-milk-flow');
     if (f) {
       f.innerHTML = `
-        <div class="sl-stage"><div class="sl-stage-h"><span>1</span>Milking</div><div class="sl-stage-b"><div class="sl-big">${fmtN(todayL)} <small>L today</small></div><small>${fmtN(monthL)} L this month</small><button type="button" class="btn btn-sm btn-green" data-sl-sub="milking">+ Record milking</button></div></div>
+        <div class="sl-stage"><div class="sl-stage-h"><span>1</span>Milking</div><div class="sl-stage-b"><div class="sl-big">${fmtL(todayL)} <small>L today</small></div><small>${fmtL(monthL)} L this month</small><button type="button" class="btn btn-sm btn-green" data-sl-sub="milking">+ Record milking</button></div></div>
         <div class="sl-flow-arrow" aria-hidden="true">➜</div>
         <div class="sl-stage"><div class="sl-stage-h"><span>2</span>Raw chilled tank${rawT.length > 1 ? 's' : ''}</div><div class="sl-stage-b">${rawT.map(w => card(w, 'raw')).join('') || '<small>No raw milk tank yet.</small>'}</div></div>
         <div class="sl-flow-arrow" aria-hidden="true">➜</div>
-        <div class="sl-stage"><div class="sl-stage-h"><span>3</span>Pasteurizer</div><div class="sl-stage-b"><div class="sl-big">${pzN} <small>run${pzN === 1 ? '' : 's'} this month</small></div><small>${fmtN(pzIn)} L in → ${fmtN(pzOut)} L out</small>${pzIn > 0 ? `<small>loss ${fmtN(pzIn - pzOut)} L (${pct(pzIn - pzOut, pzIn)})</small>` : ''}<button type="button" class="btn btn-sm btn-green" data-sl-sub="pasteurize">Pasteurize</button></div></div>
+        <div class="sl-stage"><div class="sl-stage-h"><span>3</span>Pasteurizer</div><div class="sl-stage-b"><div class="sl-big">${pzN} <small>run${pzN === 1 ? '' : 's'} this month</small></div><small>${fmtL(pzIn)} L in → ${fmtL(pzOut)} L out</small>${pzIn > 0 ? `<small>loss ${fmtL(pzIn - pzOut)} L (${pct(pzIn - pzOut, pzIn)})</small>` : ''}<button type="button" class="btn btn-sm btn-green" data-sl-sub="pasteurize">Pasteurize</button></div></div>
         <div class="sl-flow-arrow" aria-hidden="true">➜</div>
         <div class="sl-stage"><div class="sl-stage-h"><span>4</span>Pasteurized chilled tank${pastT.length > 1 ? 's' : ''}</div><div class="sl-stage-b">${pastT.map(w => card(w, 'past')).join('') || '<small>No pasteurized tank yet.</small>'}</div></div>
         <div class="sl-flow-arrow" aria-hidden="true">➜</div>
@@ -592,7 +594,7 @@
     const after = now + (deltaLiters || 0);
     const cap = N(w.capacity);
     const bad = after < -0.001 || (cap > 0 && after > cap + 0.001);
-    return `<span class="sl-bal-now">${fmtQ(now, 'L')} now</span>${deltaLiters ? `<span class="sl-bal-arrow">→</span><b class="${bad ? 'sl-bad' : ''}">${fmtQ(after, 'L')} after</b>` : ''}${cap > 0 ? `<small>${after > cap ? 'over capacity · ' : ''}capacity ${fmtN(cap)} L</small>` : ''}`;
+    return `<span class="sl-bal-now">${fmtQ(now, 'L')} now</span>${deltaLiters ? `<span class="sl-bal-arrow">→</span><b class="${bad ? 'sl-bad' : ''}">${fmtQ(after, 'L')} after</b>` : ''}${cap > 0 ? `<small>${after > cap ? 'over capacity · ' : ''}capacity ${fmtL(cap)} L</small>` : ''}`;
   }
 
   function accountOptionsHtml() {
@@ -880,8 +882,19 @@
   }
 
   function productUnitCost(productId) {
+    const landed = landedUnitCostPricing(productId);
+    if (landed > 0) return landed;
     const p = catalogById(productId);
+    const sku = (p?.sku || '').toUpperCase();
+    if ((sku === 'MILK-RAW' || sku === 'MILK-PAST') && page.milkCostPerLitre != null && page.milkCostPerLitre !== '')
+      return N(page.milkCostPerLitre);
     return p ? N(p.defaultPrice) : 0;
+  }
+
+  function milkCostLabel(cost, productId) {
+    if (!(cost > 0)) return '—';
+    const fromLanded = productId && landedUnitCostPricing(productId) > 0;
+    return rs(cost) + '/L' + (!fromLanded && page.milkCostIsEstimate ? ' · estimate' : '');
   }
 
   function bulkMilkQtyAtWarehouse(w, sku) {
@@ -1146,11 +1159,15 @@
           : bulkMilkQtyAtWarehouse(w, 'MILK-PAST');
         if (w.isActive === false && Math.abs(q) < 0.0005) return '';
         const k = tankKind(w);
-        const cost = productUnitCost(k === 'raw_tank' ? catalogId('MILK-RAW') : catalogId('MILK-PAST'));
+        const pid = k === 'raw_tank' ? catalogId('MILK-RAW') : catalogId('MILK-PAST');
+        const cost = productUnitCost(pid);
         const val = q * cost;
         const cap = N(w.capacity);
         const fill = cap > 0 ? pct(q, cap) : '—';
-        return `<tr><td><b>${esc(w.name)}</b>${w.isActive === false ? ' <span class="chip chip-exp">inactive</span>' : ''}</td><td>${esc(KIND_LABEL[k] || k)}</td><td class="num-cell"><b class="${q < -0.001 ? 'sl-bad' : ''}">${fmtQ(q, 'L')}</b></td><td class="num-cell hide-sm">${q > 0.0005 && cost > 0 ? rs(cost) + '/L' : '—'}</td><td class="num-cell hide-sm">${val > 0 ? rs(val) : '—'}</td><td class="num-cell hide-sm">${fill}</td></tr>`;
+        const costCell = q > 0.0005 && cost > 0
+          ? (k === 'raw_tank' || k === 'past_tank' ? milkCostLabel(cost, pid) : rs(cost) + '/L')
+          : '—';
+        return `<tr><td><b>${esc(w.name)}</b>${w.isActive === false ? ' <span class="chip chip-exp">inactive</span>' : ''}</td><td>${esc(KIND_LABEL[k] || k)}</td><td class="num-cell"><b class="${q < -0.001 ? 'sl-bad' : ''}">${fmtQ(q, 'L')}</b></td><td class="num-cell hide-sm">${costCell}</td><td class="num-cell hide-sm">${val > 0 ? rs(val) : '—'}</td><td class="num-cell hide-sm">${fill}</td></tr>`;
       }).join('');
       const prodRows = allStockBalanceRows(false)
         .filter(r => {
@@ -1319,7 +1336,7 @@
     const expect = document.getElementById('sl-mk-expect');
     if (expect) {
       if (p && size > 0 && inL > 0) {
-        expect.innerHTML = `<span>${fmtN(inL)} L fills about <b>${fmtN(Math.floor(inL / size + 1e-9), 0)} × ${esc(p.name)}</b></span>${out > 0 ? `<small>in stock after: ${fmtN(dairyStockQty(pid) + out)} ${esc(p.unit || '')}</small>` : ''}`;
+        expect.innerHTML = `<span>${fmtL(inL)} L fills about <b>${fmtN(Math.floor(inL / size + 1e-9), 0)} × ${esc(p.name)}</b></span>${out > 0 ? `<small>in stock after: ${fmtN(dairyStockQty(pid) + out)} ${esc(p.unit || '')}</small>` : ''}`;
       } else if (p) {
         expect.innerHTML = `<small>${fmtN(dairyStockQty(pid))} ${esc(p.unit || '')} in stock now</small>`;
       } else {
@@ -2105,7 +2122,7 @@
       const t = +tr.querySelector('.sl-mg-t')?.value || 0;
       const r = +tr.querySelector('.sl-mg-r')?.value || 0;
       const u = tr.querySelector('.sl-mg-u');
-      if (u) { u.textContent = t || r ? fmtN(t - r) + ' L' : '—'; u.classList.toggle('sl-bad', r > t); }
+      if (u) { u.textContent = t || r ? fmtL(t - r) + ' L' : '—'; u.classList.toggle('sl-bad', r > t); }
     });
   }
 
@@ -2875,10 +2892,10 @@
     if (kpis) {
       kpis.innerHTML = mode === 'milk'
         ? [
-          bpKpi('Milk collected', `${fmtN(total('milkLitres'))} L`),
+          bpKpi('Milk collected', `${fmtL(total('milkLitres'))} L`),
           bpKpi('Breed pools / entries', `${fmtN(rows.length, 0)} breeds`),
           bpKpi('Milking records', fmtN(total('goatSessions'), 0)),
-          bpKpi('Average L per record', total('goatSessions') ? `${fmtN(total('milkLitres') / total('goatSessions'))} L` : '—')
+          bpKpi('Average L per record', total('goatSessions') ? `${fmtL(total('milkLitres') / total('goatSessions'))} L` : '—')
         ].join('')
         : [
           bpKpi('Live goats sold', fmtN(total('head'), 0)),
@@ -2899,7 +2916,7 @@
     if (chart) {
       chart.innerHTML = rows.length
         ? rows.map(r =>
-          `<div style="display:grid;grid-template-columns:minmax(100px,160px) 1fr 95px;gap:12px;align-items:center;margin:13px 0"><strong>${esc(r.breed)}</strong><div style="height:23px;background:var(--green-tint,#e8f2e9);border-radius:6px;overflow:hidden"><div style="width:${Math.min(100, 100 * N(r[key]) / max)}%;height:100%;background:${mode === 'milk' ? '#2f6b3d' : '#b86a37'};border-radius:6px"></div></div><b style="text-align:right">${fmtN(r[key])} ${mode === 'milk' ? 'L' : 'kg'}</b></div>`
+          `<div style="display:grid;grid-template-columns:minmax(100px,160px) 1fr 95px;gap:12px;align-items:center;margin:13px 0"><strong>${esc(r.breed)}</strong><div style="height:23px;background:var(--green-tint,#e8f2e9);border-radius:6px;overflow:hidden"><div style="width:${Math.min(100, 100 * N(r[key]) / max)}%;height:100%;background:${mode === 'milk' ? '#2f6b3d' : '#b86a37'};border-radius:6px"></div></div><b style="text-align:right">${mode === 'milk' ? fmtL(r[key]) : fmtN(r[key])} ${mode === 'milk' ? 'L' : 'kg'}</b></div>`
         ).join('')
         : `<div class="empty">No recorded ${mode === 'milk' ? 'breed-specific milk' : 'breed-linked carcass'} data for this month. Start recording to populate the chart.</div>`;
     }
@@ -2907,7 +2924,7 @@
       ? ['Breed', 'Milk (L)', 'Milking records', 'L per record']
       : ['Breed', 'Live goats sold', 'Live sale kg*', 'Revenue (Rs)', 'Recorded cost (Rs)', 'Margin (Rs)*', 'Carcasses', 'Carcass kg', 'Carcass yield*'];
     const cells = r => mode === 'milk'
-      ? [r.breed, fmtN(r.milkLitres), r.goatSessions ? fmtN(r.goatSessions, 0) : '—', r.avg == null ? '—' : fmtN(r.avg)]
+      ? [r.breed, fmtL(r.milkLitres), r.goatSessions ? fmtN(r.goatSessions, 0) : '—', r.avg == null ? '—' : fmtL(r.avg)]
       : [r.breed, fmtN(r.head, 0), r.salesKg ? fmtN(r.salesKg) : '—', fmtN(r.revenue), fmtN(r.cost), fmtN(r.margin), fmtN(r.carcasses, 0), fmtN(r.carcassKg), r.carcassLiveKg ? fmtN(r.carcassKg / r.carcassLiveKg * 100, 1) + '%' : '—'];
     const table = document.getElementById('bp-table');
     if (table) {
@@ -3074,7 +3091,7 @@
 
     const assertTank = usableAdd => {
       if (cap > 0 && now + usableAdd > cap + 0.0005) {
-        farmNotify(`${whRow?.name || 'Tank'} would exceed ${fmtN(cap)} L capacity (${fmtQ(now, 'L')} in tank now).`);
+        farmNotify(`${whRow?.name || 'Tank'} would exceed ${fmtL(cap)} L capacity (${fmtQ(now, 'L')} in tank now).`);
         return false;
       }
       return true;
@@ -3413,7 +3430,7 @@
     const cap = N(dest?.capacity);
     const destQty = N(dest?.litersOrKg);
     if (cap > 0 && destQty + q > cap + 0.001) {
-      if (!confirm(`${dest.name} will be over its capacity of ${fmtN(cap)} L. Move anyway?`)) return;
+      if (!confirm(`${dest.name} will be over its capacity of ${fmtL(cap)} L. Move anyway?`)) return;
     }
     const sku = kindOfWhId(from) === 'past_tank' ? 'MILK-PAST' : 'MILK-RAW';
     const productId = catalogId(sku);

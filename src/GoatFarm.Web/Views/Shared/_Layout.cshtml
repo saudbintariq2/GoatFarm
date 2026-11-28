@@ -23,6 +23,10 @@
     if (brandFavicon.StartsWith("~/", StringComparison.Ordinal)) brandFavicon = brandFavicon[2..];
     brandFavicon = brandFavicon.TrimStart('/');
     var faviconIsSvg = brandFavicon.EndsWith(".svg", StringComparison.OrdinalIgnoreCase);
+    // Ops: set ApplicationSettings:HelpWhatsApp to a full wa.me URL, e.g. https://wa.me/92XXXXXXXXXX
+    var helpWhatsApp = (Configuration["ApplicationSettings:HelpWhatsApp"] ?? "").Trim();
+    if (string.IsNullOrEmpty(helpWhatsApp))
+        helpWhatsApp = "https://wa.me/92"; // placeholder — set HelpWhatsApp in appsettings
 
     var isAuthenticated = User.Identity?.IsAuthenticated == true;
 
@@ -93,7 +97,6 @@
         ["projects"] = ("Projects & Assets", "Plan farm construction, capital spending, equipment and solar", "🏗"),
         ["admin"] = ("Admin", "Approvals, audit log, users, profile", "👥"),
         ["backup"] = ("Backup center", "Export and restore your farm", "💾"),
-        ["milk"] = ("Milk", "Collect, sell and account for waste", "🥛"),
 
         ["feed"] = ("Feed & stock", "Store, usage, plans and recipes", "🌾"),
 
@@ -268,7 +271,7 @@
 
                     }
 
-                    <a class="side-footer-link" href="#" title="Help documentation coming soon">
+                    <a class="side-footer-link" href="@helpWhatsApp" target="_blank" rel="noopener noreferrer" title="Help on WhatsApp">
 
                         <span aria-hidden="true">?</span> Help
 
@@ -330,13 +333,13 @@
 
                                 <form class="top-search scanbar farm-header-search" id="globalSearchForm" method="get" asp-controller="Search" asp-action="Index" role="search">
 
-                                    <label for="globalTag" class="sr-only">Scan or enter tag / RFID ID</label>
+                                    <label for="globalTag" class="sr-only">Tag / RFID</label>
 
-                                    <span class="scanico" aria-hidden="true">⌕</span>
+                                    <button type="submit" class="farm-header-search-ico" title="Search by tag / RFID" aria-label="Search by tag / RFID">⌕</button>
 
-                                    <input id="globalTag" name="tag" placeholder="Scan or enter tag / RFID ID…" autocomplete="off" spellcheck="false" maxlength="64">
+                                    <input id="globalTag" name="tag" class="search-box" placeholder="Tag / RFID" autocomplete="off" spellcheck="false" maxlength="64">
 
-                                    <button type="submit" class="btn btn-green btn-sm global-search-btn">Search</button>
+                                    <button type="submit" class="btn btn-green btn-sm global-search-btn"><span class="global-search-btn-label">Search</span></button>
 
                                 </form>
 
@@ -367,7 +370,7 @@
                                 <button type="button" class="btn btn-ghost btn-sm farm-header-voice" id="headerVoiceAssistant" title="AI assistant (English / Urdu)">🎙 Assistant</button>
                             }
 
-                            <div class="farm-header-datetime" aria-live="polite">
+                            <div class="farm-header-datetime date-block" aria-live="polite">
 
                                 <span class="farm-header-cal" aria-hidden="true">📅</span>
 

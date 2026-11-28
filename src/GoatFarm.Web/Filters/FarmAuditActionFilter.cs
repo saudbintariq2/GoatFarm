@@ -17,8 +17,9 @@ public sealed class FarmAuditActionFilter : IAsyncActionFilter
 {
     private static readonly HashSet<string> SkipControllers = new(StringComparer.OrdinalIgnoreCase)
     {
+        // Products removed from skip so SaveMilkingSession / SaveSale are audited (A5).
         "Account", "Admin", "Assistant", "Dashboard", "Home", "Reports", "Search",
-        "Trading", "Products", "Projects", "BackupCenter"
+        "Trading", "Projects", "BackupCenter"
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -111,6 +112,7 @@ internal static class FarmAuditMap
         "Vaccine" => FarmTabs.Vaccines,
         "Tasks" => FarmTabs.Tasks,
         "Milk" => FarmTabs.Products,
+        "Products" => FarmTabs.Products,
         "Reminder" => FarmTabs.Vaccines,
         "Treatment" => FarmTabs.Vaccines,
         "Settings" => FarmTabs.Settings,

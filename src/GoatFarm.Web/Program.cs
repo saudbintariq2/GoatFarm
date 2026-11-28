@@ -77,11 +77,12 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
+    // A4 — strong passwords + lock-out
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequiredLength = 8;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequiredLength = 10;
     options.User.RequireUniqueEmail = true;
     options.Lockout.AllowedForNewUsers = true;
     options.Lockout.MaxFailedAccessAttempts = 5;
@@ -117,10 +118,10 @@ if (app.Configuration.GetValue<bool>("Diagnostics:ServerTiming"))
     app.UseMiddleware<ServerTimingMiddleware>();
 
 if (!app.Environment.IsDevelopment())
+{
     app.UseHsts();
-
-if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
+}
 
 app.UseStaticFiles();
 app.Use(async (context, next) =>
@@ -136,6 +137,19 @@ app.Use(async (context, next) =>
         }
         return Task.CompletedTask;
     });
+    await next();
+});
+// A6 — security headers
+app.Use(async (ctx, next) =>
+{
+    var h = ctx.Response.Headers;
+    h["Content-Security-Policy"] =
+        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+        "script-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+    h["X-Content-Type-Options"] = "nosniff";
+    h["X-Frame-Options"] = "DENY";
+    h["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    h["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()";
     await next();
 });
 app.UseRouting();

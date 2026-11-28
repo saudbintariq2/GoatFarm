@@ -22,6 +22,10 @@ public class TaskViewModel
     public bool IsMine { get; set; }
     public bool CanChangeStatus { get; set; }
     public string? CompletedDisplay { get; set; }
+    /// <summary>T1 — breeding now-job row (not editable).</summary>
+    public bool IsReadOnly { get; set; }
+    public string? LinkUrl { get; set; }
+    public string? LinkLabel { get; set; }
 }
 
 public class TaskUserOptionViewModel

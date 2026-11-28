@@ -66,10 +66,11 @@
                                     <span class="breed">@string.Join(", ", j.Tags.Take(8))@(j.Tags.Count > 8 ? " …" : "")</span>
                                 }
                             </span>
-                            @if (!string.IsNullOrEmpty(j.BreedView))
+                            @if (!string.IsNullOrEmpty(j.ActionKey) || !string.IsNullOrEmpty(j.BreedView))
                             {
                                 <button type="button" class="btn btn-ghost btn-sm breed-todo-act"
                                         data-breed-goto="@j.BreedView"
+                                        data-breed-action="@j.ActionKey"
                                         data-breed-scan="@(j.OpenScan ? "1" : null)">@j.ActionLabel</button>
                             }
                             else if (j.ActionLabel == "Weigh")

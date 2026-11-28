@@ -9,6 +9,12 @@ public interface IBreedingService
         string? selectedBatchId = null,
         string? reportBuck = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>T1 — same now-jobs as Breeding › Today (for Tasks page).</summary>
+    Task<IReadOnlyList<BreedingNowJobViewModel>> GetNowJobsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>B7 — ensure Flushing group and move Second group does in/out by plan dates.</summary>
+    Task<ApplyFlushingPlanResultViewModel> ApplyFlushingPlanAsync(CancellationToken cancellationToken = default);
     Task<BreedingDoeProfileViewModel?> GetDoeProfileAsync(int goatId, CancellationToken cancellationToken = default);
     Task RecordPrepAsync(RecordPrepViewModel model, CancellationToken cancellationToken = default);
     Task<CrossCheckViewModel> CheckCrossAsync(string doeTag, string? buckTag, DateOnly? date, CancellationToken cancellationToken = default);

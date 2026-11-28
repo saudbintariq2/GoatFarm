@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using GoatFarm.Application.Interfaces;
+using GoatFarm.Application.ViewModels.Breeding;
 using GoatFarm.Application.ViewModels.Tasks;
 using GoatFarm.Domain.Constants;
+using GoatFarm.Domain.Enums;
 using GoatFarm.Web.Helpers;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,12 +12,18 @@ namespace GoatFarm.Web.Controllers;
 public class TasksController : Controller
 {
     private readonly ITaskService _taskService;
+    private readonly IBreedingService _breedingService;
     private readonly IPermissionService _permissionService;
     private readonly IApprovalService _approvalService;
 
-    public TasksController(ITaskService taskService, IPermissionService permissionService, IApprovalService approvalService)
+    public TasksController(
+        ITaskService taskService,
+        IBreedingService breedingService,
+        IPermissionService permissionService,
+        IApprovalService approvalService)
     {
         _taskService = taskService;
+        _breedingService = breedingService;
         _permissionService = permissionService;
         _approvalService = approvalService;
     }
@@ -29,12 +37,63 @@ public class TasksController : Controller
     public async Task<IActionResult> Index(string? filter, CancellationToken cancellationToken)
     {
         ViewData["ActiveTab"] = "tasks";
-        return View(await _taskService.GetPageAsync(CurrentUserId, await CanEditAsync(cancellationToken), filter, cancellationToken));
+        return View(await BuildPageAsync(filter, cancellationToken));
     }
 
     [HttpGet]
     public async Task<IActionResult> GetData(string? filter, CancellationToken cancellationToken) =>
-        Json(await _taskService.GetPageAsync(CurrentUserId, await CanEditAsync(cancellationToken), filter, cancellationToken));
+        Json(await BuildPageAsync(filter, cancellationToken));
+
+    private async Task<TasksPageViewModel> BuildPageAsync(string? filter, CancellationToken cancellationToken)
+    {
+        var page = await _taskService.GetPageAsync(CurrentUserId, await CanEditAsync(cancellationToken), filter, cancellationToken);
+        // T1 — breeding › Today now-jobs as read-only rows (filter "all" / overdue / urgent only).
+        var f = string.IsNullOrWhiteSpace(filter) ? "all" : filter.Trim();
+        if (f is "all" or "urgent" or "overdue")
+        {
+            var jobs = await _breedingService.GetNowJobsAsync(cancellationToken);
+            var breedRows = MapBreedingJobs(jobs, f);
+            page.ToDo = breedRows.Concat(page.ToDo).ToList();
+        }
+
+        return page;
+    }
+
+    private static IReadOnlyList<TaskViewModel> MapBreedingJobs(IReadOnlyList<BreedingNowJobViewModel> jobs, string filter)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var rows = new List<TaskViewModel>();
+        var i = 0;
+        foreach (var j in jobs)
+        {
+            i++;
+            var overdue = j.SortDate < today;
+            var urgent = j.UrgencyKey == "no" || overdue;
+            if (filter == "urgent" && !urgent) continue;
+            if (filter == "overdue" && !overdue) continue;
+
+            var view = string.IsNullOrWhiteSpace(j.BreedView) ? "today" : j.BreedView;
+            rows.Add(new TaskViewModel
+            {
+                Id = -i,
+                Title = (string.IsNullOrWhiteSpace(j.Icon) ? "" : j.Icon + " ") + j.Text,
+                Notes = string.IsNullOrWhiteSpace(j.Subtext) ? null : j.Subtext,
+                Type = FarmTaskType.Task,
+                Priority = urgent ? FarmTaskPriority.Urgent : FarmTaskPriority.Normal,
+                Status = FarmTaskStatus.ToDo,
+                DueDate = j.SortDate,
+                AssigneeName = "Breeding",
+                IsOverdue = overdue,
+                DueText = overdue ? "overdue" : j.WhenSubtext,
+                CanChangeStatus = false,
+                IsReadOnly = true,
+                LinkUrl = "/Breeding?view=" + Uri.EscapeDataString(view),
+                LinkLabel = "Open Breeding"
+            });
+        }
+
+        return rows;
+    }
 
     [HttpGet]
     public async Task<IActionResult> MyOpenCount(CancellationToken cancellationToken) =>

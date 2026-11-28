@@ -412,18 +412,33 @@ public class StatisticsService : IStatisticsService
     {
         var items = new List<DashboardActivityViewModel>();
 
-        var milkRows = await _context.MilkProductions.AsNoTracking()
-            .OrderByDescending(p => p.Date)
+        // D3 / A2 / A5 — prefer audit-log plain summaries (same wording as Admin › Audit).
+        var sessions = await _context.MilkingSessions.AsNoTracking()
+            .OrderByDescending(s => s.Date).ThenByDescending(s => s.Id)
             .Take(3)
             .ToListAsync(cancellationToken);
-        foreach (var p in milkRows)
+        foreach (var s in sessions)
             items.Add(new DashboardActivityViewModel
             {
                 Icon = "🥛",
-                Text = $"Milk recorded — {p.Liters:N1} L",
-                When = ActivityWhen(p.Date, today),
-                SortDate = p.Date,
-                Href = "/Milk"
+                Text = AuditText.ToText("Products.SaveMilkingSession", $"{s.Liters:0.0} L"),
+                When = ActivityWhen(s.Date, today),
+                SortDate = s.Date,
+                Href = "/Products"
+            });
+
+        var productSales = await _context.ProductSales.AsNoTracking()
+            .OrderByDescending(s => s.Date).ThenByDescending(s => s.Id)
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        foreach (var s in productSales)
+            items.Add(new DashboardActivityViewModel
+            {
+                Icon = "🥛",
+                Text = AuditText.ToText("Products.SaveSale", $"{s.ProductName} · Rs {s.Amount:N0}"),
+                When = ActivityWhen(s.Date, today),
+                SortDate = s.Date,
+                Href = "/Products"
             });
 
         var feedRows = await _context.FeedPurchases.AsNoTracking()
@@ -434,7 +449,7 @@ public class StatisticsService : IStatisticsService
             items.Add(new DashboardActivityViewModel
             {
                 Icon = "🌾",
-                Text = $"Feed purchased — {p.Kg:N0} kg",
+                Text = AuditText.ToText("Feed.AddPurchase", $"{p.Kg:N0} kg"),
                 When = ActivityWhen(p.Date, today),
                 SortDate = p.Date,
                 Href = "/Feed"
@@ -449,7 +464,7 @@ public class StatisticsService : IStatisticsService
             items.Add(new DashboardActivityViewModel
             {
                 Icon = "💞",
-                Text = "Breeding cross recorded",
+                Text = AuditText.ToText("Breeding.RecordCross"),
                 When = ActivityWhen(e.MatedDate, today),
                 SortDate = e.MatedDate,
                 Href = "/Breeding"

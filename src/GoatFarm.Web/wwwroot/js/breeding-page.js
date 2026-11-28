@@ -186,9 +186,20 @@ window.BreedingPage = (() => {
       b.addEventListener('click', () => setBreedingView(b.dataset.breedView));
     });
     document.querySelectorAll('[data-breed-goto]').forEach(b => {
-      b.addEventListener('click', () => {
+      b.addEventListener('click', async () => {
+        const action = b.dataset.breedAction;
+        if (action === 'flushing-plan') {
+          try {
+            const res = await gr().api('/Breeding/ApplyFlushingPlan', { method: 'POST', body: '{}' });
+            if (res?.message) gr().showToast?.(res.message);
+          } catch (err) {
+            const msg = err.error || err.title || 'Could not apply Flushing plan';
+            alert(msg);
+            return;
+          }
+        }
         const view = b.dataset.breedGoto;
-        setBreedingView(view);
+        if (view) setBreedingView(view);
         if (b.dataset.breedScan === '1' && view === 'does') {
           const url = new URL(location.href);
           url.searchParams.set('scan', '1');

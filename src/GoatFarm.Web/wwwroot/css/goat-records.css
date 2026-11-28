@@ -151,6 +151,39 @@
   #view-herd table.herd-breed-cols{min-width:1200px}
   #view-herd table.herd-breed-cols .herd-doe-col,
   #view-herd table.herd-breed-cols .herd-kid-col{font-size:12px;white-space:nowrap}
+
+  /* >>> FIX M1 — phone herd cards ───────────────────────────── */
+  @media (max-width: 600px) {
+    #view-herd .herd-scroll-hint{display:none}
+    #view-herd .herd-table-scroll{overflow:visible;margin:0;padding:0}
+    #view-herd table.herd-table.herd-breed-cols{min-width:0;width:100%}
+    #view-herd .herd-table thead{display:none}
+    #view-herd .herd-table,
+    #view-herd .herd-table tbody,
+    #view-herd .herd-table tr,
+    #view-herd .herd-table td{display:block;width:100%}
+    #view-herd .herd-table tr{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 12px;
+      margin-bottom:10px;
+      background:var(--card,#fff);
+      box-sizing:border-box
+    }
+    #view-herd .herd-table td{border:0;padding:2px 0}
+    #view-herd .herd-table td[data-label]::before{
+      content:attr(data-label) ": ";
+      font-weight:600;
+      color:var(--muted,var(--ink-soft))
+    }
+    #view-herd .herd-table td.c-tag[data-label]::before{display:none}
+    /* show only the useful columns on a phone */
+    #view-herd .herd-table td:not(.c-tag):not(.c-status):not(.c-breeding):not(.c-nextjob):not(.c-milk){display:none !important}
+    #view-herd .herd-table td.c-breeding,
+    #view-herd .herd-table td.c-nextjob,
+    #view-herd .herd-table td.c-milk{display:block !important;white-space:normal}
+  }
+  /* <<< FIX M1 ───────────────────────────── */
   button.linkish{font-family:inherit;font-size:inherit;font-weight:700;color:inherit;background:none;border:none;
     padding:0;margin:0;text-decoration:underline;cursor:pointer}
   .v207-stage{line-height:1.45}

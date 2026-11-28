@@ -219,18 +219,62 @@ public class FarmMetricsService : IFarmMetricsService
         return Task.FromResult((perDay, goats));
     }
 
-    public async Task<decimal?> FeedCostPerLitreAsync(DateOnly monthStart, CancellationToken cancellationToken = default)
+    public async Task<FeedCostPerLitreResult> FeedCostPerLitreAsync(
+        DateOnly monthStart,
+        int? productId = null,
+        CancellationToken cancellationToken = default)
     {
+        var landed = await TryMilkLandedCostAsync(productId, cancellationToken);
+        if (landed is > 0)
+            return new FeedCostPerLitreResult(Math.Round(landed.Value, 1), IsEstimate: false);
+
         var today = DateOnly.FromDateTime(DateTime.Today);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
         var to = today < monthEnd ? today : monthEnd;
-        var litres = await MilkLitresAsync(monthStart, to, cancellationToken);
+        var byDay = await MilkByDayAsync(monthStart, to, cancellationToken);
+        var litres = byDay.Values.Sum();
         if (litres <= 0)
-            return null;
+            return new FeedCostPerLitreResult(null, IsEstimate: true);
 
-        var (perDay, _) = await FeedCostPerDayAsync(cancellationToken);
-        var days = to.DayNumber - monthStart.DayNumber + 1;
-        return Math.Round(perDay * days / litres, 1);
+        var feed = _services.GetRequiredService<IFeedService>();
+        var perDay = feed.CalculateMilkingGroupFeedDaily();
+        if (perDay <= 0)
+            return new FeedCostPerLitreResult(null, IsEstimate: true);
+
+        var calendarDays = to.DayNumber - monthStart.DayNumber + 1;
+        var milkingDays = byDay.Count(kv => kv.Value > 0);
+        var isEstimate = milkingDays < 7;
+        return new FeedCostPerLitreResult(Math.Round(perDay * calendarDays / litres, 1), isEstimate);
+    }
+
+    private async Task<decimal?> TryMilkLandedCostAsync(int? productId, CancellationToken cancellationToken)
+    {
+        async Task<decimal?> LandedForProduct(int id)
+        {
+            var row = await _db.ProductPricingProfiles.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.ProductId == id, cancellationToken);
+            if (row is null) return null;
+            var landed = row.BaseCost + row.PackagingCost + row.TransportCost + row.StorageCost + row.OtherCost;
+            return landed > 0 ? landed : null;
+        }
+
+        if (productId is > 0)
+        {
+            var forProduct = await LandedForProduct(productId.Value);
+            if (forProduct.HasValue) return forProduct;
+        }
+
+        var milkSkus = await _db.ProductCatalogItems.AsNoTracking()
+            .Where(c => c.Sku == "MILK-RAW" || c.Sku == "milk-raw")
+            .Select(c => c.Id)
+            .ToListAsync(cancellationToken);
+        foreach (var id in milkSkus)
+        {
+            var raw = await LandedForProduct(id);
+            if (raw.HasValue) return raw;
+        }
+
+        return null;
     }
 
     public async Task<(int Scanned, int Pregnant, int Waiting, decimal? Rate)> PregnancyRateAsync(

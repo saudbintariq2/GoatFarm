@@ -5,19 +5,19 @@
 
 <div class="bignum">
     <div><div class="lbl">Milk sold this month</div><div class="big" id="milkIncome">@DisplayHelper.FormatRs(Model.MilkIncome)</div>
-        <div class="lbl" id="milkSoldNote">@Model.LitersSold.ToString("N0") L sold</div></div>
-    <div class="side"><span class="lbl">Collected this month</span><b id="milkProdL">@Model.LitersProduced.ToString("N0") L</b>
-        <span class="lbl" id="milkAvg">@Model.LitersPerDayAvg L/day avg</span></div>
+        <div class="lbl" id="milkSoldNote">@Model.LitersSold.ToString("0.0") L sold</div></div>
+    <div class="side"><span class="lbl">Collected this month</span><b id="milkProdL">@Model.LitersProduced.ToString("0.0") L</b>
+        <span class="lbl" id="milkAvg">@Model.LitersPerDayAvg.ToString("0.0") L/day avg</span></div>
 </div>
 
 <div class="milk4">
-    <div class="fincard"><div class="v">@Model.LitersProduced.ToString("N0") L</div>
+    <div class="fincard"><div class="v">@Model.LitersProduced.ToString("0.0") L</div>
         <div class="k"><span class="dot" style="background:var(--green)"></span>Collected this month</div></div>
-    <div class="fincard"><div class="v">@Model.LitersSold.ToString("N0") L</div>
+    <div class="fincard"><div class="v">@Model.LitersSold.ToString("0.0") L</div>
         <div class="k"><span class="dot" style="background:var(--blue)"></span>Sold this month</div></div>
-    <div class="fincard"><div class="v">@Model.LitersWasted.ToString("N0") L</div>
+    <div class="fincard"><div class="v">@Model.LitersWasted.ToString("0.0") L</div>
         <div class="k"><span class="dot" style="background:var(--red)"></span>Wasted this month</div></div>
-    <div class="fincard"><div class="v" id="milkLeft">@Model.LitersLeft.ToString("N0") L</div>
+    <div class="fincard"><div class="v" id="milkLeft">@Model.LitersLeft.ToString("0.0") L</div>
         <div class="k"><span class="dot" style="background:var(--green-dark)"></span>Milk left</div></div>
 </div>
 
@@ -37,7 +37,7 @@
                     data-liters="@p.Liters.ToString(CultureInfo.InvariantCulture)" data-comment="@p.Comment">
                     <td><span class="breed">@p.DateDisplay</span></td>
                     <td class="hide-sm"><span class="breed">@p.Breed</span></td>
-                    <td class="num-cell">@p.Liters.ToString("N0") L</td>
+                    <td class="num-cell">@p.Liters.ToString("0.0") L</td>
                     <td class="hide-sm">@if(!string.IsNullOrEmpty(p.Comment)){<span class="name">@p.Comment</span>}</td>
                 </tr>
             }
@@ -75,7 +75,7 @@
                     data-liters="@s.Liters.ToString(CultureInfo.InvariantCulture)"
                     data-rate="@s.Rate.ToString(CultureInfo.InvariantCulture)" data-comment="@s.Comment">
                     <td><span class="breed">@s.DateDisplay</span></td>
-                    <td class="num-cell">@s.Liters.ToString("N0") L</td>
+                    <td class="num-cell">@s.Liters.ToString("0.0") L</td>
                     <td class="num-cell hide-sm">Rs @s.Rate</td>
                     <td class="num-cell" style="color:var(--green-dark)">@DisplayHelper.FormatRs(s.Amount)</td>
                     <td class="hide-sm">@if(!string.IsNullOrEmpty(s.Comment)){<span class="name">@s.Comment</span>}</td>
@@ -116,7 +116,7 @@
                     data-notes="@w.Notes">
                     <td><span class="breed">@w.DateDisplay</span></td>
                     <td>@(string.IsNullOrWhiteSpace(w.Notes) ? "—" : w.Notes)</td>
-                    <td class="num-cell">@w.Liters.ToString("N0") L</td>
+                    <td class="num-cell">@w.Liters.ToString("0.0") L</td>
                 </tr>
             }
             @if (!Model.Wastes.Any()) {<tr><td colspan="3" class="empty">No waste logged yet.</td></tr>}

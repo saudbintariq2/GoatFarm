@@ -395,7 +395,8 @@ public class FeedService : IFeedService
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         var milkLiters = await _farmMetrics.MilkLitresAsync(monthStart, today, cancellationToken);
-        var feedPerLitre = await _farmMetrics.FeedCostPerLitreAsync(monthStart, cancellationToken);
+        var feedPerLitreResult = await _farmMetrics.FeedCostPerLitreAsync(monthStart, cancellationToken: cancellationToken);
+        var feedPerLitre = feedPerLitreResult.CostPerLitre;
 
 
 
@@ -472,9 +473,11 @@ public class FeedService : IFeedService
 
             FeedCostPerLitre = feedPerLitre,
 
+            FeedCostPerLitreIsEstimate = feedPerLitreResult.IsEstimate,
+
             FeedCostPerLitreText = feedPerLitre.HasValue
 
-                ? $"Rs {feedPerLitre.Value:F1} per litre of milk"
+                ? $"Rs {feedPerLitre.Value:F1} per litre of milk{(feedPerLitreResult.IsEstimate ? " (estimate)" : "")}"
 
                 : "— per litre (no milk logged yet)",
 
@@ -1538,6 +1541,8 @@ public class FeedService : IFeedService
 
     public decimal CalculateFarmFeedDaily() => CalculateFarmFeedMonthly() / 30m;
 
+    public decimal CalculateMilkingGroupFeedDaily() => CalculateMilkingGroupFeedMonthly() / 30m;
+
     public async Task<decimal> GetFeedStockBookValueAsync(CancellationToken cancellationToken = default)
     {
         var prices = await GetEffectivePriceDictionaryAsync(cancellationToken);
@@ -1727,6 +1732,39 @@ public class FeedService : IFeedService
     }
 
 
+
+    private decimal CalculateMilkingGroupFeedMonthly()
+    {
+        var prices = GetEffectivePriceDictionaryAsync(CancellationToken.None).GetAwaiter().GetResult();
+        var plans = _context.FeedPlans.AsNoTracking().ToList();
+        var allRecipes = GetAllMixRecipesAsync().GetAwaiter().GetResult();
+        var mixFeedKeys = MixRecipeHelper.MixFeedKeys(prices.Keys).ToList();
+        var fodderPool = LoadFodderPoolDtoAsync().GetAwaiter().GetResult();
+        var fodderDaily = FodderPoolHelper.DailyTotal(fodderPool);
+        var herd = LoadHerdSnapshotAsync(CancellationToken.None).GetAwaiter().GetResult();
+        var customGroups = _context.CustomFeedingGroups.AsNoTracking().ToList();
+
+        var totalShare = StatusOrder.Sum(st =>
+        {
+            var n = CountFeedPlan(herd, st);
+            var plan = plans.FirstOrDefault(p => p.StatusKey == st);
+            return plan is null ? 0 : plan.FodderKgPerDay * n;
+        }) + customGroups.Sum(g => g.FodderKgPerDay * CountCustomGroup(herd, g.Id));
+        var totalHeads = FeedPlanHeadcount(herd, customGroups);
+
+        var plan = plans.FirstOrDefault(p => p.StatusKey == GoatStatus.Milking);
+        if (plan is null) return 0;
+        var n = CountFeedPlan(herd, GoatStatus.Milking);
+        if (n <= 0) return 0;
+
+        var recipeKey = DisplayHelper.StatusKey(GoatStatus.Milking);
+        var recipe = allRecipes.GetValueOrDefault(recipeKey) ?? new Dictionary<string, decimal>(MixRecipeHelper.DefaultRecipe);
+        var mixCost = MixRecipeHelper.MixCostPerKg(recipe, prices, mixFeedKeys);
+        var fodderCost = CalculateFodderCostPerGoat(plan.FodderKgPerDay, fodderDaily, totalShare, totalHeads, fodderPool.Mode);
+        var daily = MixRecipeHelper.PlanDailyFeedCostV41(
+            plan.MixKgPerDay, mixCost, plan.FodderDryKgPerDay, prices.GetValueOrDefault(FeedTypes.FodderDry), fodderCost);
+        return daily * 30 * n;
+    }
 
     private decimal CalculateFarmFeedMonthlyInternal(bool feedOnly)
 

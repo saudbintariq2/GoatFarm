@@ -84,14 +84,16 @@
                         }
                         @foreach (var t in col.Items)
                         {
-                            <article class="task-card @(t.IsOverdue ? "task-overdue" : "")"
+                            <article class="task-card @(t.IsOverdue ? "task-overdue" : "") @(t.IsReadOnly ? "task-readonly" : "")"
                                      data-task-id="@t.Id"
                                      data-title="@t.Title" data-notes="@t.Notes" data-due="@t.DueDateDisplay"
                                      data-priority="@t.Priority" data-type="@t.Type"
-                                     data-assignee="@t.AssigneeUserId" data-goat="@t.GoatTag">
+                                     data-assignee="@t.AssigneeUserId" data-goat="@t.GoatTag"
+                                     data-readonly="@(t.IsReadOnly ? "1" : null)">
                                 <div class="task-card-head">
                                     <b>@t.Title</b>
-                                    <span class="chip @PriorityCss(t.Priority)">@t.Priority</span>
+                                    @if (t.IsReadOnly) { <span class="chip chip-dry">Breeding</span> }
+                                    else { <span class="chip @PriorityCss(t.Priority)">@t.Priority</span> }
                                 </div>
                                 <div class="task-meta">
                                     <span>👤 @t.AssigneeName</span>
@@ -101,13 +103,20 @@
                                 </div>
                                 @if (!string.IsNullOrEmpty(t.Notes)) { <div class="task-notes">@t.Notes</div> }
                                 <div class="task-actions">
-                                    @if (t.CanChangeStatus)
+                                    @if (t.IsReadOnly && !string.IsNullOrEmpty(t.LinkUrl))
                                     {
-                                        @if (t.Status == FarmTaskStatus.ToDo) { <button type="button" class="btn btn-ghost btn-sm" data-task-status="InProgress">Start</button> }
-                                        @if (t.Status != FarmTaskStatus.Completed) { <button type="button" class="btn btn-green btn-sm" data-task-status="Completed">Complete</button> }
-                                        else { <button type="button" class="btn btn-ghost btn-sm" data-task-status="ToDo">Reopen</button> }
+                                        <a class="btn btn-ghost btn-sm" href="@t.LinkUrl">@(t.LinkLabel ?? "Open")</a>
                                     }
-                                    <button type="button" class="btn btn-ghost btn-sm task-edit-btn" data-task-edit>Edit</button>
+                                    else
+                                    {
+                                        @if (t.CanChangeStatus)
+                                        {
+                                            @if (t.Status == FarmTaskStatus.ToDo) { <button type="button" class="btn btn-ghost btn-sm" data-task-status="InProgress">Start</button> }
+                                            @if (t.Status != FarmTaskStatus.Completed) { <button type="button" class="btn btn-green btn-sm" data-task-status="Completed">Complete</button> }
+                                            else { <button type="button" class="btn btn-ghost btn-sm" data-task-status="ToDo">Reopen</button> }
+                                        }
+                                        <button type="button" class="btn btn-ghost btn-sm task-edit-btn" data-task-edit>Edit</button>
+                                    }
                                 </div>
                             </article>
                         }

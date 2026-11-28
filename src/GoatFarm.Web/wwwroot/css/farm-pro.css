@@ -496,15 +496,105 @@ body.farm-pro .farm-header-search .global-search-btn {
   flex-shrink: 0;
 }
 
-body.farm-pro .farm-header-search .scanico {
+body.farm-pro .farm-header-search .scanico,
+body.farm-pro .farm-header-search-ico {
   color: var(--fp-ink-soft);
   font-size: 18px;
 }
 
-body.farm-pro .farm-header-search input {
+body.farm-pro .farm-header-search-ico {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--fp-line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(21, 36, 41, 0.06);
+  font-family: inherit;
+  line-height: 1;
+}
+
+body.farm-pro .farm-header-search input,
+body.farm-pro .farm-header-search .search-box {
   width: 100%;
   font-size: 14px;
 }
+
+/* >>> FIX M1 — compact phone header ───────────────────────────── */
+@media (max-width: 600px) {
+  body.farm-pro .farm-header-inner {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px 12px 8px 56px;
+    align-items: center;
+  }
+  body.farm-pro .nav-toggle {
+    top: 8px;
+    left: 8px;
+    width: 38px;
+    height: 38px;
+  }
+  body.farm-pro .farm-header-welcome {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  body.farm-pro .farm-header-eyebrow,
+  body.farm-pro .farm-header-tag {
+    display: none;
+  }
+  body.farm-pro .farm-header-title {
+    font-size: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  body.farm-pro .farm-header-tools {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  body.farm-pro .farm-header-search.scanbar {
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+  /* keep the search icon button only */
+  body.farm-pro .farm-header-search .search-box,
+  body.farm-pro .farm-header-search .global-search-btn {
+    display: none;
+  }
+  body.farm-pro .farm-header-search-ico {
+    display: inline-grid;
+  }
+  body.farm-pro .farm-header-sync,
+  body.farm-pro .farm-header-voice {
+    display: none;
+  }
+  body.farm-pro .farm-header-datetime,
+  body.farm-pro .farm-header .date-block {
+    font-size: 12px;
+    white-space: nowrap;
+    padding: 4px 8px;
+  }
+  body.farm-pro .farm-header-datetime .farm-header-cal {
+    display: none;
+  }
+  body.farm-pro .farm-header-loc {
+    display: none;
+  }
+}
+/* <<< FIX M1 ───────────────────────────── */
 
 body.farm-pro .farm-header-bell {
   position: relative;
@@ -2167,6 +2257,38 @@ body.farm-pro .login-brand-mobile {
   }
   .wd-grid {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* M1 override — phone header must stay compact below 600px (wins over tablet rules) */
+@media (max-width: 600px) {
+  body.farm-pro .farm-header-inner {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px 12px 8px 56px;
+    align-items: center;
+  }
+  body.farm-pro .farm-header-tools {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+  body.farm-pro .farm-header-search {
+    flex: 0 0 auto;
+    flex-basis: auto;
+    max-width: none;
+    min-width: 0;
+  }
+  body.farm-pro .farm-header-search .search-box,
+  body.farm-pro .farm-header-search .global-search-btn {
+    display: none !important;
+  }
+  body.farm-pro .farm-header-search-ico {
+    display: inline-grid;
+  }
+  body.farm-pro .farm-header-datetime.date-block {
+    font-size: 12px;
+    white-space: nowrap;
   }
 }
 

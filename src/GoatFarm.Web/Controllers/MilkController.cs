@@ -26,16 +26,10 @@ public class MilkController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(int prodPage = 1, int salePage = 1, int wastePage = 1, CancellationToken cancellationToken = default)
+    public IActionResult Index(int prodPage = 1, int salePage = 1, int wastePage = 1)
     {
-        ViewData["ActiveTab"] = "milk";
-        var breeds = await _lookupService.GetListAsync(LookupSettingKeys.Breeds, cancellationToken);
-        ViewBag.MilkBreeds = new[] { "Mixed" }.Concat(breeds.Where(b => b != "Mixed")).ToArray();
-        var model = await _milkService.GetMilkPageAsync(prodPage, salePage, wastePage, cancellationToken: cancellationToken);
-        ViewBag.ProdPage = model.ProdPage;
-        ViewBag.SalePage = model.SalePage;
-        ViewBag.WastePage = model.WastePage;
-        return View(model);
+        // A7 — legacy Milk tab removed from nav; milk work lives under Products.
+        return RedirectToAction("Index", "Products");
     }
 
     [HttpGet]
