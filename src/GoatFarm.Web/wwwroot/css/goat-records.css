@@ -80,13 +80,15 @@
     border:1px solid var(--line);border-radius:9px;background:#FCFDFB;color:var(--ink);width:100%}
   .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--green);background:#fff}
   .field input:disabled{background:#f0f0ee;color:#aaa}
-  .field .inline-check{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:600;font-size:12px;color:var(--ink-soft);white-space:nowrap;margin:0}
-  .field .inline-check input{width:auto;padding:0;margin:0}
-  #goatFormPanel .goat-add-grid{grid-template-columns:repeat(6,1fr);align-items:end}
+  .field .inline-check{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:600;font-size:12px;color:var(--ink-soft);white-space:nowrap;margin:0;min-width:0}
+  .field .inline-check input,
+  .field .inline-check input[type=checkbox]{width:auto;max-width:none;flex:0 0 auto;padding:0;margin:0;accent-color:var(--green)}
+  #goatFormPanel .goat-add-grid{grid-template-columns:repeat(6,minmax(0,1fr));align-items:start}
   #goatFormPanel .goat-add-grid .field-comment{grid-column:1 / -1}
   #goatFormPanel .goat-form-actions{margin-top:14px}
-  .field-dob input[type="date"]{width:100%}
-  .field-dob .field-dob-est{margin-top:2px}
+  .field-dob{min-width:0;overflow:hidden}
+  .field-dob input[type="date"]{width:100%;box-sizing:border-box}
+  .field-dob .field-dob-est{margin-top:2px;width:100%;max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .btn-death{background:var(--red);border-color:var(--red);color:#fff}
   .btn-death:hover{background:#8a261c;border-color:#8a261c;color:#fff}
   .field-comment input,
@@ -148,15 +150,12 @@
   .herd-nextstep-wrap{margin-top:6px}
   .herd-nextstep{padding:5px 10px!important;font-size:12px!important;min-height:0!important}
   #view-herd .herd-table-scroll{overflow-x:auto;margin:0 -4px;padding-bottom:4px}
-  #view-herd table.herd-breed-cols{min-width:1200px}
-  #view-herd table.herd-breed-cols .herd-doe-col,
-  #view-herd table.herd-breed-cols .herd-kid-col{font-size:12px;white-space:nowrap}
+  #view-herd table.herd-table{width:100%;min-width:0}
 
   /* >>> FIX M1 — phone herd cards ───────────────────────────── */
   @media (max-width: 600px) {
-    #view-herd .herd-scroll-hint{display:none}
     #view-herd .herd-table-scroll{overflow:visible;margin:0;padding:0}
-    #view-herd table.herd-table.herd-breed-cols{min-width:0;width:100%}
+    #view-herd table.herd-table{min-width:0;width:100%}
     #view-herd .herd-table thead{display:none}
     #view-herd .herd-table,
     #view-herd .herd-table tbody,
@@ -177,11 +176,13 @@
       color:var(--muted,var(--ink-soft))
     }
     #view-herd .herd-table td.c-tag[data-label]::before{display:none}
-    /* show only the useful columns on a phone */
-    #view-herd .herd-table td:not(.c-tag):not(.c-status):not(.c-breeding):not(.c-nextjob):not(.c-milk){display:none !important}
-    #view-herd .herd-table td.c-breeding,
-    #view-herd .herd-table td.c-nextjob,
-    #view-herd .herd-table td.c-milk{display:block !important;white-space:normal}
+    #view-herd .herd-table td:not(.c-tag):not(.c-breed):not(.c-age):not(.c-status):not(.c-price):not(.c-date):not(.c-breeding){display:none !important}
+    #view-herd .herd-table td.c-breed,
+    #view-herd .herd-table td.c-age,
+    #view-herd .herd-table td.c-status,
+    #view-herd .herd-table td.c-price,
+    #view-herd .herd-table td.c-date,
+    #view-herd .herd-table td.c-breeding{display:block !important;white-space:normal}
   }
   /* <<< FIX M1 ───────────────────────────── */
   button.linkish{font-family:inherit;font-size:inherit;font-weight:700;color:inherit;background:none;border:none;
